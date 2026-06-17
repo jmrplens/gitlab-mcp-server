@@ -1,6 +1,13 @@
 //go:build e2e && enterprise
 
-// projects_meta_ee_test.go tests Enterprise project meta-tool actions.
+// projects_meta_ee_test.go exercises Enterprise Premium/Ultimate project
+// meta-tool actions against a live GitLab EE instance.
+//
+// Covers project service accounts (CRUD and PAT management), project-level
+// security settings, and pull mirror housekeeping. Each test skips cleanly
+// when the running GitLab does not report EE capabilities.
+//
+// Build tag: e2e && enterprise.
 package suite
 
 import (
@@ -16,9 +23,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
 )
 
-// TestMeta_ProjectServiceAccounts exercises project service account CRUD and PAT
-// management through the gitlab_project meta-tool. Project service accounts are
-// Premium/Ultimate-only, so CE runs return before making GitLab calls.
+// TestMeta_ProjectServiceAccounts exercises project service account CRUD and
+// PAT management through the gitlab_project meta-tool against a live GitLab
+// EE Premium/Ultimate instance.
+//
+// Project service accounts are Premium/Ultimate-only, so CE runs return
+// before making GitLab calls. The test walks create, list, get, edit,
+// delete, and personal_access_token_create for service accounts via
+// {action, params} arguments through the catalog-backed tool. Each subtest
+// asserts the meta-tool returns the expected payload and that mutations
+// are observable through subsequent reads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Premium/Ultimate.
 func TestMeta_ProjectServiceAccounts(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -165,8 +181,17 @@ func TestMeta_ProjectServiceAccounts(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectSecuritySettings exercises Ultimate project security settings
-// get/update actions through the gitlab_project meta-tool.
+// TestMeta_ProjectSecuritySettings exercises Ultimate project security
+// settings get and update actions through the gitlab_project meta-tool
+// against a live GitLab EE instance.
+//
+// The test creates a project fixture, then walks security_settings_get and
+// security_settings_update via {action, params} arguments through the
+// catalog-backed tool. Each subtest asserts the meta-tool returns the
+// expected payload and that mutations are observable through subsequent
+// reads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Ultimate.
 func TestMeta_ProjectSecuritySettings(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -206,7 +231,15 @@ func TestMeta_ProjectSecuritySettings(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectMirroring tests pull mirror and housekeeping actions.
+// TestMeta_ProjectMirroring exercises pull mirror and housekeeping actions
+// through the gitlab_project meta-tool against a live GitLab EE instance.
+//
+// The test creates a project with mirroring enabled, exercises pull-mirror
+// configuration actions, then triggers housekeeping and verifies the
+// meta-tool returns the expected housekeeping payload. The test skips cleanly
+// when the running GitLab does not report EE/Premium capabilities.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_ProjectMirroring(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

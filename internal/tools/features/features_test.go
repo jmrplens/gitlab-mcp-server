@@ -20,7 +20,9 @@ const fmtUnexpPath = "unexpected path: %s"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/features (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/features" {
@@ -56,7 +58,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -68,7 +72,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestListDefinitions_Success verifies ListDefinitions when success.
+// TestListDefinitions_Success verifies that ListDefinitions succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/features/definitions (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListDefinitions_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/features/definitions" {
@@ -95,7 +101,9 @@ func TestListDefinitions_Success(t *testing.T) {
 	}
 }
 
-// TestSet_Success verifies Set when success.
+// TestSet_Success verifies that Set succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/features/my_flag (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestSet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -119,7 +127,9 @@ func TestSet_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies Delete when success.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/features/my_flag (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -137,7 +147,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies Delete when error.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -149,7 +161,9 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Features: []FeatureItem{
@@ -166,7 +180,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -175,7 +191,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListDefinitionsMarkdown verifies FormatListDefinitionsMarkdown.
+// TestFormatListDefinitionsMarkdown verifies the ListDefinitionsMarkdown Markdown formatter for a representative listdefinitions input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListDefinitionsMarkdown(t *testing.T) {
 	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{
 		Definitions: []DefinitionItem{
@@ -188,7 +206,9 @@ func TestFormatListDefinitionsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatFeatureMarkdown verifies FormatFeatureMarkdown.
+// TestFormatFeatureMarkdown verifies the FeatureMarkdown Markdown formatter for a representative feature input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFeatureMarkdown(t *testing.T) {
 	result := FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{
@@ -214,7 +234,9 @@ func TestFormatFeatureMarkdown(t *testing.T) {
 // Set — API error
 // ---------------------------------------------------------------------------.
 
-// TestSet_APIError verifies Set when API error.
+// TestSet_APIError verifies that Set returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -229,7 +251,9 @@ func TestSet_APIError(t *testing.T) {
 // Set — with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestSet_AllOptionalFields verifies Set when all optional fields.
+// TestSet_AllOptionalFields verifies the Set_AllOptionalFields handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSet_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -262,7 +286,9 @@ func TestSet_AllOptionalFields(t *testing.T) {
 // ListDefinitions — API error
 // ---------------------------------------------------------------------------.
 
-// TestListDefinitions_APIError verifies ListDefinitions when API error.
+// TestListDefinitions_APIError verifies that ListDefinitions returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListDefinitions_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -277,7 +303,9 @@ func TestListDefinitions_APIError(t *testing.T) {
 // Formatter — empty definitions
 // ---------------------------------------------------------------------------.
 
-// TestFormatListDefinitionsMarkdown_Empty verifies FormatListDefinitionsMarkdown when empty.
+// TestFormatListDefinitionsMarkdown_Empty verifies the ListDefinitionsMarkdown_Empty Markdown formatter for a representative listdefinitions_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
 	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{})
 	text := result.Content[0].(*mcp.TextContent).Text
@@ -290,7 +318,9 @@ func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
 // Formatter — feature without definition
 // ---------------------------------------------------------------------------.
 
-// TestFormatFeatureMarkdown_NoDefinition verifies FormatFeatureMarkdown when no definition.
+// TestFormatFeatureMarkdown_NoDefinition verifies the FeatureMarkdown_NoDefinition Markdown formatter for a representative feature_nodefinition input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 	result := FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{

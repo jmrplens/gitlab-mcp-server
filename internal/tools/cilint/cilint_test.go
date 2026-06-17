@@ -20,7 +20,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // CI Lint Project
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_Success verifies CILintProject when success.
+// TestCILintProject_Success verifies that CILintProject succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/ci/lint (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILintProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -56,7 +58,9 @@ func TestCILintProject_Success(t *testing.T) {
 	}
 }
 
-// TestCILintProject_Invalid verifies CILintProject when invalid.
+// TestCILintProject_Invalid verifies the CILintProject_Invalid handler.
+// The mock GitLab API at /api/v4/projects/123/ci/lint (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILintProject_Invalid(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -86,7 +90,9 @@ func TestCILintProject_Invalid(t *testing.T) {
 	}
 }
 
-// TestCILintProject_WithOptions verifies CILintProject when with options.
+// TestCILintProject_WithOptions verifies the CILintProject_WithOptions handler.
+// The mock GitLab API at /api/v4/projects/123/ci/lint (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILintProject_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodGet {
@@ -115,7 +121,9 @@ func TestCILintProject_WithOptions(t *testing.T) {
 	}
 }
 
-// TestCILintProject_MissingProjectID verifies CILintProject when missing project ID.
+// TestCILintProject_MissingProjectID verifies that CILintProject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCILintProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintProject(context.Background(), client, ProjectInput{})
@@ -124,7 +132,9 @@ func TestCILintProject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCILintProject_CancelledContext verifies CILintProject when cancelled context.
+// TestCILintProject_CancelledContext verifies the CILintProject_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCILintProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -138,7 +148,9 @@ func TestCILintProject_CancelledContext(t *testing.T) {
 // CI Lint (Namespace)
 // ---------------------------------------------------------------------------.
 
-// TestCILint_Success verifies CILint when success.
+// TestCILint_Success verifies that CILint succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/ci/lint (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILint_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodPost {
@@ -166,7 +178,9 @@ func TestCILint_Success(t *testing.T) {
 	}
 }
 
-// TestCILint_InvalidYAML verifies CILint when invalid YAML.
+// TestCILint_InvalidYAML verifies the CILint_InvalidYAML handler.
+// The mock GitLab API at /api/v4/projects/123/ci/lint (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILint_InvalidYAML(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/ci/lint" && r.Method == http.MethodPost {
@@ -197,7 +211,9 @@ func TestCILint_InvalidYAML(t *testing.T) {
 	}
 }
 
-// TestCILint_MissingProjectID verifies CILint when missing project ID.
+// TestCILint_MissingProjectID verifies that CILint_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCILint_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{Content: "stages: [build]"})
@@ -206,7 +222,9 @@ func TestCILint_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCILint_MissingContent verifies CILint when missing content.
+// TestCILint_MissingContent verifies that CILint_MissingContent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCILint_MissingContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{ProjectID: "123"})
@@ -215,7 +233,9 @@ func TestCILint_MissingContent(t *testing.T) {
 	}
 }
 
-// TestCILint_EmptyContent verifies CILint when empty content.
+// TestCILint_EmptyContent verifies the CILint_EmptyContent handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCILint_EmptyContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := LintContent(context.Background(), client, ContentInput{ProjectID: "123", Content: "   "})
@@ -224,7 +244,9 @@ func TestCILint_EmptyContent(t *testing.T) {
 	}
 }
 
-// TestCILint_CancelledContext verifies CILint when cancelled context.
+// TestCILint_CancelledContext verifies the CILint_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCILint_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -249,7 +271,9 @@ const (
 // LintProject — API error
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_APIError verifies CILintProject when API error.
+// TestCILintProject_APIError verifies that CILintProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCILintProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -264,7 +288,9 @@ func TestCILintProject_APIError(t *testing.T) {
 // LintProject — all optional fields (DryRunRef, Ref)
 // ---------------------------------------------------------------------------.
 
-// TestCILintProject_AllOptionalFields verifies CILintProject when all optional fields.
+// TestCILintProject_AllOptionalFields verifies the CILintProject_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/42/ci/lint (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILintProject_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/ci/lint" && r.Method == http.MethodGet {
@@ -310,7 +336,9 @@ func TestCILintProject_AllOptionalFields(t *testing.T) {
 // LintContent — API error
 // ---------------------------------------------------------------------------.
 
-// TestCILintContent_APIError verifies CILintContent when API error.
+// TestCILintContent_APIError verifies that CILintContent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCILintContent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -328,7 +356,9 @@ func TestCILintContent_APIError(t *testing.T) {
 // LintContent — all optional fields (DryRun, IncludeJobs, Ref)
 // ---------------------------------------------------------------------------.
 
-// TestCILintContent_AllOptionalFields verifies CILintContent when all optional fields.
+// TestCILintContent_AllOptionalFields verifies the CILintContent_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/99/ci/lint (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCILintContent_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/99/ci/lint" && r.Method == http.MethodPost {
@@ -368,7 +398,9 @@ func TestCILintContent_AllOptionalFields(t *testing.T) {
 // toOutput — empty includes slice
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_EmptyIncludes verifies ToOutput includes for empty.
+// TestToOutput_EmptyIncludes verifies the ToOutput_EmptyIncludes handler.
+// The mock GitLab API at /api/v4/projects/1/ci/lint (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_EmptyIncludes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/ci/lint" && r.Method == http.MethodGet {
@@ -397,7 +429,9 @@ func TestToOutput_EmptyIncludes(t *testing.T) {
 // FormatOutputMarkdown — valid with all sections
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_ValidAllSections verifies FormatOutputMarkdown when valid all sections.
+// TestFormatOutputMarkdown_ValidAllSections verifies the OutputMarkdown_ValidAllSections Markdown formatter for a representative output_validallsections input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:      true,
@@ -437,7 +471,9 @@ func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 // FormatOutputMarkdown — invalid with errors
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_InvalidWithErrors verifies FormatOutputMarkdown when invalid with errors.
+// TestFormatOutputMarkdown_InvalidWithErrors verifies the OutputMarkdown_InvalidWithErrors Markdown formatter for a representative output_invalidwitherrors input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:  false,
@@ -470,7 +506,9 @@ func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 // FormatOutputMarkdown — empty output (all defaults)
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
+// TestFormatOutputMarkdown_Empty verifies the OutputMarkdown_Empty Markdown formatter for a representative output_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	// Zero-value Output has Valid=false, which produces the Invalid header
@@ -483,7 +521,9 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // FormatOutputMarkdown — valid but empty content returns empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage verifies FormatOutputMarkdown returns minimal message for valid no content.
+// TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage verifies the OutputMarkdown_ValidNoContentReturnsMinimalMessage Markdown formatter for a representative output_validnocontentreturnsminimalmessage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage(t *testing.T) {
 	md := FormatOutputMarkdown(Output{Valid: true})
 	if md == "" {
@@ -498,7 +538,9 @@ func TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage(t *testing.T) 
 // FormatOutputMarkdown — only merged yaml
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyMergedYaml verifies FormatOutputMarkdown when only merged YAML.
+// TestFormatOutputMarkdown_OnlyMergedYaml verifies the OutputMarkdown_OnlyMergedYaml Markdown formatter for a representative output_onlymergedyaml input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_OnlyMergedYaml(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:      true,
@@ -519,7 +561,9 @@ func TestFormatOutputMarkdown_OnlyMergedYaml(t *testing.T) {
 // FormatOutputMarkdown — only includes
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyIncludes verifies FormatOutputMarkdown includes for only.
+// TestFormatOutputMarkdown_OnlyIncludes verifies the OutputMarkdown_OnlyIncludes Markdown formatter for a representative output_onlyincludes input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_OnlyIncludes(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid: true,
@@ -539,7 +583,9 @@ func TestFormatOutputMarkdown_OnlyIncludes(t *testing.T) {
 // FormatOutputMarkdown — only warnings
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyWarnings verifies FormatOutputMarkdown when only warnings.
+// TestFormatOutputMarkdown_OnlyWarnings verifies the OutputMarkdown_OnlyWarnings Markdown formatter for a representative output_onlywarnings input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_OnlyWarnings(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:    true,
@@ -557,7 +603,9 @@ func TestFormatOutputMarkdown_OnlyWarnings(t *testing.T) {
 // FormatOutputMarkdown — only errors (invalid)
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_OnlyErrors verifies FormatOutputMarkdown when only errors.
+// TestFormatOutputMarkdown_OnlyErrors verifies the OutputMarkdown_OnlyErrors Markdown formatter for a representative output_onlyerrors input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFormatOutputMarkdown_OnlyErrors(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid:  false,
@@ -575,7 +623,9 @@ func TestFormatOutputMarkdown_OnlyErrors(t *testing.T) {
 // FormatOutputMarkdown — includes with special characters in table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_IncludesSpecialChars verifies FormatOutputMarkdown includes special chars.
+// TestFormatOutputMarkdown_IncludesSpecialChars verifies the OutputMarkdown_IncludesSpecialChars Markdown formatter for a representative output_includesspecialchars input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Valid: true,
@@ -596,7 +646,9 @@ func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates all CI lint canonical routes across table-driven subtests.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	lintResult := `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"stages:\n  - build","includes":[]}`
 

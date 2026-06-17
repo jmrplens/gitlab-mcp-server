@@ -31,7 +31,9 @@ const (
 	testDateCreated = "2026-01-14"
 )
 
-// TestListProjectEvents_Success verifies ListProjectEvents when success.
+// TestListProjectEvents_Success verifies that ListProjectEvents succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/events (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/events" {
@@ -65,7 +67,9 @@ func TestListProjectEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_WithFilters verifies ListProjectEvents when with filters.
+// TestListProjectEvents_WithFilters verifies the ListProjectEvents_WithFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/events") {
@@ -112,7 +116,9 @@ func TestListProjectEvents_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_ValidationError verifies ListProjectEvents when validation error.
+// TestListProjectEvents_ValidationError verifies that ListProjectEvents_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectEvents_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for validation error")
@@ -124,7 +130,9 @@ func TestListProjectEvents_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_APIError_Forbidden verifies ListProjectEvents returns an error on HTTP 403.
+// TestListProjectEvents_APIError_Forbidden verifies that ListProjectEvents_Forbidden returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectEvents_APIError_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -136,7 +144,9 @@ func TestListProjectEvents_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_EmptyResult verifies ListProjectEvents when empty result.
+// TestListProjectEvents_EmptyResult verifies the ListProjectEvents_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
@@ -151,7 +161,9 @@ func TestListProjectEvents_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_Success verifies ListCurrentUserContributionEvents when success.
+// TestListCurrentUserContributionEvents_Success verifies that ListCurrentUserContributionEvents succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/events (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/events" {
@@ -185,7 +197,9 @@ func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_WithFilters verifies ListCurrentUserContributionEvents when with filters.
+// TestListCurrentUserContributionEvents_WithFilters verifies the ListCurrentUserContributionEvents_WithFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListCurrentUserContributionEvents_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/events") {
@@ -220,7 +234,9 @@ func TestListCurrentUserContributionEvents_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_APIError_Forbidden verifies ListCurrentUserContributionEvents returns error on HTTP 403.
+// TestListCurrentUserContributionEvents_APIError_Forbidden verifies that ListCurrentUserContributionEvents_Forbidden returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListCurrentUserContributionEvents_APIError_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -232,7 +248,9 @@ func TestListCurrentUserContributionEvents_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithEvents verifies FormatContributionListMarkdownString when with events.
+// TestFormatContributionListMarkdownString_WithEvents verifies the ContributionListMarkdownString_WithEvents Markdown formatter for a representative contributionliststring_withevents input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -249,7 +267,9 @@ func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_Empty verifies FormatContributionListMarkdownString when empty.
+// TestFormatContributionListMarkdownString_Empty verifies the ContributionListMarkdownString_Empty Markdown formatter for a representative contributionliststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
 	out := ListContributionEventsOutput{Events: []ContributionEventOutput{}}
 	md := FormatContributionListMarkdownString(out)
@@ -258,7 +278,9 @@ func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithEvents verifies FormatListMarkdownString when with events.
+// TestFormatListMarkdownString_WithEvents verifies the ListMarkdownString_WithEvents Markdown formatter for a representative liststring_withevents input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithEvents(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -278,7 +300,9 @@ func TestFormatListMarkdownString_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	out := ListProjectEventsOutput{Events: []ProjectEventOutput{}}
 	md := FormatListMarkdownString(out)
@@ -287,7 +311,9 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_TargetTitleShown verifies FormatContributionListMarkdownString when target title shown.
+// TestFormatContributionListMarkdownString_TargetTitleShown verifies the ContributionListMarkdownString_TargetTitleShown Markdown formatter for a representative contributionliststring_targettitleshown input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_TargetTitleShown(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -300,7 +326,9 @@ func TestFormatContributionListMarkdownString_TargetTitleShown(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_AuthorPrefixed verifies FormatContributionListMarkdownString when author prefixed.
+// TestFormatContributionListMarkdownString_AuthorPrefixed verifies the ContributionListMarkdownString_AuthorPrefixed Markdown formatter for a representative contributionliststring_authorprefixed input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_AuthorPrefixed(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -313,7 +341,9 @@ func TestFormatContributionListMarkdownString_AuthorPrefixed(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_NoEventID verifies FormatContributionListMarkdownString when no event ID.
+// TestFormatContributionListMarkdownString_NoEventID verifies the ContributionListMarkdownString_NoEventID Markdown formatter for a representative contributionliststring_noeventid input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_NoEventID(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -326,7 +356,9 @@ func TestFormatContributionListMarkdownString_NoEventID(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_TargetTitleShown verifies FormatListMarkdownString when target title shown.
+// TestFormatListMarkdownString_TargetTitleShown verifies the ListMarkdownString_TargetTitleShown Markdown formatter for a representative liststring_targettitleshown input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_TargetTitleShown(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -339,7 +371,9 @@ func TestFormatListMarkdownString_TargetTitleShown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_AuthorPrefixed verifies FormatListMarkdownString when author prefixed.
+// TestFormatListMarkdownString_AuthorPrefixed verifies the ListMarkdownString_AuthorPrefixed Markdown formatter for a representative liststring_authorprefixed input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -352,7 +386,9 @@ func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_NoEventID verifies FormatListMarkdownString when no event ID.
+// TestFormatListMarkdownString_NoEventID verifies the ListMarkdownString_NoEventID Markdown formatter for a representative liststring_noeventid input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_NoEventID(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
@@ -365,7 +401,9 @@ func TestFormatListMarkdownString_NoEventID(t *testing.T) {
 	}
 }
 
-// TestFormatAuthor covers FormatAuthor with table-driven subtests.
+// TestFormatAuthor verifies the Author Markdown formatter for a representative author input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAuthor(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -404,7 +442,9 @@ func containsSubstring(s, sub string) bool {
 
 // toContributionEventOutput.
 
-// TestCovtoContributionEventOutput_NilCreatedAt verifies CovtoContributionEventOutput when nil created at.
+// TestCovtoContributionEventOutput_NilCreatedAt verifies the CovtoContributionEventOutput_NilCreatedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 	e := &gl.ContributionEvent{
 		ID:             1,
@@ -428,7 +468,9 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestCovtoContributionEventOutput_WithDate verifies CovtoContributionEventOutput when with date.
+// TestCovtoContributionEventOutput_WithDate verifies the CovtoContributionEventOutput_WithDate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 	ts := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 	e := &gl.ContributionEvent{
@@ -452,7 +494,9 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 
 // FormatContributionListMarkdown.
 
-// TestFormatContributionListMarkdown_Wrapper verifies FormatContributionListMarkdown when wrapper.
+// TestFormatContributionListMarkdown_Wrapper verifies the ContributionListMarkdown_Wrapper Markdown formatter for a representative contributionlist_wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
@@ -463,7 +507,9 @@ func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_EmptyTargetType verifies FormatContributionListMarkdownString when empty target type.
+// TestFormatContributionListMarkdownString_EmptyTargetType verifies the ContributionListMarkdownString_EmptyTargetType Markdown formatter for a representative contributionliststring_emptytargettype input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_EmptyTargetType(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
@@ -474,7 +520,9 @@ func TestFormatContributionListMarkdownString_EmptyTargetType(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithTargetType verifies FormatContributionListMarkdownString when with target type.
+// TestFormatContributionListMarkdownString_WithTargetType verifies the ContributionListMarkdownString_WithTargetType Markdown formatter for a representative contributionliststring_withtargettype input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdownString_WithTargetType(t *testing.T) {
 	out := ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: "Issue", TargetIID: 42}},
@@ -487,7 +535,9 @@ func TestFormatContributionListMarkdownString_WithTargetType(t *testing.T) {
 
 // toProjectEventOutput.
 
-// TestCovtoProject_EventOutputFieldMapping verifies CovtoProject when event output field mapping.
+// TestCovtoProject_EventOutputFieldMapping verifies the CovtoProject_EventOutputFieldMapping handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 	e := &gl.ProjectEvent{
 		ID:             101,
@@ -513,7 +563,9 @@ func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 
 // FormatListMarkdown.
 
-// TestFormatListMarkdown_Wrapper verifies FormatListMarkdown when wrapper.
+// TestFormatListMarkdown_Wrapper verifies the ListMarkdown_Wrapper Markdown formatter for a representative list_wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
@@ -524,7 +576,9 @@ func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_EmptyTargetType verifies FormatListMarkdownString when empty target type.
+// TestFormatListMarkdownString_EmptyTargetType verifies the ListMarkdownString_EmptyTargetType Markdown formatter for a representative liststring_emptytargettype input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_EmptyTargetType(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
@@ -535,7 +589,9 @@ func TestFormatListMarkdownString_EmptyTargetType(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithTargetType verifies FormatListMarkdownString when with target type.
+// TestFormatListMarkdownString_WithTargetType verifies the ListMarkdownString_WithTargetType Markdown formatter for a representative liststring_withtargettype input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithTargetType(t *testing.T) {
 	out := ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: "MR", TargetIID: 5}},
@@ -548,7 +604,9 @@ func TestFormatListMarkdownString_WithTargetType(t *testing.T) {
 
 // API error paths.
 
-// TestListCurrentUserContributionEvents_APIError verifies ListCurrentUserContributionEvents when API error.
+// TestListCurrentUserContributionEvents_APIError verifies that ListCurrentUserContributionEvents returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListCurrentUserContributionEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -559,7 +617,9 @@ func TestListCurrentUserContributionEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_AllFilters verifies ListCurrentUserContributionEvents when all filters.
+// TestListCurrentUserContributionEvents_AllFilters verifies the ListCurrentUserContributionEvents_AllFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -580,7 +640,9 @@ func TestListCurrentUserContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListCurrentUserContributionEvents_InvalidDates verifies ListCurrentUserContributionEvents when invalid dates.
+// TestListCurrentUserContributionEvents_InvalidDates verifies the ListCurrentUserContributionEvents_InvalidDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListCurrentUserContributionEvents_InvalidDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -594,7 +656,9 @@ func TestListCurrentUserContributionEvents_InvalidDates(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_APIError verifies ListProjectEvents when API error.
+// TestListProjectEvents_APIError verifies that ListProjectEvents returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -605,7 +669,9 @@ func TestListProjectEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_EmptyProjectID verifies ListProjectEvents when empty project ID.
+// TestListProjectEvents_EmptyProjectID verifies the ListProjectEvents_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -616,7 +682,9 @@ func TestListProjectEvents_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_AllFilters verifies ListProjectEvents when all filters.
+// TestListProjectEvents_AllFilters verifies the ListProjectEvents_AllFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -637,7 +705,9 @@ func TestListProjectEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListProjectEvents_InvalidDates verifies ListProjectEvents when invalid dates.
+// TestListProjectEvents_InvalidDates verifies the ListProjectEvents_InvalidDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectEvents_InvalidDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -652,7 +722,9 @@ func TestListProjectEvents_InvalidDates(t *testing.T) {
 	}
 }
 
-// TestUserActionSpecs_Metadata verifies event action spec metadata.
+// TestUserActionSpecs_Metadata verifies the UserActionSpecs_Metadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUserActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -683,7 +755,9 @@ func TestUserActionSpecs_Metadata(t *testing.T) {
 
 // ActionSpec route execution.
 
-// TestUserActionSpecs_CallRoutes validates event canonical routes.
+// TestUserActionSpecs_CallRoutes verifies the UserActionSpecs_CallRoutes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUserActionSpecs_CallRoutes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -731,8 +805,9 @@ func TestFormatTarget_WithURLAndTitle(t *testing.T) {
 	}
 }
 
-// TestFormatTarget_WithURLNoTitle verifies that formatTarget produces a clickable
-// link without title when targetTitle is empty.
+// TestFormatTarget_WithURLNoTitle verifies the Target_WithURLNoTitle Markdown formatter for a representative target_withurlnotitle input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatTarget_WithURLNoTitle(t *testing.T) {
 	got := formatTarget("MergeRequest", 10, "", "https://gitlab.example.com/mr/10")
 	if !strings.Contains(got, "[MergeRequest #10](https://gitlab.example.com/mr/10)") {
@@ -743,8 +818,9 @@ func TestFormatTarget_WithURLNoTitle(t *testing.T) {
 	}
 }
 
-// TestResolveProjectWebURLs_SkipsZeroID verifies that resolveProjectWebURLs
-// skips project ID 0 without making an API call.
+// TestResolveProjectWebURLs_SkipsZeroID verifies the ResolveProjectWebURLs_SkipsZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestResolveProjectWebURLs_SkipsZeroID(t *testing.T) {
 	apiCalled := false
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -760,8 +836,9 @@ func TestResolveProjectWebURLs_SkipsZeroID(t *testing.T) {
 	}
 }
 
-// TestResolveProjectWebURLs_DeduplicatesIDs verifies that resolveProjectWebURLs
-// makes only one API call per unique project ID.
+// TestResolveProjectWebURLs_DeduplicatesIDs verifies the ResolveProjectWebURLs_DeduplicatesIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestResolveProjectWebURLs_DeduplicatesIDs(t *testing.T) {
 	callCount := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

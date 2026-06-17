@@ -13,7 +13,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 )
 
-// TestMeta_SearchExtended exercises all 10 search actions beyond the basic code/projects.
+// TestMeta_SearchExtended exercises all 10 search actions beyond the basic
+// code/projects searches through the gitlab_search meta-tool against a live
+// GitLab instance.
+//
+// The test creates a project and a known commit so the search routes return
+// non-empty results, then walks every additional search action exposed by the
+// catalog: issues, merge_requests, users, groups, milestones, wiki_blobs,
+// notes, snippets, global, and commits. Each subtest asserts the action
+// returns successfully with the expected payload shape.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SearchExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

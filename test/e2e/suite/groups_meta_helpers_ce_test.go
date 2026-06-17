@@ -2,6 +2,17 @@
 
 // groups_meta_helpers_ce_test.go contains shared helpers for advanced gitlab_group
 // meta-tool E2E workflows.
+//
+// The helpers are split by domain (core, hooks, badges, members, labels,
+// milestones, boards, and the Enterprise-gated analytics, security settings,
+// SSH certs, credentials, LDAP, SAML, wikis, protected branches, and
+// protected environments subtrees). The orchestrating run* functions build
+// [testing.T.Run] subtrees so each domain reports independently.
+//
+// The Enterprise-gated subtrees are no-ops on Community Edition sessions
+// when called via runMetaGroup*Operations; the underlying CE fallback
+// keeps the helpers safe to call from shared test code without build-tag
+// gymnastics.
 package suite
 
 import (
@@ -30,6 +41,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
 )
 
+// runMetaGroupCoreOperations exercises the cross-cutting group meta-tool
+// actions (update, search, projects) that apply on both CE and EE.
+// Each subtest is independent — only the update step needs the test
+// group's ID.
 func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName string, groupID int64, groupIDStr string) {
 	t.Helper()
 	t.Run("Update", func(t *testing.T) {
@@ -66,6 +81,11 @@ func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName strin
 	})
 }
 
+// runMetaGroupHookOperations runs the full group webhook lifecycle via
+// the gitlab_group meta-tool: add → list → get → edit → delete, plus an
+// additional subtest that exercises the newer hook event-fields surface.
+// The shared hookID is threaded through each subtest so the orchestrator
+// can hand off state cleanly.
 func runMetaGroupHookOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var hookID int64
@@ -238,6 +258,10 @@ func metaGroupHookNewEventFields(t *testing.T, ctx context.Context, groupID int6
 	}
 }
 
+// runMetaGroupBadgeOperations drives the group badge CRUD lifecycle via
+// the gitlab_group meta-tool (add → list → get → edit → preview → delete).
+// Preview is exercised between edit and delete so a regression in the
+// render pipeline is caught independently of the storage path.
 func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var badgeID int64
@@ -318,6 +342,11 @@ func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int6
 	})
 }
 
+// runMetaGroupMemberChecks exercises the "member not found" error path of
+// the group-member meta-tool actions. Both direct and inherited lookups
+// for a user that is not part of a freshly created standalone group must
+// return an error so a regression that silently returns an empty struct
+// would be caught.
 func runMetaGroupMemberChecks(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	t.Run("GroupMemberGet", func(t *testing.T) {
@@ -349,6 +378,9 @@ func runMetaGroupMemberChecks(t *testing.T, ctx context.Context, groupID int64, 
 	})
 }
 
+// runMetaGroupLabelOperations drives the group label CRUD lifecycle via
+// the gitlab_group meta-tool. labelName is threaded through the subtests
+// so list/delete lookups target the value created in this run.
 func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var labelName string
@@ -447,6 +479,10 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 	})
 }
 
+// runMetaGroupMilestoneOperations drives the group milestone lifecycle
+// (create → get → update → issues → merge_requests) via the gitlab_group
+// meta-tool. The burndown subtest only runs on Enterprise sessions because
+// the underlying endpoint is Premium/Ultimate-only.
 func runMetaGroupMilestoneOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var milestoneID int64
@@ -532,6 +568,9 @@ func runMetaGroupMilestoneOperations(t *testing.T, ctx context.Context, groupID 
 	})
 }
 
+// runMetaGroupBoardOperations dispatches to the Enterprise group-board
+// subtree. On Community Edition sessions it returns without running so
+// the CE and EE suites share the same call site.
 func runMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	if !sess.enterprise {
@@ -540,6 +579,8 @@ func runMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int6
 	runEnterpriseMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
 }
 
+// runMetaGroupEnterpriseOperations runs every Enterprise-only gitlab_group
+// meta-tool subtree. No-op on Community Edition sessions.
 func runMetaGroupEnterpriseOperations(t *testing.T, ctx context.Context, groupPath string, groupID int64, groupIDStr string) {
 	t.Helper()
 	if !sess.enterprise {
@@ -556,6 +597,10 @@ func runMetaGroupEnterpriseOperations(t *testing.T, ctx context.Context, groupPa
 	runEnterpriseMetaGroupProtectedEnvOperations(t, ctx, groupID, groupIDStr)
 }
 
+// runEnterpriseMetaGroupAnalyticsOperations exercises the value-stream
+// analytics aggregation actions on the gitlab_group meta-tool. Each subtest
+// asserts the corresponding tool returns the expected shape so future
+// catalog changes that drop a field are caught.
 func runEnterpriseMetaGroupAnalyticsOperations(t *testing.T, ctx context.Context, groupPath string) {
 	t.Helper()
 
@@ -587,6 +632,9 @@ func runEnterpriseMetaGroupAnalyticsOperations(t *testing.T, ctx context.Context
 	})
 }
 
+// runEnterpriseMetaGroupSecuritySettingsOperations verifies the
+// security_settings_update meta-tool action toggles group secret push
+// protection on the freshly created group and reports the updated flag back.
 func runEnterpriseMetaGroupSecuritySettingsOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	t.Run("SecuritySettingsUpdate", func(t *testing.T) {
@@ -603,6 +651,10 @@ func runEnterpriseMetaGroupSecuritySettingsOperations(t *testing.T, ctx context.
 	})
 }
 
+// runEnterpriseMetaGroupSSHCertOperations exercises the group-level SSH
+// certificate lifecycle: list (empty), create with a freshly minted
+// ed25519 key, list (one), and delete. The created certificate ID is
+// scoped to the subtest so each call site can run independently.
 func runEnterpriseMetaGroupSSHCertOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var certificateID int64
@@ -656,6 +708,11 @@ func runEnterpriseMetaGroupSSHCertOperations(t *testing.T, ctx context.Context, 
 	})
 }
 
+// runEnterpriseMetaGroupCredentialOperations asserts the group credential
+// inventory meta-tool actions surface the documented hint when the GitLab
+// instance does not expose the credential inventory API (Ultimate +
+// Owner/admin required). Without this check a silent success on a misrouted
+// credential action would not be caught.
 func runEnterpriseMetaGroupCredentialOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	requireTruef(t, groupID > 0, "groupID not set")
@@ -699,6 +756,10 @@ func runEnterpriseMetaGroupCredentialOperations(t *testing.T, ctx context.Contex
 	})
 }
 
+// requireErrorContainsAll fails the test unless err is non-nil and its
+// message contains every fragment. Used to assert that error responses
+// carry the action-specific guidance the meta-tool surface is contracted
+// to surface (license tier hints, next-step URLs, etc.).
 func requireErrorContainsAll(t *testing.T, err error, fragments ...string) {
 	t.Helper()
 	if err == nil {
@@ -712,6 +773,10 @@ func requireErrorContainsAll(t *testing.T, err error, fragments ...string) {
 	}
 }
 
+// runEnterpriseMetaGroupLDAPOperations exercises the group LDAP link
+// lifecycle (list/add/list/delete and delete-for-provider). Each subtest
+// asserts the expected side effect so a regression that drops the link
+// silently from the response is caught.
 func runEnterpriseMetaGroupLDAPOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	requireTruef(t, groupID > 0, "groupID not set")
@@ -788,6 +853,11 @@ func runEnterpriseMetaGroupLDAPOperations(t *testing.T, ctx context.Context, gro
 	})
 }
 
+// runEnterpriseMetaGroupSAMLOperations verifies the SAML link meta-tool
+// actions fail with the documented license/SSO hint when the GitLab
+// instance does not have SSO configured. The error path is the only
+// deterministic behavior on a stock EE Ultimate sandbox without an SSO
+// provider wired up, so we assert it instead of expecting success.
 func runEnterpriseMetaGroupSAMLOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	requireTruef(t, groupID > 0, "groupID not set")
@@ -837,6 +907,11 @@ func runEnterpriseMetaGroupSAMLOperations(t *testing.T, ctx context.Context, gro
 	})
 }
 
+// runEnterpriseMetaGroupBoardOperations drives the group board CRUD
+// lifecycle via the gitlab_group meta-tool: create → list → get → update →
+// list-lists → delete. The list subtest polls with backoff because GitLab
+// is eventually consistent and the created board may not appear in the
+// list response for a few seconds after the create call returns.
 func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var boardID int64
@@ -945,6 +1020,10 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 	})
 }
 
+// generateED25519AuthorizedKey returns a freshly minted ed25519 public key
+// formatted as an OpenSSH authorized-keys line with the supplied comment.
+// Used to seed the SSH certificate create action without relying on disk
+// fixtures.
 func generateED25519AuthorizedKey(t *testing.T, comment string) string {
 	t.Helper()
 	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
@@ -958,8 +1037,14 @@ func generateED25519AuthorizedKey(t *testing.T, comment string) string {
 	return keyType + " " + base64.StdEncoding.EncodeToString(payload) + " " + comment
 }
 
+// maxSSHWireFieldLength is the maximum value an OpenSSH wire-format length
+// prefix (uint32) can encode. We panic before generating keys with a field
+// that would exceed it.
 const maxSSHWireFieldLength = 1<<32 - 1
 
+// appendLengthPrefixed appends value to dst prefixed with its big-endian
+// uint32 length, matching the SSH wire format used by OpenSSH authorized
+// keys.
 func appendLengthPrefixed(dst, value []byte) []byte {
 	lengthValue := uint64(len(value))
 	if lengthValue > maxSSHWireFieldLength {
@@ -973,6 +1058,8 @@ func appendLengthPrefixed(dst, value []byte) []byte {
 	return dst
 }
 
+// runEnterpriseMetaGroupWikiOperations drives the group wiki page CRUD
+// lifecycle (create → list → get → update → delete).
 func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var wikiSlug string
@@ -1041,6 +1128,10 @@ func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, gro
 	})
 }
 
+// runEnterpriseMetaGroupProtectedBranchOperations exercises the group
+// protected branch lifecycle (protect → list → get → update → unprotect)
+// via the gitlab_group meta-tool. The created rule is wildcarded so it
+// does not collide with real release branches on the test group.
 func runEnterpriseMetaGroupProtectedBranchOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	branchName := uniqueName("release-") + "/*"
@@ -1104,6 +1195,11 @@ func runEnterpriseMetaGroupProtectedBranchOperations(t *testing.T, ctx context.C
 	})
 }
 
+// runEnterpriseMetaGroupProtectedEnvOperations exercises the group
+// protected environment lifecycle (invalid-tier hint → protect → list →
+// get → update → unprotect). The update step targets an existing deploy
+// access level by ID and switches its access tier, proving the update path
+// keeps the resource identifier stable across edits.
 func runEnterpriseMetaGroupProtectedEnvOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	const envName = "production"

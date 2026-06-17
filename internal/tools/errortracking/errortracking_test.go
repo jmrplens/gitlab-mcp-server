@@ -17,7 +17,9 @@ const errExpectedErr = "expected error"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestGetSettings verifies GetSettings.
+// TestGetSettings verifies the GetSettings handler.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/settings (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetSettings(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/settings" || r.Method != http.MethodGet {
@@ -41,7 +43,9 @@ func TestGetSettings(t *testing.T) {
 	}
 }
 
-// TestGetSettings_Error verifies GetSettings when error.
+// TestGetSettings_Error verifies that GetSettings returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetSettings_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -52,7 +56,9 @@ func TestGetSettings_Error(t *testing.T) {
 	}
 }
 
-// TestEnableDisable verifies EnableDisable.
+// TestEnableDisable verifies the EnableDisable handler.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/settings (PATCH) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEnableDisable(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/settings" || r.Method != http.MethodPatch {
@@ -72,7 +78,9 @@ func TestEnableDisable(t *testing.T) {
 	}
 }
 
-// TestEnableDisable_Error verifies EnableDisable when error.
+// TestEnableDisable_Error verifies that EnableDisable returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnableDisable_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -83,7 +91,9 @@ func TestEnableDisable_Error(t *testing.T) {
 	}
 }
 
-// TestListClientKeys verifies ListClientKeys.
+// TestListClientKeys verifies the ListClientKeys handler.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListClientKeys(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys" || r.Method != http.MethodGet {
@@ -104,7 +114,9 @@ func TestListClientKeys(t *testing.T) {
 	}
 }
 
-// TestListClientKeys_Error verifies ListClientKeys when error.
+// TestListClientKeys_Error verifies that ListClientKeys returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListClientKeys_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -115,7 +127,9 @@ func TestListClientKeys_Error(t *testing.T) {
 	}
 }
 
-// TestCreateClientKey verifies CreateClientKey.
+// TestCreateClientKey verifies the CreateClientKey handler.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreateClientKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys" || r.Method != http.MethodPost {
@@ -133,7 +147,9 @@ func TestCreateClientKey(t *testing.T) {
 	}
 }
 
-// TestCreateClientKey_Error verifies CreateClientKey when error.
+// TestCreateClientKey_Error verifies that CreateClientKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateClientKey_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -144,7 +160,9 @@ func TestCreateClientKey_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey verifies DeleteClientKey.
+// TestDeleteClientKey verifies the DeleteClientKey handler.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys/10 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteClientKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/error_tracking/client_keys/10" || r.Method != http.MethodDelete {
@@ -159,7 +177,9 @@ func TestDeleteClientKey(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey_Error verifies DeleteClientKey when error.
+// TestDeleteClientKey_Error verifies that DeleteClientKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteClientKey_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"error"}`)
@@ -170,7 +190,9 @@ func TestDeleteClientKey_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteClientKey_InvalidKeyID verifies DeleteClientKey when invalid key ID.
+// TestDeleteClientKey_InvalidKeyID verifies the DeleteClientKey_InvalidKeyID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -188,7 +210,9 @@ func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 	}
 }
 
-// TestFormatSettingsMarkdown verifies FormatSettingsMarkdown.
+// TestFormatSettingsMarkdown verifies the SettingsMarkdown Markdown formatter for a representative settings input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSettingsMarkdown(t *testing.T) {
 	out := SettingsOutput{Active: true, ProjectName: "test", SentryExternalURL: "https://sentry.io", Integrated: false}
 	md := FormatSettingsMarkdown(out)
@@ -197,7 +221,9 @@ func TestFormatSettingsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListKeysMarkdown verifies FormatListKeysMarkdown.
+// TestFormatListKeysMarkdown verifies the ListKeysMarkdown Markdown formatter for a representative listkeys input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListKeysMarkdown(t *testing.T) {
 	out := ListClientKeysOutput{Keys: []ClientKeyItem{{ID: 1, Active: true, PublicKey: "pk", SentryDsn: "dsn"}}}
 	md := FormatListKeysMarkdown(out)
@@ -223,7 +249,9 @@ const (
 // ListClientKeys — pagination branch (Page > 0, PerPage > 0)
 // ---------------------------------------------------------------------------.
 
-// TestListClientKeys_WithPagination verifies ListClientKeys when with pagination.
+// TestListClientKeys_WithPagination verifies that ListClientKeys_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListClientKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/error_tracking/client_keys" && r.Method == http.MethodGet {
@@ -249,7 +277,9 @@ func TestListClientKeys_WithPagination(t *testing.T) {
 // FormatKeyMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatKeyMarkdown verifies FormatKeyMarkdown.
+// TestFormatKeyMarkdown verifies the KeyMarkdown Markdown formatter for a representative key input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatKeyMarkdown(t *testing.T) {
 	md := FormatKeyMarkdown(ClientKeyItem{ID: 42, Active: true, PublicKey: "pk-123", SentryDsn: "https://dsn.example.com"})
 	for _, want := range []string{
@@ -265,7 +295,9 @@ func TestFormatKeyMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatKeyMarkdown_Inactive verifies FormatKeyMarkdown when inactive.
+// TestFormatKeyMarkdown_Inactive verifies the KeyMarkdown_Inactive Markdown formatter for a representative key_inactive input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatKeyMarkdown_Inactive(t *testing.T) {
 	md := FormatKeyMarkdown(ClientKeyItem{ID: 7, Active: false, PublicKey: "pk-xyz", SentryDsn: "dsn2"})
 	if !strings.Contains(md, "**Active**: false") {
@@ -277,7 +309,9 @@ func TestFormatKeyMarkdown_Inactive(t *testing.T) {
 // FormatListKeysMarkdown — empty keys branch
 // ---------------------------------------------------------------------------.
 
-// TestFormatListKeysMarkdown_Empty verifies FormatListKeysMarkdown when empty.
+// TestFormatListKeysMarkdown_Empty verifies the ListKeysMarkdown_Empty Markdown formatter for a representative listkeys_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListKeysMarkdown_Empty(t *testing.T) {
 	md := FormatListKeysMarkdown(ListClientKeysOutput{Keys: []ClientKeyItem{}})
 	if !strings.Contains(md, "No client keys found") {
@@ -288,7 +322,9 @@ func TestFormatListKeysMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListKeysMarkdown_NilKeys verifies FormatListKeysMarkdown when nil keys.
+// TestFormatListKeysMarkdown_NilKeys verifies the ListKeysMarkdown_NilKeys Markdown formatter for a representative listkeys_nilkeys input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListKeysMarkdown_NilKeys(t *testing.T) {
 	md := FormatListKeysMarkdown(ListClientKeysOutput{})
 	if !strings.Contains(md, "No client keys found") {
@@ -300,7 +336,9 @@ func TestFormatListKeysMarkdown_NilKeys(t *testing.T) {
 // FormatSettingsMarkdown — minimal fields (no ProjectName, no SentryExternalURL)
 // ---------------------------------------------------------------------------.
 
-// TestFormatSettingsMarkdown_MinimalFields verifies FormatSettingsMarkdown when minimal fields.
+// TestFormatSettingsMarkdown_MinimalFields verifies the SettingsMarkdown_MinimalFields Markdown formatter for a representative settings_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSettingsMarkdown_MinimalFields(t *testing.T) {
 	md := FormatSettingsMarkdown(SettingsOutput{Active: false, Integrated: true})
 	if !strings.Contains(md, "**Active**: false") {

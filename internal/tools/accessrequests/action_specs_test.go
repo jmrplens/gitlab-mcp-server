@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_DenyErrors verifies deny routes return errors when the GitLab API rejects them.
+// TestActionSpecs_DenyErrors validates the DenyErrors route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DenyErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +44,9 @@ func TestActionSpecs_DenyErrors(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DenyConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DenyConfirmDeclined verifies the CatalogSurface_DenyConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DenyConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := accessRequestSpecsByTool(t, ActionSpecs(client))

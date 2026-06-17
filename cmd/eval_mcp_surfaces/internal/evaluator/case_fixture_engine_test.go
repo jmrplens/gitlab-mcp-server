@@ -1,3 +1,7 @@
+// case_fixture_engine_test.go covers [PrepareCaseAttempt] and the typed fixture
+// preparation engine used by evaluation cases that opt into live fixture
+// management.
+
 package evaluator
 
 import (
@@ -7,6 +11,16 @@ import (
 	"testing"
 )
 
+// TestPrepareCaseAttempt_EnsuresValidatesAndRendersOutput verifies that
+// PrepareCaseAttempt calls the fixture's Ensure callback once, runs the
+// optional Validate hook, and renders the case prompt template using the
+// fixture outputs.
+//
+// The test wraps a tiny project fixture that records its idempotency key
+// (asserting it contains the case ID) and returns a known project path. It
+// then checks the prepared prompt, fixture outputs, and FixtureHealth slice
+// for a single ready health entry. This guards the happy path used by every
+// typed evaluation case.
 func TestPrepareCaseAttempt_EnsuresValidatesAndRendersOutput(t *testing.T) {
 	var ensureCalls int
 	evalCase := EvalCase{
@@ -44,6 +58,15 @@ func TestPrepareCaseAttempt_EnsuresValidatesAndRendersOutput(t *testing.T) {
 	}
 }
 
+// TestPrepareCaseAttempt_RetriesUntilSuccess verifies that PrepareCaseAttempt
+// honors the fixture's Retries counter and reports every attempt in the
+// returned FixtureHealth slice, marking the final attempt ready when the
+// fixture eventually succeeds.
+//
+// The test configures a fixture that fails once before returning a valid
+// output. It asserts that the ensure callback ran twice and that the second
+// health entry is marked Ready. This protects the evaluator from treating a
+// transient GitLab 5xx as a permanent failure.
 func TestPrepareCaseAttempt_RetriesUntilSuccess(t *testing.T) {
 	var ensureCalls int
 	evalCase := EvalCase{ID: "MT-FIXTURE-002", Prompt: "ready", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{{
@@ -66,6 +89,14 @@ func TestPrepareCaseAttempt_RetriesUntilSuccess(t *testing.T) {
 	}
 }
 
+// TestPrepareCaseAttempt_FailsAfterRetryExhaustion verifies that
+// PrepareCaseAttempt returns an error mentioning "failed after N attempts"
+// when a fixture continues to fail past its Retries budget, and that
+// FixtureHealth contains one failed entry per attempt.
+//
+// The test forces the fixture to always fail with the same error and asserts
+// the wrapped message plus the resulting health slice length. This protects
+// operators from silently losing fixture state when GitLab outages persist.
 func TestPrepareCaseAttempt_FailsAfterRetryExhaustion(t *testing.T) {
 	evalCase := EvalCase{ID: "MT-FIXTURE-003", Prompt: "never", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{{
 		Name:    "downstream",
@@ -81,6 +112,17 @@ func TestPrepareCaseAttempt_FailsAfterRetryExhaustion(t *testing.T) {
 	}
 }
 
+// TestPrepareCaseAttempt_CleansPreparedFixturesWhenLaterFixtureFails
+// verifies that PrepareCaseAttempt runs cleanup callbacks for any fixtures
+// that succeeded before a later sibling failed, so the live GitLab instance
+// is left in a clean state.
+//
+// The test prepares a successful "prepared" fixture and a failing "failing"
+// fixture. It asserts that the failing fixture surfaces a wrapped error, the
+// prepared case retains one cleanup function, and that cleanup function was
+// invoked with the resource_id emitted by the prepared fixture. This guards
+// the operator's GitLab from accumulating orphan resources after aborted
+// evaluations.
 func TestPrepareCaseAttempt_CleansPreparedFixturesWhenLaterFixtureFails(t *testing.T) {
 	var cleaned []string
 	evalCase := EvalCase{ID: "MT-FIXTURE-CLEANUP", Prompt: "cleanup", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{
@@ -110,6 +152,15 @@ func TestPrepareCaseAttempt_CleansPreparedFixturesWhenLaterFixtureFails(t *testi
 	}
 }
 
+// TestPrepareCaseAttempt_FailsValidationAndMissingOutput verifies that
+// PrepareCaseAttempt rejects a fixture that omits an output key declared in
+// the fixture's Outputs slice, surfacing a "missing output" error before
+// the case prompt is rendered.
+//
+// The test runs a fixture that returns an empty FixtureOutput even though it
+// declared project_path as a required output. The assertion guards against
+// silently rendering an empty prompt template when live fixture preparation
+// under-delivers.
 func TestPrepareCaseAttempt_FailsValidationAndMissingOutput(t *testing.T) {
 	evalCase := EvalCase{ID: "MT-FIXTURE-004", Prompt: "missing", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{{
 		Name:    "project",
@@ -122,6 +173,14 @@ func TestPrepareCaseAttempt_FailsValidationAndMissingOutput(t *testing.T) {
 	}
 }
 
+// TestPrepareCaseAttempt_RespectsContextCancellation verifies that
+// PrepareCaseAttempt returns a wrapped [context.Canceled] error before
+// touching any fixture when the supplied context is already canceled.
+//
+// The test cancels a derived context immediately and asserts the returned
+// error satisfies [errors.Is] for context.Canceled. This protects long
+// evaluation runs from leaking GitLab resources when the user aborts the
+// CLI.
 func TestPrepareCaseAttempt_RespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -135,6 +194,16 @@ func TestPrepareCaseAttempt_RespectsContextCancellation(t *testing.T) {
 	}
 }
 
+// TestPrepareTaskAttempt_UsesTypedFixtureEngineForTypedFixtureCases verifies
+// that prepareTaskAttempt and prepareTaskAttemptValue delegate to the typed
+// fixture engine for cases with declared fixtures and a prompt template,
+// producing both a rendered task prompt and a wrapped [PreparedCase].
+//
+// The test opts into execute+use-fixtures, runs the helper on a tiny
+// resource fixture, and asserts the task prompt and the wrapped Prepared
+// value both contain the rendered template output. This protects the bridge
+// between the runtime orchestrator and the typed fixture engine from
+// regressing to the legacy "prompt only" path.
 func TestPrepareTaskAttempt_UsesTypedFixtureEngineForTypedFixtureCases(t *testing.T) {
 	evalCase := EvalCase{
 		ID:             "MT-FIXTURE-006",

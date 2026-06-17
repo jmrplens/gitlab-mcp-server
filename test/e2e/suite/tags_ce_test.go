@@ -13,7 +13,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
-// TestIndividual_Tags exercises the tag lifecycle using individual MCP tools.
+// TestIndividual_Tags exercises the tag lifecycle using individual MCP tools
+// against a live GitLab instance.
+//
+// The test creates a project fixture, walks gitlab_tag_create, _list, _get,
+// _update, and _delete, and finally exercises release_create off the tag.
+// Each subtest asserts the tag name and target SHA round-trip through the
+// GitLab API, and cleanup removes the tag and release on test exit.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Tags(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -83,7 +91,15 @@ func TestIndividual_Tags(t *testing.T) {
 	})
 }
 
-// TestMeta_Tags exercises the tag lifecycle using the gitlab_tag meta-tool.
+// TestMeta_Tags exercises the tag lifecycle using the gitlab_tag meta-tool
+// against a live GitLab instance.
+//
+// The test mirrors [TestIndividual_Tags] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_tag tool.
+// Subtests cover create, list, get, update, delete, and release_create off
+// the resulting tag, verifying the meta-tool returns consistent payloads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Tags(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

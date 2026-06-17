@@ -21,9 +21,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
 )
 
-// TestMeta_SecurityAttributes exercises security attribute lifecycle
-// (create/update/delete) under a test category, via the
-// gitlab_security_attribute meta-tool.
+// TestMeta_SecurityAttributes exercises the security attribute lifecycle
+// (create, update, delete) under a test category through the
+// gitlab_security_attribute meta-tool against a live GitLab EE Ultimate instance.
+//
+// The test creates a security category first, then walks attribute_create,
+// attribute_update, and attribute_delete via {action, params} arguments
+// through the catalog-backed tool. Each subtest asserts the meta-tool
+// returns the expected attribute payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Ultimate.
 func TestMeta_SecurityAttributes(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("security attributes require GitLab Ultimate")

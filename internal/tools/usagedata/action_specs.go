@@ -8,19 +8,27 @@ import (
 // ActionSpecs returns canonical specs for usage data tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_service_ping — read the latest service ping payload (admin-only).
 		usageDataReadSpec("usage_data_service_ping", toolutil.RouteAction(client, GetServicePing), "gitlab_get_service_ping"),
+		// gitlab_get_non_sql_metrics — read non-SQL service ping metrics.
 		usageDataReadSpec("usage_data_non_sql_metrics", toolutil.RouteAction(client, GetNonSQLMetrics), "gitlab_get_non_sql_metrics"),
+		// gitlab_get_usage_queries — read SQL queries that produce service ping counts.
 		usageDataReadSpec("usage_data_queries", toolutil.RouteAction(client, GetQueries), "gitlab_get_usage_queries"),
+		// gitlab_get_metric_definitions — read metric definitions as YAML.
 		usageDataReadSpec("usage_data_metric_definitions", toolutil.RouteAction(client, GetMetricDefinitions), "gitlab_get_metric_definitions"),
+		// gitlab_track_event — record one usage event for analytics instrumentation.
 		usageDataCreateSpec("usage_data_track_event", toolutil.RouteAction(client, TrackEvent), "gitlab_track_event"),
+		// gitlab_track_events — record a batch of usage events in one request.
 		usageDataCreateSpec("usage_data_track_events", toolutil.RouteAction(client, TrackEvents), "gitlab_track_events"),
 	}
 }
 
+// usageDataReadSpec builds the canonical read-only spec for a usage data tool.
 func usageDataReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, usageDataOptions(name, individualTool))
 }
 
+// usageDataCreateSpec builds the canonical create spec for a usage data tool.
 func usageDataCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, usageDataOptions(name, individualTool))
 }

@@ -9,8 +9,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestFormatMergeCheckMarkdown verifies single merge status check markdown
-// rendering covers ID, name, external URL, and status fields plus hints.
+// TestFormatMergeCheckMarkdown verifies the MergeCheckMarkdown Markdown formatter for a representative mergecheck input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMergeCheckMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -58,8 +59,9 @@ func TestFormatMergeCheckMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProjectCheckMarkdown verifies single project status check
-// markdown rendering covers all fields, protected branches, and hints.
+// TestFormatProjectCheckMarkdown verifies the ProjectCheckMarkdown Markdown formatter for a representative projectcheck input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProjectCheckMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -122,8 +124,9 @@ func TestFormatProjectCheckMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMergeMarkdown verifies merge status check list rendering
-// covers empty results, populated lists with table rows, and pagination.
+// TestFormatListMergeMarkdown verifies the ListMergeMarkdown Markdown formatter for a representative listmerge input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMergeMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

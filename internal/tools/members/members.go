@@ -79,10 +79,10 @@ func ToOutput(m *gl.ProjectMember) Output {
 	return out
 }
 
-// List retrieves all members of a GitLab project, including
-// inherited members from parent groups. Supports filtering by name or
-// username via the Query field and pagination. Returns the member list
-// with pagination metadata.
+// List retrieves all project members (including inherited members
+// from parent groups) via the GitLab Project members API
+// (GET /projects/:id/members/all). Supports filtering by name or
+// username via the Query field and pagination.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -157,7 +157,10 @@ type DeleteInput struct {
 // Handlers
 // ---------------------------------------------------------------------------.
 
-// Get retrieves a single project member by user ID.
+// Get retrieves a direct project member by user ID via the GitLab
+// Project members API (GET /projects/:id/members/:user_id). Does not
+// include members inherited from parent groups; use [GetInherited] for
+// that.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("memberGet: project_id is required")
@@ -174,7 +177,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return ToOutput(m), nil
 }
 
-// GetInherited retrieves a project member including inherited membership.
+// GetInherited retrieves a project member including membership
+// inherited from any parent group via the GitLab Project members API
+// (GET /projects/:id/members/all/:user_id).
 func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("memberGetInherited: project_id is required")
@@ -191,7 +196,11 @@ func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInp
 	return ToOutput(m), nil
 }
 
-// Add adds a user as a member of a project.
+// Add adds a user as a member of a project via the GitLab Project
+// members API (POST /projects/:id/members). The user may be identified
+// by either user_id or username. The AccessLevel must be one of
+// 5/10/15/20/25/30/40/50/60; a MemberRoleID (Premium/Ultimate) may be
+// provided instead to attach a custom role.
 func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("memberAdd: project_id is required")
@@ -233,7 +242,10 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	return ToOutput(m), nil
 }
 
-// Edit modifies an existing project member's access level or expiration.
+// Edit modifies an existing project member's access level, expiration
+// date, or custom member role via the GitLab Project members API
+// (PUT /projects/:id/members/:user_id). Requires at least the same
+// access level as the target member.
 func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("memberEdit: project_id is required")
@@ -266,7 +278,9 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	return ToOutput(m), nil
 }
 
-// Delete removes a member from a project.
+// Delete removes a member from a project via the GitLab Project
+// members API (DELETE /projects/:id/members/:user_id). Requires
+// Maintainer role; the last Owner of a project cannot be removed.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if input.ProjectID == "" {
 		return errors.New("memberDelete: project_id is required")

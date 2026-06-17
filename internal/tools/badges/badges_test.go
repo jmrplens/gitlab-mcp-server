@@ -66,7 +66,9 @@ func badgeMarkdownText(t *testing.T, result *mcp.CallToolResult) string {
 
 // Project Badges.
 
-// TestListProject_Success verifies ListProject when success.
+// TestListProject_Success verifies that ListProject succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadges) && r.Method == http.MethodGet {
@@ -88,7 +90,9 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_Error verifies ListProject when error.
+// TestListProject_Error verifies that ListProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProject_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -100,7 +104,9 @@ func TestListProject_Error(t *testing.T) {
 	}
 }
 
-// TestGetProject_Success verifies GetProject when success.
+// TestGetProject_Success verifies that GetProject succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodGet {
@@ -119,7 +125,9 @@ func TestGetProject_Success(t *testing.T) {
 	}
 }
 
-// TestAddProject_Success verifies AddProject when success.
+// TestAddProject_Success verifies that AddProject succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadges) && r.Method == http.MethodPost {
@@ -143,7 +151,9 @@ func TestAddProject_Success(t *testing.T) {
 	}
 }
 
-// TestEditProject_Success verifies EditProject when success.
+// TestEditProject_Success verifies that EditProject succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodPut {
@@ -166,7 +176,9 @@ func TestEditProject_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_Success verifies DeleteProject when success.
+// TestDeleteProject_Success verifies that DeleteProject succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodDelete {
@@ -182,7 +194,9 @@ func TestDeleteProject_Success(t *testing.T) {
 	}
 }
 
-// TestPreviewProject_Success verifies PreviewProject when success.
+// TestPreviewProject_Success verifies that PreviewProject succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPreviewProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/badges/render") && r.Method == http.MethodGet {
@@ -207,7 +221,9 @@ func TestPreviewProject_Success(t *testing.T) {
 
 // Group Badges.
 
-// TestListGroup_Success verifies ListGroup when success.
+// TestListGroup_Success verifies that ListGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadges) && r.Method == http.MethodGet {
@@ -226,7 +242,9 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroup_Success verifies GetGroup when success.
+// TestGetGroup_Success verifies that GetGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodGet {
@@ -245,7 +263,9 @@ func TestGetGroup_Success(t *testing.T) {
 	}
 }
 
-// TestAddGroup_Success verifies AddGroup when success.
+// TestAddGroup_Success verifies that AddGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadges) && r.Method == http.MethodPost {
@@ -268,7 +288,9 @@ func TestAddGroup_Success(t *testing.T) {
 	}
 }
 
-// TestEditGroup_Success verifies EditGroup when success.
+// TestEditGroup_Success verifies that EditGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodPut {
@@ -291,7 +313,9 @@ func TestEditGroup_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_Success verifies DeleteGroup when success.
+// TestDeleteGroup_Success verifies that DeleteGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, pathBadge1) && r.Method == http.MethodDelete {
@@ -307,7 +331,9 @@ func TestDeleteGroup_Success(t *testing.T) {
 	}
 }
 
-// TestPreviewGroup_Success verifies PreviewGroup when success.
+// TestPreviewGroup_Success verifies that PreviewGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPreviewGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/badges/render") && r.Method == http.MethodGet {
@@ -332,7 +358,9 @@ func TestPreviewGroup_Success(t *testing.T) {
 
 // Validation Tests.
 
-// TestGetProject_BadgeIDRequired verifies GetProject when badge ID required.
+// TestGetProject_BadgeIDRequired verifies the GetProject_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetProject_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -344,7 +372,9 @@ func TestGetProject_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// TestEditProject_BadgeIDRequired verifies EditProject when badge ID required.
+// TestEditProject_BadgeIDRequired verifies the EditProject_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditProject_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -356,7 +386,9 @@ func TestEditProject_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_BadgeIDRequired verifies DeleteProject when badge ID required.
+// TestDeleteProject_BadgeIDRequired verifies the DeleteProject_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteProject_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -368,7 +400,9 @@ func TestDeleteProject_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// TestGetGroup_BadgeIDRequired verifies GetGroup when badge ID required.
+// TestGetGroup_BadgeIDRequired verifies the GetGroup_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroup_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -380,7 +414,9 @@ func TestGetGroup_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// TestEditGroup_BadgeIDRequired verifies EditGroup when badge ID required.
+// TestEditGroup_BadgeIDRequired verifies the EditGroup_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditGroup_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -392,7 +428,9 @@ func TestEditGroup_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_BadgeIDRequired verifies DeleteGroup when badge ID required.
+// TestDeleteGroup_BadgeIDRequired verifies the DeleteGroup_BadgeIDRequired handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroup_BadgeIDRequired(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -406,7 +444,9 @@ func TestDeleteGroup_BadgeIDRequired(t *testing.T) {
 
 // Formatters.
 
-// TestFormatBadgeListMarkdown_Empty verifies FormatBadgeListMarkdown when empty.
+// TestFormatBadgeListMarkdown_Empty verifies the BadgeListMarkdown_Empty Markdown formatter for a representative badgelist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBadgeListMarkdown_Empty(t *testing.T) {
 	result := FormatBadgeListMarkdown(nil, "Badges", toolutil.PaginationOutput{})
 	if result == nil {
@@ -414,7 +454,9 @@ func TestFormatBadgeListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatBadgeListMarkdown_WithData verifies FormatBadgeListMarkdown when with data.
+// TestFormatBadgeListMarkdown_WithData verifies the BadgeListMarkdown_WithData Markdown formatter for a representative badgelist_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBadgeListMarkdown_WithData(t *testing.T) {
 	result := FormatBadgeListMarkdown([]BadgeItem{
 		{ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io", Kind: "project"},
@@ -424,7 +466,9 @@ func TestFormatBadgeListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatBadgeMarkdown verifies FormatBadgeMarkdown.
+// TestFormatBadgeMarkdown verifies the BadgeMarkdown Markdown formatter for a representative badge input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBadgeMarkdown(t *testing.T) {
 	result := FormatBadgeMarkdown(BadgeItem{
 		ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io",
@@ -444,7 +488,9 @@ const errExpectedNil = "expected error, got nil"
 // Project Badges — API errors (400), validation
 // ---------------------------------------------------------------------------.
 
-// TestGetProject_APIError400 verifies GetProject when API error 400.
+// TestGetProject_APIError400 verifies that GetProject400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -455,7 +501,9 @@ func TestGetProject_APIError400(t *testing.T) {
 	}
 }
 
-// TestAddProject_APIError400 verifies AddProject when API error 400.
+// TestAddProject_APIError400 verifies that AddProject400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -466,8 +514,9 @@ func TestAddProject_APIError400(t *testing.T) {
 	}
 }
 
-// TestAddProject_APIErrorBranches verifies AddProject returns actionable
-// errors for permission failures and preserves fallback API error details.
+// TestAddProject_APIErrorBranches verifies that AddProjectBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddProject_APIErrorBranches(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -505,7 +554,9 @@ func TestAddProject_APIErrorBranches(t *testing.T) {
 	}
 }
 
-// TestEditProject_APIError400 verifies EditProject when API error 400.
+// TestEditProject_APIError400 verifies that EditProject400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -516,8 +567,9 @@ func TestEditProject_APIError400(t *testing.T) {
 	}
 }
 
-// TestEditProject_APIError403 verifies EditProject includes the project badge
-// permission hint when GitLab rejects the update.
+// TestEditProject_APIError403 verifies that EditProject403 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditProject_APIError403(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -531,7 +583,9 @@ func TestEditProject_APIError403(t *testing.T) {
 	}
 }
 
-// TestDeleteProject_APIError400 verifies DeleteProject when API error 400.
+// TestDeleteProject_APIError400 verifies that DeleteProject400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -542,7 +596,9 @@ func TestDeleteProject_APIError400(t *testing.T) {
 	}
 }
 
-// TestPreviewProject_APIError400 verifies PreviewProject when API error 400.
+// TestPreviewProject_APIError400 verifies that PreviewProject400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPreviewProject_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -557,7 +613,9 @@ func TestPreviewProject_APIError400(t *testing.T) {
 // Project Badges — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestListProject_WithNameFilter verifies ListProject when with name filter.
+// TestListProject_WithNameFilter verifies the ListProject_WithNameFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProject_WithNameFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("name") == "coverage" {
@@ -575,7 +633,9 @@ func TestListProject_WithNameFilter(t *testing.T) {
 	}
 }
 
-// TestAddProject_WithoutName verifies AddProject when without name.
+// TestAddProject_WithoutName verifies the AddProject_WithoutName handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddProject_WithoutName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -595,7 +655,9 @@ func TestAddProject_WithoutName(t *testing.T) {
 	}
 }
 
-// TestEditProject_AllOptionalFields verifies EditProject when all optional fields.
+// TestEditProject_AllOptionalFields verifies the EditProject_AllOptionalFields handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditProject_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -620,7 +682,9 @@ func TestEditProject_AllOptionalFields(t *testing.T) {
 // Group Badges — API errors (400), optional fields
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_APIError400 verifies ListGroup when API error 400.
+// TestListGroup_APIError400 verifies that ListGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -631,7 +695,9 @@ func TestListGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestGetGroup_APIError400 verifies GetGroup when API error 400.
+// TestGetGroup_APIError400 verifies that GetGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -642,7 +708,9 @@ func TestGetGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestAddGroup_APIError400 verifies AddGroup when API error 400.
+// TestAddGroup_APIError400 verifies that AddGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -653,8 +721,9 @@ func TestAddGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestAddGroup_APIErrorBranches verifies AddGroup returns actionable errors
-// for permission failures and preserves fallback API error details.
+// TestAddGroup_APIErrorBranches verifies that AddGroupBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddGroup_APIErrorBranches(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -692,7 +761,9 @@ func TestAddGroup_APIErrorBranches(t *testing.T) {
 	}
 }
 
-// TestEditGroup_APIError400 verifies EditGroup when API error 400.
+// TestEditGroup_APIError400 verifies that EditGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -703,8 +774,9 @@ func TestEditGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestEditGroup_APIError403 verifies EditGroup includes the group badge
-// permission hint when GitLab rejects the update.
+// TestEditGroup_APIError403 verifies that EditGroup403 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditGroup_APIError403(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -718,7 +790,9 @@ func TestEditGroup_APIError403(t *testing.T) {
 	}
 }
 
-// TestDeleteGroup_APIError400 verifies DeleteGroup when API error 400.
+// TestDeleteGroup_APIError400 verifies that DeleteGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -729,7 +803,9 @@ func TestDeleteGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestPreviewGroup_APIError400 verifies PreviewGroup when API error 400.
+// TestPreviewGroup_APIError400 verifies that PreviewGroup400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPreviewGroup_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -740,7 +816,9 @@ func TestPreviewGroup_APIError400(t *testing.T) {
 	}
 }
 
-// TestListGroup_WithNameFilter verifies ListGroup when with name filter.
+// TestListGroup_WithNameFilter verifies the ListGroup_WithNameFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListGroup_WithNameFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("name") == "build" {
@@ -758,7 +836,9 @@ func TestListGroup_WithNameFilter(t *testing.T) {
 	}
 }
 
-// TestAddGroup_WithName verifies AddGroup when with name.
+// TestAddGroup_WithName verifies the AddGroup_WithName handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddGroup_WithName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -778,7 +858,9 @@ func TestAddGroup_WithName(t *testing.T) {
 	}
 }
 
-// TestEditGroup_AllOptionalFields verifies EditGroup when all optional fields.
+// TestEditGroup_AllOptionalFields verifies the EditGroup_AllOptionalFields handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditGroup_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -799,7 +881,9 @@ func TestEditGroup_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestPreviewGroup_WithName verifies PreviewGroup when with name.
+// TestPreviewGroup_WithName verifies the PreviewGroup_WithName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPreviewGroup_WithName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/badges/render") {
@@ -823,7 +907,9 @@ func TestPreviewGroup_WithName(t *testing.T) {
 // Formatters — edge cases
 // ---------------------------------------------------------------------------.
 
-// TestFormatBadgeMarkdown_MinimalFields verifies FormatBadgeMarkdown when minimal fields.
+// TestFormatBadgeMarkdown_MinimalFields verifies the BadgeMarkdown_MinimalFields Markdown formatter for a representative badge_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBadgeMarkdown_MinimalFields(t *testing.T) {
 	result := FormatBadgeMarkdown(BadgeItem{ID: 1, Name: "test", LinkURL: "u", ImageURL: "i"})
 	if result == nil {
@@ -838,7 +924,9 @@ func TestFormatBadgeMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatBadgeListMarkdown_Pagination verifies FormatBadgeListMarkdown when pagination.
+// TestFormatBadgeListMarkdown_Pagination verifies the BadgeListMarkdown_Pagination Markdown formatter for a representative badgelist_pagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatBadgeListMarkdown_Pagination(t *testing.T) {
 	result := FormatBadgeListMarkdown(
 		[]BadgeItem{{ID: 1, Name: "b", LinkURL: "l", ImageURL: "i", Kind: "project"}},
@@ -930,7 +1018,9 @@ func TestMarkdownRegistry_BadgeOutputTypes(t *testing.T) {
 // Action specs — all tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for badge actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -989,7 +1079,9 @@ func assertBadgeCreateScopeGuidance(t *testing.T, byTool map[string]toolutil.Act
 	}
 }
 
-// TestActionSpecs_CallAllRoutes validates all badge routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newBadgeRouteSpecs(t)
 
@@ -1025,7 +1117,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_GetNotFound validates 404 NotFound paths on canonical get routes.
+// TestActionSpecs_GetNotFound validates the GetNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_GetNotFound(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -1058,7 +1152,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteErrors covers the error paths in delete routes.
+// TestActionSpecs_DeleteErrors validates the DeleteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

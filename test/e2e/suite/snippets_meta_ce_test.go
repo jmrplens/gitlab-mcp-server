@@ -17,7 +17,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippets"
 )
 
-// TestMeta_SnippetsPersonal exercises personal snippet actions not covered by snippets_test.go.
+// TestMeta_SnippetsPersonal exercises personal snippet actions beyond those
+// already covered by the snippets test, using the gitlab_snippet meta-tool
+// against a live GitLab instance.
+//
+// The test creates a personal snippet, walks update/list/get/user actions,
+// and then deletes the snippet. Each subtest asserts the meta-tool returns
+// the expected snippet metadata and that mutations are observable through
+// subsequent reads. Cleanup removes the snippet when the test exits.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SnippetsPersonal(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -88,7 +97,16 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 	})
 }
 
-// TestMeta_SnippetsProject exercises project-level snippet CRUD via gitlab_snippet.
+// TestMeta_SnippetsProject exercises project-level snippet CRUD through the
+// gitlab_snippet meta-tool against a live GitLab instance.
+//
+// The test creates a project, then walks the project_snippet_create,
+// project_snippet_list, project_snippet_get, project_snippet_update,
+// project_snippet_file_content, and project_snippet_delete actions. Each
+// subtest asserts the meta-tool returns the expected snippet metadata and
+// that the file content round-trips correctly.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SnippetsProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -179,7 +197,15 @@ func TestMeta_SnippetsProject(t *testing.T) {
 	})
 }
 
-// TestMeta_SnippetDiscussions exercises snippet discussion lifecycle.
+// TestMeta_SnippetDiscussions exercises the snippet discussion lifecycle
+// through the gitlab_snippet meta-tool against a live GitLab instance.
+//
+// The test creates a snippet, opens a discussion, replies, lists discussions,
+// resolves, and finally deletes the snippet. Each subtest asserts the
+// meta-tool returns the expected discussion metadata and that the resolved
+// flag is observable through a follow-up read.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SnippetDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -303,7 +329,15 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 	})
 }
 
-// TestMeta_SnippetNotes exercises snippet note CRUD.
+// TestMeta_SnippetNotes exercises snippet note CRUD through the
+// gitlab_snippet meta-tool against a live GitLab instance.
+//
+// The test creates a snippet, posts notes, lists notes, edits a note, and
+// finally deletes the notes and the snippet. Each subtest asserts the
+// meta-tool returns the expected note metadata and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SnippetNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -406,7 +440,15 @@ func TestMeta_SnippetNotes(t *testing.T) {
 	})
 }
 
-// TestMeta_SnippetEmoji exercises snippet award emoji actions.
+// TestMeta_SnippetEmoji exercises snippet award emoji actions through the
+// gitlab_snippet meta-tool against a live GitLab instance.
+//
+// The test creates a snippet, awards an emoji, lists the awarded emoji,
+// reads it back, removes it, and finally deletes the snippet. Each subtest
+// asserts the meta-tool returns the expected emoji metadata and that
+// removal is observed through a follow-up list call.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SnippetEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -11,11 +11,17 @@ import (
 // ActionSpecs returns canonical specs for group epic actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_epic_list — list epics in a group.
 		epicReadSpec("epic_list", toolutil.RouteAction(client, List), "gitlab_epic_list"),
+		// gitlab_epic_get — fetch a single epic by IID.
 		epicReadSpec("epic_get", toolutil.RouteAction(client, Get), "gitlab_epic_get"),
+		// gitlab_epic_get_links — list child epics linked to a parent epic.
 		epicReadSpec("epic_get_links", toolutil.RouteAction(client, GetLinks), "gitlab_epic_get_links"),
+		// gitlab_epic_create — create a new epic in a group.
 		epicCreateSpec("epic_create", toolutil.RouteAction(client, Create), "gitlab_epic_create"),
+		// gitlab_epic_update — update an existing epic.
 		epicUpdateSpec("epic_update", toolutil.RouteAction(client, Update), "gitlab_epic_update"),
+		// gitlab_epic_delete — delete an epic and its associations.
 		epicDeleteSpec("epic_delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_epic_delete"),
 	}
 }

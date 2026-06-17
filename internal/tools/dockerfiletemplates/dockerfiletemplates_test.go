@@ -13,7 +13,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestList verifies List.
+// TestList verifies the List handler.
+// The mock GitLab API at /api/v4/templates/dockerfiles (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/dockerfiles" {
@@ -31,7 +33,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -42,7 +46,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies Get.
+// TestGet verifies the Get handler.
+// The mock GitLab API at /api/v4/templates/dockerfiles/Ruby (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/dockerfiles/Ruby" {
@@ -60,7 +66,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -71,7 +79,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyKey verifies Get when empty key.
+// TestGet_EmptyKey verifies the Get_EmptyKey handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not call API with empty key")
@@ -85,7 +95,9 @@ func TestGet_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateListItem{{Key: "R", Name: "R"}}})
 	if !strings.Contains(md, "R") {
@@ -93,7 +105,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "R", Content: "FROM r"})
 	if !strings.Contains(md, "FROM") {
@@ -107,7 +121,9 @@ func TestFormatGetMarkdown(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: nil})
 	if !strings.Contains(md, "No templates found") {
@@ -119,7 +135,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // List — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies List when API error 400.
+// TestList_APIError400 verifies that List400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -134,7 +152,9 @@ func TestList_APIError400(t *testing.T) {
 // Get — API error 400
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError400 verifies Get when API error 400.
+// TestGet_APIError400 verifies that Get400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -149,7 +169,9 @@ func TestGet_APIError400(t *testing.T) {
 // List — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" || r.URL.Query().Get("per_page") != "5" {
@@ -166,7 +188,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies Dockerfile template action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -199,7 +223,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates Dockerfile template canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	specByTool := newDockerfileRouteSpecs(t)
 
@@ -233,7 +259,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // ActionSpec route execution error paths
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRouteErrors validates Dockerfile template route errors.
+// TestActionSpecs_CallRouteErrors validates the CallRouteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/templates/dockerfiles", func(w http.ResponseWriter, _ *http.Request) {

@@ -8,7 +8,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestActionSpecs_DeleteError verifies that the delete route returns an error when the GitLab API fails.
+// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

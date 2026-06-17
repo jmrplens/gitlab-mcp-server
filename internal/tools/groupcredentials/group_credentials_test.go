@@ -17,7 +17,9 @@ const (
 	sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
 )
 
-// TestListPATs_Success verifies that ListPATs returns the expected output when the GitLab API responds successfully.
+// TestListPATs_Success verifies that ListPATs succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListPATs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -115,7 +117,9 @@ func TestGroupCredential404Hints(t *testing.T) {
 	}
 }
 
-// TestToPATOutput_Nil verifies nil token conversion returns zero output.
+// TestToPATOutput_Nil verifies the ToPATOutput_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToPATOutput_Nil(t *testing.T) {
 	out := toPATOutput(nil)
 	if out.ID != 0 || out.Name != "" || len(out.Scopes) != 0 || out.State != "" {
@@ -123,7 +127,9 @@ func TestToPATOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestListPATs_WithPagination verifies that ListPATs forwards the pagination parameters to the GitLab API.
+// TestListPATs_WithPagination verifies that ListPATs_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListPATs_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -144,7 +150,9 @@ func TestListPATs_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListPATs_WithFilters verifies that ListPATs forwards the filters parameters to the GitLab API.
+// TestListPATs_WithFilters verifies the ListPATs_WithFilters handler.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListPATs_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -166,7 +174,9 @@ func TestListPATs_WithFilters(t *testing.T) {
 	}
 }
 
-// TestListPATs_MissingGroupID verifies that ListPATs returns a validation error when group_id is missing.
+// TestListPATs_MissingGroupID verifies that ListPATs_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPATs_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -178,7 +188,9 @@ func TestListPATs_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestListPATs_CancelledContext verifies that ListPATs returns an error when the context is already cancelled.
+// TestListPATs_CancelledContext verifies the ListPATs_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListPATs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -192,7 +204,9 @@ func TestListPATs_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListPATs_APIError verifies that ListPATs returns an error when the GitLab API responds with a failure status.
+// TestListPATs_APIError verifies that ListPATs returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPATs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
@@ -210,7 +224,9 @@ func TestListPATs_APIError(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_Success verifies that ListSSHKeys returns the expected output when the GitLab API responds successfully.
+// TestListSSHKeys_Success verifies that ListSSHKeys succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListSSHKeys_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
@@ -237,7 +253,9 @@ func TestListSSHKeys_Success(t *testing.T) {
 	}
 }
 
-// TestToSSHKeyOutput_Nil verifies nil SSH key conversion returns zero output.
+// TestToSSHKeyOutput_Nil verifies the ToSSHKeyOutput_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToSSHKeyOutput_Nil(t *testing.T) {
 	out := toSSHKeyOutput(nil)
 	if out != (SSHKeyOutput{}) {
@@ -245,7 +263,9 @@ func TestToSSHKeyOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_MissingGroupID verifies that ListSSHKeys returns a validation error when group_id is missing.
+// TestListSSHKeys_MissingGroupID verifies that ListSSHKeys_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListSSHKeys_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -257,7 +277,9 @@ func TestListSSHKeys_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_CancelledContext verifies that ListSSHKeys returns an error when the context is already cancelled.
+// TestListSSHKeys_CancelledContext verifies the ListSSHKeys_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListSSHKeys_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -271,7 +293,9 @@ func TestListSSHKeys_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_APIError verifies that ListSSHKeys returns an error when the GitLab API responds with a failure status.
+// TestListSSHKeys_APIError verifies that ListSSHKeys returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys (GET) responds with HTTP BadRequest.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListSSHKeys_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
@@ -289,7 +313,9 @@ func TestListSSHKeys_APIError(t *testing.T) {
 	}
 }
 
-// TestRevokePAT_Success verifies that RevokePAT returns the expected output when the GitLab API responds successfully.
+// TestRevokePAT_Success verifies that RevokePAT succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens/99 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestRevokePAT_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens/99" {
@@ -308,7 +334,9 @@ func TestRevokePAT_Success(t *testing.T) {
 	}
 }
 
-// TestRevokePAT_MissingGroupID verifies that RevokePAT returns a validation error when group_id is missing.
+// TestRevokePAT_MissingGroupID verifies that RevokePAT_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevokePAT_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -320,7 +348,9 @@ func TestRevokePAT_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestRevokePAT_MissingTokenID verifies that RevokePAT returns a validation error when token_id is missing.
+// TestRevokePAT_MissingTokenID verifies that RevokePAT_MissingTokenID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevokePAT_MissingTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -334,7 +364,9 @@ func TestRevokePAT_MissingTokenID(t *testing.T) {
 	}
 }
 
-// TestRevokePAT_CancelledContext verifies that RevokePAT returns an error when the context is already cancelled.
+// TestRevokePAT_CancelledContext verifies the RevokePAT_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRevokePAT_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -351,7 +383,9 @@ func TestRevokePAT_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRevokePAT_APIError verifies that RevokePAT returns an error when the GitLab API responds with a failure status.
+// TestRevokePAT_APIError verifies that RevokePAT returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens/99 (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevokePAT_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens/99" {
@@ -370,7 +404,9 @@ func TestRevokePAT_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteSSHKey_Success verifies that DeleteSSHKey returns the expected output when the GitLab API responds successfully.
+// TestDeleteSSHKey_Success verifies that DeleteSSHKey succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys/5 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteSSHKey_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys/5" {
@@ -389,7 +425,9 @@ func TestDeleteSSHKey_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteSSHKey_MissingGroupID verifies that DeleteSSHKey returns a validation error when group_id is missing.
+// TestDeleteSSHKey_MissingGroupID verifies that DeleteSSHKey_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteSSHKey_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -401,8 +439,9 @@ func TestDeleteSSHKey_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteSSHKey_MissingKeyID verifies that DeleteSSHKey returns a validation
-// error when key_id is zero.
+// TestDeleteSSHKey_MissingKeyID verifies that DeleteSSHKey_MissingKeyID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteSSHKey_MissingKeyID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -416,8 +455,9 @@ func TestDeleteSSHKey_MissingKeyID(t *testing.T) {
 	}
 }
 
-// TestDeleteSSHKey_CancelledContext verifies that DeleteSSHKey returns an error
-// when the context is already cancelled before the API call.
+// TestDeleteSSHKey_CancelledContext verifies the DeleteSSHKey_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -434,7 +474,9 @@ func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteSSHKey_APIError verifies that DeleteSSHKey propagates a 404 API error.
+// TestDeleteSSHKey_APIError verifies that DeleteSSHKey returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys/5 (GET) responds with HTTP NotFound.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteSSHKey_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys/5" {
@@ -453,8 +495,9 @@ func TestDeleteSSHKey_APIError(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_WithPagination verifies that page and per_page parameters
-// are sent as query parameters to the GitLab API.
+// TestListSSHKeys_WithPagination verifies that ListSSHKeys_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListSSHKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
@@ -541,8 +584,9 @@ func TestListPATs_InactiveTokenState(t *testing.T) {
 	}
 }
 
-// TestListSSHKeys_WithLastUsedAt verifies that toSSHKeyOutput populates the
-// LastUsedAt field when the API response includes last_used_at.
+// TestListSSHKeys_WithLastUsedAt verifies the ListSSHKeys_WithLastUsedAt handler.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/ssh_keys (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListSSHKeys_WithLastUsedAt(t *testing.T) {
 	keyJSON := `[{"id":7,"title":"used-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","last_used_at":"2026-06-15T10:30:00Z","usage_type":"auth","user_id":15}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -567,8 +611,9 @@ func TestListSSHKeys_WithLastUsedAt(t *testing.T) {
 	}
 }
 
-// TestListPATs_WithRevokedFilter verifies that the revoked filter parameter
-// is passed through to the GitLab API as a query parameter.
+// TestListPATs_WithRevokedFilter verifies the ListPATs_WithRevokedFilter handler.
+// The mock GitLab API at /api/v4/groups/mygroup/manage/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListPATs_WithRevokedFilter(t *testing.T) {
 	revoked := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

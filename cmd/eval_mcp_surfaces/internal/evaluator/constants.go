@@ -1,173 +1,225 @@
 package evaluator
 
+// Default directory, model, and backend identifiers used to bootstrap the
+// evaluator when explicit flags are absent. All values are mirrored on the
+// command line so flag documentation should stay in sync with this block.
 const (
-	// defaultEvalDir identifies the default eval dir constant used by this package.
+	// defaultEvalDir is the directory under which generated reports,
+	// fixtures, and terminal logs are written.
 	defaultEvalDir = "dist/evaluation/mcp-surfaces"
-	// defaultFixtures identifies the default fixtures constant used by this package.
+	// defaultFixtures is the JSON file used to persist live fixture state
+	// between prepare-fixtures and use-fixtures invocations.
 	defaultFixtures = "dist/evaluation/mcp-surfaces/e2e-fixtures.json"
-	// defaultModel identifies the default model constant used by this package.
+	// defaultModel is the provider:model label used when no explicit model
+	// flag or EVAL_MODELS environment variable is supplied.
 	defaultModel = "anthropic:claude-haiku-4-5-20251001"
-	// backendMock identifies the backend mock constant used by this package.
+	// backendMock keeps the catalog offline; no live GitLab calls execute.
 	backendMock = "mock"
-	// backendGitLab identifies the backend GitLab constant used by this package.
+	// backendGitLab switches the catalog backend to a real GitLab instance.
 	backendGitLab = "gitlab"
-	// editionAll identifies the edition selector that keeps every task.
+	// editionAll keeps every case regardless of edition tag.
 	editionAll = "all"
-	// editionCE identifies the GitLab CE/base task selector.
+	// editionCE selects cases targeted at GitLab CE/base.
 	editionCE = "ce"
-	// editionEnterprise identifies the GitLab Enterprise/Premium task selector.
+	// editionEnterprise selects cases that require GitLab Enterprise/Premium.
 	editionEnterprise = "enterprise"
-	// anthropicAPI identifies the anthropic API constant used by this package.
+	// anthropicAPI is the Anthropic Messages endpoint used by the
+	// first-party provider implementation.
 	anthropicAPI = "https://api.anthropic.com/v1/messages"
-	// anthropicVersion identifies the anthropic version constant used by this package.
+	// anthropicVersion is the Anthropic API version header sent with every
+	// first-party request.
 	anthropicVersion = "2023-06-01"
-	// toolCallLimit identifies the tool call limit constant used by this package.
+	// toolCallLimit is the floor applied to per-task tool-call budgets.
 	toolCallLimit = 12
-	// maxResponseBytes identifies the max response bytes constant used by this package.
+	// maxResponseBytes caps the size of provider response bodies that the
+	// runner keeps in memory.
 	maxResponseBytes = 1 << 20
-	// maxToolResultLen identifies the max tool result len constant used by this package.
+	// maxToolResultLen is the character limit applied to simulated and live
+	// tool results before they are returned to the model.
 	maxToolResultLen = 20_000
-	// dynamicFindTool identifies the dynamic find tool constant used by this package.
+	// dynamicFindTool is the dynamic-surface discovery tool name.
 	dynamicFindTool = "gitlab_find_action"
-	// dynamicExecuteActionTool identifies the dynamic execute-action MCP tool name used by this package.
+	// dynamicExecuteActionTool is the dynamic-surface dispatcher tool name.
 	dynamicExecuteActionTool = "gitlab_execute_action"
-	// resourceListTool identifies the evaluator resource-list bridge tool.
+	// resourceListTool is the evaluator bridge tool that lists MCP resources.
 	resourceListTool = "gitlab_list_resources"
-	// resourceReadTool identifies the evaluator resource-read bridge tool.
+	// resourceReadTool is the evaluator bridge tool that reads MCP resources.
 	resourceReadTool = "gitlab_read_resource"
-	// capabilityListTool identifies the evaluator MCP capability bridge tool.
+	// capabilityListTool is the evaluator bridge tool that reports MCP
+	// server capabilities.
 	capabilityListTool = "gitlab_list_capabilities"
-	// promptListTool identifies the evaluator prompt-list bridge tool.
+	// promptListTool is the evaluator bridge tool that lists MCP prompts.
 	promptListTool = "gitlab_list_prompts"
-	// promptGetTool identifies the evaluator prompt-get bridge tool.
+	// promptGetTool is the evaluator bridge tool that renders one MCP prompt.
 	promptGetTool = "gitlab_get_prompt"
-	// completionTool identifies the evaluator completion bridge tool.
+	// completionTool is the evaluator bridge tool that requests MCP argument
+	// completions.
 	completionTool = "gitlab_complete"
-	// defaultDockerComposeFile identifies the default Docker Compose file for GitLab evaluator runs.
+	// defaultDockerComposeFile is the Compose file used by Docker-backed
+	// presets when --docker-compose-file is not supplied.
 	defaultDockerComposeFile = "test/e2e/docker-compose.yml"
-	// defaultDockerGitLabURL identifies the default host URL exposed by the Docker GitLab fixture stack.
+	// defaultDockerGitLabURL is the host URL exposed by the Docker GitLab
+	// fixture stack.
 	defaultDockerGitLabURL = "http://localhost:8929"
-	// defaultDockerGitLabEEImage identifies the default GitLab EE image used for Enterprise Docker runtimes.
+	// defaultDockerGitLabEEImage is the GitLab EE image used by Enterprise
+	// Docker runtimes when no override is supplied.
 	defaultDockerGitLabEEImage = "gitlab/gitlab-ee:latest"
 )
 
+// Preset, partition, and diagnostic identifiers shared between the CLI and the
+// evaluator runtime. Presets compose edition, partition, and Docker flags; the
+// constants below double as the canonical names referenced by docs and tests.
 const (
-	// presetSchemaEnterprise identifies the preset schema enterprise constant used by this package.
+	// presetSchemaEnterprise runs the typed registry against the schema
+	// validator without live GitLab calls.
 	presetSchemaEnterprise = "schema-enterprise"
-	// presetDockerRead identifies the preset docker read constant used by this package.
+	// presetDockerRead runs the read-only subset of the CE registry against a
+	// Docker GitLab instance.
 	presetDockerRead = "docker-read"
-	// presetDockerMutatingSafe identifies the preset docker mutating safe constant used by this package.
+	// presetDockerMutatingSafe runs CE cases that mutate state but skip
+	// destructive steps.
 	presetDockerMutatingSafe = "docker-mutating-safe"
-	// presetDockerDestructiveSafe identifies the preset docker destructive safe constant used by this package.
+	// presetDockerDestructiveSafe runs destructive CE cases with confirm.
 	presetDockerDestructiveSafe = "docker-destructive-safe"
-	// presetDockerEnterpriseRead identifies the Docker-backed Enterprise read-only preset.
+	// presetDockerEnterpriseRead runs Enterprise read-only cases against a
+	// Docker GitLab instance.
 	presetDockerEnterpriseRead = "docker-enterprise-read"
-	// presetDockerEnterpriseMutatingSafe identifies the Docker-backed Enterprise safe mutation preset.
+	// presetDockerEnterpriseMutatingSafe runs Enterprise mutating cases.
 	presetDockerEnterpriseMutatingSafe = "docker-enterprise-mutating-safe"
-	// presetDockerEnterpriseDestructiveSafe identifies the Docker-backed Enterprise destructive preset.
+	// presetDockerEnterpriseDestructiveSafe runs Enterprise destructive cases.
 	presetDockerEnterpriseDestructiveSafe = "docker-enterprise-destructive-safe"
-	// presetDockerCapabilityDiscovery identifies the Docker-backed MCP capability discovery preset.
+	// presetDockerCapabilityDiscovery runs MCP capability discovery cases.
 	presetDockerCapabilityDiscovery = "docker-capability-discovery"
-	// presetDockerErrorRecovery identifies the Docker-backed fault-injection/error-recovery preset.
+	// presetDockerErrorRecovery runs the fault-injection/error-recovery cases.
 	presetDockerErrorRecovery = "docker-error-recovery"
 
-	// partitionBaseRead identifies the partition base read constant used by this package.
+	// partitionBaseRead groups read-only CE cases.
 	partitionBaseRead = "base-read"
-	// partitionBaseMutating identifies the partition base mutating constant used by this package.
+	// partitionBaseMutating groups CE cases that mutate state but are not
+	// destructive.
 	partitionBaseMutating = "base-mutating"
-	// partitionBaseDestructive identifies the partition base destructive constant used by this package.
+	// partitionBaseDestructive groups destructive CE cases.
 	partitionBaseDestructive = "base-destructive"
-	// partitionEnterpriseRead identifies the partition enterprise read constant used by this package.
+	// partitionEnterpriseRead groups read-only Enterprise cases.
 	partitionEnterpriseRead = "enterprise-read"
-	// partitionEnterpriseMutating identifies the partition enterprise mutating constant used by this package.
+	// partitionEnterpriseMutating groups Enterprise cases that mutate state.
 	partitionEnterpriseMutating = "enterprise-mutating"
-	// partitionEnterpriseDestructive identifies the partition enterprise destructive constant used by this package.
+	// partitionEnterpriseDestructive groups destructive Enterprise cases.
 	partitionEnterpriseDestructive = "enterprise-destructive"
-	// partitionErrorRecovery identifies the partition error recovery constant used by this package.
+	// partitionErrorRecovery groups error-recovery/fault-injection cases.
 	partitionErrorRecovery = "error-recovery"
-	// partitionCapabilityFallback identifies the partition capability fallback constant used by this package.
+	// partitionCapabilityFallback groups cases that depend on the MCP
+	// capability bridge rather than the action catalog.
 	partitionCapabilityFallback = "capability-fallback"
-	// flagSkipDestructive identifies the flag skip destructive constant used by this package.
+	// flagSkipDestructive is the canonical name of the destructive-skip flag.
 	flagSkipDestructive = "skip-destructive"
-	// flagSkipMutating identifies the flag skip mutating constant used by this package.
+	// flagSkipMutating is the canonical name of the mutation-skip flag.
 	flagSkipMutating = "skip-mutating"
-	// flagOnlyDestructive identifies the flag only destructive constant used by this package.
+	// flagOnlyDestructive is the canonical name of the destructive-only flag.
 	flagOnlyDestructive = "only-destructive"
-	// flagOnlyMutating identifies the flag only mutating constant used by this package.
+	// flagOnlyMutating is the canonical name of the mutation-only flag.
 	flagOnlyMutating = "only-mutating"
-	// flagSkipUnavailable identifies the flag skip unavailable constant used by this package.
+	// flagSkipUnavailable is the canonical name of the unavailable-skip flag.
 	flagSkipUnavailable = "skip-unavailable"
-	// promptMarkerIssue identifies the prompt marker issue constant used by this package.
+
+	// promptMarkerIssue is the natural-language marker that the prompt parser
+	// recognises when extracting issue identifiers.
 	promptMarkerIssue = "issue "
-	// promptMarkerMergeRequest identifies the prompt marker merge request constant used by this package.
+	// promptMarkerMergeRequest is the natural-language marker recognised when
+	// extracting merge-request identifiers.
 	promptMarkerMergeRequest = "merge request "
-	// promptMarkerBranch identifies the prompt marker branch constant used by this package.
+	// promptMarkerBranch is the natural-language marker recognised when
+	// extracting branch names.
 	promptMarkerBranch = "branch "
-	// promptMarkerProject identifies the prompt marker project constant used by this package.
+	// promptMarkerProject is the natural-language marker recognised when
+	// extracting project paths.
 	promptMarkerProject = "project "
-	// promptMarkerAllowlistProject identifies allowlist project prompt markers.
+	// promptMarkerAllowlistProject is the marker recognised around CI job
+	// token allowlist project identifiers.
 	promptMarkerAllowlistProject = "allowlist of project "
-	// promptMarkerIssueIID identifies issue IID prompt markers.
+	// promptMarkerIssueIID is the marker recognised around an issue IID.
 	promptMarkerIssueIID = "issue IID "
-	// promptMarkerGroupPath identifies group path prompt markers.
+	// promptMarkerGroupPath is the marker recognised around a group path.
 	promptMarkerGroupPath = "group path "
-	// promptMarkerAwardEmojiID identifies the prompt marker award emoji ID constant used by this package.
+	// promptMarkerAwardEmojiID is the marker recognised around an award
+	// emoji identifier.
 	promptMarkerAwardEmojiID = "award emoji ID "
-	// promptMarkerFrom identifies the prompt marker from constant used by this package.
+	// promptMarkerFrom is the shared connector marker used by compare-style
+	// prompts (e.g. "from `main` to `feature/x`").
 	promptMarkerFrom = " from "
-	// promptPhraseFailedJobs identifies the prompt phrase failed jobs constant used by this package.
+	// promptPhraseFailedJobs is the literal phrase that selects the failed
+	// jobs pipeline workflow.
 	promptPhraseFailedJobs = "failed jobs"
-	// metricToolSelection identifies the metric tool selection constant used by this package.
+
+	// metricToolSelection is the rendered label for the tool-selection metric.
 	metricToolSelection = "Tool-selection accuracy"
-	// metricActionSelection identifies the metric action selection constant used by this package.
+	// metricActionSelection is the rendered label for the action-selection
+	// metric.
 	metricActionSelection = "Action-selection accuracy"
-	// metricFirstCallValidationPassRate identifies the metric first call validation pass rate constant used by this package.
+	// metricFirstCallValidationPassRate is the rendered label for the
+	// first-call validation pass rate metric.
 	metricFirstCallValidationPassRate = "First-call validation pass rate"
-	// metricRepairSuccessRate identifies the metric repair success rate constant used by this package.
+	// metricRepairSuccessRate is the rendered label for the repair success
+	// rate metric.
 	metricRepairSuccessRate = "Repair success rate"
-	// metricDestructiveSafety identifies the metric destructive safety constant used by this package.
+	// metricDestructiveSafety is the rendered label for the destructive
+	// safety metric.
 	metricDestructiveSafety = "Destructive safety"
-	// metricFinalTaskSuccess identifies the metric final task success constant used by this package.
+	// metricFinalTaskSuccess is the rendered label for the final task
+	// success proxy metric.
 	metricFinalTaskSuccess = "Final task success proxy"
-	// metricEstimatedTokens identifies the metric estimated tokens constant used by this package.
+	// metricEstimatedTokens is the rendered label for the estimated tokens
+	// metric.
 	metricEstimatedTokens = "Estimated tokens"
-	// metricValueTableHeader identifies the metric value table header constant used by this package.
+	// metricValueTableHeader is the markdown header for a metric value row.
 	metricValueTableHeader = "| Metric | Value |\n| --- | ---: |\n"
-	// metricIntegerValueTableRow identifies the metric integer value table row constant used by this package.
+	// metricIntegerValueTableRow formats a single metric integer as a
+	// markdown table row.
 	metricIntegerValueTableRow = "| %s | %d |\n"
-	// timestampLayout identifies the UTC timestamp layout used for generated evaluator artifacts.
+	// timestampLayout is the UTC timestamp layout used for generated
+	// evaluator artifacts.
 	timestampLayout = "20060102-150405"
 
-	// actionDiscoverProjectResolve identifies the action discover project resolve constant used by this package.
+	// actionDiscoverProjectResolve is the dynamic action that resolves a
+	// remote URL to a GitLab project.
 	actionDiscoverProjectResolve = "discover_project.resolve"
-	// actionSearchProjects identifies the action search projects constant used by this package.
+	// actionSearchProjects is the dynamic action that searches projects.
 	actionSearchProjects = "search.projects"
-	// actionProjectGet identifies the action project get constant used by this package.
+	// actionProjectGet is the dynamic action that fetches a project.
 	actionProjectGet = "project.get"
-	// actionProjectList identifies the action project list constant used by this package.
+	// actionProjectList is the dynamic action that lists projects.
 	actionProjectList = "project.list"
-	// actionEnvironmentProtectedList identifies the action environment protected list constant used by this package.
+	// actionEnvironmentProtectedList is the dynamic action that lists
+	// protected environments.
 	actionEnvironmentProtectedList = "environment.protected_list"
-	// actionPipelineGet identifies the action pipeline get constant used by this package.
+	// actionPipelineGet is the dynamic action that fetches a pipeline.
 	actionPipelineGet = "pipeline.get"
-	// actionIssueCreate identifies the action issue create constant used by this package.
+	// actionIssueCreate is the dynamic action that creates an issue.
 	actionIssueCreate = "issue.create"
-	// actionIssueLinkCreate identifies the action issue link create constant used by this package.
+	// actionIssueLinkCreate is the dynamic action that links two issues.
 	actionIssueLinkCreate = "issue.link_create"
-	// errBuildActionCatalog identifies the err build action catalog constant used by this package.
+	// errBuildActionCatalog formats the wrapped error returned when the
+	// action catalog cannot be loaded.
 	errBuildActionCatalog = "build action catalog: %w"
-	// diagnosticUnknownParams identifies the diagnostic unknown params constant used by this package.
+	// diagnosticUnknownParams is the substring emitted when the model passes
+	// parameters that the schema does not list.
 	diagnosticUnknownParams = "unknown params"
-	// diagnosticMissingRequiredParams identifies missing required params diagnostics.
+	// diagnosticMissingRequiredParams is the substring emitted when required
+	// parameters are missing from the call.
 	diagnosticMissingRequiredParams = "missing required params"
-	// diagnosticMissingRequiredStandalone identifies standalone missing required field diagnostics.
+	// diagnosticMissingRequiredStandalone is the standalone-prefixed variant
+	// of the missing-required diagnostic.
 	diagnosticMissingRequiredStandalone = "missing required "
-	// diagnosticNotFound identifies the diagnostic not found constant used by this package.
+	// diagnosticNotFound is the substring emitted when a tool returns a
+	// not-found error that should be reflected in repair feedback.
 	diagnosticNotFound = "not found"
-	// diagnosticExpectedAction identifies the diagnostic expected action constant used by this package.
+	// diagnosticExpectedAction is the substring emitted when the model
+	// selected the wrong action for a step.
 	diagnosticExpectedAction = "expected action"
-	// diagnosticUnexpectedTopLevelParameter identifies invalid dynamic envelopes.
+	// diagnosticUnexpectedTopLevelParameter is the substring emitted when a
+	// dynamic call wraps its arguments in an invalid top-level parameter.
 	diagnosticUnexpectedTopLevelParameter = "unexpected top-level parameter"
 )
 
-// evalElicitationReleaseTag stores the package-level eval elicitation release tag state.
+// evalElicitationReleaseTag stores the package-level eval elicitation release
+// tag state.

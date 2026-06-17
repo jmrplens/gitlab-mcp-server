@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestGet verifies Get.
+// TestGet verifies the Get handler.
+// The mock GitLab API at /api/v4/application/statistics (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/application/statistics" {
@@ -41,7 +43,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -53,7 +57,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{ActiveUsers: 80, Projects: 45, Issues: 200}
 	md := FormatGetMarkdown(out)
@@ -73,7 +79,9 @@ func TestFormatGetMarkdown(t *testing.T) {
 // covStatsJSON identifies the cov stats JSON constant used by this package.
 const covStatsJSON = `{"forks":10,"issues":20,"merge_requests":30,"notes":40,"snippets":5,"ssh_keys":3,"milestones":7,"users":100,"groups":15,"projects":50,"active_users":80}`
 
-// TestGet_APIError_Coverage verifies Get when API error coverage.
+// TestGet_APIError_Coverage verifies that Get_Coverage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -84,7 +92,9 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success_Coverage verifies Get when success coverage.
+// TestGet_Success_Coverage verifies the Get_Success_Coverage handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
@@ -98,7 +108,9 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Cov_Coverage verifies FormatGetMarkdown when cov coverage.
+// TestFormatGetMarkdown_Cov_Coverage verifies the GetMarkdown_Cov_Coverage Markdown formatter for a representative get_cov_coverage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	out := GetOutput{Projects: 50, ActiveUsers: 80, Users: 100, Issues: 20}
 	md := FormatGetMarkdown(out)
@@ -107,7 +119,9 @@ func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata_Coverage verifies application statistics action spec metadata.
+// TestActionSpecs_Metadata_Coverage validates the Metadata_Coverage route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
@@ -130,7 +144,9 @@ func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute_Coverage verifies the application statistics canonical route.
+// TestActionSpecs_CallRoute_Coverage validates the CallRoute_Coverage route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
@@ -146,7 +162,9 @@ func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError validates the application statistics route error path.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

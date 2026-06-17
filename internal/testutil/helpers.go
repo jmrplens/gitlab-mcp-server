@@ -1,15 +1,35 @@
-// Package testutil provides shared test utilities for MCP tool tests.
-// It includes a test GitLab client factory, JSON response helpers, and
-// pagination header utilities used across all domain tool test files.
-// It also includes helpers for GraphQL test responses and assertions for
-// embedded MCP resource content.
+// Package testutil provides test helpers for gitlab-mcp-server.
 //
-// # HTTP Test Pattern
+// It wraps [net/http/httptest], the official
+// [gitlab.com/gitlab-org/api/client-go] client, and shared assertion helpers
+// so every domain test can stand up an isolated MCP server in a few lines.
+// The package is consumed by every tool test under [internal/tools] and is
+// the only sanctioned way to construct a [gitlabclient.Client] in tests.
 //
-// Most tool tests create an httptest server with package-specific routing,
-// build a GitLab client with [NewTestClient], then call the handler directly.
-// Response helpers keep JSON, pagination headers, and GraphQL envelopes
-// consistent across domain packages.
+// # Helper categories
+//
+//   - Client factory: [NewTestClient] spins up an [httptest.Server], wires it
+//     into [gitlabclient.NewClient], and tears the server down on test exit.
+//   - Response writers: [RespondJSON], [RespondJSONWithPagination],
+//     [RespondGraphQL], and [RespondGraphQLError] keep response shapes
+//     consistent across packages.
+//   - Request assertions: [AssertRequestMethod], [AssertRequestPath], and
+//     [AssertQueryParam] validate inbound HTTP calls in mock handlers.
+//   - Context and logging: [CancelledCtx] returns a pre-cancelled context;
+//     [CaptureSlog] captures [log/slog] output to a buffer for assertions.
+//   - Embedded resources: [AssertEmbeddedResource] toggles the embedded
+//     resource global flag and checks MCP call results.
+//   - GraphQL helpers: [GraphQLHandler] and [ParseGraphQLVariables] simplify
+//     mocking [POST /api/graphql] requests.
+//
+// # Typical usage
+//
+//	func TestListBranches(t *testing.T) {
+//	    client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//	        testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"main"}]`)
+//	    }))
+//	    // ... call the domain handler with client ...
+//	}
 package testutil
 
 import (
@@ -25,11 +45,16 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
-// captureSlogMu serializes CaptureSlog calls to prevent concurrent tests
-// from overwriting each other's global slog default.
+// captureSlogMu serializes [CaptureSlog] calls so concurrent tests do not
+// overwrite each other's [slog.Default] handler while capturing output.
 var captureSlogMu sync.Mutex
 
-// CancelledCtx returns a pre-cancelled context for testing cancellation handling.
+// CancelledCtx returns a [context.Context] that is already cancelled. Use it
+// to test handler cancellation paths without dealing with real timers.
+//
+// The returned context returns [context.Canceled] from [context.Context.Err]
+// immediately. The associated cancel function is intentionally dropped —
+// callers must not attempt to cancel it again.
 func CancelledCtx(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -37,9 +62,13 @@ func CancelledCtx(t *testing.T) context.Context {
 	return ctx
 }
 
-// CaptureSlog redirects slog output to a buffer for the duration of the test.
-// The original default logger is restored via t.Cleanup.
-// NOT safe for t.Parallel — acquires captureSlogMu for the test lifetime.
+// CaptureSlog redirects [slog] output to an in-memory [bytes.Buffer] for the
+// duration of the test. The original [slog.Default] logger is restored via
+// [testing.T.Cleanup].
+//
+// CaptureSlog is NOT safe for [testing.T.Parallel]: it acquires
+// [captureSlogMu] for the lifetime of the test and would deadlock with
+// another parallel CaptureSlog caller.
 func CaptureSlog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -53,11 +82,12 @@ func CaptureSlog(t *testing.T) *bytes.Buffer {
 	return &buf
 }
 
-// MsgErrEmptyProjectID is the shared assertion message for tests that expect
-// an error when project_id is empty.
+// MsgErrEmptyProjectID is the canonical assertion message for tests that
+// expect an error when the GitLab tool input omits project_id.
 const MsgErrEmptyProjectID = "expected error for empty project_id, got nil"
 
-// AssertRequestMethod fails the test if the HTTP method does not match expected.
+// AssertRequestMethod fails the test if r.Method does not equal expected.
+// It calls [testing.T.Helper] so failure lines point at the caller.
 func AssertRequestMethod(t *testing.T, r *http.Request, expected string) {
 	t.Helper()
 	if r.Method != expected {
@@ -65,7 +95,8 @@ func AssertRequestMethod(t *testing.T, r *http.Request, expected string) {
 	}
 }
 
-// AssertRequestPath fails the test if the URL path does not match expected.
+// AssertRequestPath fails the test if r.URL.Path does not equal expected.
+// It calls [testing.T.Helper] so failure lines point at the caller.
 func AssertRequestPath(t *testing.T, r *http.Request, expected string) {
 	t.Helper()
 	if r.URL.Path != expected {
@@ -73,7 +104,9 @@ func AssertRequestPath(t *testing.T, r *http.Request, expected string) {
 	}
 }
 
-// AssertQueryParam fails the test if query parameter key does not equal expected.
+// AssertQueryParam fails the test if the URL query parameter key does not
+// equal expected. Missing parameters are reported as a mismatch with an
+// empty actual value.
 func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 	t.Helper()
 	got := r.URL.Query().Get(key)
@@ -82,7 +115,18 @@ func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 	}
 }
 
-// NewTestClient creates a GitLab client pointed at a test HTTP server.
+// NewTestClient creates a [gitlabclient.Client] pointed at a fresh
+// [httptest.Server] backed by handler. The server is automatically torn down
+// when the test finishes via [testing.T.Cleanup], so callers never need to
+// manage its lifecycle.
+//
+// The client uses a static token ("test-token"), TLS verification disabled,
+// and retries disabled — sufficient for most handler unit tests but not for
+// exercising the transport retry policy. NewTestClient calls
+// [testing.T.Helper] and [testing.T.Fatalf] if client construction fails.
+//
+// The returned client is safe for concurrent use; the httptest.Server that
+// backs it is goroutine-safe by construction.
 func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
 	t.Helper()
 
@@ -104,24 +148,33 @@ func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
 	return client
 }
 
-// RespondJSON writes a JSON response with the given status code and body.
+// RespondJSON writes a JSON response with the given HTTP status and raw body.
+// It sets Content-Type to "application/json". body is written verbatim —
+// callers are responsible for producing valid JSON. Write errors are
+// intentionally ignored because the only writer in tests is an
+// [httptest.ResponseRecorder], which never fails.
 func RespondJSON(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
 }
 
-// PaginationHeaders holds GitLab pagination header values for test mocks.
+// PaginationHeaders is the set of GitLab pagination response headers
+// returned with list endpoints. Empty fields are omitted from the response so
+// handlers can populate only the headers a given scenario exercises.
 type PaginationHeaders struct {
-	Page       string
-	PerPage    string
-	Total      string
-	TotalPages string
-	NextPage   string
-	PrevPage   string
+	Page       string // X-Page — current page number.
+	PerPage    string // X-Per-Page — items per page in this response.
+	Total      string // X-Total — total items across all pages.
+	TotalPages string // X-Total-Pages — total page count.
+	NextPage   string // X-Next-Page — next page number, if any.
+	PrevPage   string // X-Prev-Page — previous page number, if any.
 }
 
-// RespondJSONWithPagination writes a JSON response with GitLab pagination headers.
+// RespondJSONWithPagination writes a JSON response with GitLab pagination
+// headers attached. Headers whose [PaginationHeaders] field is empty are
+// omitted, matching GitLab's behavior on pages without a next/previous
+// pointer.
 func RespondJSONWithPagination(w http.ResponseWriter, status int, body string, p PaginationHeaders) {
 	w.Header().Set("Content-Type", "application/json")
 	if p.Page != "" {

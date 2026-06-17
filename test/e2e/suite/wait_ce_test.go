@@ -26,8 +26,14 @@ wait-job:
 `
 
 // TestWaitTools exercises gitlab_pipeline_wait and gitlab_job_wait for both
-// individual and meta-tool sessions. Creates a pipeline, waits for it via the
-// MCP wait tool (not the direct API helper), then waits for each job.
+// the individual and meta-tool sessions against a live GitLab CE instance.
+//
+// The test creates a project fixture, triggers a pipeline, then waits for
+// the pipeline and each job through the MCP wait tools (not the direct API
+// helper) to validate the MCP server wrapping. It exercises both the
+// individual session and the catalog-backed meta-tool session.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
 func TestWaitTools(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

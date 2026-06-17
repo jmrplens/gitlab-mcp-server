@@ -15,7 +15,9 @@ const (
 	pathGroupWikiSlug = "/api/v4/groups/mygroup/wikis/home"
 )
 
-// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikis {
@@ -40,7 +42,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithContent verifies that List forwards the content parameters to the GitLab API.
+// TestList_WithContent verifies the List_WithContent handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithContent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikis {
@@ -65,7 +69,9 @@ func TestList_WithContent(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List returns a validation error when group_id is missing.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -76,7 +82,9 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -88,7 +96,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikiSlug {
@@ -110,7 +120,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingFields verifies that Get returns a validation error when fields is missing.
+// TestGet_MissingFields verifies that Get_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -125,7 +137,9 @@ func TestGet_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies that Create returns the expected output when the GitLab API responds successfully.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupWikis {
@@ -149,7 +163,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingFields verifies that Create returns a validation error when fields is missing.
+// TestCreate_MissingFields verifies that Create_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -168,7 +184,9 @@ func TestCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestEdit_Success verifies that Edit returns the expected output when the GitLab API responds successfully.
+// TestEdit_Success verifies that Edit succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupWikiSlug {
@@ -192,7 +210,9 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
-// TestEdit_MissingFields verifies that Edit returns a validation error when fields is missing.
+// TestEdit_MissingFields verifies that Edit_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEdit_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -207,7 +227,9 @@ func TestEdit_MissingFields(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupWikiSlug {
@@ -223,7 +245,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingFields verifies that Delete returns a validation error when fields is missing.
+// TestDelete_MissingFields verifies that Delete_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -238,7 +262,9 @@ func TestDelete_MissingFields(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List propagates GitLab API errors.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -249,7 +275,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies that List returns an empty slice when no pages exist.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -263,7 +291,9 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get propagates GitLab API errors.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Wiki Not Found"}`)
@@ -274,7 +304,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_RenderHTML verifies that Get passes the render_html query parameter.
+// TestGet_RenderHTML verifies the Get_RenderHTML handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_RenderHTML(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikiSlug {
@@ -294,7 +326,9 @@ func TestGet_RenderHTML(t *testing.T) {
 	}
 }
 
-// TestGet_Version verifies that Get passes the version query parameter.
+// TestGet_Version verifies the Get_Version handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Version(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupWikiSlug {
@@ -314,8 +348,9 @@ func TestGet_Version(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies that Get returns an error when the
-// context is cancelled before the API call.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -327,7 +362,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create propagates GitLab API errors.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"422 Unprocessable"}`)
@@ -342,8 +379,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_NoFormat verifies that Create works without specifying a format,
-// exercising the branch where Format is empty.
+// TestCreate_NoFormat verifies the Create_NoFormat handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_NoFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupWikis {
@@ -366,8 +404,9 @@ func TestCreate_NoFormat(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies that Create returns an error when the
-// context is cancelled before the API call.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -379,7 +418,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEdit_APIError verifies that Edit propagates GitLab API errors.
+// TestEdit_APIError verifies that Edit returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEdit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -394,7 +435,9 @@ func TestEdit_APIError(t *testing.T) {
 	}
 }
 
-// TestEdit_WithFormat verifies that Edit passes the format option when set.
+// TestEdit_WithFormat verifies the Edit_WithFormat handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEdit_WithFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupWikiSlug {
@@ -418,8 +461,9 @@ func TestEdit_WithFormat(t *testing.T) {
 	}
 }
 
-// TestEdit_OnlyTitle verifies that Edit works when only the title is updated,
-// exercising partial-update branches (no content, no format).
+// TestEdit_OnlyTitle verifies the Edit_OnlyTitle handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEdit_OnlyTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupWikiSlug {
@@ -442,8 +486,9 @@ func TestEdit_OnlyTitle(t *testing.T) {
 	}
 }
 
-// TestEdit_CancelledContext verifies that Edit returns an error when the
-// context is cancelled before the API call.
+// TestEdit_CancelledContext verifies the Edit_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEdit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -455,7 +500,9 @@ func TestEdit_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete propagates GitLab API errors.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -466,8 +513,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies that Delete returns an error when the
-// context is cancelled before the API call.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

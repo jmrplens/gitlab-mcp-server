@@ -16,14 +16,20 @@ const (
 // ActionSpecs returns canonical specs for security attribute actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_create_security_attribute — create one or more security attributes under a category.
 		securityAttributeCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_security_attribute", descriptionCreateSecurityAttribute),
+		// gitlab_update_security_attribute — rename, re-describe, or recolor an editable security attribute.
 		securityAttributeUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_update_security_attribute", descriptionUpdateSecurityAttribute),
+		// gitlab_delete_security_attribute — delete an editable custom security attribute.
 		securityAttributeDeleteSpec("delete", toolutil.DestructiveAction(client, Delete), "gitlab_delete_security_attribute", descriptionDeleteSecurityAttribute),
+		// gitlab_update_project_security_attributes — add or remove security attributes on a project.
 		securityAttributeProjectUpdateSpec("project_update", toolutil.RouteAction(client, ProjectUpdate), "gitlab_update_project_security_attributes", descriptionUpdateProjectSecurityAttribute),
+		// gitlab_bulk_update_security_attributes — add, remove, or replace security attributes across many groups and projects.
 		securityAttributeBulkUpdateSpec("bulk_update", toolutil.DestructiveAction(client, BulkUpdate), "gitlab_bulk_update_security_attributes", descriptionBulkUpdateSecurityAttributes),
 	}
 }
 
+// securityAttributeCreateSpec builds the canonical create spec for a security attribute tool.
 func securityAttributeCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -36,6 +42,7 @@ func securityAttributeCreateSpec(name string, route toolutil.ActionRoute, indivi
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
+// securityAttributeUpdateSpec builds the canonical update spec for a security attribute tool.
 func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -48,12 +55,14 @@ func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, indivi
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
+// securityAttributeDeleteSpec builds the canonical destructive delete spec for a security attribute tool.
 func securityAttributeDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.Usage = "Delete an editable custom security attribute."
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
+// securityAttributeProjectUpdateSpec builds the canonical update spec for adding/removing attributes on a project.
 func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -65,6 +74,7 @@ func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute,
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
+// securityAttributeBulkUpdateSpec builds the canonical destructive spec for bulk security attribute updates.
 func securityAttributeBulkUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{

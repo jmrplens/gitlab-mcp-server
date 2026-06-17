@@ -10,7 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestCatalog_FromActionMapsRoundTrip_DeterministicActions verifies Catalog when from action maps round trip deterministic actions.
+// TestCatalog_FromActionMapsRoundTrip_DeterministicActions verifies the Catalog_FromActionMapsRoundTrip_DeterministicActions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -55,7 +57,9 @@ func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	}
 }
 
-// TestFromActionMapsWithError_InvalidToolName_ReturnsError verifies FromActionMapsWithError returns error with invalid tool name.
+// TestFromActionMapsWithError_InvalidToolName_ReturnsError verifies that FromActionMapsWithError_InvalidToolName_ReturnsError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	catalog, err := FromActionMapsWithError(map[string]toolutil.ActionMap{
 		"": {"get": testRoute(false)},
@@ -68,7 +72,9 @@ func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	}
 }
 
-// TestFromActionMaps_InvalidToolName_Panics verifies FromActionMaps when invalid tool name panics.
+// TestFromActionMaps_InvalidToolName_Panics verifies the FromActionMaps_InvalidToolName_Panics handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFromActionMaps_InvalidToolName_Panics(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -81,7 +87,9 @@ func TestFromActionMaps_InvalidToolName_Panics(t *testing.T) {
 	})
 }
 
-// TestGroup_SetActionAndActionsInOrder_DefensiveBranches verifies Group when set action and actions in order defensive branches.
+// TestGroup_SetActionAndActionsInOrder_DefensiveBranches verifies the Group_SetActionAndActionsInOrder_DefensiveBranches handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	group := Group{ToolName: "gitlab_project"}
 	group.SetAction(Action{})
@@ -114,7 +122,9 @@ func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	}
 }
 
-// TestCatalog_CloneDefensivelyCopiesRoutes verifies Catalog when clone defensively copies routes.
+// TestCatalog_CloneDefensivelyCopiesRoutes verifies the Catalog_CloneDefensivelyCopiesRoutes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_CloneDefensivelyCopiesRoutes(t *testing.T) {
 	catalog := FromActionMaps(map[string]toolutil.ActionMap{
 		"gitlab_project": {"get": testRoute(false)},
@@ -137,7 +147,9 @@ func TestCatalog_CloneDefensivelyCopiesRoutes(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupAndAddActionValidateDuplicates verifies Catalog when add group and add action validate duplicates.
+// TestCatalog_AddGroupAndAddActionValidateDuplicates verifies the Catalog_AddGroupAndAddActionValidateDuplicates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	catalog := NewCatalog()
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project"})
@@ -190,8 +202,9 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupInitializesZeroValueCatalog verifies AddGroup supports a
-// zero-value catalog and detects cross-group action ID collisions.
+// TestCatalog_AddGroupInitializesZeroValueCatalog verifies the Catalog_AddGroupInitializesZeroValueCatalog handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_AddGroupInitializesZeroValueCatalog(t *testing.T) {
 	var catalog Catalog
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project", BaseDomain: "shared"})
@@ -210,7 +223,9 @@ func TestCatalog_AddGroupInitializesZeroValueCatalog(t *testing.T) {
 	}
 }
 
-// TestMustAddCatalogGroup_PanicsOnInvariantDrift verifies MustAddCatalogGroup when panics on invariant drift.
+// TestMustAddCatalogGroup_PanicsOnInvariantDrift verifies the MustAddCatalogGroup_PanicsOnInvariantDrift handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMustAddCatalogGroup_PanicsOnInvariantDrift(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -276,7 +291,9 @@ func TestCatalog_AddGroup_DuplicateActionIDDeadBranch(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddActionCreatesGroupWithMetadata verifies Catalog when add action creates group with metadata.
+// TestCatalog_AddActionCreatesGroupWithMetadata verifies the Catalog_AddActionCreatesGroupWithMetadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
 	catalog := NewCatalog()
 	formatResult := func(any) *mcp.CallToolResult { return nil }
@@ -306,7 +323,9 @@ func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupPreservesFormatter verifies Catalog when add group preserves formatter.
+// TestCatalog_AddGroupPreservesFormatter verifies the Catalog_AddGroupPreservesFormatter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_AddGroupPreservesFormatter(t *testing.T) {
 	group := NewGroup(GroupOptions{
 		ToolName: "gitlab_project",
@@ -329,7 +348,9 @@ func TestCatalog_AddGroupPreservesFormatter(t *testing.T) {
 	}
 }
 
-// TestCatalog_LookupsAndNilReceivers verifies Catalog when lookups and nil receivers.
+// TestCatalog_LookupsAndNilReceivers verifies the Catalog_LookupsAndNilReceivers handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_LookupsAndNilReceivers(t *testing.T) {
 	var nilCatalog *Catalog
 	if _, ok := nilCatalog.Group("gitlab_project"); ok {
@@ -358,7 +379,9 @@ func TestCatalog_LookupsAndNilReceivers(t *testing.T) {
 	}
 }
 
-// TestCatalog_ValidateRejectsInvalidCatalogs covers Catalog with table-driven subtests for validate rejects invalid catalogs.
+// TestCatalog_ValidateRejectsInvalidCatalogs verifies the Catalog_ValidateRejectsInvalidCatalogs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -415,7 +438,9 @@ func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 	}
 }
 
-// TestCatalog_ValidateAcceptsValidAndRejectsNil verifies Catalog when validate accepts valid and rejects nil.
+// TestCatalog_ValidateAcceptsValidAndRejectsNil verifies the Catalog_ValidateAcceptsValidAndRejectsNil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_ValidateAcceptsValidAndRejectsNil(t *testing.T) {
 	var nilCatalog *Catalog
 	if err := nilCatalog.Validate(); err == nil {
@@ -429,7 +454,9 @@ func TestCatalog_ValidateAcceptsValidAndRejectsNil(t *testing.T) {
 	}
 }
 
-// TestCatalog_FiltersCloneWithoutMutatingSource verifies Catalog when filters clone without mutating source.
+// TestCatalog_FiltersCloneWithoutMutatingSource verifies the Catalog_FiltersCloneWithoutMutatingSource handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalog_FiltersCloneWithoutMutatingSource(t *testing.T) {
 	catalog := NewCatalog()
 	readGroup := NewGroup(GroupOptions{ToolName: "gitlab_search", ReadOnly: true})

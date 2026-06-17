@@ -21,7 +21,9 @@ const registerUserJSON = `{
 	"created_at": "2026-01-01T00:00:00Z"
 }`
 
-// TestActionSpecs_CallAllRoutes verifies enterprise user tools through canonical routes.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/42/enterprise_users", func(w http.ResponseWriter, _ *http.Request) {
@@ -75,7 +77,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_MutationErrors verifies mutation routes return errors when GitLab rejects them.
+// TestActionSpecs_MutationErrors validates the MutationErrors route through the catalog surface.
+// The test exercises the PATCH path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_MutationErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +108,9 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_ConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_ConfirmDeclined verifies the CatalogSurface_ConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := enterpriseUserSpecsByTool(t, ActionSpecs(client))

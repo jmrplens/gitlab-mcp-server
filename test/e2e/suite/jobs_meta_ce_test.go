@@ -4,6 +4,8 @@
 // Covers job token scope management (patch, inbound allowlist, group allowlist)
 // and extended job actions (list bridges, delete project artifacts) via the
 // gitlab_job meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -126,7 +128,14 @@ func TestMeta_JobTokenScope(t *testing.T) {
 	})
 }
 
-// TestMeta_JobsExtended exercises job actions that don't require a CI runner.
+// TestMeta_JobsExtended exercises job actions that don't require a CI
+// runner through the gitlab_job meta-tool.
+//
+// The test creates a project fixture and runs subtests covering job list,
+// artifact delete, and other extended actions. Each subtest asserts the
+// expected outcome and verifies the tool name stays constant.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_JobsExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -41,6 +41,10 @@ import (
 )
 
 // dockerArg describes one top-level argument in the Docker MCP Registry format.
+//
+// Name is the JSON Schema property name. Type is the Docker-flavored type
+// string ("string", "boolean", etc.) derived from the MCP JSON Schema. Desc
+// is the property description copied from the input schema verbatim.
 type dockerArg struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
@@ -48,6 +52,10 @@ type dockerArg struct {
 }
 
 // dockerTool describes one MCP tool entry emitted for the Docker MCP Registry.
+//
+// Name is the MCP tool name. Description is the tool description trimmed to
+// fit Docker's compact format. Arguments lists the top-level input
+// properties; nested objects are flattened into a single object argument.
 type dockerTool struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
@@ -143,6 +151,10 @@ func run(args []string, stdout io.Writer) error {
 
 // schemaArgs flattens a JSON Schema object into Docker's argument format.
 // It only emits top-level properties; nested objects are described as type "object".
+//
+// Properties are returned sorted by name so that the generated output is
+// deterministic across runs. Returns nil for nil, non-object, or
+// unmarshalable inputs so callers can treat the helper as fail-closed.
 func schemaArgs(schema any) []dockerArg {
 	if schema == nil {
 		return nil

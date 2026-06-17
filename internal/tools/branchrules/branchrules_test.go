@@ -48,7 +48,9 @@ const sampleUnprotectedRuleNode = `{
 	"externalStatusChecks": {"nodes": []}
 }`
 
-// TestActionSpecs_Metadata verifies canonical metadata for branch rule actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	specs := ActionSpecs(client)
@@ -75,8 +77,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 
 // Handler tests.
 
-// TestList_Success verifies that listing branch rules returns the expected
-// items when the GraphQL API responds with valid branch rule data.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -167,8 +170,9 @@ func assertUnprotectedBranchRule(t *testing.T, r2 BranchRuleItem) {
 	}
 }
 
-// TestList_EmptyProject verifies that listing branch rules for a project
-// with no rules returns an empty result set.
+// TestList_EmptyProject verifies the List_EmptyProject handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyProject(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -193,8 +197,9 @@ func TestList_EmptyProject(t *testing.T) {
 	}
 }
 
-// TestList_ProjectNotFound verifies that listing branch rules returns an
-// error when the specified project does not exist.
+// TestList_ProjectNotFound verifies that List_ProjectNotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ProjectNotFound(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -212,8 +217,9 @@ func TestList_ProjectNotFound(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectPath verifies that listing branch rules returns
-// a validation error when the required project_path parameter is missing.
+// TestList_MissingProjectPath verifies that List_MissingProjectPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingProjectPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := List(context.Background(), client, ListInput{})
@@ -225,8 +231,9 @@ func TestList_MissingProjectPath(t *testing.T) {
 	}
 }
 
-// TestList_ServerError verifies that listing branch rules propagates
-// errors when the GraphQL API returns a server error.
+// TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -241,8 +248,9 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
-// TestList_CE verifies that CE clients use the CE-compatible query and
-// correctly parse responses without EE-only fields.
+// TestList_CE verifies the List_CE handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_CE(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -294,8 +302,9 @@ func TestList_CE(t *testing.T) {
 	}
 }
 
-// TestList_Pagination verifies that cursor-based pagination parameters
-// are correctly forwarded to the GraphQL API and page info is returned.
+// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_Pagination(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, r *http.Request) {
@@ -359,8 +368,9 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
-// TestList_NullOptionalFields verifies that branch rules with null
-// optional fields (timestamps, approval rules) are handled without errors.
+// TestList_NullOptionalFields verifies the List_NullOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_NullOptionalFields(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -420,8 +430,9 @@ func TestList_NullOptionalFields(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatListMarkdown_Empty verifies that formatting an empty branch
-// rule list produces the expected no-results Markdown message.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No branch rules found") {
@@ -481,7 +492,9 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 	}
 }
 
-// TestBoolIcon verifies that boolIcon returns the correct Yes/No strings.
+// TestBoolIcon verifies the BoolIcon handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBoolIcon(t *testing.T) {
 	if boolIcon(true) != "Yes" {
 		t.Errorf("boolIcon(true) = %q, want %q", boolIcon(true), "Yes")
@@ -491,8 +504,9 @@ func TestBoolIcon(t *testing.T) {
 	}
 }
 
-// TestFormatApprovalRulesSummary verifies the formatting of approval rule
-// summaries including empty, single, and multiple rule cases.
+// TestFormatApprovalRulesSummary verifies the ApprovalRulesSummary Markdown formatter for a representative approvalrulessummary input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatApprovalRulesSummary(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -513,8 +527,9 @@ func TestFormatApprovalRulesSummary(t *testing.T) {
 	}
 }
 
-// TestFormatStatusChecksSummary verifies the formatting of external status
-// check summaries including empty, single, and multiple check cases.
+// TestFormatStatusChecksSummary verifies the StatusChecksSummary Markdown formatter for a representative statuscheckssummary input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusChecksSummary(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -535,7 +550,9 @@ func TestFormatStatusChecksSummary(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute verifies the canonical branch rule route executes successfully.
+// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
@@ -572,7 +589,9 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError verifies the canonical route returns handler errors.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	specs := ActionSpecs(client)

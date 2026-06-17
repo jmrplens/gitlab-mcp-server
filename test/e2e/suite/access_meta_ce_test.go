@@ -4,6 +4,8 @@
 // gitlab_access meta-tool against a live GitLab instance. Covers project
 // access tokens, personal tokens, deploy tokens, deploy keys, access
 // requests, and invitations.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -19,7 +21,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/invites"
 )
 
-// TestMeta_AccessTokensProject exercises project access token CRUD via gitlab_access.
+// TestMeta_AccessTokensProject exercises the project access token lifecycle
+// through the gitlab_access meta-tool.
+//
+// The test creates a project fixture and drives list, create, get, rotate, and
+// revoke through the catalog-backed gitlab_access meta-tool, asserting that
+// each step returns the expected token ID and that the revoke step completes
+// without error. The created project is auto-deleted by the fixture's
+// per-test resource ledger.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AccessTokensProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -101,7 +112,15 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 	})
 }
 
-// TestMeta_AccessTokensPersonal exercises personal access token operations.
+// TestMeta_AccessTokensPersonal exercises personal access token operations
+// via the gitlab_access meta-tool.
+//
+// The test lists the authenticated user's personal access tokens through the
+// token_personal_list action. It asserts the call succeeds and logs the count
+// for visibility; it does not mutate personal tokens because the E2E token is
+// the active credential for the test run.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AccessTokensPersonal(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -121,7 +140,15 @@ func TestMeta_AccessTokensPersonal(t *testing.T) {
 	})
 }
 
-// TestMeta_AccessDeployTokens exercises deploy token CRUD via gitlab_access.
+// TestMeta_AccessDeployTokens exercises the deploy token lifecycle through the
+// gitlab_access meta-tool.
+//
+// The test creates a project fixture, lists instance- and project-scoped
+// deploy tokens, creates a new project-scoped deploy token, fetches it by ID,
+// and defers deletion via deploy_token_delete_project. Each subtest asserts
+// the expected ID and that the meta-tool returns a structured output.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AccessDeployTokens(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -194,7 +221,17 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 	})
 }
 
-// TestMeta_DeployKeysExtended exercises extended deploy key actions.
+// TestMeta_DeployKeysExtended exercises extended deploy key actions on the
+// gitlab_access meta-tool, including add, enable on a second project, and
+// user/project listing.
+//
+// The test creates two project fixtures, registers a generated SSH key as a
+// deploy key on the first project, enables it on the second project, and
+// lists user-scoped deploy keys. Cleanup deletes the deploy key after the
+// enable step. The parallel flag is dropped in Enterprise mode because
+// shared GitLab state is touched across both fixtures.
+//
+// Build tag: e2e && !enterprise. Mode: CE/EE. Surface: meta.
 func TestMeta_DeployKeysExtended(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -272,7 +309,15 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 	})
 }
 
-// TestMeta_AccessRequests exercises access request actions.
+// TestMeta_AccessRequests exercises access request actions via the
+// gitlab_access meta-tool.
+//
+// The test creates a project fixture and lists pending access requests on
+// the project through request_list_project. The list is expected to be
+// well-formed even when no requests are pending, asserting that the meta-tool
+// returns a structured empty slice rather than an error.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AccessRequests(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -294,7 +339,16 @@ func TestMeta_AccessRequests(t *testing.T) {
 	})
 }
 
-// TestMeta_Invitations exercises invitation actions.
+// TestMeta_Invitations exercises invitation actions via the gitlab_access
+// meta-tool.
+//
+// The test creates a project fixture, lists pending invitations through
+// invite_list_project, and creates a fresh invitation with a unique email
+// through invite_project. It asserts that both calls succeed and that the
+// returned invitation status is one of the GitLab-recognized states
+// (accepted, pending, expired).
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Invitations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

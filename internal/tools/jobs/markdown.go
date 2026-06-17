@@ -206,6 +206,9 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	return b.String()
 }
 
+// formatWaitResult wraps the Markdown output of [FormatWaitMarkdown] in
+// an [mcp.CallToolResult], marking the result as an error when the wait
+// timed out so callers can branch on the outcome.
 func formatWaitResult(out WaitOutput) *mcp.CallToolResult {
 	result := toolutil.ToolResultAnnotated(FormatWaitMarkdown(out), toolutil.ContentDetail)
 	if out.TimedOut {

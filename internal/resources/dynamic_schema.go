@@ -15,7 +15,9 @@ const dynamicSchemaIndexURI = "gitlab://schema/dynamic/"
 
 const dynamicSchemaTemplateURI = "gitlab://schema/dynamic/{action}"
 
-// DynamicSchemaActionEntry describes one executable dynamic catalog action.
+// DynamicSchemaActionEntry describes one executable entry in the
+// dynamic action catalog, returned as a row of the
+// [DynamicSchemaIndex] payload.
 type DynamicSchemaActionEntry struct {
 	ID             string   `json:"id"`
 	Tool           string   `json:"tool"`
@@ -27,7 +29,10 @@ type DynamicSchemaActionEntry struct {
 	RequiredParams []string `json:"required_params,omitempty"`
 }
 
-// DynamicSchemaIndex is the payload returned by the dynamic index resource.
+// DynamicSchemaIndex is the JSON payload returned by the
+// "gitlab://schema/dynamic/" resource. It enumerates the canonical
+// "domain.action" IDs accepted by gitlab_execute_action and points to
+// the per-action schema resource.
 type DynamicSchemaIndex struct {
 	URITemplate   string                     `json:"uri_template"`
 	ExecuteAction string                     `json:"execute_action"`
@@ -35,10 +40,19 @@ type DynamicSchemaIndex struct {
 	Actions       []DynamicSchemaActionEntry `json:"actions"`
 }
 
-// RegisterDynamicSchemaResources wires dynamic action catalog resources into
-// the MCP server. The index uses canonical domain.action IDs accepted by
-// gitlab_execute_action, while the template returns action-specific params
-// schemas without adding meta-tool-only params such as confirm.
+// RegisterDynamicSchemaResources wires the dynamic action catalog
+// resources into the MCP server. Two resources are registered:
+//
+//   - The static "gitlab://schema/dynamic/" index resource, which
+//     lists every canonical "domain.action" ID accepted by
+//     gitlab_execute_action.
+//   - The "gitlab://schema/dynamic/{action}" template resource, which
+//     returns action-specific params schemas without the meta-tool-only
+//     fields (such as confirm) that gitlab_execute_action adds on top.
+//
+// When catalog is nil an empty [actioncatalog.Catalog] is used; when
+// catalog is non-nil a clone is taken so the original is not mutated
+// by the resource handlers.
 func RegisterDynamicSchemaResources(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	snapshot := catalog
 	if snapshot == nil {
@@ -50,6 +64,9 @@ func RegisterDynamicSchemaResources(server *mcp.Server, catalog *actioncatalog.C
 	registerDynamicSchemaTemplate(server, snapshot)
 }
 
+// registerDynamicSchemaIndex registers the static catalog resource that
+// lists every canonical "domain.action" ID accepted by
+// gitlab_execute_action.
 func registerDynamicSchemaIndex(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	server.AddResource(&mcp.Resource{
 		URI:         dynamicSchemaIndexURI,
@@ -64,6 +81,9 @@ func registerDynamicSchemaIndex(server *mcp.Server, catalog *actioncatalog.Catal
 	})
 }
 
+// registerDynamicSchemaTemplate registers the URI-template resource that
+// returns the per-action params schema for a canonical dynamic action
+// ID.
 func registerDynamicSchemaTemplate(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: dynamicSchemaTemplateURI,
@@ -78,6 +98,10 @@ func registerDynamicSchemaTemplate(server *mcp.Server, catalog *actioncatalog.Ca
 	})
 }
 
+// readDynamicSchemaResource resolves uri to a single dynamic action
+// schema. It returns a resource-not-found error when uri is malformed
+// (per [parseDynamicSchemaURI]) or when the action ID is not present
+// in catalog.
 func readDynamicSchemaResource(catalog *actioncatalog.Catalog, uri string) (*mcp.ReadResourceResult, error) {
 	actionID := parseDynamicSchemaURI(uri)
 	if actionID == "" {
@@ -90,6 +114,9 @@ func readDynamicSchemaResource(catalog *actioncatalog.Catalog, uri string) (*mcp
 	return marshalResourceJSON(dynamicActionSchema(action))
 }
 
+// buildDynamicSchemaIndex builds a sorted index of dynamic action
+// entries from the catalog. Entries are sorted alphabetically by ID
+// so the rendered JSON is stable across runs.
 func buildDynamicSchemaIndex(catalog *actioncatalog.Catalog) DynamicSchemaIndex {
 	actions := catalog.Actions()
 	entries := make([]DynamicSchemaActionEntry, 0, len(actions))
@@ -114,6 +141,11 @@ func buildDynamicSchemaIndex(catalog *actioncatalog.Catalog) DynamicSchemaIndex 
 	}
 }
 
+// dynamicActionSchema returns the JSON Schema (as a generic map) for
+// the params object of one dynamic action. The schema is cloned via
+// [toolutil.CloneMetaSchemaRoutes] so per-action edits do not leak
+// between sibling actions. When the action has no captured InputSchema
+// a permissive fallback object schema is returned.
 func dynamicActionSchema(action actioncatalog.Action) map[string]any {
 	route := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: action.Route}})[action.ToolName][action.Name]
 	if route.InputSchema == nil {
@@ -127,6 +159,9 @@ func dynamicActionSchema(action actioncatalog.Action) map[string]any {
 	return enrichDynamicSchema(route.InputSchema, action)
 }
 
+// enrichDynamicSchema adds x_parameter_guidance and (for destructive
+// actions) x_destructive / x_confirmation fields to schema in place.
+// The map is returned for fluent use.
 func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map[string]any {
 	if guidance := dynamicParameterGuidance(action); len(guidance) > 0 {
 		schema["x_parameter_guidance"] = guidance
@@ -141,6 +176,10 @@ func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map
 	return schema
 }
 
+// dynamicParameterGuidance converts the route's
+// [toolutil.ParameterGuidance] map into the JSON shape embedded under
+// the schema's x_parameter_guidance key. Returns nil when there is no
+// guidance to embed.
 func dynamicParameterGuidance(action actioncatalog.Action) map[string]any {
 	if len(action.Route.ParameterGuidance) == 0 {
 		return nil
@@ -155,6 +194,9 @@ func dynamicParameterGuidance(action actioncatalog.Action) map[string]any {
 	return guidance
 }
 
+// dynamicParameterGuidanceEntry renders a single guidance item as a
+// JSON map. Only the populated fields of item are included so the
+// output stays compact.
 func dynamicParameterGuidanceEntry(item toolutil.ParameterGuidance) map[string]any {
 	entry := make(map[string]any, 4)
 	if item.SemanticRole != "" {
@@ -172,10 +214,16 @@ func dynamicParameterGuidanceEntry(item toolutil.ParameterGuidance) map[string]a
 	return entry
 }
 
+// dynamicSchemaURI builds the per-action schema URI by appending id
+// to the [dynamicSchemaIndexURI] prefix.
 func dynamicSchemaURI(id actioncatalog.ActionID) string {
 	return dynamicSchemaIndexURI + string(id)
 }
 
+// parseDynamicSchemaURI extracts the canonical "domain.action" ID
+// from a "gitlab://schema/dynamic/{action}" URI. Returns the empty
+// string when uri does not start with [dynamicSchemaIndexURI], has an
+// embedded slash, or has an empty ID.
 func parseDynamicSchemaURI(uri string) string {
 	rest := strings.TrimPrefix(uri, dynamicSchemaIndexURI)
 	if rest == uri || rest == "" || strings.Contains(rest, "/") {
@@ -184,6 +232,10 @@ func parseDynamicSchemaURI(uri string) string {
 	return strings.ToLower(strings.TrimSpace(rest))
 }
 
+// dynamicRequiredParams extracts and deduplicates the list of required
+// parameter names from a JSON Schema. It supports both a top-level
+// "required" array and alternative-required branches in "anyOf"/"oneOf".
+// Returns nil when schema is nil or has no required parameters.
 func dynamicRequiredParams(schema map[string]any) []string {
 	if schema == nil {
 		return nil
@@ -195,6 +247,10 @@ func dynamicRequiredParams(schema map[string]any) []string {
 	return dedupeDynamicStrings(names)
 }
 
+// appendDynamicRequiredParamNames appends each non-empty string in raw
+// to names. raw is expected to be either a []any or []string (the two
+// shapes the JSON parser can return for a JSON array); any other type
+// is ignored.
 func appendDynamicRequiredParamNames(names []string, raw any) []string {
 	switch values := raw.(type) {
 	case []any:
@@ -209,6 +265,9 @@ func appendDynamicRequiredParamNames(names []string, raw any) []string {
 	return names
 }
 
+// appendDynamicAlternativeRequiredParams walks any "anyOf" or "oneOf"
+// branches in schema and merges their "required" lists into names.
+// Non-object alternatives are ignored.
 func appendDynamicAlternativeRequiredParams(names []string, schema map[string]any) []string {
 	for _, keyword := range []string{"anyOf", "oneOf"} {
 		alternatives, ok := schema[keyword].([]any)
@@ -226,6 +285,9 @@ func appendDynamicAlternativeRequiredParams(names []string, schema map[string]an
 	return names
 }
 
+// dedupeDynamicStrings returns a slice of strings with consecutive
+// duplicates and empty values removed. The input is expected to be
+// pre-sorted by the caller (the only deduplication guarantee provided).
 func dedupeDynamicStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil

@@ -10,6 +10,10 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
+// ProjectServiceAccountFixture provisions a project-scoped GitLab service
+// account used as the live fixture for the enterprise project-service-account
+// evaluation case. It returns a CaseFixtureSpec scoped to FixtureScopeCase so
+// every case attempt can reuse the same identity.
 var ProjectServiceAccountFixture = enterpriseLiveCaseFixture("project_service_account", FixtureScopeCase, []string{"project_id", "project_path", "project_service_account_id"}, func(ctx context.Context, preparer *liveFixturePreparer) error {
 	return preparer.ensureProjectServiceAccount(ctx)
 }, "project_service_account")
@@ -20,6 +24,11 @@ func enterpriseLiveCaseFixture(name string, scope FixtureScope, outputs []string
 	return fixture
 }
 
+// EnterprisePushRuleProjectFixture builds a CaseFixtureSpec that ensures a
+// disposable project exists for enterprise push-rule evaluation cases. When
+// seedRule is true the project is created with a non-empty push rule so the
+// case can exercise update flows; otherwise the project is left without a
+// rule to exercise create flows.
 func EnterprisePushRuleProjectFixture(seedRule bool) CaseFixtureSpec {
 	name := "enterprise_push_rule_project"
 	seedPart := "empty"
@@ -43,6 +52,11 @@ func EnterprisePushRuleProjectFixture(seedRule bool) CaseFixtureSpec {
 	}
 }
 
+// EnterpriseGroupServiceAccountFixture builds a CaseFixtureSpec that ensures
+// a disposable group with a service account exists for enterprise evaluation
+// cases. When withPAT is true the fixture additionally provisions a personal
+// access token bound to that service account so cases can exercise PAT-scoped
+// operations; the base form only exposes the service account identity.
 func EnterpriseGroupServiceAccountFixture(withPAT bool) CaseFixtureSpec {
 	name := "enterprise_group_service_account"
 	outputs := []string{"group_id", "group_path", "service_account_id"}

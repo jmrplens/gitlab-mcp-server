@@ -14,9 +14,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 )
 
-// TestSampling exercises all 11 sampling tools via the sampling-enabled session.
-// Each sampling tool invokes an LLM via mock handler; we verify non-empty results
-// and that the mock model name is returned.
+// TestSampling exercises all 11 sampling tools through the sampling-enabled
+// session against a live GitLab CE instance.
+//
+// The test creates a project fixture with an MR and other resources that
+// the sampling tools need, then walks every LLM-backed tool: analyze MR
+// changes, summarize MR, summarize issue, suggest reviewers, draft issue
+// reply, draft MR review, generate commit message, generate release notes,
+// suggest labels, triage issue, and explain CI failure. Each subtest
+// asserts the mock LLM handler returns non-empty results and the documented
+// mock model name is observed.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: sampling.
 func TestSampling(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

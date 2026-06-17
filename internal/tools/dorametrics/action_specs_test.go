@@ -1,3 +1,4 @@
+// action_specs_test.go contains unit tests for the DORA metrics [toolutil.ActionSpec] entries (project, group, instance scopes).
 package dorametrics
 
 import (
@@ -11,7 +12,9 @@ import (
 
 const registerMetricsJSON = `[{"date":"2026-01-01","value":42.5}]`
 
-// TestActionSpecs_CallRoutes verifies both DORA metrics canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -56,8 +59,9 @@ func doraMetricSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.Acti
 	return specByTool
 }
 
-// TestMarkdownHints_Output verifies the init()-registered markdown formatter
-// for Output produces non-nil content via MarkdownForResult.
+// TestMarkdownHints_Output verifies the MarkdownHints_Output handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownHints_Output(t *testing.T) {
 	md := toolutil.MarkdownForResult(Output{
 		Metrics: []MetricOutput{{Date: "2026-01-01", Value: 42.5}},

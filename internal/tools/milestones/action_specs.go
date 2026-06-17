@@ -9,19 +9,33 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ActionSpecs returns canonical specs for project milestone actions.
+// ActionSpecs returns canonical specs for project milestone actions
+// exposed as MCP tools. The list, get, create, update, delete, issues,
+// and merge_requests routes are projected into the dynamic, meta,
+// individual, and audit surfaces by the action catalog (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_milestone_list — list project milestones with optional filters.
 		milestoneReadSpec("milestone_list", toolutil.RouteAction(client, List), "gitlab_milestone_list"),
+		// gitlab_milestone_get — fetch a milestone by IID (returns a structured not-found result on 404).
 		milestoneReadSpec("milestone_get", milestoneGetRoute(client), "gitlab_milestone_get"),
+		// gitlab_milestone_create — create a new milestone.
 		milestoneCreateSpec("milestone_create", toolutil.RouteAction(client, Create), "gitlab_milestone_create"),
+		// gitlab_milestone_update — update an existing milestone.
 		milestoneUpdateSpec("milestone_update", toolutil.RouteAction(client, Update), "gitlab_milestone_update"),
+		// gitlab_milestone_delete — remove a milestone (destructive).
 		milestoneDeleteSpec("milestone_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_milestone_delete"),
+		// gitlab_milestone_issues — list issues assigned to a milestone.
 		milestoneReadSpec("milestone_issues", toolutil.RouteAction(client, GetIssues), "gitlab_milestone_issues"),
+		// gitlab_milestone_merge_requests — list MRs assigned to a milestone.
 		milestoneReadSpec("milestone_merge_requests", toolutil.RouteAction(client, GetMergeRequests), "gitlab_milestone_merge_requests"),
 	}
 }
 
+// milestoneGetRoute wraps the [Get] route so a 404 response is
+// converted into a structured [milestoneNotFoundOutput] hint rather
+// than an error, matching the get-not-found pattern used across the
+// project.
 func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, Get)
 	baseHandler := route.Handler
@@ -36,22 +50,37 @@ func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	return route
 }
 
+// milestoneReadSpec builds a read-only [toolutil.ActionSpec] for a
+// milestone action using the package's default
+// [milestoneOptionsForAction].
 func milestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
+// milestoneCreateSpec builds a create-style [toolutil.ActionSpec] for
+// a milestone action using the package's default
+// [milestoneOptionsForAction].
 func milestoneCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
+// milestoneUpdateSpec builds an update-style [toolutil.ActionSpec] for
+// a milestone action using the package's default
+// [milestoneOptionsForAction].
 func milestoneUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
+// milestoneDeleteSpec builds a destructive [toolutil.ActionSpec] for a
+// milestone action using the package's default
+// [milestoneOptionsForAction].
 func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
+// milestoneOptionsForAction returns the base [toolutil.ActionSpecOptions]
+// for a milestone action and customises the Usage/Aliases/ParameterGuidance
+// for the list, get, and create individual tools.
 func milestoneOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute milestones domain action.", Tags: []string{"project", "milestone"},

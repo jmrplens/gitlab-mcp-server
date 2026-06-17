@@ -26,8 +26,9 @@ const errExpectedErr = "expected error"
 // errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
-// TestScheduleExport_Success verifies that ScheduleExport calls the correct
-// API endpoint and returns a success message.
+// TestScheduleExport_Success verifies that ScheduleExport succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/1/export (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestScheduleExport_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/1/export" && r.Method == http.MethodPost {
@@ -47,7 +48,9 @@ func TestScheduleExport_Success(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_APIError verifies error handling when the API returns an error.
+// TestScheduleExport_APIError verifies that ScheduleExport returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestScheduleExport_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -60,8 +63,9 @@ func TestScheduleExport_APIError(t *testing.T) {
 	}
 }
 
-// TestExportDownload_Success verifies that ExportDownload returns base64-encoded
-// content and correct byte size.
+// TestExportDownload_Success verifies that ExportDownload succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/1/export/download (GET) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestExportDownload_Success(t *testing.T) {
 	archiveData := []byte("fake-group-tar-gz")
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +95,9 @@ func TestExportDownload_Success(t *testing.T) {
 	}
 }
 
-// TestExportDownload_APIError verifies error handling when the API returns an error.
+// TestExportDownload_APIError verifies that ExportDownload returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestExportDownload_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -104,7 +110,9 @@ func TestExportDownload_APIError(t *testing.T) {
 	}
 }
 
-// TestImportFile_Success verifies that ImportFile calls the correct API endpoint.
+// TestImportFile_Success verifies that ImportFile succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/import (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestImportFile_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/import" && r.Method == http.MethodPost {
@@ -133,7 +141,9 @@ func TestImportFile_Success(t *testing.T) {
 	}
 }
 
-// TestImportFile_APIError verifies error handling when the API returns an error.
+// TestImportFile_APIError verifies that ImportFile returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportFile_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -155,7 +165,9 @@ func TestImportFile_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatScheduleExportMarkdown verifies markdown formatting.
+// TestFormatScheduleExportMarkdown verifies the ScheduleExportMarkdown Markdown formatter for a representative scheduleexport input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatScheduleExportMarkdown(t *testing.T) {
 	result := FormatScheduleExportMarkdown(ScheduleExportOutput{Message: "ok"})
 	if result == nil {
@@ -167,7 +179,9 @@ func TestFormatScheduleExportMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatExportDownloadMarkdown verifies download markdown formatting.
+// TestFormatExportDownloadMarkdown verifies the ExportDownloadMarkdown Markdown formatter for a representative exportdownload input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatExportDownloadMarkdown(t *testing.T) {
 	result := FormatExportDownloadMarkdown(ExportDownloadOutput{SizeBytes: 512})
 	if result == nil {
@@ -179,7 +193,9 @@ func TestFormatExportDownloadMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatImportFileMarkdown verifies import markdown formatting.
+// TestFormatImportFileMarkdown verifies the ImportFileMarkdown Markdown formatter for a representative importfile input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatImportFileMarkdown(t *testing.T) {
 	result := FormatImportFileMarkdown(ImportFileOutput{Message: "ok"})
 	if result == nil {
@@ -200,7 +216,9 @@ const errExpCancelledCtx = "expected error for canceled context"
 // ScheduleExport — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestScheduleExport_CancelledContext verifies ScheduleExport when cancelled context.
+// TestScheduleExport_CancelledContext verifies the ScheduleExport_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -253,7 +271,9 @@ func (failingReader) Read([]byte) (int, error) {
 	return 0, errors.New("read failed")
 }
 
-// TestImportFile_InvalidArchivePath verifies ImportFile rejects invalid local archive paths before making an API call.
+// TestImportFile_InvalidArchivePath verifies the ImportFile_InvalidArchivePath handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestImportFile_InvalidArchivePath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("ImportFile should reject invalid file path before API request")
@@ -264,7 +284,9 @@ func TestImportFile_InvalidArchivePath(t *testing.T) {
 	}
 }
 
-// TestExportDownload_CancelledContext verifies ExportDownload when cancelled context.
+// TestExportDownload_CancelledContext verifies the ExportDownload_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestExportDownload_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -278,7 +300,9 @@ func TestExportDownload_CancelledContext(t *testing.T) {
 // ImportFile — canceled context, with parent_id
 // ---------------------------------------------------------------------------.
 
-// TestImportFile_CancelledContext verifies ImportFile when cancelled context.
+// TestImportFile_CancelledContext verifies the ImportFile_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestImportFile_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -298,7 +322,9 @@ func TestImportFile_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestImportFile_WithParentID verifies ImportFile when with parent ID.
+// TestImportFile_WithParentID verifies the ImportFile_WithParentID handler.
+// The mock GitLab API at /api/v4/groups/import (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestImportFile_WithParentID(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/import" && r.Method == http.MethodPost {
@@ -333,7 +359,9 @@ func TestImportFile_WithParentID(t *testing.T) {
 // FormatMarkdown — dispatch for all types and unknown type
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_ScheduleExportOutput verifies FormatMarkdown when schedule export output.
+// TestFormatMarkdown_ScheduleExportOutput verifies the Markdown_ScheduleExportOutput Markdown formatter for a representative _scheduleexportoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_ScheduleExportOutput(t *testing.T) {
 	result := FormatMarkdown(ScheduleExportOutput{Message: "Group export scheduled successfully"})
 	if result == nil {
@@ -341,7 +369,9 @@ func TestFormatMarkdown_ScheduleExportOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ExportDownloadOutput verifies FormatMarkdown when export download output.
+// TestFormatMarkdown_ExportDownloadOutput verifies the Markdown_ExportDownloadOutput Markdown formatter for a representative _exportdownloadoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_ExportDownloadOutput(t *testing.T) {
 	result := FormatMarkdown(ExportDownloadOutput{ContentBase64: "dGVzdA==", SizeBytes: 4})
 	if result == nil {
@@ -349,7 +379,9 @@ func TestFormatMarkdown_ExportDownloadOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ImportFileOutput verifies FormatMarkdown when import file output.
+// TestFormatMarkdown_ImportFileOutput verifies the Markdown_ImportFileOutput Markdown formatter for a representative _importfileoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_ImportFileOutput(t *testing.T) {
 	result := FormatMarkdown(ImportFileOutput{Message: "Group import started successfully"})
 	if result == nil {
@@ -357,7 +389,9 @@ func TestFormatMarkdown_ImportFileOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_UnknownType verifies FormatMarkdown when unknown type.
+// TestFormatMarkdown_UnknownType verifies the Markdown_UnknownType Markdown formatter for a representative _unknowntype input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_UnknownType(t *testing.T) {
 	result := FormatMarkdown("unknown type")
 	if result != nil {
@@ -365,7 +399,9 @@ func TestFormatMarkdown_UnknownType(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyScheduleExportOutput verifies FormatMarkdown when empty schedule export output.
+// TestFormatMarkdown_EmptyScheduleExportOutput verifies the Markdown_EmptyScheduleExportOutput Markdown formatter for a representative _emptyscheduleexportoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_EmptyScheduleExportOutput(t *testing.T) {
 	result := FormatMarkdown(ScheduleExportOutput{})
 	if result != nil {
@@ -373,7 +409,9 @@ func TestFormatMarkdown_EmptyScheduleExportOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyExportDownloadOutput verifies FormatMarkdown when empty export download output.
+// TestFormatMarkdown_EmptyExportDownloadOutput verifies the Markdown_EmptyExportDownloadOutput Markdown formatter for a representative _emptyexportdownloadoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_EmptyExportDownloadOutput(t *testing.T) {
 	result := FormatMarkdown(ExportDownloadOutput{})
 	if result != nil {
@@ -381,7 +419,9 @@ func TestFormatMarkdown_EmptyExportDownloadOutput(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_EmptyImportFileOutput verifies FormatMarkdown when empty import file output.
+// TestFormatMarkdown_EmptyImportFileOutput verifies the Markdown_EmptyImportFileOutput Markdown formatter for a representative _emptyimportfileoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_EmptyImportFileOutput(t *testing.T) {
 	result := FormatMarkdown(ImportFileOutput{})
 	if result != nil {
@@ -393,7 +433,9 @@ func TestFormatMarkdown_EmptyImportFileOutput(t *testing.T) {
 // FormatExportDownloadMarkdown — content check
 // ---------------------------------------------------------------------------.
 
-// TestFormatExportDownloadMarkdown_ContentCheck verifies FormatExportDownloadMarkdown when content check.
+// TestFormatExportDownloadMarkdown_ContentCheck verifies the ExportDownloadMarkdown_ContentCheck Markdown formatter for a representative exportdownload_contentcheck input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
 	result := FormatExportDownloadMarkdown(ExportDownloadOutput{
 		ContentBase64: "dGVzdA==",
@@ -419,7 +461,9 @@ func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
 // ValidActions
 // ---------------------------------------------------------------------------.
 
-// TestValidActions verifies ValidActions.
+// TestValidActions verifies the ValidActions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestValidActions(t *testing.T) {
 	actions := ValidActions()
 	for _, expected := range []string{"schedule_export", "export_download", "import_file"} {
@@ -433,7 +477,9 @@ func TestValidActions(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies group import/export action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -449,7 +495,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes validates all group import/export canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, groupImportExportHandler())
 	specs := ActionSpecs(client)

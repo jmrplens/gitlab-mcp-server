@@ -24,6 +24,14 @@ import (
 // TestScopeFilter_NonAdminToken creates a non-admin user with a read_api
 // token and verifies that scope-filtered tools (admin_mode) are removed
 // while regular meta-tools remain registered.
+//
+// The test creates the user via the admin session, issues a read_api PAT,
+// detects scopes via the raw GitLab client, builds an in-memory MCP server
+// with meta-tools, applies the scope filter, and lists remaining tools.
+// Assertions check that admin-only meta-tools are removed, regular
+// meta-tools are still present, and the read_api scope is observed.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestScopeFilter_NonAdminToken(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not available")
@@ -179,6 +187,14 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 
 // TestScopeFilter_AdminToken creates a PAT with admin_mode scope for the
 // existing admin user and verifies that NO tools are removed by scope filtering.
+//
+// The test issues an admin_mode PAT for the current admin user, detects
+// scopes via the raw GitLab client, builds an in-memory MCP server with
+// meta-tools, and applies the scope filter. The assertion is that the
+// filter reports zero removed tools, since admin_mode grants access to
+// every registered meta-tool.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
 func TestScopeFilter_AdminToken(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not available")

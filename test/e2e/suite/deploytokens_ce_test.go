@@ -2,6 +2,8 @@
 
 // deploytokens_ce_test.go tests the deploy token MCP tools against a live GitLab instance.
 // Exercises create, list, get, and delete via the gitlab_access meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -12,7 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
 )
 
-// TestMeta_DeployTokens exercises project deploy token CRUD via the gitlab_access meta-tool.
+// TestMeta_DeployTokens exercises project deploy token CRUD via the
+// gitlab_access meta-tool.
+//
+// The test creates a project fixture, then runs four subtests that drive
+// the deploy_token_create_project, deploy_token_list_project,
+// deploy_token_get_project, and deploy_token_delete_project actions. Each
+// subtest asserts the expected ID round-trips through the GitLab API and
+// that the list contains the created token.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_DeployTokens(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

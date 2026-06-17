@@ -24,7 +24,9 @@ const errAPIShouldNotCallZeroAgentID = "API should not be called when AgentID is
 // errExpectedZeroAgentID identifies the err expected zero agent ID constant used by this package.
 const errExpectedZeroAgentID = "expected error for zero AgentID, got nil"
 
-// TestListAgents verifies ListAgents.
+// TestListAgents verifies the ListAgents handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListAgents(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents" || r.Method != http.MethodGet {
@@ -42,7 +44,9 @@ func TestListAgents(t *testing.T) {
 	}
 }
 
-// TestListAgents_Error verifies ListAgents when error.
+// TestListAgents_Error verifies that ListAgents returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListAgents_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -53,7 +57,9 @@ func TestListAgents_Error(t *testing.T) {
 	}
 }
 
-// TestGetAgent verifies GetAgent.
+// TestGetAgent verifies the GetAgent handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5" || r.Method != http.MethodGet {
@@ -71,7 +77,9 @@ func TestGetAgent(t *testing.T) {
 	}
 }
 
-// TestRegisterAgent verifies RegisterAgent.
+// TestRegisterAgent verifies the RegisterAgent handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRegisterAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -89,7 +97,9 @@ func TestRegisterAgent(t *testing.T) {
 	}
 }
 
-// TestDeleteAgent verifies DeleteAgent.
+// TestDeleteAgent verifies the DeleteAgent handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteAgent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5" || r.Method != http.MethodDelete {
@@ -104,7 +114,9 @@ func TestDeleteAgent(t *testing.T) {
 	}
 }
 
-// TestListAgentTokens verifies ListAgentTokens.
+// TestListAgentTokens verifies the ListAgentTokens handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5/tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListAgentTokens(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens" || r.Method != http.MethodGet {
@@ -122,7 +134,9 @@ func TestListAgentTokens(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken verifies GetAgentToken.
+// TestGetAgentToken verifies the GetAgentToken handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5/tokens/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens/1" || r.Method != http.MethodGet {
@@ -140,7 +154,9 @@ func TestGetAgentToken(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken verifies CreateAgentToken.
+// TestCreateAgentToken verifies the CreateAgentToken handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -158,7 +174,9 @@ func TestCreateAgentToken(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken verifies RevokeAgentToken.
+// TestRevokeAgentToken verifies the RevokeAgentToken handler.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5/tokens/1 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestRevokeAgentToken(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens/1" || r.Method != http.MethodDelete {
@@ -173,7 +191,9 @@ func TestRevokeAgentToken(t *testing.T) {
 	}
 }
 
-// TestFormatAgentsListMarkdown verifies FormatAgentsListMarkdown.
+// TestFormatAgentsListMarkdown verifies the AgentsListMarkdown Markdown formatter for a representative agentslist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAgentsListMarkdown(t *testing.T) {
 	md := FormatAgentsListMarkdown(ListAgentsOutput{Agents: []AgentItem{{ID: 1, Name: "a"}}})
 	if md == "" {
@@ -181,7 +201,9 @@ func TestFormatAgentsListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatTokensListMarkdown verifies FormatTokensListMarkdown.
+// TestFormatTokensListMarkdown verifies the TokensListMarkdown Markdown formatter for a representative tokenslist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatTokensListMarkdown(t *testing.T) {
 	md := FormatTokensListMarkdown(ListAgentTokensOutput{Tokens: []AgentTokenItem{{ID: 1, Name: "t", Status: "active"}}})
 	if md == "" {
@@ -189,7 +211,9 @@ func TestFormatTokensListMarkdown(t *testing.T) {
 	}
 }
 
-// TestGetAgent_ZeroAgentID verifies GetAgent when zero agent ID.
+// TestGetAgent_ZeroAgentID verifies the GetAgent_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetAgent_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -200,7 +224,9 @@ func TestGetAgent_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestDeleteAgent_ZeroAgentID verifies DeleteAgent when zero agent ID.
+// TestDeleteAgent_ZeroAgentID verifies the DeleteAgent_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteAgent_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -211,7 +237,9 @@ func TestDeleteAgent_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestListAgentTokens_ZeroAgentID verifies ListAgentTokens when zero agent ID.
+// TestListAgentTokens_ZeroAgentID verifies the ListAgentTokens_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListAgentTokens_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -222,7 +250,9 @@ func TestListAgentTokens_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken_ZeroAgentID verifies GetAgentToken when zero agent ID.
+// TestGetAgentToken_ZeroAgentID verifies the GetAgentToken_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -233,7 +263,9 @@ func TestGetAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestGetAgentToken_ZeroTokenID verifies GetAgentToken when zero token ID.
+// TestGetAgentToken_ZeroTokenID verifies the GetAgentToken_ZeroTokenID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetAgentToken_ZeroTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TokenID is 0")
@@ -244,7 +276,9 @@ func TestGetAgentToken_ZeroTokenID(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken_ZeroAgentID verifies CreateAgentToken when zero agent ID.
+// TestCreateAgentToken_ZeroAgentID verifies the CreateAgentToken_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -255,7 +289,9 @@ func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken_ZeroAgentID verifies RevokeAgentToken when zero agent ID.
+// TestRevokeAgentToken_ZeroAgentID verifies the RevokeAgentToken_ZeroAgentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal(errAPIShouldNotCallZeroAgentID)
@@ -266,7 +302,9 @@ func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
 	}
 }
 
-// TestRevokeAgentToken_ZeroTokenID verifies RevokeAgentToken when zero token ID.
+// TestRevokeAgentToken_ZeroTokenID verifies the RevokeAgentToken_ZeroTokenID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevokeAgentToken_ZeroTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called when TokenID is 0")
@@ -286,7 +324,9 @@ const errExpectedAPI = "expected API error, got nil"
 // GetAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetAgent_APIError verifies GetAgent when API error.
+// TestGetAgent_APIError verifies that GetAgent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -301,7 +341,9 @@ func TestGetAgent_APIError(t *testing.T) {
 // RegisterAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestRegisterAgent_APIError verifies RegisterAgent when API error.
+// TestRegisterAgent_APIError verifies that RegisterAgent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRegisterAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -316,7 +358,9 @@ func TestRegisterAgent_APIError(t *testing.T) {
 // DeleteAgent — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteAgent_APIError verifies DeleteAgent when API error.
+// TestDeleteAgent_APIError verifies that DeleteAgent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteAgent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -331,7 +375,9 @@ func TestDeleteAgent_APIError(t *testing.T) {
 // ListAgentTokens — API error
 // ---------------------------------------------------------------------------.
 
-// TestListAgentTokens_APIError verifies ListAgentTokens when API error.
+// TestListAgentTokens_APIError verifies that ListAgentTokens returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListAgentTokens_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -346,7 +392,9 @@ func TestListAgentTokens_APIError(t *testing.T) {
 // GetAgentToken — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetAgentToken_APIError verifies GetAgentToken when API error.
+// TestGetAgentToken_APIError verifies that GetAgentToken returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -361,7 +409,9 @@ func TestGetAgentToken_APIError(t *testing.T) {
 // CreateAgentToken — API error, with description
 // ---------------------------------------------------------------------------.
 
-// TestCreateAgentToken_APIError verifies CreateAgentToken when API error.
+// TestCreateAgentToken_APIError verifies that CreateAgentToken returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -372,7 +422,9 @@ func TestCreateAgentToken_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateAgentToken_WithDescription verifies CreateAgentToken when with description.
+// TestCreateAgentToken_WithDescription verifies the CreateAgentToken_WithDescription handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateAgentToken_WithDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -399,7 +451,9 @@ func TestCreateAgentToken_WithDescription(t *testing.T) {
 // RevokeAgentToken — API error
 // ---------------------------------------------------------------------------.
 
-// TestRevokeAgentToken_APIError verifies RevokeAgentToken when API error.
+// TestRevokeAgentToken_APIError verifies that RevokeAgentToken returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevokeAgentToken_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -414,7 +468,9 @@ func TestRevokeAgentToken_APIError(t *testing.T) {
 // ListAgents — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListAgents_WithPagination verifies ListAgents when with pagination.
+// TestListAgents_WithPagination verifies that ListAgents_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListAgents_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/cluster_agents" && r.Method == http.MethodGet {
@@ -436,7 +492,9 @@ func TestListAgents_WithPagination(t *testing.T) {
 // ListAgentTokens — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListAgentTokens_WithPagination verifies ListAgentTokens when with pagination.
+// TestListAgentTokens_WithPagination verifies that ListAgentTokens_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/cluster_agents/5/tokens (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListAgentTokens_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/cluster_agents/5/tokens" && r.Method == http.MethodGet {
@@ -458,7 +516,9 @@ func TestListAgentTokens_WithPagination(t *testing.T) {
 // Formatters — empty lists
 // ---------------------------------------------------------------------------.
 
-// TestFormatAgentsListMarkdown_Empty verifies FormatAgentsListMarkdown when empty.
+// TestFormatAgentsListMarkdown_Empty verifies the AgentsListMarkdown_Empty Markdown formatter for a representative agentslist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAgentsListMarkdown_Empty(t *testing.T) {
 	md := FormatAgentsListMarkdown(ListAgentsOutput{})
 	if !strings.Contains(md, "No cluster agents found.") {
@@ -466,7 +526,9 @@ func TestFormatAgentsListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatTokensListMarkdown_Empty verifies FormatTokensListMarkdown when empty.
+// TestFormatTokensListMarkdown_Empty verifies the TokensListMarkdown_Empty Markdown formatter for a representative tokenslist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatTokensListMarkdown_Empty(t *testing.T) {
 	md := FormatTokensListMarkdown(ListAgentTokensOutput{})
 	if !strings.Contains(md, "No agent tokens found.") {
@@ -474,7 +536,9 @@ func TestFormatTokensListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatAgentMarkdown_Content verifies FormatAgentMarkdown when content.
+// TestFormatAgentMarkdown_Content verifies the AgentMarkdown_Content Markdown formatter for a representative agent_content input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAgentMarkdown_Content(t *testing.T) {
 	md := FormatAgentMarkdown(AgentItem{ID: 5, Name: "test-agent"})
 	if !strings.Contains(md, "test-agent") {
@@ -482,7 +546,9 @@ func TestFormatAgentMarkdown_Content(t *testing.T) {
 	}
 }
 
-// TestFormatTokenMarkdown_WithToken verifies FormatTokenMarkdown when with token.
+// TestFormatTokenMarkdown_WithToken verifies the TokenMarkdown_WithToken Markdown formatter for a representative token_withtoken input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatTokenMarkdown_WithToken(t *testing.T) {
 	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active", Token: "s3cr3t"})
 	if !strings.Contains(md, "s3cr3t") {
@@ -490,7 +556,9 @@ func TestFormatTokenMarkdown_WithToken(t *testing.T) {
 	}
 }
 
-// TestFormatTokenMarkdown_WithoutToken verifies FormatTokenMarkdown when without token.
+// TestFormatTokenMarkdown_WithoutToken verifies the TokenMarkdown_WithoutToken Markdown formatter for a representative token_withouttoken input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatTokenMarkdown_WithoutToken(t *testing.T) {
 	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active"})
 	if strings.Contains(md, "Token") && strings.Contains(md, "s3cr3t") {
@@ -502,7 +570,9 @@ func TestFormatTokenMarkdown_WithoutToken(t *testing.T) {
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for cluster agent actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -539,7 +609,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage for all tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates cluster agent routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newClusterAgentRouteSpecs(t)
 
@@ -571,7 +643,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths verifies API errors through canonical routes.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -603,7 +677,9 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

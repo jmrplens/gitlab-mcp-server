@@ -7,42 +7,58 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// MetaToolInput is an alias for [toolutil.MetaToolInput].
+// MetaToolInput is an alias for [toolutil.MetaToolInput] kept for
+// backward compatibility with sub-package code that imports the alias
+// from the tools namespace.
 type MetaToolInput = toolutil.MetaToolInput
 
-// actionFunc is an alias for [toolutil.ActionFunc].
+// actionFunc is an alias for [toolutil.ActionFunc]. Re-exported so the
+// tools package can type its internal helpers without reaching into
+// toolutil.
 type actionFunc = toolutil.ActionFunc
 
-// actionRoute is an alias for [toolutil.ActionRoute].
+// actionRoute is an alias for [toolutil.ActionRoute]. Re-exported so the
+// tools package can type its internal helpers without reaching into
+// toolutil.
 type actionRoute = toolutil.ActionRoute
 
-// actionMap is an alias for [toolutil.ActionMap].
+// actionMap is an alias for [toolutil.ActionMap]. Re-exported so the
+// tools package can type its internal helpers without reaching into
+// toolutil.
 type actionMap = toolutil.ActionMap
 
-// route and destructiveRoute are constructors for ActionRoute.
+// route and destructiveRoute are constructors for [toolutil.ActionRoute].
+// destructiveRoute additionally marks the route as destructive so the
+// meta-tool layer can apply confirmation prompts.
 var (
 	route            = toolutil.Route
 	destructiveRoute = toolutil.DestructiveRoute
 )
 
-// unmarshalParams handles unmarshal params and returns [T].
+// unmarshalParams decodes a params map into a typed Go value of type T
+// using [toolutil.UnmarshalParams]. Generic helper shared by every
+// meta-tool registration.
 func unmarshalParams[T any](params map[string]any) (T, error) {
 	return toolutil.UnmarshalParams[T](params)
 }
 
-// wrapAction resolves wrap action for evaluator execution.
+// wrapAction turns a typed client-and-input handler into a
+// [toolutil.ActionFunc] for meta-tool dispatch.
 func wrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionFunc {
 	return toolutil.WrapAction(client, fn)
 }
 
-// wrapVoidAction resolves wrap void action for evaluator execution.
+// wrapVoidAction is the void-returning variant of [wrapAction] for
+// meta-tool handlers that return only an error.
 func wrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) error) actionFunc {
 	return toolutil.WrapVoidAction(client, fn)
 }
 
 // Composite wrappers: combine wrapping + metadata in a single call.
 
-// routeAction wraps a typed function as a non-destructive ActionRoute.
+// routeAction wraps a typed function as a non-destructive
+// [toolutil.ActionRoute]. The result is safe to assign directly to a
+// meta-tool routes map.
 func routeAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionRoute {
 	return toolutil.RouteAction(client, fn)
 }
@@ -64,7 +80,8 @@ func SetMetaParamSchema(mode string) {
 // returns a restore function for tests that temporarily override the global
 // mode. Valid modes match SetMetaParamSchema: "opaque", "compact", and
 // "full". Use it with defer, for example:
-// defer SetMetaParamSchemaScoped("full")().
+//
+//	defer SetMetaParamSchemaScoped("full")()
 func SetMetaParamSchemaScoped(mode string) func() {
 	return toolutil.SetMetaParamSchemaModeScoped(mode)
 }

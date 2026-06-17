@@ -12,10 +12,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectmirrors"
 )
 
-// TestMeta_ProjectRemoteMirrors exercises the remote mirror CRUD actions
-// (mirror_list, mirror_add, mirror_get, mirror_get_public_key, mirror_edit,
-// mirror_force_push, mirror_delete) via the gitlab_project meta-tool.
+// TestMeta_ProjectRemoteMirrors exercises remote mirror CRUD actions through
+// the gitlab_project meta-tool against a live GitLab CE instance.
+//
+// The test creates a project fixture and a local bare mirror repository
+// (acting as the remote), then walks mirror_list, mirror_add,
+// mirror_get_public_key, mirror_get, mirror_edit, mirror_force_push, and
+// mirror_delete via {action, params} arguments through the catalog-backed
+// tool. Each subtest asserts the meta-tool returns the expected mirror
+// payload and that mutations are observable through subsequent reads.
+//
 // Remote mirrors are a Free-tier feature (push mirrors).
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 	t.Parallel()
 

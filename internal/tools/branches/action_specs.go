@@ -14,15 +14,25 @@ const actionBranchList = "branch.list"
 // ActionSpecs returns canonical specs for branch and protected branch actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_branch_create — create a new branch from a ref.
 		branchSpec("create", toolutil.RouteAction(client, Create), "gitlab_branch_create", false, false),
+		// gitlab_branch_get — fetch a single branch by name (returns a structured not-found result on 404).
 		branchSpec("get", branchGetRoute(client), "gitlab_branch_get", true, true),
+		// gitlab_branch_list — list branches for a project with optional search and pagination.
 		branchSpec("list", toolutil.RouteAction(client, List), "gitlab_branch_list", true, true),
+		// gitlab_branch_delete — delete a single branch by name (destructive).
 		branchSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_branch_delete", false, true),
+		// gitlab_branch_delete_merged — delete all merged branches in a project (destructive).
 		branchSpec("delete_merged", toolutil.DestructiveVoidAction(client, DeleteMerged), "gitlab_branch_delete_merged", false, true),
+		// gitlab_branch_protect — protect a branch with push/merge access levels.
 		branchSpec("protect", toolutil.RouteAction(client, Protect), "gitlab_branch_protect", false, true),
+		// gitlab_branch_unprotect — remove protection from a branch (destructive, idempotent).
 		branchSpec("unprotect", toolutil.DestructiveAction(client, Unprotect), "gitlab_branch_unprotect", false, true),
+		// gitlab_protected_branches_list — list protected branches for a project.
 		branchSpec("list_protected", toolutil.RouteAction(client, ProtectedList), "gitlab_protected_branches_list", true, true),
+		// gitlab_protected_branch_get — fetch a single protected branch.
 		branchSpec("get_protected", toolutil.RouteAction(client, ProtectedGet), "gitlab_protected_branch_get", true, true),
+		// gitlab_protected_branch_update — update an existing protected branch.
 		branchSpec("update_protected", toolutil.RouteAction(client, ProtectedUpdate), "gitlab_protected_branch_update", false, true),
 	}
 }

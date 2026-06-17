@@ -17,9 +17,11 @@ import (
 // hintVerifyJobID is the 404 hint shared by job tools.
 const hintVerifyJobID = "verify job_id with gitlab_job_list"
 
-// maxTraceBytes limits trace output to prevent oversized responses.
+// maxTraceBytes limits the trace log returned by [Trace] so a single
+// response cannot exceed roughly 100 KB.
 const maxTraceBytes = 100 * 1024
 
+// Operation and formatter constants shared by the jobs package.
 const (
 	toolJobTrace    = "jobTrace"
 	fmtCodeFenceEnd = "\n```\n"
@@ -68,7 +70,10 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List retrieves a paginated list of jobs for a pipeline.
+// List retrieves a paginated list of CI/CD jobs for a specific pipeline
+// via the GitLab Jobs API (GET /projects/:id/pipelines/:pipeline_id/jobs).
+// Optional filters narrow by job status (scope) and whether to include
+// retried jobs.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -117,7 +122,8 @@ type GetInput struct {
 	JobID     int64                `json:"job_id"     jsonschema:"Job ID to retrieve,required"`
 }
 
-// Get retrieves a single job by ID from a GitLab project.
+// Get retrieves a single CI/CD job by its global ID via the GitLab
+// Jobs API (GET /projects/:id/jobs/:job_id).
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -152,7 +158,10 @@ type TraceOutput struct {
 	Truncated bool   `json:"truncated"`
 }
 
-// Trace retrieves the raw log output of a CI/CD job, truncated at 100KB.
+// Trace retrieves the raw log output of a CI/CD job via the GitLab
+// Jobs trace API (GET /projects/:id/jobs/:job_id/trace). The trace is
+// truncated to [maxTraceBytes] and the Truncated flag is set when the
+// log was longer than that.
 func Trace(ctx context.Context, client *gitlabclient.Client, input TraceInput) (TraceOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return TraceOutput{}, err
@@ -202,7 +211,10 @@ type CancelInput struct {
 	Force     bool                 `json:"force,omitempty" jsonschema:"Force cancel even if the job is already in a non-cancellable state"`
 }
 
-// Cancel cancels a running job. When Force is true, cancels even if the job is in a non-cancellable state.
+// Cancel cancels a running CI/CD job via the GitLab Jobs cancel API
+// (POST /projects/:id/jobs/:job_id/cancel). When Force is true, the
+// call uses [gl.CancelJobOptions] to cancel jobs in non-cancellable
+// states (requires GitLab v17.2+).
 func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -234,7 +246,10 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 	return ToOutput(j), nil
 }
 
-// Retry retries a failed or canceled job.
+// Retry retries a failed or canceled CI/CD job via the GitLab Jobs
+// retry API (POST /projects/:id/jobs/:job_id/retry). Only jobs in
+// failed or canceled states can be retried; running or successful jobs
+// return 403.
 func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -259,7 +274,9 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 	return ToOutput(j), nil
 }
 
-// ToOutput converts a GitLab API [gl.Job] to MCP output format.
+// ToOutput converts a GitLab API [gl.Job] into the package's [Output],
+// formatting timestamps as RFC 3339 strings and flattening the
+// embedded pipeline, runner, user, and commit references.
 func ToOutput(j *gl.Job) Output {
 	out := Output{
 		ID:             j.ID,
@@ -312,7 +329,8 @@ func ToOutput(j *gl.Job) Output {
 // TASK-024: additional job handlers
 // ---------------------------------------------------------------------------.
 
-// maxArtifactBytes limits artifact content returned to prevent oversized responses.
+// maxArtifactBytes limits artifact content returned by [readArtifactContent]
+// and [readSingleArtifactContent] to roughly 1 MB to keep responses bounded.
 const maxArtifactBytes = 1 * 1024 * 1024
 
 // ListProjectInput defines parameters for listing all jobs in a project.
@@ -323,7 +341,10 @@ type ListProjectInput struct {
 	toolutil.PaginationInput
 }
 
-// ListProject retrieves a paginated list of all jobs in a project.
+// ListProject retrieves a paginated list of all CI/CD jobs in a project
+// across pipelines via the GitLab Jobs API
+// (GET /projects/:id/jobs). Optional filters narrow by job status and
+// whether to include retried jobs.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -397,7 +418,9 @@ type BridgeListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// BridgeToOutput converts a GitLab API Bridge to MCP output format.
+// BridgeToOutput converts a GitLab API [gl.Bridge] into the package's
+// [BridgeOutput], formatting timestamps as RFC 3339 strings and
+// flattening the embedded user and downstream pipeline references.
 func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 	out := BridgeOutput{
 		ID:             b.ID,
@@ -431,7 +454,10 @@ func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 	return out
 }
 
-// ListBridges retrieves a paginated list of bridge (trigger) jobs for a pipeline.
+// ListBridges retrieves a paginated list of pipeline bridge (trigger)
+// jobs for a pipeline via the GitLab Jobs API
+// (GET /projects/:id/pipelines/:pipeline_id/bridges). Bridges only
+// exist on pipelines that trigger downstream or multi-project pipelines.
 func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return BridgeListOutput{}, err
@@ -478,7 +504,10 @@ type ArtifactsOutput struct {
 	Truncated bool   `json:"truncated"`
 }
 
-// GetArtifacts downloads the artifacts archive for a specific job.
+// GetArtifacts downloads the artifacts archive for a specific CI/CD
+// job via the GitLab Jobs artifacts API
+// (GET /projects/:id/jobs/:job_id/artifacts). The archive is truncated
+// to [maxArtifactBytes] and base64-encoded into the response.
 func GetArtifacts(ctx context.Context, client *gitlabclient.Client, input GetInput) (ArtifactsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ArtifactsOutput{}, err
@@ -506,7 +535,11 @@ type DownloadArtifactsInput struct {
 	JobName   string               `json:"job"        jsonschema:"Job name to download artifacts from"`
 }
 
-// DownloadArtifacts downloads the artifacts archive for a ref and job name.
+// DownloadArtifacts downloads the artifacts archive for the latest
+// successful job on a given ref via the GitLab Jobs artifacts API
+// (GET /projects/:id/jobs/artifacts/:ref_name/download). Useful for
+// retrieving the most recent build output for a branch or tag without
+// knowing the underlying job ID.
 func DownloadArtifacts(ctx context.Context, client *gitlabclient.Client, input DownloadArtifactsInput) (ArtifactsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ArtifactsOutput{}, err
@@ -547,7 +580,11 @@ type SingleArtifactOutput struct {
 	Truncated    bool   `json:"truncated"`
 }
 
-// DownloadSingleArtifact downloads a single artifact file from a job.
+// DownloadSingleArtifact downloads a single artifact file by job ID
+// and artifact path via the GitLab Jobs artifacts API
+// (GET /projects/:id/jobs/:job_id/artifacts/:artifact_path). The
+// response contains the raw file content (up to [maxArtifactBytes])
+// and a Truncated flag if the file was larger.
 func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, input SingleArtifactInput) (SingleArtifactOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SingleArtifactOutput{}, err
@@ -578,7 +615,10 @@ type SingleArtifactRefInput struct {
 	JobName      string               `json:"job"            jsonschema:"Job name,required"`
 }
 
-// DownloadSingleArtifactByRef downloads a single artifact file by ref and job name.
+// DownloadSingleArtifactByRef downloads a single artifact file by ref,
+// job name, and artifact path via the GitLab Jobs artifacts API
+// (GET /projects/:id/jobs/artifacts/:ref_name/raw/:artifact_path).
+// Returns the raw file content (up to [maxArtifactBytes]).
 func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Client, input SingleArtifactRefInput) (SingleArtifactOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SingleArtifactOutput{}, err
@@ -608,7 +648,10 @@ func DownloadSingleArtifactByRef(ctx context.Context, client *gitlabclient.Clien
 	return readSingleArtifactContent(reader, 0, input.ArtifactPath)
 }
 
-// Erase erases a job's trace and artifacts.
+// Erase erases a CI/CD job's trace log and artifacts via the GitLab
+// Jobs erase API (POST /projects/:id/jobs/:job_id/erase). The job must
+// be in a finished state; this operation is destructive and requires
+// Maintainer+ role.
 func Erase(ctx context.Context, client *gitlabclient.Client, input ActionInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -633,7 +676,10 @@ func Erase(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 	return ToOutput(j), nil
 }
 
-// KeepArtifacts prevents artifacts from being deleted when expiration is set.
+// KeepArtifacts prevents a CI/CD job's artifacts from being deleted
+// when an expiration is configured. Calls the GitLab Jobs keep API
+// (POST /projects/:id/jobs/:job_id/keep_artifacts), which clears the
+// expire_at and retains the artifacts indefinitely. Requires Maintainer+.
 func KeepArtifacts(ctx context.Context, client *gitlabclient.Client, input ActionInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -672,7 +718,10 @@ type JobVariableInput struct {
 	VariableType string `json:"variable_type,omitempty" jsonschema:"Variable type (env_var or file, default: env_var)"`
 }
 
-// Play triggers a manual job (plays it).
+// Play triggers a manual CI/CD job via the GitLab Jobs play API
+// (POST /projects/:id/jobs/:job_id/play) with optional job variables.
+// Only jobs defined as "manual" in .gitlab-ci.yml and that have not
+// yet run can be played; use [Retry] for jobs that already finished.
 func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -721,7 +770,9 @@ type DeleteArtifactsInput struct {
 	JobID     int64                `json:"job_id"     jsonschema:"Job ID to delete artifacts from,required"`
 }
 
-// DeleteArtifacts deletes the artifacts for a specific job.
+// DeleteArtifacts deletes the artifacts for a specific CI/CD job via
+// the GitLab Jobs artifacts API (DELETE /projects/:id/jobs/:job_id/artifacts).
+// Requires Maintainer+ role and a finished job.
 func DeleteArtifacts(ctx context.Context, client *gitlabclient.Client, input DeleteArtifactsInput) error {
 	if input.ProjectID == "" {
 		return errors.New("jobDeleteArtifacts: project_id is required")
@@ -746,7 +797,9 @@ type DeleteProjectArtifactsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 }
 
-// DeleteProjectArtifacts deletes all artifacts in a project.
+// DeleteProjectArtifacts deletes every artifact in a project via the
+// GitLab Jobs artifacts API (DELETE /projects/:id/artifacts). The
+// operation is irreversible and requires Maintainer+ role.
 func DeleteProjectArtifacts(ctx context.Context, client *gitlabclient.Client, input DeleteProjectArtifactsInput) error {
 	if input.ProjectID == "" {
 		return errors.New("jobDeleteProjectArtifacts: project_id is required")
@@ -763,7 +816,9 @@ func DeleteProjectArtifacts(ctx context.Context, client *gitlabclient.Client, in
 	return nil
 }
 
-// readArtifactContent reads artifact bytes from a reader with a size limit.
+// readArtifactContent reads up to [maxArtifactBytes] from a job
+// artifact stream and base64-encodes the bytes. Sets the Truncated
+// flag when the underlying reader had more data than the limit.
 func readArtifactContent(reader io.Reader, jobID int64) (ArtifactsOutput, error) {
 	buf := make([]byte, maxArtifactBytes+1)
 	n, err := io.ReadFull(reader, buf)
@@ -782,7 +837,9 @@ func readArtifactContent(reader io.Reader, jobID int64) (ArtifactsOutput, error)
 	}, nil
 }
 
-// readSingleArtifactContent reads a single artifact file content with a size limit.
+// readSingleArtifactContent reads up to [maxArtifactBytes] from a
+// single artifact file stream and returns the raw bytes (not
+// base64-encoded). Sets the Truncated flag when the file was larger.
 func readSingleArtifactContent(reader io.Reader, jobID int64, path string) (SingleArtifactOutput, error) {
 	buf := make([]byte, maxArtifactBytes+1)
 	n, err := io.ReadFull(reader, buf)

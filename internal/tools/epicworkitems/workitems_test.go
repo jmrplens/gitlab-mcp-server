@@ -1,3 +1,5 @@
+// workitems_test.go contains unit tests for the shared epic-backed work item
+// GraphQL helpers (ResolveEpicGID, ResolveWorkItemGID).
 package epicworkitems
 
 import (

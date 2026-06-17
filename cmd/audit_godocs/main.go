@@ -66,6 +66,12 @@ const (
 )
 
 // options controls how the documentation audit scans and reports packages.
+//
+// format is the requested output format ("markdown" or "json"). outputPath,
+// when non-empty, redirects the report to a file; otherwise the report is
+// written to stdout. includeTests enables Test/Benchmark/Fuzz/Example
+// validation; failOnFindings turns findings into a non-zero exit code;
+// ignoreInternal skips packages whose import path contains "/internal/".
 type options struct {
 	format         string
 	outputPath     string
@@ -75,6 +81,9 @@ type options struct {
 }
 
 // packageInfo identifies one Go package returned by go list.
+//
+// Dir is the absolute directory of the package; ImportPath is its module
+// path; Name is the short package identifier from the package clause.
 type packageInfo struct {
 	Dir        string `json:"dir"`
 	ImportPath string `json:"import_path"`
@@ -82,6 +91,11 @@ type packageInfo struct {
 }
 
 // finding describes one documentation issue found in a package.
+//
+// Category is one of the constants declared at the top of this file (e.g.
+// "func_missing"). ImportPath and Package identify the affected package;
+// File and Name pinpoint the symbol. Detail carries the human-readable
+// explanation rendered in the report.
 type finding struct {
 	Category   string `json:"category"`
 	ImportPath string `json:"import_path"`
@@ -92,6 +106,12 @@ type finding struct {
 }
 
 // report is the complete machine-readable audit result.
+//
+// GeneratedAt is the RFC3339 timestamp recorded when the audit finished.
+// Packages is the count of audited packages; Findings is the unsorted list
+// of every finding collected during the walk. ByCategory and ByPackage
+// expose pre-computed counts so consumers can render summary tables
+// without re-aggregating Findings.
 type report struct {
 	GeneratedAt  string         `json:"generated_at"`
 	IncludeTests bool           `json:"include_tests"`

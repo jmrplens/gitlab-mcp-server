@@ -27,6 +27,13 @@ const (
 )
 
 // repoStats accumulates filesystem-level measurements of the Go codebase.
+//
+// File counts, line counts, and function counts are populated by walking
+// root with [collectStats]. Hall-of-fame fields track the longest names
+// and largest files. Project meta fields (Packages, DirectDeps,
+// IndirectDeps, CommitCount, ContributorCount) are filled after the walk
+// from go.mod and git, so callers should not assume they are valid until
+// [collectStats] returns.
 type repoStats struct {
 	// File counts
 	SourceFiles   int
@@ -322,6 +329,9 @@ func classifyDep(line string, direct, indirect *int) {
 
 // gitBin resolves the absolute path of the git executable so downstream calls
 // use a fixed path instead of relying on PATH lookup at runtime.
+//
+// Returns the absolute path; the error from [exec.LookPath] is forwarded
+// unchanged so callers can recognize the missing-git scenario.
 func gitBin() (string, error) {
 	return exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
 }

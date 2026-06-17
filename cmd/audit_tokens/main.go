@@ -42,6 +42,10 @@ const (
 )
 
 // toolTokenInfo stores the serialized size estimate for one MCP tool.
+//
+// Name is the MCP tool name. Domain is the GitLab API domain parsed from
+// the tool name (e.g. "project" for "gitlab_project_get"). Tokens is the
+// byte-length divided by [bytesPerTok]. Bytes is the raw JSON length.
 type toolTokenInfo struct {
 	Name   string
 	Domain string
@@ -49,8 +53,14 @@ type toolTokenInfo struct {
 	Bytes  int
 }
 
-// resourceRegistrationOptions selects which MCP resource groups are advertised
-// for token-audit measurements.
+// resourceRegistrationOptions selects which MCP resource groups are
+// advertised for token-audit measurements.
+//
+// Core includes the static resources from [resources.Register]. ToolManifest
+// adds the surface-aware tool manifest template and tools/{id} template;
+// ToolSurface, ToolList, and ToolCatalog drive its content. WorkflowGuides
+// includes the static workflow guides. WorkspaceRoots includes the
+// gitlab://workspace/roots template.
 type resourceRegistrationOptions struct {
 	Core           bool
 	ToolManifest   bool

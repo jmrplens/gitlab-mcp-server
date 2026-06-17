@@ -37,7 +37,9 @@ const featureFlagListJSON = `[` + featureFlagJSON + `]`
 
 // -- List --.
 
-// TestListFeatureFlags_Success verifies ListFeatureFlags when success.
+// TestListFeatureFlags_Success verifies that ListFeatureFlags succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListFeatureFlags_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +66,9 @@ func TestListFeatureFlags_Success(t *testing.T) {
 	}
 }
 
-// TestListFeatureFlags_MissingProjectID verifies ListFeatureFlags when missing project ID.
+// TestListFeatureFlags_MissingProjectID verifies that ListFeatureFlags_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListFeatureFlags_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListFeatureFlags(context.Background(), client, ListInput{})
@@ -75,7 +79,9 @@ func TestListFeatureFlags_MissingProjectID(t *testing.T) {
 
 // -- Get --.
 
-// TestGetFeatureFlag_Success verifies GetFeatureFlag when success.
+// TestGetFeatureFlag_Success verifies that GetFeatureFlag succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +107,9 @@ func TestGetFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestGetFeatureFlag_MissingParams verifies GetFeatureFlag when missing params.
+// TestGetFeatureFlag_MissingParams verifies that GetFeatureFlag_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetFeatureFlag(context.Background(), client, GetInput{})
@@ -116,7 +124,9 @@ func TestGetFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Create --.
 
-// TestCreateFeatureFlag_Success verifies CreateFeatureFlag when success.
+// TestCreateFeatureFlag_Success verifies that CreateFeatureFlag succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +148,9 @@ func TestCreateFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_WithStrategies verifies CreateFeatureFlag when with strategies.
+// TestCreateFeatureFlag_WithStrategies verifies the CreateFeatureFlag_WithStrategies handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +172,9 @@ func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_InvalidStrategies verifies CreateFeatureFlag when invalid strategies.
+// TestCreateFeatureFlag_InvalidStrategies verifies the CreateFeatureFlag_InvalidStrategies handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateFeatureFlag_InvalidStrategies(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{
@@ -173,7 +187,9 @@ func TestCreateFeatureFlag_InvalidStrategies(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_MissingParams verifies CreateFeatureFlag when missing params.
+// TestCreateFeatureFlag_MissingParams verifies that CreateFeatureFlag_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{})
@@ -188,7 +204,9 @@ func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Update --.
 
-// TestUpdateFeatureFlag_Success verifies UpdateFeatureFlag when success.
+// TestUpdateFeatureFlag_Success verifies that UpdateFeatureFlag succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +227,9 @@ func TestUpdateFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_MissingParams verifies UpdateFeatureFlag when missing params.
+// TestUpdateFeatureFlag_MissingParams verifies that UpdateFeatureFlag_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{})
@@ -224,7 +244,9 @@ func TestUpdateFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Delete --.
 
-// TestDeleteFeatureFlag_Success verifies DeleteFeatureFlag when success.
+// TestDeleteFeatureFlag_Success verifies that DeleteFeatureFlag succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteFeatureFlag_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +263,9 @@ func TestDeleteFeatureFlag_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteFeatureFlag_MissingParams verifies DeleteFeatureFlag when missing params.
+// TestDeleteFeatureFlag_MissingParams verifies that DeleteFeatureFlag_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteFeatureFlag_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteFeatureFlag(context.Background(), client, DeleteInput{})
@@ -256,7 +280,9 @@ func TestDeleteFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatFeatureFlagMarkdown verifies FormatFeatureFlagMarkdown.
+// TestFormatFeatureFlagMarkdown verifies the FeatureFlagMarkdown Markdown formatter for a representative featureflag input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFeatureFlagMarkdown(t *testing.T) {
 	out := Output{
 		Name:        "my-flag",
@@ -292,7 +318,9 @@ func TestFormatFeatureFlagMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListFeatureFlagsMarkdown verifies FormatListFeatureFlagsMarkdown.
+// TestFormatListFeatureFlagsMarkdown verifies the ListFeatureFlagsMarkdown Markdown formatter for a representative listfeatureflags input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListFeatureFlagsMarkdown(t *testing.T) {
 	out := ListOutput{
 		FeatureFlags: []Output{
@@ -310,7 +338,9 @@ func TestFormatListFeatureFlagsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListFeatureFlagsMarkdown_Empty verifies FormatListFeatureFlagsMarkdown when empty.
+// TestFormatListFeatureFlagsMarkdown_Empty verifies the ListFeatureFlagsMarkdown_Empty Markdown formatter for a representative listfeatureflags_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListFeatureFlagsMarkdown_Empty(t *testing.T) {
 	out := ListOutput{FeatureFlags: []Output{}}
 	md := FormatListFeatureFlagsMarkdown(out)
@@ -364,7 +394,9 @@ const covFeatureFlagJSON = `{
 // ListFeatureFlags — API error, scope param
 // ---------------------------------------------------------------------------.
 
-// TestListFeatureFlags_APIError verifies ListFeatureFlags when API error.
+// TestListFeatureFlags_APIError verifies that ListFeatureFlags returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListFeatureFlags_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -375,7 +407,9 @@ func TestListFeatureFlags_APIError(t *testing.T) {
 	}
 }
 
-// TestListFeatureFlags_Forbidden verifies Premium/role hints.
+// TestListFeatureFlags_Forbidden verifies the ListFeatureFlags_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListFeatureFlags_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -389,7 +423,9 @@ func TestListFeatureFlags_Forbidden(t *testing.T) {
 	}
 }
 
-// TestListFeatureFlags_WithScope verifies ListFeatureFlags when with scope.
+// TestListFeatureFlags_WithScope verifies the ListFeatureFlags_WithScope handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListFeatureFlags_WithScope(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
@@ -418,7 +454,9 @@ func TestListFeatureFlags_WithScope(t *testing.T) {
 // GetFeatureFlag — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetFeatureFlag_APIError verifies GetFeatureFlag when API error.
+// TestGetFeatureFlag_APIError verifies that GetFeatureFlag returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -433,7 +471,9 @@ func TestGetFeatureFlag_APIError(t *testing.T) {
 // CreateFeatureFlag — API error, Active param
 // ---------------------------------------------------------------------------.
 
-// TestCreateFeatureFlag_APIError verifies CreateFeatureFlag when API error.
+// TestCreateFeatureFlag_APIError verifies that CreateFeatureFlag returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -444,7 +484,9 @@ func TestCreateFeatureFlag_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_ErrorBranches verifies forbidden and generic error paths.
+// TestCreateFeatureFlag_ErrorBranches verifies that CreateFeatureFlagBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateFeatureFlag_ErrorBranches(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -471,7 +513,9 @@ func TestCreateFeatureFlag_ErrorBranches(t *testing.T) {
 	}
 }
 
-// TestCreateFeatureFlag_WithActive verifies CreateFeatureFlag when with active.
+// TestCreateFeatureFlag_WithActive verifies the CreateFeatureFlag_WithActive handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateFeatureFlag_WithActive(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, _ *http.Request) {
@@ -497,7 +541,9 @@ func TestCreateFeatureFlag_WithActive(t *testing.T) {
 // UpdateFeatureFlag — API error, NewName, Active, Strategies, invalid strategies
 // ---------------------------------------------------------------------------.
 
-// TestUpdateFeatureFlag_APIError verifies UpdateFeatureFlag when API error.
+// TestUpdateFeatureFlag_APIError verifies that UpdateFeatureFlag returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -508,7 +554,9 @@ func TestUpdateFeatureFlag_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_Forbidden verifies role hints.
+// TestUpdateFeatureFlag_Forbidden verifies the UpdateFeatureFlag_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateFeatureFlag_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -522,7 +570,9 @@ func TestUpdateFeatureFlag_Forbidden(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_AllOptionalFields verifies UpdateFeatureFlag when all optional fields.
+// TestUpdateFeatureFlag_AllOptionalFields verifies the UpdateFeatureFlag_AllOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("PUT /api/v4/projects/1/feature_flags/cov-flag", func(w http.ResponseWriter, _ *http.Request) {
@@ -548,7 +598,9 @@ func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestUpdateFeatureFlag_InvalidStrategies verifies UpdateFeatureFlag when invalid strategies.
+// TestUpdateFeatureFlag_InvalidStrategies verifies the UpdateFeatureFlag_InvalidStrategies handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateFeatureFlag_InvalidStrategies(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{
@@ -565,7 +617,9 @@ func TestUpdateFeatureFlag_InvalidStrategies(t *testing.T) {
 // DeleteFeatureFlag — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteFeatureFlag_APIError verifies DeleteFeatureFlag when API error.
+// TestDeleteFeatureFlag_APIError verifies that DeleteFeatureFlag returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteFeatureFlag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -580,7 +634,9 @@ func TestDeleteFeatureFlag_APIError(t *testing.T) {
 // formatParameters — all parameter branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatParameters_AllFields verifies FormatParameters when all fields.
+// TestFormatParameters_AllFields verifies the Parameters_AllFields Markdown formatter for a representative parameters_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatParameters_AllFields(t *testing.T) {
 	p := &StrategyParameterOutput{
 		Percentage: "50",
@@ -597,14 +653,18 @@ func TestFormatParameters_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatParameters_Nil verifies FormatParameters when nil.
+// TestFormatParameters_Nil verifies the Parameters_Nil Markdown formatter for a representative parameters_nil input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatParameters_Nil(t *testing.T) {
 	if got := formatParameters(nil); got != "-" {
 		t.Errorf("expected '-', got %q", got)
 	}
 }
 
-// TestFormatParameters_Empty verifies FormatParameters when empty.
+// TestFormatParameters_Empty verifies the Parameters_Empty Markdown formatter for a representative parameters_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatParameters_Empty(t *testing.T) {
 	if got := formatParameters(&StrategyParameterOutput{}); got != "-" {
 		t.Errorf("expected '-' for empty params, got %q", got)
@@ -615,14 +675,18 @@ func TestFormatParameters_Empty(t *testing.T) {
 // formatScopes — empty and multiple scopes
 // ---------------------------------------------------------------------------.
 
-// TestFormatScopes_Empty verifies FormatScopes when empty.
+// TestFormatScopes_Empty verifies the Scopes_Empty Markdown formatter for a representative scopes_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatScopes_Empty(t *testing.T) {
 	if got := formatScopes(nil); got != "-" {
 		t.Errorf("expected '-', got %q", got)
 	}
 }
 
-// TestFormatScopes_Multiple verifies FormatScopes when multiple.
+// TestFormatScopes_Multiple verifies the Scopes_Multiple Markdown formatter for a representative scopes_multiple input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatScopes_Multiple(t *testing.T) {
 	scopes := []ScopeOutput{
 		{ID: 1, EnvironmentScope: "production"},
@@ -638,7 +702,9 @@ func TestFormatScopes_Multiple(t *testing.T) {
 // FormatFeatureFlagMarkdown — no strategies, no dates
 // ---------------------------------------------------------------------------.
 
-// TestFormatFeatureFlagMarkdown_Minimal verifies FormatFeatureFlagMarkdown when minimal.
+// TestFormatFeatureFlagMarkdown_Minimal verifies the FeatureFlagMarkdown_Minimal Markdown formatter for a representative featureflag_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFeatureFlagMarkdown_Minimal(t *testing.T) {
 	out := Output{
 		Name:    "bare-flag",
@@ -664,7 +730,9 @@ func TestFormatFeatureFlagMarkdown_Minimal(t *testing.T) {
 // FormatListFeatureFlagsMarkdown — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListFeatureFlagsMarkdown_WithPagination verifies FormatListFeatureFlagsMarkdown when with pagination.
+// TestFormatListFeatureFlagsMarkdown_WithPagination verifies the ListFeatureFlagsMarkdown_WithPagination Markdown formatter for a representative listfeatureflags_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatListFeatureFlagsMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		FeatureFlags: []Output{
@@ -682,7 +750,9 @@ func TestFormatListFeatureFlagsMarkdown_WithPagination(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for feature flag actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -710,7 +780,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage for all 5 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates feature flag routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := covNewFeatureFlagSpecsByTool(t)
 
@@ -769,7 +841,9 @@ func covNewFeatureFlagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return featureFlagSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestActionSpecs_FeatureFlagGetRoute verifies the canonical feature flag get route output.
+// TestActionSpecs_FeatureFlagGetRoute validates the FeatureFlagGetRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_FeatureFlagGetRoute(t *testing.T) {
 	const respJSON = `{"name":"experimental_ui","description":"","active":true,"version":"new_version_flag"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

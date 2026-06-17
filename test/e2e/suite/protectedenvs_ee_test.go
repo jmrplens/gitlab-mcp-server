@@ -12,9 +12,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
 )
 
-// TestMeta_ProtectedEnvs exercises protected environment CRUD via the
-// gitlab_environment meta-tool.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// TestMeta_ProtectedEnvs exercises protected environment CRUD operations
+// through the gitlab_environment meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture, walks protect, list, get, and
+// unprotect actions via {action, params} arguments through the catalog-backed
+// tool, and asserts each step returns the expected payload and that the
+// protected environment round-trips through GitLab correctly.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Premium/Ultimate.
 func TestMeta_ProtectedEnvs(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

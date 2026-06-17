@@ -46,6 +46,10 @@ func TestPipelines(t *testing.T) {
 	})
 }
 
+// runIndividualPipelineLifecycle drives the pipeline lifecycle through
+// the individual MCP tool surface: create → get → list → wait → list jobs
+// → get job → fetch trace → retry → delete. Each subtest asserts the
+// expected response shape so a silent regression in any handler is caught.
 func runIndividualPipelineLifecycle(ctx context.Context, t *testing.T) {
 	t.Helper()
 	proj := setupIndividualPipelineProject(ctx, t)
@@ -86,6 +90,10 @@ func runIndividualPipelineLifecycle(ctx context.Context, t *testing.T) {
 	})
 }
 
+// setupIndividualPipelineProject creates a project, seeds it with a
+// bootstrap commit and the pipeline CI YAML, and returns the fixture.
+// The CI YAML is created with commitFileCreateOrUpdate so re-running the
+// test against the same project ID is safe.
 func setupIndividualPipelineProject(ctx context.Context, t *testing.T) ProjectFixture {
 	t.Helper()
 	proj := createProject(ctx, t, sess.individual)
@@ -94,6 +102,8 @@ func setupIndividualPipelineProject(ctx context.Context, t *testing.T) ProjectFi
 	return proj
 }
 
+// createIndividualPipeline creates a pipeline on main and returns its ID.
+// Fails the test if the create response carries a non-positive ID.
 func createIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixture) int64 {
 	t.Helper()
 	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_create", pipelines.CreateInput{ProjectID: proj.pidOf(), Ref: "main"})
@@ -107,6 +117,8 @@ func createIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFix
 	return out.ID
 }
 
+// assertIndividualPipelineGet fetches the pipeline by ID and asserts the
+// response matches the requested ID.
 func assertIndividualPipelineGet(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_get", pipelines.GetInput{ProjectID: proj.pidOf(), PipelineID: pipelineID})
@@ -118,6 +130,8 @@ func assertIndividualPipelineGet(ctx context.Context, t *testing.T, proj Project
 	}
 }
 
+// assertIndividualPipelineList verifies the project has at least one
+// pipeline after the create step.
 func assertIndividualPipelineList(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
 	out, err := callToolOn[pipelines.ListOutput](ctx, sess.individual, "gitlab_pipeline_list", pipelines.ListInput{ProjectID: proj.pidOf()})
@@ -129,6 +143,9 @@ func assertIndividualPipelineList(ctx context.Context, t *testing.T, proj Projec
 	}
 }
 
+// waitAndListIndividualJobs waits for the pipeline to finish (via the
+// shared waitForPipeline helper) and then lists its jobs. Returns the
+// first job's ID for downstream subtests.
 func waitAndListIndividualJobs(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) int64 {
 	t.Helper()
 	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
@@ -144,6 +161,8 @@ func waitAndListIndividualJobs(ctx context.Context, t *testing.T, proj ProjectFi
 	return out.Jobs[0].ID
 }
 
+// assertIndividualJobGet fetches a job by ID and asserts the response
+// matches the requested ID.
 func assertIndividualJobGet(ctx context.Context, t *testing.T, proj ProjectFixture, jobID int64) {
 	t.Helper()
 	out, err := callToolOn[jobs.Output](ctx, sess.individual, "gitlab_job_get", jobs.GetInput{ProjectID: proj.pidOf(), JobID: jobID})
@@ -155,6 +174,7 @@ func assertIndividualJobGet(ctx context.Context, t *testing.T, proj ProjectFixtu
 	}
 }
 
+// assertIndividualJobTrace fetches the job trace and asserts it is non-empty.
 func assertIndividualJobTrace(ctx context.Context, t *testing.T, proj ProjectFixture, jobID int64) {
 	t.Helper()
 	out, err := callToolOn[jobs.TraceOutput](ctx, sess.individual, "gitlab_job_trace", jobs.TraceInput{ProjectID: proj.pidOf(), JobID: jobID})
@@ -167,6 +187,8 @@ func assertIndividualJobTrace(ctx context.Context, t *testing.T, proj ProjectFix
 	t.Logf("Job trace: %d chars, truncated=%v", len(out.Trace), out.Truncated)
 }
 
+// retryIndividualPipeline retries the pipeline and waits for it to reach
+// a terminal status again before returning.
 func retryIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_retry", pipelines.ActionInput{ProjectID: proj.pidOf(), PipelineID: pipelineID})
@@ -177,6 +199,7 @@ func retryIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixt
 	waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 }
 
+// deleteIndividualPipeline removes the pipeline from the project.
 func deleteIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	err := callToolVoidOn(ctx, sess.individual, "gitlab_pipeline_delete", pipelines.DeleteInput{ProjectID: proj.pidOf(), PipelineID: pipelineID})
@@ -185,6 +208,9 @@ func deleteIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFix
 	}
 }
 
+// runMetaPipelineLifecycle mirrors runIndividualPipelineLifecycle but
+// drives the same lifecycle through the gitlab_pipeline/gitlab_job
+// meta-tool surfaces.
 func runMetaPipelineLifecycle(ctx context.Context, t *testing.T) {
 	t.Helper()
 	projM := setupMetaPipelineProject(ctx, t)
@@ -225,6 +251,9 @@ func runMetaPipelineLifecycle(ctx context.Context, t *testing.T) {
 	})
 }
 
+// setupMetaPipelineProject creates a project via the meta session, seeds
+// it with a bootstrap commit and the pipeline CI YAML, and returns the
+// fixture.
 func setupMetaPipelineProject(ctx context.Context, t *testing.T) ProjectFixture {
 	t.Helper()
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -233,6 +262,8 @@ func setupMetaPipelineProject(ctx context.Context, t *testing.T) ProjectFixture 
 	return proj
 }
 
+// createMetaPipeline creates a pipeline on main via the gitlab_pipeline
+// meta-tool and returns its ID.
 func createMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture) int64 {
 	t.Helper()
 	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
@@ -246,6 +277,8 @@ func createMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture) 
 	return out.ID
 }
 
+// assertMetaPipelineGet fetches a pipeline by ID via the meta-tool and
+// asserts the response matches the requested ID.
 func assertMetaPipelineGet(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
@@ -260,6 +293,8 @@ func assertMetaPipelineGet(ctx context.Context, t *testing.T, proj ProjectFixtur
 	}
 }
 
+// assertMetaPipelineList verifies the project has at least one pipeline
+// after the create step when using the meta-tool surface.
 func assertMetaPipelineList(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
 	out, err := callToolOn[pipelines.ListOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
@@ -274,6 +309,8 @@ func assertMetaPipelineList(ctx context.Context, t *testing.T, proj ProjectFixtu
 	}
 }
 
+// waitAndListMetaJobs waits for the pipeline to finish and then lists its
+// jobs through the meta-tool surface. Returns the first job's ID.
 func waitAndListMetaJobs(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) int64 {
 	t.Helper()
 	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
@@ -291,6 +328,7 @@ func waitAndListMetaJobs(ctx context.Context, t *testing.T, proj ProjectFixture,
 	return out.Jobs[0].ID
 }
 
+// assertMetaJobGet fetches a job by ID through the meta-tool surface.
 func assertMetaJobGet(ctx context.Context, t *testing.T, proj ProjectFixture, jobID int64) {
 	t.Helper()
 	out, err := callToolOn[jobs.Output](ctx, sess.meta, "gitlab_job", map[string]any{
@@ -305,6 +343,8 @@ func assertMetaJobGet(ctx context.Context, t *testing.T, proj ProjectFixture, jo
 	}
 }
 
+// assertMetaJobTrace fetches the job trace through the meta-tool surface
+// and asserts it is non-empty.
 func assertMetaJobTrace(ctx context.Context, t *testing.T, proj ProjectFixture, jobID int64) {
 	t.Helper()
 	out, err := callToolOn[jobs.TraceOutput](ctx, sess.meta, "gitlab_job", map[string]any{
@@ -319,6 +359,8 @@ func assertMetaJobTrace(ctx context.Context, t *testing.T, proj ProjectFixture, 
 	}
 }
 
+// retryMetaPipeline retries the pipeline via the meta-tool surface and
+// waits for it to reach a terminal status.
 func retryMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	_, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
@@ -331,6 +373,7 @@ func retryMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, p
 	waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 }
 
+// deleteMetaPipeline removes the pipeline via the meta-tool surface.
 func deleteMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
 	t.Helper()
 	err := callToolVoidOn(ctx, sess.meta, "gitlab_pipeline", map[string]any{

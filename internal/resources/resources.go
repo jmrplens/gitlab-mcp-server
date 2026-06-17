@@ -18,7 +18,11 @@ import (
 
 // Resource output structs.
 
-// ProjectResourceOutput is the output for the project resource.
+// ProjectResourceOutput is the JSON payload returned by the
+// "gitlab://project/{project_id}" resource. It contains the project's
+// identifying fields, namespace path, visibility, web URL,
+// description, and default branch — enough for clients to render a
+// project card without an extra API call.
 type ProjectResourceOutput struct {
 	ID                int64  `json:"id"`
 	Name              string `json:"name"`
@@ -29,7 +33,10 @@ type ProjectResourceOutput struct {
 	DefaultBranch     string `json:"default_branch"`
 }
 
-// UserResourceOutput is the output for the current user resource.
+// UserResourceOutput is the JSON payload returned by the
+// "gitlab://user/current" resource. It contains the authenticated
+// user's profile fields: ID, username, display name, email, account
+// state, web URL, and admin status.
 type UserResourceOutput struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
@@ -40,7 +47,11 @@ type UserResourceOutput struct {
 	IsAdmin  bool   `json:"is_admin"`
 }
 
-// MemberResourceOutput is the output for a project member.
+// MemberResourceOutput is the JSON payload for a single member entry
+// in the "gitlab://{project|group}/{id}/members" resources. It
+// includes the member's ID, username, display name, account state,
+// numeric access level (10=guest, 20=reporter, 30=developer,
+// 40=maintainer, 50=owner), and web URL.
 type MemberResourceOutput struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`
@@ -69,7 +80,11 @@ func groupMemberResourceOutput(member *gl.GroupMember) MemberResourceOutput {
 	return memberResourceOutput(member.ID, member.Username, member.Name, member.State, member.AccessLevel, member.WebURL)
 }
 
-// PipelineResourceOutput is the output for a pipeline.
+// PipelineResourceOutput is the JSON payload returned by the pipeline
+// detail resources ("gitlab://project/{id}/pipelines/latest" and
+// "gitlab://project/{id}/pipeline/{pipeline_id}"). It contains the
+// pipeline's ID, IID, status, ref, SHA, web URL, and source
+// ("push", "web", etc.).
 type PipelineResourceOutput struct {
 	ID     int64  `json:"id"`
 	IID    int64  `json:"iid"`
@@ -80,7 +95,11 @@ type PipelineResourceOutput struct {
 	Source string `json:"source"`
 }
 
-// JobResourceOutput is the output for a pipeline job.
+// JobResourceOutput is the JSON payload for a single pipeline job
+// returned by the "gitlab://project/{id}/pipeline/{id}/jobs" and
+// "gitlab://project/{id}/job/{job_id}" resources. It contains the
+// job's ID, name, stage, status, ref, duration in seconds,
+// failure reason (omitted when empty), and web URL.
 type JobResourceOutput struct {
 	ID            int64   `json:"id"`
 	Name          string  `json:"name"`
@@ -92,7 +111,10 @@ type JobResourceOutput struct {
 	WebURL        string  `json:"web_url"`
 }
 
-// LabelResourceOutput is the output for a project label.
+// LabelResourceOutput is the JSON payload for a single project or
+// group label. It includes the label's ID, name, color (hex), optional
+// description, and the current open issue and open MR counts (used by
+// the label detail and listing resources).
 type LabelResourceOutput struct {
 	ID                     int64  `json:"id"`
 	Name                   string `json:"name"`
@@ -102,7 +124,9 @@ type LabelResourceOutput struct {
 	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
 }
 
-// MilestoneResourceOutput is the output for a project milestone.
+// MilestoneResourceOutput is the JSON payload for a single project or
+// group milestone. It includes the milestone's ID, IID, title,
+// description, state (active/closed), optional due date, and web URL.
 type MilestoneResourceOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`
@@ -113,7 +137,10 @@ type MilestoneResourceOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
-// MRResourceOutput is the output for a merge request resource.
+// MRResourceOutput is the JSON payload returned by the
+// "gitlab://project/{id}/mr/{iid}" resource. It contains the MR's ID,
+// IID, title, state, source and target branches, author username,
+// web URL, and detailed merge status.
 type MRResourceOutput struct {
 	ID           int64  `json:"id"`
 	IID          int64  `json:"iid"`
@@ -126,7 +153,10 @@ type MRResourceOutput struct {
 	MergeStatus  string `json:"merge_status"`
 }
 
-// BranchResourceOutput is the output for a repository branch.
+// BranchResourceOutput is the JSON payload for a single repository
+// branch (used by both the branch listing and the branch detail
+// resources). It includes the branch's name, protection flag, merge
+// status, default flag, and web URL.
 type BranchResourceOutput struct {
 	Name      string `json:"name"`
 	Protected bool   `json:"protected"`
@@ -135,7 +165,10 @@ type BranchResourceOutput struct {
 	WebURL    string `json:"web_url"`
 }
 
-// GroupResourceOutput is the output for a GitLab group.
+// GroupResourceOutput is the JSON payload for a GitLab group
+// (used by both the groups listing and the group detail resources).
+// It contains the group's ID, name, path, full path, description,
+// visibility, and web URL.
 type GroupResourceOutput struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
@@ -146,7 +179,10 @@ type GroupResourceOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
-// IssueResourceOutput is the output for a project issue.
+// IssueResourceOutput is the JSON payload for a single project issue
+// (used by both the issues listing and the issue detail resources).
+// It contains the issue's ID, IID, title, state, labels, assignees
+// (usernames), author username, web URL, and creation timestamp.
 type IssueResourceOutput struct {
 	ID        int64    `json:"id"`
 	IID       int64    `json:"iid"`
@@ -159,7 +195,10 @@ type IssueResourceOutput struct {
 	CreatedAt string   `json:"created_at"`
 }
 
-// ReleaseResourceOutput is the output for a project release.
+// ReleaseResourceOutput is the JSON payload for a single project
+// release (used by both the releases listing and the release detail
+// resources). It contains the tag name, release name, description,
+// author username, creation timestamp, and optional release timestamp.
 type ReleaseResourceOutput struct {
 	TagName     string `json:"tag_name"`
 	Name        string `json:"name"`
@@ -169,7 +208,10 @@ type ReleaseResourceOutput struct {
 	ReleasedAt  string `json:"released_at,omitempty"`
 }
 
-// TagResourceOutput is the output for a repository tag.
+// TagResourceOutput is the JSON payload for a single repository tag
+// (used by both the tags listing and the tag detail resources). It
+// contains the tag name, optional annotation message, target commit
+// SHA, protection status, and optional creation timestamp.
 type TagResourceOutput struct {
 	Name      string `json:"name"`
 	Message   string `json:"message,omitempty"`
@@ -178,7 +220,11 @@ type TagResourceOutput struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// CommitResourceOutput is the output for a single commit resource.
+// CommitResourceOutput is the JSON payload returned by the
+// "gitlab://project/{id}/commit/{sha}" resource. It contains the
+// commit's full ID, short ID, title, full message, author name and
+// email, authored/committed timestamps, parent commit IDs, web URL,
+// and optional [CommitStatsOutput] with addition/deletion totals.
 type CommitResourceOutput struct {
 	ID            string             `json:"id"`
 	ShortID       string             `json:"short_id"`
@@ -193,15 +239,20 @@ type CommitResourceOutput struct {
 	Stats         *CommitStatsOutput `json:"stats,omitempty"`
 }
 
-// CommitStatsOutput holds additions/deletions/total for a commit resource.
+// CommitStatsOutput holds line addition and deletion totals for a
+// single commit, returned as a sub-object of [CommitResourceOutput].
 type CommitStatsOutput struct {
 	Additions int64 `json:"additions"`
 	Deletions int64 `json:"deletions"`
 	Total     int64 `json:"total"`
 }
 
-// FileBlobResourceOutput is the output for a repository file blob resource.
-// Binary content is omitted; only the textual representation is returned.
+// FileBlobResourceOutput is the JSON payload returned by the
+// "gitlab://project/{id}/file/{ref}/{path}" resource. Binary content
+// is omitted; only the textual representation is returned (see
+// [decodeFileContent]). Files larger than [fileBlobMaxBytes] are
+// truncated to their metadata with Truncated=true and
+// ContentCategory="truncated".
 type FileBlobResourceOutput struct {
 	FileName        string `json:"file_name"`
 	FilePath        string `json:"file_path"`
@@ -216,7 +267,10 @@ type FileBlobResourceOutput struct {
 	Truncated       bool   `json:"truncated,omitempty"`
 }
 
-// WikiResourceOutput is the output for a wiki page resource.
+// WikiResourceOutput is the JSON payload returned by the
+// "gitlab://project/{id}/wiki/{slug}" resource. It contains the page
+// title, slug, format (markdown, rdoc, asciidoc, or org), raw content,
+// and encoding (omitted when the API does not return one).
 type WikiResourceOutput struct {
 	Title    string `json:"title"`
 	Slug     string `json:"slug"`
@@ -225,8 +279,11 @@ type WikiResourceOutput struct {
 	Encoding string `json:"encoding,omitempty"`
 }
 
-// MRNoteResourceOutput is the output for a single merge-request note inside
-// the MR notes resource.
+// MRNoteResourceOutput is the JSON payload for a single merge-request
+// note inside the flat "gitlab://project/{id}/mr/{iid}/notes" list
+// resource. It contains the note's ID, author username, body,
+// system flag, resolvable and resolved flags (omitted when not
+// resolvable), and optional creation and update timestamps.
 type MRNoteResourceOutput struct {
 	ID         int64  `json:"id"`
 	Author     string `json:"author"`
@@ -238,8 +295,11 @@ type MRNoteResourceOutput struct {
 	UpdatedAt  string `json:"updated_at,omitempty"`
 }
 
-// MRDiscussionNoteResourceOutput is the output for a note inside a discussion
-// thread of the MR discussions resource.
+// MRDiscussionNoteResourceOutput is the JSON payload for a single
+// note inside a discussion thread, returned as part of the
+// "gitlab://project/{id}/mr/{iid}/discussions" resource. It contains
+// the note's ID, author username, body, system flag, resolved and
+// resolvable flags, and optional creation timestamp.
 type MRDiscussionNoteResourceOutput struct {
 	ID         int64  `json:"id"`
 	Author     string `json:"author"`
@@ -250,14 +310,21 @@ type MRDiscussionNoteResourceOutput struct {
 	CreatedAt  string `json:"created_at,omitempty"`
 }
 
-// MRDiscussionResourceOutput is the output for a single discussion thread.
+// MRDiscussionResourceOutput is the JSON payload for a single
+// discussion thread on a merge request. It bundles a thread ID, the
+// individual_note flag (true for non-threaded comments), and the
+// ordered list of notes that make up the thread.
 type MRDiscussionResourceOutput struct {
 	ID             string                           `json:"id"`
 	IndividualNote bool                             `json:"individual_note"`
 	Notes          []MRDiscussionNoteResourceOutput `json:"notes"`
 }
 
-// DeploymentResourceOutput is the output for a single project deployment.
+// DeploymentResourceOutput is the JSON payload for a single project
+// deployment, returned by the
+// "gitlab://project/{id}/deployment/{deployment_id}" resource. It
+// contains the deployment's ID, IID, ref, SHA, status, and optional
+// environment name.
 type DeploymentResourceOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`
@@ -267,7 +334,11 @@ type DeploymentResourceOutput struct {
 	Environment string `json:"environment,omitempty"`
 }
 
-// EnvironmentResourceOutput is the output for a single project environment.
+// EnvironmentResourceOutput is the JSON payload for a single project
+// environment, returned by the
+// "gitlab://project/{id}/environment/{environment_id}" resource. It
+// contains the environment's ID, name, slug, state, and optional
+// tier ("production", "staging", "testing", "development", or other).
 type EnvironmentResourceOutput struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -276,7 +347,12 @@ type EnvironmentResourceOutput struct {
 	Tier  string `json:"tier,omitempty"`
 }
 
-// SnippetResourceOutput is the output for a personal or project snippet.
+// SnippetResourceOutput is the JSON payload for a personal (global) or
+// project snippet, returned by the
+// "gitlab://snippet/{snippet_id}" and
+// "gitlab://project/{id}/snippet/{snippet_id}" resources. It contains
+// the snippet's ID, title, file name, description, visibility, and
+// web URL.
 type SnippetResourceOutput struct {
 	ID          int64  `json:"id"`
 	Title       string `json:"title"`
@@ -286,7 +362,11 @@ type SnippetResourceOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
-// FeatureFlagResourceOutput is the output for a single project feature flag.
+// FeatureFlagResourceOutput is the JSON payload for a single project
+// feature flag, returned by the
+// "gitlab://project/{id}/feature_flag/{name}" resource. It contains
+// the flag's name, optional description, active flag, and the
+// strategy version ("legacy" or "new").
 type FeatureFlagResourceOutput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -294,7 +374,11 @@ type FeatureFlagResourceOutput struct {
 	Version     string `json:"version"`
 }
 
-// DeployKeyResourceOutput is the output for a single project deploy key.
+// DeployKeyResourceOutput is the JSON payload for a single project
+// deploy key, returned by the
+// "gitlab://project/{id}/deploy_key/{deploy_key_id}" resource. It
+// contains the key's ID, title, public key text, and optional SHA256
+// fingerprint.
 type DeployKeyResourceOutput struct {
 	ID          int64  `json:"id"`
 	Title       string `json:"title"`
@@ -302,7 +386,9 @@ type DeployKeyResourceOutput struct {
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
-// BoardResourceOutput is the output for a single project issue board.
+// BoardResourceOutput is the JSON payload for a single project issue
+// board, returned by the "gitlab://project/{id}/board/{board_id}"
+// resource. It contains the board's ID and name.
 type BoardResourceOutput struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -328,7 +414,51 @@ func wrapErr(msg string, err error) error {
 	return fmt.Errorf("%s: %s (%w)", msg, toolutil.ClassifyError(err), err)
 }
 
-// Register registers all MCP resources (read-only data endpoints).
+// Register adds every GitLab-backed MCP resource to the given server.
+// The full set of URI shapes exposed by Register is:
+//
+//	gitlab://user/current
+//	gitlab://groups
+//	gitlab://group/{group_id}
+//	gitlab://group/{group_id}/members
+//	gitlab://group/{group_id}/projects
+//	gitlab://group/{group_id}/milestone/{milestone_iid}
+//	gitlab://group/{group_id}/label/{label_id}
+//	gitlab://project/{project_id}
+//	gitlab://project/{project_id}/members
+//	gitlab://project/{project_id}/issues
+//	gitlab://project/{project_id}/issue/{issue_iid}
+//	gitlab://project/{project_id}/pipelines/latest
+//	gitlab://project/{project_id}/pipeline/{pipeline_id}
+//	gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs
+//	gitlab://project/{project_id}/labels
+//	gitlab://project/{project_id}/label/{label_id}
+//	gitlab://project/{project_id}/milestones
+//	gitlab://project/{project_id}/milestone/{milestone_iid}
+//	gitlab://project/{project_id}/mr/{merge_request_iid}
+//	gitlab://project/{project_id}/mr/{merge_request_iid}/notes
+//	gitlab://project/{project_id}/mr/{merge_request_iid}/discussions
+//	gitlab://project/{project_id}/branches
+//	gitlab://project/{project_id}/branch/{branch}
+//	gitlab://project/{project_id}/releases
+//	gitlab://project/{project_id}/release/{tag_name}
+//	gitlab://project/{project_id}/tags
+//	gitlab://project/{project_id}/tag/{tag_name}
+//	gitlab://project/{project_id}/commit/{sha}
+//	gitlab://project/{project_id}/file/{ref}/{+path}
+//	gitlab://project/{project_id}/wiki/{slug}
+//	gitlab://project/{project_id}/deployment/{deployment_id}
+//	gitlab://project/{project_id}/environment/{environment_id}
+//	gitlab://project/{project_id}/job/{job_id}
+//	gitlab://project/{project_id}/snippet/{snippet_id}
+//	gitlab://project/{project_id}/feature_flag/{name}
+//	gitlab://project/{project_id}/deploy_key/{deploy_key_id}
+//	gitlab://project/{project_id}/board/{board_id}
+//	gitlab://snippet/{snippet_id}
+//
+// Tool-manifest, workflow-guide, workspace-root, and meta/dynamic
+// schema resources are registered separately by their dedicated
+// Register* helpers (see doc.go for the full family breakdown).
 func Register(server *mcp.Server, client *gitlabclient.Client) {
 	registerCurrentUserResource(server, client)
 	registerGroupsResource(server, client)
@@ -1252,8 +1382,8 @@ func registerReleaseResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerBranchResource registers the
-// "gitlab://project/{project_id}/branch/{branch}" template resource that
-// returns details for a single repository branch.
+// "gitlab://project/{project_id}/branch/{branch}" template resource,
+// which returns details for a single repository branch.
 func registerBranchResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/branch/{branch}",
@@ -1284,8 +1414,8 @@ func registerBranchResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerTagResource registers the
-// "gitlab://project/{project_id}/tag/{tag_name}" template resource that
-// returns details for a single Git tag.
+// "gitlab://project/{project_id}/tag/{tag_name}" template resource,
+// which returns details for a single Git tag.
 func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/tag/{tag_name}",
@@ -1308,8 +1438,9 @@ func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerLabelResource registers the
-// "gitlab://project/{project_id}/label/{label_id}" template resource that
-// returns details for a single project label by ID or name.
+// "gitlab://project/{project_id}/label/{label_id}" template resource,
+// which returns details for a single project label by numeric ID or
+// label name.
 func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/label/{label_id}",
@@ -1341,9 +1472,11 @@ func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerMilestoneResource registers the
-// "gitlab://project/{project_id}/milestone/{milestone_iid}" template resource
-// that returns details for a single project milestone identified by its
-// project-scoped IID.
+// "gitlab://project/{project_id}/milestone/{milestone_iid}" template
+// resource, which returns details for a single project milestone
+// identified by its project-scoped IID. Internally, it lists
+// milestones filtered by IID because the GitLab Milestones API
+// exposes only a list endpoint.
 func registerMilestoneResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/milestone/{milestone_iid}",
@@ -1386,15 +1519,15 @@ func registerMilestoneResource(server *mcp.Server, client *gitlabclient.Client) 
 	})
 }
 
-// extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}" URI
-// into its three components. The path component may contain slashes. Returns
-// empty strings if the URI does not match the expected layout.
+// extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}"
+// URI into its three components. The path component may contain slashes.
+// Returns empty strings if the URI does not match the expected layout.
 //
 // Limitation: when the ref itself contains a slash (e.g. "feature/new-ui"),
 // the URI is ambiguous because both segments use "/" as a separator. This
-// helper assumes refs are slash-free. Callers that need to address files on
-// branches with slashes should URL-encode the ref before constructing the
-// URI.
+// helper assumes refs are slash-free. Callers that need to address files
+// on branches with slashes should URL-encode the ref before constructing
+// the URI.
 func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
 	rest := extractSuffix(uri, uriProjectPrefix)
 	if rest == "" {
@@ -1415,10 +1548,11 @@ func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
 }
 
 // decodeFileContent decodes the contents of a [gl.File] returned by the
-// RepositoryFiles GitLab API. Base64 encoded payloads are decoded; binary
-// content is detected via the file name and replaced with an empty string
-// so JSON responses stay textual. Returns the decoded content and a
-// human-readable category ("text" or "binary").
+// RepositoryFiles GitLab API. Base64 encoded payloads are decoded;
+// binary content is detected via the file name (or via invalid UTF-8
+// after decoding) and replaced with an empty string so JSON responses
+// stay textual. Returns the decoded content and a human-readable
+// category ("text" or "binary").
 func decodeFileContent(f *gl.File) (content, category string) {
 	if f == nil {
 		return "", "binary"
@@ -1439,9 +1573,9 @@ func decodeFileContent(f *gl.File) (content, category string) {
 	return string(decoded), "text"
 }
 
-// issueToResourceOutput converts a GitLab API [gl.Issue] to the MCP resource
-// output format, extracting author username, assignee usernames, and formatting
-// the creation timestamp.
+// issueToResourceOutput converts a GitLab API [gl.Issue] to the MCP
+// resource output format, extracting the author username, the list of
+// assignee usernames, and formatting the creation timestamp.
 func issueToResourceOutput(issue *gl.Issue) IssueResourceOutput {
 	out := IssueResourceOutput{
 		ID:     issue.ID,
@@ -1469,7 +1603,8 @@ func issueToResourceOutput(issue *gl.Issue) IssueResourceOutput {
 
 // URI parsing helpers.
 
-// extractSuffix returns the portion of uri after the given prefix.
+// extractSuffix returns the portion of uri after the given prefix, or
+// the empty string when uri does not start with prefix.
 func extractSuffix(uri, prefix string) string {
 	if !strings.HasPrefix(uri, prefix) {
 		return ""
@@ -1477,7 +1612,9 @@ func extractSuffix(uri, prefix string) string {
 	return strings.TrimPrefix(uri, prefix)
 }
 
-// extractMiddle returns the portion of uri between prefix and suffix.
+// extractMiddle returns the substring of uri between prefix and suffix.
+// Both prefix and suffix must match exactly; otherwise the empty string
+// is returned.
 func extractMiddle(uri, prefix, suffix string) string {
 	if !strings.HasPrefix(uri, prefix) || !strings.HasSuffix(uri, suffix) {
 		return ""
@@ -1485,7 +1622,10 @@ func extractMiddle(uri, prefix, suffix string) string {
 	return uri[len(prefix) : len(uri)-len(suffix)]
 }
 
-// extractTwoParts splits a URI into two dynamic segments around a separator.
+// extractTwoParts splits a URI into two dynamic segments around
+// separator. Both segments must be non-empty for the split to succeed;
+// the empty string is returned for both when the URI does not match
+// the expected layout.
 func extractTwoParts(uri, prefix, separator string) (first, second string) {
 	rest := extractSuffix(uri, prefix)
 	if rest == "" {
@@ -1498,6 +1638,10 @@ func extractTwoParts(uri, prefix, separator string) (first, second string) {
 	return parts[0], parts[1]
 }
 
+// readProjectIntResource is the shared handler for resources that
+// extract a (projectID, int64) pair from the URI and dispatch to a
+// GitLab API call. The supplied separator and operation label are used
+// to build the resource-not-found and error responses.
 func readProjectIntResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, int64) (O, error)) (*mcp.ReadResourceResult, error) {
 	projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
 	if projectID == "" || idStr == "" {
@@ -1514,6 +1658,11 @@ func readProjectIntResource[O any](_ context.Context, req *mcp.ReadResourceReque
 	return marshalResourceJSON(out)
 }
 
+// readProjectNamedResource is the shared handler for resources that
+// extract a (projectID, name) pair from the URI and dispatch to a
+// GitLab API call. It mirrors [readProjectIntResource] but takes a
+// string for the second segment (e.g. branch name, tag name, feature
+// flag name).
 func readProjectNamedResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, string) (O, error)) (*mcp.ReadResourceResult, error) {
 	projectID, name := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
 	if projectID == "" || name == "" {
@@ -1526,7 +1675,10 @@ func readProjectNamedResource[O any](_ context.Context, req *mcp.ReadResourceReq
 	return marshalResourceJSON(out)
 }
 
-// marshalResourceJSON marshals a value to JSON and wraps it as a ReadResourceResult.
+// marshalResourceJSON marshals a value to JSON and wraps it in a
+// [*mcp.ReadResourceResult] as a single text contents block with
+// [mimeJSON]. The marshal error is returned wrapped in a
+// "failed to marshal resource" prefix.
 func marshalResourceJSON(v any) (*mcp.ReadResourceResult, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -1540,9 +1692,9 @@ func marshalResourceJSON(v any) (*mcp.ReadResourceResult, error) {
 	}, nil
 }
 
-// pipelineToResourceOutput converts a GitLab API [gl.Pipeline] to the MCP
-// resource output format, mapping all relevant fields including status, ref,
-// SHA, and source.
+// pipelineToResourceOutput converts a GitLab API [gl.Pipeline] to the
+// MCP resource output format, mapping the ID, IID, status, ref, SHA,
+// web URL, and source.
 func pipelineToResourceOutput(p *gl.Pipeline) PipelineResourceOutput {
 	return PipelineResourceOutput{
 		ID:     p.ID,
@@ -1556,13 +1708,17 @@ func pipelineToResourceOutput(p *gl.Pipeline) PipelineResourceOutput {
 }
 
 // extractGroupTwoParts splits a "gitlab://group/{group_id}/{kind}/{value}"
-// URI into its (group_id, value) components.
+// URI into its (group_id, value) components. The kind argument is
+// interpolated into the separator so the helper is reusable across
+// group milestone, label, and similar lookups.
 func extractGroupTwoParts(uri, kind string) (groupID, value string) {
 	return extractTwoParts(uri, uriGroupPrefix, "/"+kind+"/")
 }
 
 // registerDeploymentResource registers the
-// "gitlab://project/{project_id}/deployment/{deployment_id}" template.
+// "gitlab://project/{project_id}/deployment/{deployment_id}" template
+// resource, which returns details for a single project deployment by
+// numeric ID.
 func registerDeploymentResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deployment/{deployment_id}",
@@ -1600,7 +1756,9 @@ func registerDeploymentResource(server *mcp.Server, client *gitlabclient.Client)
 }
 
 // registerEnvironmentResource registers the
-// "gitlab://project/{project_id}/environment/{environment_id}" template.
+// "gitlab://project/{project_id}/environment/{environment_id}" template
+// resource, which returns details for a single project environment by
+// numeric ID.
 func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/environment/{environment_id}",
@@ -1635,7 +1793,8 @@ func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client
 }
 
 // registerJobResource registers the
-// "gitlab://project/{project_id}/job/{job_id}" template.
+// "gitlab://project/{project_id}/job/{job_id}" template resource, which
+// returns details for a single CI job by numeric ID.
 func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/job/{job_id}",
@@ -1673,7 +1832,8 @@ func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerSnippetResource registers the "gitlab://snippet/{snippet_id}"
-// template (personal/global snippet).
+// template resource, which returns details for a personal (global) snippet
+// by numeric ID.
 func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://snippet/{snippet_id}",
@@ -1709,7 +1869,9 @@ func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerProjectSnippetResource registers the
-// "gitlab://project/{project_id}/snippet/{snippet_id}" template.
+// "gitlab://project/{project_id}/snippet/{snippet_id}" template
+// resource, which returns details for a single project snippet by
+// numeric ID.
 func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/snippet/{snippet_id}",
@@ -1745,7 +1907,9 @@ func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Cli
 }
 
 // registerFeatureFlagResource registers the
-// "gitlab://project/{project_id}/feature_flag/{name}" template.
+// "gitlab://project/{project_id}/feature_flag/{name}" template
+// resource, which returns details for a single project feature flag
+// by name.
 func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/feature_flag/{name}",
@@ -1768,7 +1932,9 @@ func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client
 }
 
 // registerDeployKeyResource registers the
-// "gitlab://project/{project_id}/deploy_key/{deploy_key_id}" template.
+// "gitlab://project/{project_id}/deploy_key/{deploy_key_id}" template
+// resource, which returns details for a single project deploy key by
+// numeric ID.
 func registerDeployKeyResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deploy_key/{deploy_key_id}",
@@ -1802,7 +1968,9 @@ func registerDeployKeyResource(server *mcp.Server, client *gitlabclient.Client) 
 }
 
 // registerBoardResource registers the
-// "gitlab://project/{project_id}/board/{board_id}" template.
+// "gitlab://project/{project_id}/board/{board_id}" template resource,
+// which returns details for a single project issue board by numeric
+// ID.
 func registerBoardResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/board/{board_id}",
@@ -1831,7 +1999,8 @@ func registerBoardResource(server *mcp.Server, client *gitlabclient.Client) {
 }
 
 // registerGroupMilestoneResource registers the
-// "gitlab://group/{group_id}/milestone/{milestone_iid}" template.
+// "gitlab://group/{group_id}/milestone/{milestone_iid}" template
+// resource, which returns details for a single group milestone by IID.
 func registerGroupMilestoneResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/milestone/{milestone_iid}",
@@ -1874,7 +2043,9 @@ func registerGroupMilestoneResource(server *mcp.Server, client *gitlabclient.Cli
 }
 
 // registerGroupLabelResource registers the
-// "gitlab://group/{group_id}/label/{label_id}" template.
+// "gitlab://group/{group_id}/label/{label_id}" template resource,
+// which returns details for a single group label by numeric ID or
+// name.
 func registerGroupLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/label/{label_id}",

@@ -39,7 +39,9 @@ const testTypeGroup = "group"
 // testTypeProject identifies the test type project constant used by this package.
 const testTypeProject = "project"
 
-// TestList_User verifies List when user.
+// TestList_User verifies the List_User handler.
+// The mock GitLab API at /api/v4/users/1/custom_attributes (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/users/1/custom_attributes" {
@@ -60,7 +62,9 @@ func TestList_User(t *testing.T) {
 	}
 }
 
-// TestList_Group verifies List when group.
+// TestList_Group verifies the List_Group handler.
+// The mock GitLab API at /api/v4/groups/2/custom_attributes (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/2/custom_attributes" {
@@ -78,7 +82,9 @@ func TestList_Group(t *testing.T) {
 	}
 }
 
-// TestList_Project verifies List when project.
+// TestList_Project verifies the List_Project handler.
+// The mock GitLab API at /api/v4/projects/3/custom_attributes (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/3/custom_attributes" {
@@ -96,7 +102,9 @@ func TestList_Project(t *testing.T) {
 	}
 }
 
-// TestList_InvalidType verifies List when invalid type.
+// TestList_InvalidType verifies the List_InvalidType handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -107,7 +115,9 @@ func TestList_InvalidType(t *testing.T) {
 	}
 }
 
-// TestGet_User verifies Get when user.
+// TestGet_User verifies the Get_User handler.
+// The mock GitLab API at /api/v4/users/1/custom_attributes/dept (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/users/1/custom_attributes/dept" {
@@ -125,7 +135,9 @@ func TestGet_User(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -137,7 +149,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestSet_Group verifies Set when group.
+// TestSet_Group verifies the Set_Group handler.
+// The mock GitLab API at /api/v4/groups/2/custom_attributes/tier (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestSet_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/2/custom_attributes/tier" {
@@ -158,7 +172,9 @@ func TestSet_Group(t *testing.T) {
 	}
 }
 
-// TestSet_Error verifies Set when error.
+// TestSet_Error verifies that Set returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -170,7 +186,9 @@ func TestSet_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_Project verifies Delete when project.
+// TestDelete_Project verifies the Delete_Project handler.
+// The mock GitLab API at /api/v4/projects/3/custom_attributes/old_key (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/3/custom_attributes/old_key" {
@@ -188,7 +206,9 @@ func TestDelete_Project(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies Delete when error.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -200,7 +220,9 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Output verifies FormatListMarkdown when output.
+// TestFormatListMarkdown_Output verifies the ListMarkdown_Output Markdown formatter for a representative list_output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Output(t *testing.T) {
 	out := ListOutput{Attributes: []AttributeItem{{Key: testKeyDept, Value: "eng"}}}
 	md := FormatListMarkdown(out)
@@ -212,7 +234,9 @@ func TestFormatListMarkdown_Output(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No custom attributes") {
@@ -220,7 +244,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Output verifies FormatGetMarkdown when output.
+// TestFormatGetMarkdown_Output verifies the GetMarkdown_Output Markdown formatter for a representative get_output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_Output(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{AttributeItem: AttributeItem{Key: "k", Value: "v"}})
 	if !strings.Contains(md, "k") || !strings.Contains(md, "v") {
@@ -228,7 +254,9 @@ func TestFormatGetMarkdown_Output(t *testing.T) {
 	}
 }
 
-// TestList_InvalidResourceID verifies List when invalid resource ID.
+// TestList_InvalidResourceID verifies the List_InvalidResourceID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -242,7 +270,9 @@ func TestList_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidResourceID verifies Get when invalid resource ID.
+// TestGet_InvalidResourceID verifies the Get_InvalidResourceID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -256,7 +286,9 @@ func TestGet_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestSet_InvalidResourceID verifies Set when invalid resource ID.
+// TestSet_InvalidResourceID verifies the Set_InvalidResourceID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSet_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -270,7 +302,9 @@ func TestSet_InvalidResourceID(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidResourceID verifies Delete when invalid resource ID.
+// TestDelete_InvalidResourceID verifies the Delete_InvalidResourceID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_InvalidResourceID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// no response needed: validation fails before reaching API
@@ -293,7 +327,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // Get — group and project resource types
 // ---------------------------------------------------------------------------.
 
-// TestGet_Group verifies Get when group.
+// TestGet_Group verifies the Get_Group handler.
+// The mock GitLab API at /api/v4/groups/2/custom_attributes/tier (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/2/custom_attributes/tier" {
@@ -312,7 +348,9 @@ func TestGet_Group(t *testing.T) {
 	}
 }
 
-// TestGet_Project verifies Get when project.
+// TestGet_Project verifies the Get_Project handler.
+// The mock GitLab API at /api/v4/projects/3/custom_attributes/env (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/3/custom_attributes/env" {
@@ -331,7 +369,9 @@ func TestGet_Project(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidType verifies Get when invalid type.
+// TestGet_InvalidType verifies the Get_InvalidType handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(t.Context(), client, GetInput{ResourceType: "invalid", ResourceID: 1, Key: "k"})
@@ -344,7 +384,9 @@ func TestGet_InvalidType(t *testing.T) {
 // Set — user and project resource types
 // ---------------------------------------------------------------------------.
 
-// TestSet_User verifies Set when user.
+// TestSet_User verifies the Set_User handler.
+// The mock GitLab API at /api/v4/users/1/custom_attributes/role (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestSet_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/1/custom_attributes/role" && r.Method == http.MethodPut {
@@ -363,7 +405,9 @@ func TestSet_User(t *testing.T) {
 	}
 }
 
-// TestSet_Project verifies Set when project.
+// TestSet_Project verifies the Set_Project handler.
+// The mock GitLab API at /api/v4/projects/5/custom_attributes/env (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestSet_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/5/custom_attributes/env" && r.Method == http.MethodPut {
@@ -382,7 +426,9 @@ func TestSet_Project(t *testing.T) {
 	}
 }
 
-// TestSet_InvalidType verifies Set when invalid type.
+// TestSet_InvalidType verifies the Set_InvalidType handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSet_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Set(t.Context(), client, SetInput{ResourceType: "bad", ResourceID: 1, Key: "k", Value: "v"})
@@ -395,7 +441,9 @@ func TestSet_InvalidType(t *testing.T) {
 // Delete — user and group resource types + invalid type
 // ---------------------------------------------------------------------------.
 
-// TestDelete_User verifies Delete when user.
+// TestDelete_User verifies the Delete_User handler.
+// The mock GitLab API at /api/v4/users/1/custom_attributes/old (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/users/1/custom_attributes/old" && r.Method == http.MethodDelete {
@@ -411,7 +459,9 @@ func TestDelete_User(t *testing.T) {
 	}
 }
 
-// TestDelete_Group verifies Delete when group.
+// TestDelete_Group verifies the Delete_Group handler.
+// The mock GitLab API at /api/v4/groups/2/custom_attributes/stale (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/2/custom_attributes/stale" && r.Method == http.MethodDelete {
@@ -427,7 +477,9 @@ func TestDelete_Group(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidType verifies Delete when invalid type.
+// TestDelete_InvalidType verifies the Delete_InvalidType handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_InvalidType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(t.Context(), client, DeleteInput{ResourceType: "bad", ResourceID: 1, Key: "k"})
@@ -440,7 +492,9 @@ func TestDelete_InvalidType(t *testing.T) {
 // List — API error for user type
 // ---------------------------------------------------------------------------.
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -455,7 +509,9 @@ func TestList_Error(t *testing.T) {
 // FormatSetMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatSetMarkdown_Coverage verifies FormatSetMarkdown when coverage.
+// TestFormatSetMarkdown_Coverage verifies the SetMarkdown_Coverage Markdown formatter for a representative set_coverage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetMarkdown_Coverage(t *testing.T) {
 	md := FormatSetMarkdown(SetOutput{AttributeItem: AttributeItem{Key: "env", Value: "prod"}})
 	if !strings.Contains(md, "env") || !strings.Contains(md, "prod") {
@@ -470,7 +526,9 @@ func TestFormatSetMarkdown_Coverage(t *testing.T) {
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for custom attribute actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	specs := ActionSpecs(client)
@@ -491,7 +549,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates custom attribute routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newCustomAttributeRouteSpecs(t)
 
@@ -527,7 +587,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths covers the error return paths in canonical routes.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -555,7 +617,9 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	handler := http.NewServeMux()
 	client := testutil.NewTestClient(t, handler)

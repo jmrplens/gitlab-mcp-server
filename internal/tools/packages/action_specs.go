@@ -10,20 +10,35 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ActionSpecs returns canonical specs for Generic Package Registry actions.
+// ActionSpecs returns canonical specs for Generic Package Registry
+// actions exposed as MCP tools. The publish, download, list, file
+// list, delete, file delete, publish-and-link, and publish-directory
+// routes are projected into the dynamic, meta, individual, and audit
+// surfaces by the action catalog (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_package_publish — publish a file to the Generic Package Registry.
 		packageCreateSpec("publish", toolutil.RouteActionWithRequest(client, Publish), "gitlab_package_publish"),
+		// gitlab_package_download — download a file from the Generic Package Registry.
 		packageReadSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
+		// gitlab_package_list — list project packages with optional filters and ordering.
 		packageReadSpec("list", toolutil.RouteAction(client, List), "gitlab_package_list"),
+		// gitlab_package_file_list — list files within a single package.
 		packageReadSpec("file_list", toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
+		// gitlab_package_delete — delete a package (destructive).
 		packageDeleteSpec("delete", toolutil.DestructiveActionWithRequest(client, deleteOutput), "gitlab_package_delete"),
+		// gitlab_package_file_delete — delete a single file from a package (destructive).
 		packageDeleteSpec("file_delete", toolutil.DestructiveActionWithRequest(client, fileDeleteOutput), "gitlab_package_file_delete"),
+		// gitlab_package_publish_and_link — publish a file and link it to a release in one call.
 		packageCreateSpec("publish_and_link", toolutil.RouteActionWithRequest(client, PublishAndLink), "gitlab_package_publish_and_link"),
+		// gitlab_package_publish_directory — publish every file from a local directory.
 		packageCreateSpec("publish_directory", toolutil.RouteActionWithRequest(client, PublishDirectory), "gitlab_package_publish_directory"),
 	}
 }
 
+// deleteOutput adapts the package's [Delete] handler to the
+// [toolutil.DestructiveAction] contract, returning a structured
+// success result that names the deleted package.
 func deleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := Delete(ctx, req, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -32,6 +47,9 @@ func deleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *gitlabc
 	return out, nil
 }
 
+// fileDeleteOutput adapts the package's [FileDelete] handler to the
+// [toolutil.DestructiveAction] contract, returning a structured
+// success result that names the deleted file.
 func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input FileDeleteInput) (toolutil.DeleteOutput, error) {
 	if err := FileDelete(ctx, req, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -40,18 +58,31 @@ func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *git
 	return out, nil
 }
 
+// packageReadSpec builds a read-only [toolutil.ActionSpec] for a
+// Generic Package Registry action using the package's default
+// [packageOptions].
 func packageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, packageOptions(name, individualTool))
 }
 
+// packageCreateSpec builds a create-style [toolutil.ActionSpec] for a
+// Generic Package Registry action using the package's default
+// [packageOptions].
 func packageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, packageOptions(name, individualTool))
 }
 
+// packageDeleteSpec builds a destructive [toolutil.ActionSpec] for a
+// Generic Package Registry action using the package's default
+// [packageOptions].
 func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, packageOptions(name, individualTool))
 }
 
+// packageOptions returns the base [toolutil.ActionSpecOptions] for a
+// Generic Package Registry action and customises the Usage,
+// ParameterGuidance, and InputSchemaOverrides for the list and
+// publish_directory individual tools.
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},

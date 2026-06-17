@@ -1,4 +1,3 @@
-// Package epicworkitems contains shared GraphQL helpers for epic-backed work items.
 package epicworkitems
 
 import (

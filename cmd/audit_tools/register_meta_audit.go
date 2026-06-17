@@ -12,6 +12,14 @@ import (
 	"strings"
 )
 
+// registerMetaDefinition records one package-level RegisterMeta function
+// discovered while walking the internal/tools tree.
+//
+// Package is the Go package that defines the function. File is the path
+// (relative to repo root) of the source file containing it. ToolNames is the
+// sorted list of "gitlab_*" individual tool names registered inside the
+// function body. Referenced reports whether the package is called from
+// internal/tools/register_meta.go's central dispatch.
 type registerMetaDefinition struct {
 	Package    string
 	File       string
@@ -19,14 +27,28 @@ type registerMetaDefinition struct {
 	Referenced bool
 }
 
+// unexpectedRegisterMetaDefinition explains why a RegisterMeta definition
+// violates the catalog-first runtime contract.
+//
+// Reason is a human-readable string consumed verbatim by the markdown report.
 type unexpectedRegisterMetaDefinition struct {
 	Package string
 	File    string
 	Reason  string
 }
 
+// delegatedRegisterMetaPackages enumerates packages whose package-level
+// RegisterMeta is explicitly approved as a delegated alias hub. Empty by
+// default; the catalog-first migration must add entries here only after the
+// team confirms the package is reachable from internal/tools/register_meta.go.
 var delegatedRegisterMetaPackages = map[string]struct{}{}
 
+// auditRegisterMetaDefinitions scans internal/tools for package-level
+// RegisterMeta definitions and marks each one as referenced by the central
+// hub or not.
+//
+// The returned slice is sorted by package name then file path so callers can
+// produce stable reports.
 func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error) {
 	toolsDir := filepath.Join(root, "internal", "tools")
 	definitions, err := findRegisterMetaDefinitions(root, toolsDir)
@@ -43,6 +65,8 @@ func auditRegisterMetaDefinitions(root string) ([]registerMetaDefinition, error)
 	return definitions, nil
 }
 
+// auditRegisterMetaDefinitionViolations converts each unexpected definition
+// into a violation the markdown reporter can render.
 func auditRegisterMetaDefinitionViolations(definitions []registerMetaDefinition) []violation {
 	unexpected := unexpectedRegisterMetaDefinitions(definitions)
 	violations := make([]violation, 0, len(unexpected))
@@ -56,6 +80,8 @@ func auditRegisterMetaDefinitionViolations(definitions []registerMetaDefinition)
 	return violations
 }
 
+// unexpectedRegisterMetaDefinitions flags definitions that are neither in the
+// allow-list of delegated packages nor reachable from the central hub.
 func unexpectedRegisterMetaDefinitions(definitions []registerMetaDefinition) []unexpectedRegisterMetaDefinition {
 	unexpected := make([]unexpectedRegisterMetaDefinition, 0)
 	for _, definition := range definitions {
@@ -78,11 +104,18 @@ func unexpectedRegisterMetaDefinitions(definitions []registerMetaDefinition) []u
 	return unexpected
 }
 
+// isDelegatedRegisterMetaDefinition reports whether the definition is both
+// allow-listed and reachable from the central RegisterMeta hub.
 func isDelegatedRegisterMetaDefinition(definition registerMetaDefinition) bool {
 	_, ok := delegatedRegisterMetaPackages[definition.Package]
 	return ok && definition.Referenced
 }
 
+// findRegisterMetaDefinitions walks toolsDir looking for top-level
+// RegisterMeta functions and extracts the individual tool names they declare.
+//
+// Duplicate builder names across files produce an error so the migration can
+// surface accidental re-introductions.
 func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinition, error) {
 	var definitions []registerMetaDefinition
 	fileSet := token.NewFileSet()
@@ -133,6 +166,11 @@ func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinitio
 	return definitions, nil
 }
 
+// registerMetaToolNames returns the sorted, deduplicated list of "gitlab_*"
+// tool names declared inside the body of a RegisterMeta function.
+//
+// The function walks the AST looking for Name:"gitlab_*" string literals,
+// which matches the registration pattern used by all delegated packages.
 func registerMetaToolNames(function *ast.FuncDecl) []string {
 	seen := make(map[string]struct{})
 	var names []string
@@ -164,6 +202,10 @@ func registerMetaToolNames(function *ast.FuncDecl) []string {
 	return names
 }
 
+// referencedRegisterMetaPackages parses registerMetaPath and returns the set
+// of package identifiers referenced by selector expressions ending in
+// ".RegisterMeta" — i.e., the central dispatch site that delegates to each
+// package-level RegisterMeta function.
 func referencedRegisterMetaPackages(registerMetaPath string) (map[string]struct{}, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, registerMetaPath, nil, 0)

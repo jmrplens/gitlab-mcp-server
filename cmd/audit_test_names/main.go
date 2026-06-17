@@ -32,6 +32,11 @@ const (
 )
 
 // testEntry holds the audit result for a single test function.
+//
+// File is the slash-separated path of the source file. CurrentName is the
+// function name as written. Pattern is one of the Pattern* constants
+// classifying the naming convention. SuggestedName is the recommended
+// replacement — for compliant names it equals CurrentName.
 type testEntry struct {
 	File          string
 	CurrentName   string

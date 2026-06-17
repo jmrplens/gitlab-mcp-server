@@ -2,6 +2,8 @@
 
 // environments_ce_test.go tests the environment MCP tools against a live GitLab instance.
 // Covers create, get, list, update, stop, and delete for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -12,8 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/environments"
 )
 
-// TestIndividual_Environments exercises the environment lifecycle using individual tools:
-// create → get → list → update → stop → delete.
+// TestIndividual_Environments exercises the environment lifecycle using
+// individual tools: create → get → list → update → stop → delete.
+//
+// The test creates a project fixture, then runs six subtests that drive
+// the gitlab_create_environment, gitlab_get_environment,
+// gitlab_list_environments, gitlab_update_environment, gitlab_stop_
+// environment, and gitlab_delete_environment tools. Each subtest asserts
+// the expected ID or name round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Environments(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -93,7 +103,15 @@ func TestIndividual_Environments(t *testing.T) {
 	})
 }
 
-// TestMeta_Environments exercises the same environment lifecycle via the gitlab_environment meta-tool.
+// TestMeta_Environments exercises the same environment lifecycle via the
+// gitlab_environment meta-tool.
+//
+// The test mirrors [TestIndividual_Environments] but drives every step
+// with {action, params} arguments through the catalog-backed
+// gitlab_environment tool. Each subtest asserts the same outcome and
+// verifies the tool name stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Environments(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

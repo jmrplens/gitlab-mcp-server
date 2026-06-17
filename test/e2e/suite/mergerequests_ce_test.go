@@ -3,6 +3,8 @@
 // mergerequests_ce_test.go tests the core merge request CRUD MCP tools against a
 // live GitLab instance. Covers create, get, list, update, commits, participants,
 // and delete for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,8 +17,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 )
 
-// setupMRProject creates a project with a feature branch that has
-// a commit diverging from main, suitable for creating MRs.
+// setupMRProject creates a project with a feature branch that has a
+// commit diverging from the default branch, suitable for creating
+// merge requests. It unprotects the default branch first so the
+// feature-branch commit is accepted, then returns the project fixture
+// and branch name for callers that want to drive MR creation.
 func setupMRProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) (ProjectFixture, string) {
 	t.Helper()
 	proj := createProject(ctx, t, session)
@@ -29,7 +34,10 @@ func setupMRProject(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 	return proj, branch
 }
 
-// setupMRProjectMeta is the meta-tool equivalent of setupMRProject.
+// setupMRProjectMeta is the meta-tool equivalent of [setupMRProject].
+// It uses the meta-tool variants of createProjectMeta, createBranchMeta,
+// and commitFileMeta so MR lifecycle tests can run against either surface
+// without duplicating the fixture setup logic.
 func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) (ProjectFixture, string) {
 	t.Helper()
 	proj := createProjectMeta(ctx, t, session)
@@ -42,8 +50,16 @@ func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSe
 	return proj, branch
 }
 
-// TestIndividual_MergeRequests exercises the MR lifecycle using individual tools:
-// create → get → list → update → commits → participants → delete.
+// TestIndividual_MergeRequests exercises the MR lifecycle using individual
+// tools: create → get → list → update → commits → participants → delete.
+//
+// The test builds a project fixture with a diverged feature branch via
+// [setupMRProject], then walks through the MR lifecycle. Each subtest
+// asserts the expected IID, title, or commit count round-trips through
+// the GitLab API. The test waits for MR readiness before checking
+// commits so the assertions do not race with the sidekiq diff job.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_MergeRequests(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -148,6 +164,13 @@ func TestIndividual_MergeRequests(t *testing.T) {
 
 // TestMeta_MergeRequests exercises the same MR lifecycle via the
 // gitlab_merge_request meta-tool.
+//
+// The test mirrors [TestIndividual_MergeRequests] but drives every step
+// with {action, params} arguments through the catalog-backed
+// gitlab_merge_request tool. Each subtest asserts the same outcome and
+// verifies the tool name stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_MergeRequests(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

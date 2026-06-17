@@ -130,7 +130,8 @@ type PublishDirOutput struct {
 	Errors     []string         `json:"errors,omitempty"`
 }
 
-// validatePublishDirInput checks required fields and that DirectoryPath is a valid directory.
+// validatePublishDirInput checks required fields and verifies that
+// [PublishDirInput.DirectoryPath] exists and is a directory.
 func validatePublishDirInput(ctx context.Context, input PublishDirInput) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf(fmtCtxCancelled, err)

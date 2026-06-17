@@ -2,6 +2,8 @@
 
 // groupvariables_ce_test.go tests the group CI variable MCP tools against a live GitLab instance.
 // Exercises create, list, get, update, and delete via the gitlab_ci_variable meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -16,7 +18,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestMeta_GroupVariables exercises group CI variable CRUD via the gitlab_ci_variable meta-tool.
+// TestMeta_GroupVariables exercises group CI variable CRUD via the
+// gitlab_ci_variable meta-tool.
+//
+// The test creates a dedicated group fixture, then drives the
+// group_create, group_list, group_get, group_update, and group_delete
+// actions through the catalog-backed gitlab_ci_variable meta-tool. Each
+// subtest asserts the expected key or value round-trips through the
+// GitLab API. Cleanup deletes the group via a deferred call.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_GroupVariables(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

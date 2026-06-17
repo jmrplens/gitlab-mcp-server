@@ -12,8 +12,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 )
 
-// TestIndividual_Search exercises code and project search via individual MCP tools.
-// Creates a project with unique content, waits for Sidekiq indexing, then searches.
+// TestIndividual_Search exercises code and project search through individual
+// MCP tools against a live GitLab CE instance.
+//
+// The test creates a project fixture with unique content, waits for Sidekiq
+// indexing (with retries) to make the content searchable, then walks
+// gitlab_search_code and gitlab_search_projects via the individual tool
+// surface. Each subtest asserts the expected payload shape with non-empty
+// results matching the unique content marker.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Search(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -49,8 +57,17 @@ func TestIndividual_Search(t *testing.T) {
 	})
 }
 
-// TestMeta_Search exercises code and project search via the gitlab_search meta-tool.
-// Creates a project with unique content, waits for indexing, then searches.
+// TestMeta_Search exercises code and project search through the
+// gitlab_search meta-tool against a live GitLab CE instance.
+//
+// The test mirrors [TestIndividual_Search] but drives every step with
+// {action, params} arguments through the catalog-backed tool. It creates
+// a project with unique content, waits for Sidekiq indexing, then walks
+// code_search and project_search actions. Each subtest asserts the
+// meta-tool returns consistent payloads with non-empty results matching
+// the unique content marker.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Search(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

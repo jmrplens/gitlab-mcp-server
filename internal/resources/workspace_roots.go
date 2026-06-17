@@ -11,21 +11,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// WorkspaceRootOutput describes a single workspace root provided by the MCP client.
+// WorkspaceRootOutput describes a single workspace root URI provided by
+// the MCP client. Name is optional; clients may leave it empty when
+// the directory only has a path.
 type WorkspaceRootOutput struct {
 	URI  string `json:"uri"`
 	Name string `json:"name,omitempty"`
 }
 
-// WorkspaceRootsOutput holds the list of workspace roots and a hint for project discovery.
+// WorkspaceRootsOutput is the JSON payload returned by the
+// "gitlab://workspace/roots" resource: the list of workspace roots
+// currently known to the client and a hint explaining how to use them
+// for project discovery.
 type WorkspaceRootsOutput struct {
 	Roots []WorkspaceRootOutput `json:"roots"`
 	Hint  string                `json:"hint"`
 }
 
-// RegisterWorkspaceRoots registers the "gitlab://workspace/roots" resource.
-// It exposes the client workspace root URIs so LLMs can read .git/config
-// and use gitlab_discover_project to discover the project.
+// RegisterWorkspaceRoots registers the "gitlab://workspace/roots"
+// resource, which exposes the client workspace root URIs. LLMs read
+// the .git/config in those roots to discover the project via
+// gitlab_discover_project.
 func RegisterWorkspaceRoots(server *mcp.Server, rootsMgr *roots.Manager) {
 	server.AddResource(&mcp.Resource{
 		URI:      "gitlab://workspace/roots",
@@ -53,8 +59,10 @@ func RegisterWorkspaceRoots(server *mcp.Server, rootsMgr *roots.Manager) {
 	})
 }
 
-// marshalWorkspaceRootsJSON serializes a WorkspaceRootsOutput as a JSON text
-// resource suitable for returning from an MCP ReadResource handler.
+// marshalWorkspaceRootsJSON serializes a [WorkspaceRootsOutput] as a JSON
+// text resource suitable for returning from an MCP ReadResource handler.
+// The marshalled value is wrapped in a single text contents block with
+// [mimeJSON].
 func marshalWorkspaceRootsJSON(v WorkspaceRootsOutput) (*mcp.ReadResourceResult, error) {
 	data, err := json.Marshal(v)
 	if err != nil {

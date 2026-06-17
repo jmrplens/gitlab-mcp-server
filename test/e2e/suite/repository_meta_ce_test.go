@@ -20,8 +20,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repositorysubmodules"
 )
 
-// TestMeta_RepositoryFiles exercises file CRUD actions not covered by existing tests:
-// file_create, file_update, file_delete, file_blame, file_metadata, file_raw.
+// TestMeta_RepositoryFiles exercises file CRUD actions through the
+// gitlab_repository meta-tool that are not covered by other test files.
+//
+// The test creates a project fixture and walks file_create, file_update,
+// file_delete, file_blame, file_metadata, and file_raw via {action, params}
+// arguments through the catalog-backed tool. Each subtest asserts the
+// meta-tool returns the expected file payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_RepositoryFiles(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -123,8 +131,16 @@ func TestMeta_RepositoryFiles(t *testing.T) {
 	})
 }
 
-// TestMeta_RepositoryExplore exercises repository-level exploration actions:
-// contributors, merge_base, blob, raw_blob, archive.
+// TestMeta_RepositoryExplore exercises repository-level exploration actions
+// through the gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture with a known commit history, then
+// walks contributors, merge_base, blob, raw_blob, and archive via
+// {action, params} arguments through the catalog-backed tool. Each subtest
+// asserts the meta-tool returns the expected payload with non-empty
+// contributor and snapshot metadata.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_RepositoryExplore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -158,9 +174,17 @@ func TestMeta_RepositoryExplore(t *testing.T) {
 	})
 }
 
-// TestMeta_CommitExtended exercises commit actions beyond list/get/diff:
+// TestMeta_CommitExtended exercises commit actions beyond list, get, and
+// diff through the gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture with a known commit, then walks
 // commit_refs, commit_comments, commit_comment_create, commit_statuses,
-// commit_status_set, commit_cherry_pick, commit_revert, commit_signature.
+// commit_status_set, commit_cherry_pick, commit_revert, and commit_signature
+// via {action, params} arguments through the catalog-backed tool. Each
+// subtest asserts the meta-tool returns the expected payload and that
+// mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CommitExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -292,7 +316,16 @@ func TestMeta_CommitExtended(t *testing.T) {
 	})
 }
 
-// TestMeta_CommitDiscussions exercises commit discussion actions.
+// TestMeta_CommitDiscussions exercises commit discussion actions through the
+// gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test creates a project with a known commit, opens a discussion on that
+// commit via the meta-tool, adds a reply, lists discussions, fetches the
+// created thread, and resolves it. Each subtest asserts the documented
+// action returns the expected discussion metadata and that the resolved flag
+// is observed by a follow-up read.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CommitDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -396,9 +429,16 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 // the error path in repository commit and submodule update tests.
 const InvalidCommitSHA = "0000000000000000000000000000000000000000"
 
-// TestMeta_SubmoduleUpdate exercises submodule update via gitlab_repository.
-// Uses error path: non-existent submodule returns 404 which is the expected
-// outcome on a fresh project.
+// TestMeta_SubmoduleUpdate exercises the submodule_update action through
+// the gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test uses the documented error path: a non-existent submodule returns
+// HTTP 404, which is the expected outcome on a fresh project. The subtest
+// asserts the meta-tool surfaces the 404 cleanly through the tool result
+// rather than crashing, validating the action spec wiring for the
+// submodule_update route.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_SubmoduleUpdate(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

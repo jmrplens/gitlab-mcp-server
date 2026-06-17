@@ -1,3 +1,4 @@
+// fuzzy_test.go contains unit tests for the fuzzy-matching scoring layer used by the dynamic tool surface.
 package dynamic
 
 import "testing"
@@ -234,14 +235,18 @@ func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
 	}
 }
 
-// TestFuzzyScoreEntryWithExplanation_EmptyTerms verifies FuzzyScoreEntryWithExplanation when empty terms.
+// TestFuzzyScoreEntryWithExplanation_EmptyTerms verifies the FuzzyScoreEntryWithExplanation_EmptyTerms handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
 	if score, explanation := fuzzyScoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
 		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
 	}
 }
 
-// TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore verifies FuzzyScoreEntryWithExplanation matches non explanation score.
+// TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore verifies the FuzzyScoreEntryWithExplanation_MatchesNonExplanationScore handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore(t *testing.T) {
 	entry := actionEntry{
 		ID:           "merge_request.list",

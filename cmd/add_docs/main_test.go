@@ -1,3 +1,9 @@
+// main_test.go covers the add_docs command's documentation generation
+// heuristics.
+//
+// Tests verify processFile preserves manually authored docs, regenerates
+// stale generated docs, and produces the expected phrasing for tests,
+// benchmarks, fuzz, examples, methods, and common helper name patterns.
 package main
 
 import (

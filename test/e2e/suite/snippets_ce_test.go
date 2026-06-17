@@ -12,8 +12,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippets"
 )
 
-// TestIndividual_Snippets exercises the personal snippet lifecycle via individual MCP tools:
-// create → get → content → list → update → delete.
+// TestIndividual_Snippets exercises the personal snippet lifecycle through
+// individual MCP tools against a live GitLab CE instance.
+//
+// The test walks gitlab_snippet_create → _get → _content → _list → _update
+// → _delete. Each subtest asserts the snippet ID, title, and file content
+// round-trip through the GitLab API. Cleanup removes the snippet when the
+// test exits, even on failure.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -86,8 +93,15 @@ func TestIndividual_Snippets(t *testing.T) {
 	})
 }
 
-// TestMeta_Snippets exercises the personal snippet lifecycle via the gitlab_snippet meta-tool:
-// create → get → content → list → update → delete.
+// TestMeta_Snippets exercises the personal snippet lifecycle through the
+// gitlab_snippet meta-tool against a live GitLab CE instance.
+//
+// The test mirrors [TestIndividual_Snippets] but drives every step with
+// {action, params} arguments through the catalog-backed tool. Subtests
+// cover create, get, content, list, update, and delete, verifying the
+// meta-tool returns consistent payloads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -19,6 +19,8 @@ type ServerInfo struct {
 	Repository string
 }
 
+// serverInfo holds the package-wide static metadata used in update check responses.
+// It is populated once via [SetServerInfo] during server startup.
 var serverInfo ServerInfo
 
 // SetServerInfo configures the static metadata included in check results.

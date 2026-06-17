@@ -1,3 +1,4 @@
+// action_specs_test.go contains unit tests for the group relations export [toolutil.ActionSpec] entries.
 package grouprelationsexport
 
 import (
@@ -11,7 +12,9 @@ import (
 
 const registerExportStatusJSON = `[{"relation":"labels","status":0,"batched":false,"batches_count":0,"error":""}]`
 
-// TestActionSpecs_Metadata verifies canonical metadata for group relations export actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -34,7 +37,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies both group relations export routes execute through the catalog.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +104,9 @@ func TestFormatListExportStatusMarkdownString(t *testing.T) {
 	})
 }
 
-// TestMarkdownInit_Registry verifies the init() markdown formatter is registered.
+// TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListExportStatusOutput{})
 	if out == nil {

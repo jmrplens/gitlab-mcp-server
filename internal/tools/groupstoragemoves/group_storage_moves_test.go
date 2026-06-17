@@ -26,7 +26,9 @@ const storageMoveJSON = `{
 	}
 }`
 
-// TestRetrieveAll_Success verifies that RetrieveAll returns the expected output when the GitLab API responds successfully.
+// TestRetrieveAll_Success verifies that RetrieveAll succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/group_repository_storage_moves (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestRetrieveAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/group_repository_storage_moves" {
@@ -51,7 +53,9 @@ func TestRetrieveAll_Success(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_Empty verifies that RetrieveAll handles an empty API response and returns a non-nil empty result.
+// TestRetrieveAll_Empty verifies the RetrieveAll_Empty handler.
+// The mock GitLab API at /api/v4/group_repository_storage_moves (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestRetrieveAll_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/group_repository_storage_moves" {
@@ -70,7 +74,9 @@ func TestRetrieveAll_Empty(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_APIError verifies that RetrieveAll returns an error when the GitLab API responds with a failure status.
+// TestRetrieveAll_APIError verifies that RetrieveAll returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRetrieveAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -82,7 +88,9 @@ func TestRetrieveAll_APIError(t *testing.T) {
 	}
 }
 
-// TestRetrieveForGroup_Success verifies that RetrieveForGroup returns the expected output when the GitLab API responds successfully.
+// TestRetrieveForGroup_Success verifies that RetrieveForGroup succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/repository_storage_moves (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestRetrieveForGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/10/repository_storage_moves" {
@@ -104,7 +112,9 @@ func TestRetrieveForGroup_Success(t *testing.T) {
 	}
 }
 
-// TestRetrieveForGroup_MissingGroupID verifies that RetrieveForGroup returns a validation error when group_id is missing.
+// TestRetrieveForGroup_MissingGroupID verifies that RetrieveForGroup_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRetrieveForGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -116,7 +126,9 @@ func TestRetrieveForGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/group_repository_storage_moves/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/group_repository_storage_moves/1" {
@@ -141,7 +153,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingID verifies that Get returns a validation error when id is missing.
+// TestGet_MissingID verifies that Get_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -153,7 +167,9 @@ func TestGet_MissingID(t *testing.T) {
 	}
 }
 
-// TestGetForGroup_Success verifies that GetForGroup returns the expected output when the GitLab API responds successfully.
+// TestGetForGroup_Success verifies that GetForGroup succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/repository_storage_moves/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetForGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/10/repository_storage_moves/1" {
@@ -172,7 +188,9 @@ func TestGetForGroup_Success(t *testing.T) {
 	}
 }
 
-// TestGetForGroup_MissingGroupID verifies that GetForGroup returns a validation error when group_id is missing.
+// TestGetForGroup_MissingGroupID verifies that GetForGroup_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetForGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -184,7 +202,9 @@ func TestGetForGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetForGroup_MissingID verifies that GetForGroup returns a validation error when id is missing.
+// TestGetForGroup_MissingID verifies that GetForGroup_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetForGroup_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -196,7 +216,9 @@ func TestGetForGroup_MissingID(t *testing.T) {
 	}
 }
 
-// TestSchedule_Success verifies that Schedule returns the expected output when the GitLab API responds successfully.
+// TestSchedule_Success verifies that Schedule succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/repository_storage_moves (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestSchedule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/10/repository_storage_moves" {
@@ -219,7 +241,9 @@ func TestSchedule_Success(t *testing.T) {
 	}
 }
 
-// TestSchedule_MissingGroupID verifies that Schedule returns a validation error when group_id is missing.
+// TestSchedule_MissingGroupID verifies that Schedule_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSchedule_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -231,7 +255,9 @@ func TestSchedule_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestScheduleAll_Success verifies that ScheduleAll returns the expected output when the GitLab API responds successfully.
+// TestScheduleAll_Success verifies that ScheduleAll succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/group_repository_storage_moves (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestScheduleAll_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/group_repository_storage_moves" {
@@ -252,7 +278,9 @@ func TestScheduleAll_Success(t *testing.T) {
 	}
 }
 
-// TestScheduleAll_APIError verifies that ScheduleAll returns an error when the GitLab API responds with a failure status.
+// TestScheduleAll_APIError verifies that ScheduleAll returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestScheduleAll_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -264,7 +292,9 @@ func TestScheduleAll_APIError(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_ContextCanceled verifies that RetrieveAll returns an error when the context is already cancelled.
+// TestRetrieveAll_ContextCanceled verifies the RetrieveAll_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRetrieveAll_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -278,8 +308,9 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestRetrieveAll_Pagination verifies that pagination parameters are forwarded
-// and pagination metadata is returned in the output.
+// TestRetrieveAll_Pagination verifies that RetrieveAll forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestRetrieveAll_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -313,8 +344,9 @@ func TestRetrieveAll_Pagination(t *testing.T) {
 	}
 }
 
-// TestRetrieveForGroup_APIError verifies that API errors from the GitLab
-// server are propagated when listing storage moves for a group.
+// TestRetrieveForGroup_APIError verifies that RetrieveForGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRetrieveForGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -326,8 +358,9 @@ func TestRetrieveForGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestRetrieveForGroup_ContextCanceled verifies that RetrieveForGroup returns
-// an error when the context is cancelled before the API call.
+// TestRetrieveForGroup_ContextCanceled verifies the RetrieveForGroup_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRetrieveForGroup_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -341,8 +374,9 @@ func TestRetrieveForGroup_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestRetrieveForGroup_Pagination verifies that pagination parameters are
-// forwarded correctly for the group-specific list endpoint.
+// TestRetrieveForGroup_Pagination verifies that RetrieveForGroup forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestRetrieveForGroup_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "page", "3")
@@ -370,8 +404,9 @@ func TestRetrieveForGroup_Pagination(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that API errors are propagated when getting
-// a single storage move.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -383,8 +418,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_ContextCanceled verifies that Get returns an error when the
-// context is cancelled before the API call.
+// TestGet_ContextCanceled verifies the Get_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -398,8 +434,9 @@ func TestGet_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestGetForGroup_APIError verifies that API errors are propagated when
-// getting a specific storage move for a group.
+// TestGetForGroup_APIError verifies that GetForGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetForGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -411,8 +448,9 @@ func TestGetForGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestGetForGroup_ContextCanceled verifies that GetForGroup returns an error
-// when the context is cancelled before the API call.
+// TestGetForGroup_ContextCanceled verifies the GetForGroup_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetForGroup_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -426,8 +464,9 @@ func TestGetForGroup_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestSchedule_APIError verifies that API errors are propagated when
-// scheduling a storage move.
+// TestSchedule_APIError verifies that Schedule returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSchedule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -439,8 +478,9 @@ func TestSchedule_APIError(t *testing.T) {
 	}
 }
 
-// TestSchedule_ContextCanceled verifies that Schedule returns an error when
-// the context is cancelled before the API call.
+// TestSchedule_ContextCanceled verifies the Schedule_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestSchedule_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -454,8 +494,9 @@ func TestSchedule_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestSchedule_NilDestination verifies that Schedule works without
-// a destination storage name (server picks default).
+// TestSchedule_NilDestination verifies the Schedule_NilDestination handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSchedule_NilDestination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
@@ -472,8 +513,9 @@ func TestSchedule_NilDestination(t *testing.T) {
 	}
 }
 
-// TestScheduleAll_ContextCanceled verifies that ScheduleAll returns an error
-// when the context is cancelled before the API call.
+// TestScheduleAll_ContextCanceled verifies the ScheduleAll_ContextCanceled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestScheduleAll_ContextCanceled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -487,8 +529,9 @@ func TestScheduleAll_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestScheduleAll_NilParams verifies that ScheduleAll works without
-// source or destination storage name parameters.
+// TestScheduleAll_NilParams verifies that ScheduleAll_NilParams forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestScheduleAll_NilParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPost)
@@ -505,8 +548,9 @@ func TestScheduleAll_NilParams(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilGroup verifies that toOutput handles a storage move
-// with no associated group (Group field is nil).
+// TestToOutput_NilGroup verifies the ToOutput_NilGroup handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_NilGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -539,8 +583,9 @@ func mustParseTime(s string) time.Time {
 	return tt
 }
 
-// TestFormatOutputMarkdown validates that FormatOutputMarkdown produces
-// correct Markdown for moves with and without group data.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -702,8 +747,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatScheduleAllMarkdown validates that FormatScheduleAllMarkdown
-// produces correct Markdown with the confirmation message.
+// TestFormatScheduleAllMarkdown verifies the ScheduleAllMarkdown Markdown formatter for a representative scheduleall input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
 	out := ScheduleAllOutput{Message: "All group repository storage moves have been scheduled"}
 	got := FormatScheduleAllMarkdown(out)

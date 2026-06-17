@@ -7,6 +7,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// labelMarkdownOptions configures the shared [toolutil.LabelMarkdownOptions]
+// used by the package's single-label and list Markdown formatters. It
+// centralises the title, empty-state copy, and follow-up hints so both
+// renderers stay in sync.
 var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
 	DetailTitle:       "Label",
 	ListTitle:         "Labels",
@@ -27,6 +31,8 @@ type labelNotFoundOutput struct {
 	Identifier string
 }
 
+// formatLabelNotFound renders a [labelNotFoundOutput] as a structured
+// MCP not-found result with follow-up hints.
 func formatLabelNotFound(out labelNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Label", out.Identifier,
@@ -56,6 +62,8 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 }
 
+// toLabelMarkdown adapts a package [Output] into the
+// [toolutil.LabelMarkdown] shape used by the shared formatter helpers.
 func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
 	return labeldata.ToMarkdown(label)
 }

@@ -11,7 +11,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestScheduleExport verifies ScheduleExport.
+// TestScheduleExport verifies the ScheduleExport handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestScheduleExport(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/api/v4/groups/") {
@@ -26,7 +28,9 @@ func TestScheduleExport(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_Error verifies ScheduleExport when error.
+// TestScheduleExport_Error verifies that ScheduleExport returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestScheduleExport_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -37,7 +41,9 @@ func TestScheduleExport_Error(t *testing.T) {
 	}
 }
 
-// TestListExportStatus verifies ListExportStatus.
+// TestListExportStatus verifies the ListExportStatus handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListExportStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -58,7 +64,9 @@ func TestListExportStatus(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_Error verifies ListExportStatus when error.
+// TestListExportStatus_Error verifies that ListExportStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListExportStatus_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -69,7 +77,9 @@ func TestListExportStatus_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus verifies FormatListExportStatus.
+// TestFormatListExportStatus verifies the ListExportStatus Markdown formatter for a representative listexportstatus input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListExportStatus(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -82,7 +92,9 @@ func TestFormatListExportStatus(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_Empty verifies FormatListExportStatus when empty.
+// TestFormatListExportStatus_Empty verifies the ListExportStatus_Empty Markdown formatter for a representative listexportstatus_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListExportStatus_Empty(t *testing.T) {
 	out := &ListExportStatusOutput{Statuses: []ExportStatusItem{}}
 	md := FormatListExportStatus(out)
@@ -100,7 +112,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // ScheduleExport — canceled context, with batched option
 // ---------------------------------------------------------------------------.
 
-// TestScheduleExport_CancelledContext verifies ScheduleExport when cancelled context.
+// TestScheduleExport_CancelledContext verifies the ScheduleExport_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestScheduleExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -110,7 +124,9 @@ func TestScheduleExport_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_WithBatched verifies ScheduleExport when with batched.
+// TestScheduleExport_WithBatched verifies the ScheduleExport_WithBatched handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestScheduleExport_WithBatched(t *testing.T) {
 	batched := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +142,9 @@ func TestScheduleExport_WithBatched(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_EmptyGroupID verifies ScheduleExport when empty group ID.
+// TestScheduleExport_EmptyGroupID verifies the ScheduleExport_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestScheduleExport_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -141,7 +159,9 @@ func TestScheduleExport_EmptyGroupID(t *testing.T) {
 // ListExportStatus — canceled context, with relation filter, empty group_id, pagination
 // ---------------------------------------------------------------------------.
 
-// TestListExportStatus_CancelledContext verifies ListExportStatus when cancelled context.
+// TestListExportStatus_CancelledContext verifies the ListExportStatus_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListExportStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -151,7 +171,9 @@ func TestListExportStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyGroupID verifies ListExportStatus when empty group ID.
+// TestListExportStatus_EmptyGroupID verifies the ListExportStatus_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -162,7 +184,9 @@ func TestListExportStatus_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithRelationFilter verifies ListExportStatus when with relation filter.
+// TestListExportStatus_WithRelationFilter verifies the ListExportStatus_WithRelationFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -192,7 +216,9 @@ func TestListExportStatus_WithRelationFilter(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithPagination verifies ListExportStatus when with pagination.
+// TestListExportStatus_WithPagination verifies that ListExportStatus_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListExportStatus_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -229,7 +255,9 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_EmptyResponse verifies ListExportStatus when empty response.
+// TestListExportStatus_EmptyResponse verifies the ListExportStatus_EmptyResponse handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListExportStatus_EmptyResponse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -243,7 +271,9 @@ func TestListExportStatus_EmptyResponse(t *testing.T) {
 	}
 }
 
-// TestListExportStatus_WithErrorField verifies ListExportStatus when with error field.
+// TestListExportStatus_WithErrorField verifies that ListExportStatus_WithErrorField returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListExportStatus_WithErrorField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"relation":"project","status":-1,"error":"export failed","batched":false,"batches_count":0,"updated_at":"2026-06-15T10:00:00Z"}]`)
@@ -261,7 +291,9 @@ func TestListExportStatus_WithErrorField(t *testing.T) {
 // FormatScheduleExport
 // ---------------------------------------------------------------------------.
 
-// TestFormatScheduleExport_Message verifies FormatScheduleExport when message.
+// TestFormatScheduleExport_Message verifies the ScheduleExport_Message Markdown formatter for a representative scheduleexport_message input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatScheduleExport_Message(t *testing.T) {
 	md := FormatScheduleExport()
 	if !strings.Contains(md, "scheduled successfully") {
@@ -273,7 +305,9 @@ func TestFormatScheduleExport_Message(t *testing.T) {
 // FormatListExportStatus — multiple items, with error field, markdown escaping
 // ---------------------------------------------------------------------------.
 
-// TestFormatListExportStatus_MultipleItems verifies FormatListExportStatus when multiple items.
+// TestFormatListExportStatus_MultipleItems verifies the ListExportStatus_MultipleItems Markdown formatter for a representative listexportstatus_multipleitems input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -297,7 +331,9 @@ func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus_WithPipeInRelation verifies FormatListExportStatus when with pipe in relation.
+// TestFormatListExportStatus_WithPipeInRelation verifies the ListExportStatus_WithPipeInRelation Markdown formatter for a representative listexportstatus_withpipeinrelation input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
 	out := &ListExportStatusOutput{
 		Statuses: []ExportStatusItem{
@@ -318,7 +354,9 @@ func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
 // ActionSpecs route execution for both tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates both group relations export routes.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, groupRelationsExportHandler())
 	byTool := groupRelationsSpecsByTool(t, ActionSpecs(client))
@@ -349,7 +387,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // ActionSpecs route — schedule export returns error from API
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_ScheduleExportAPIError verifies schedule export route API errors.
+// TestActionSpecs_ScheduleExportAPIError validates the ScheduleExportAPIError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ScheduleExportAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/groups/10/export_relations", func(w http.ResponseWriter, _ *http.Request) {
@@ -372,7 +412,9 @@ func TestActionSpecs_ScheduleExportAPIError(t *testing.T) {
 // ActionSpecs route — list export status returns error from API
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_ListExportStatusAPIError verifies list status route API errors.
+// TestActionSpecs_ListExportStatusAPIError validates the ListExportStatusAPIError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ListExportStatusAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/groups/10/export_relations", func(w http.ResponseWriter, _ *http.Request) {

@@ -252,6 +252,14 @@ func countCatalogDomains(catalog *actioncatalog.Catalog) map[string]int {
 	return domains
 }
 
+// enterpriseActionSpecAudit classifies the catalog actions that only appear
+// in self-managed or GitLab.com Enterprise builds but not in the base
+// catalog.
+//
+// SpecBacked lists action IDs that are covered by an ActionSpec in the
+// owner package. MissingSpec lists action IDs that lack an ActionSpec and
+// therefore violate the catalog-first contract. Both slices are sorted and
+// deduplicated before being returned.
 type enterpriseActionSpecAudit struct {
 	SpecBacked  []string
 	MissingSpec []string

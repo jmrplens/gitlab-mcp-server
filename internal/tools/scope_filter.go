@@ -43,8 +43,10 @@ var MetaToolScopes = map[string][]string{
 }
 
 // RemoveScopeFilteredTools removes tools whose required scopes are not
-// satisfied by the detected token scopes. Returns the number of tools removed.
-// If tokenScopes is nil (detection unavailable), no tools are removed.
+// satisfied by the detected token scopes. Returns the number of tools
+// removed. If tokenScopes is nil (detection unavailable), no tools are
+// removed. Logs a debug entry per removed tool and an info entry
+// summarizing the removal.
 func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 	if tokenScopes == nil {
 		return 0
@@ -81,10 +83,12 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 	return len(toRemove)
 }
 
-// FilterScopeFilteredCatalog removes catalog groups whose required scopes are
-// not satisfied by the detected token scopes. It returns a non-nil error when
-// rebuilding the filtered catalog fails, which means callers could not safely
-// evaluate the scope filter and should propagate the failure.
+// FilterScopeFilteredCatalog removes catalog groups whose required scopes
+// are not satisfied by the detected token scopes. It returns a non-nil
+// error when rebuilding the filtered catalog fails, which means callers
+// could not safely evaluate the scope filter and should propagate the
+// failure. A nil input catalog returns an empty catalog; nil token
+// scopes return a defensive clone of the source catalog.
 func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []string) (*actioncatalog.Catalog, error) {
 	if catalog == nil {
 		return actioncatalog.NewCatalog(), nil
@@ -126,6 +130,9 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 	return filtered, nil
 }
 
+// buildScopeSet returns a set of token scope strings for O(1) membership
+// tests. Used by [RemoveScopeFilteredTools] and
+// [FilterScopeFilteredCatalog].
 func buildScopeSet(tokenScopes []string) map[string]struct{} {
 	scopeSet := make(map[string]struct{}, len(tokenScopes))
 	for _, scope := range tokenScopes {
@@ -134,7 +141,9 @@ func buildScopeSet(tokenScopes []string) map[string]struct{} {
 	return scopeSet
 }
 
-// allScopesPresent checks if all required scopes exist in the set.
+// allScopesPresent reports whether every scope in required is present in
+// the scope set. An empty required slice returns true so callers can use
+// the helper without first checking the required length.
 func allScopesPresent(scopeSet map[string]struct{}, required []string) bool {
 	for _, s := range required {
 		if _, ok := scopeSet[s]; !ok {

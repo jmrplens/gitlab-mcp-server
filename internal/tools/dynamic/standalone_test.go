@@ -1,3 +1,4 @@
+// standalone_test.go contains unit tests for the dynamic surface standalone MCP server (used by inspector and integration tests).
 package dynamic
 
 import (
@@ -9,7 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies Standalone when add standalone routes respects read only and exclusions.
+// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies the Standalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
 		ReadOnly:     true,
@@ -30,7 +33,9 @@ func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault verifies Standalone when add standalone routes adds discover by default.
+// TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault verifies the Standalone_AddStandaloneRoutesAddsDiscoverByDefault handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -46,7 +51,9 @@ func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil verifies Standalone when add standalone catalog creates catalog when nil.
+// TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil verifies the Standalone_AddStandaloneCatalogCreatesCatalogWhenNil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	catalog, err := AddStandaloneCatalog(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -60,7 +67,9 @@ func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesPreservesExistingMappings verifies Standalone when add standalone routes preserves existing mappings.
+// TestStandalone_AddStandaloneRoutesPreservesExistingMappings verifies the Standalone_AddStandaloneRoutesPreservesExistingMappings handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -81,8 +90,9 @@ func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors verifies route-map
-// conversion surfaces duplicate standalone catalog errors.
+// TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors verifies that Standalone_AddStandaloneRoutesPropagatesCatalogErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_discover_project": {

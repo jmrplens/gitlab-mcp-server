@@ -31,8 +31,9 @@ const (
 	testGroupID = "mygroup"
 )
 
-// TestList validates the List handler for group epic boards across success,
-// error, validation, pagination, and edge-case scenarios.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -154,8 +155,9 @@ func assertListBoardLists(t *testing.T, board Output) {
 	}
 }
 
-// TestList_CancelledContext verifies the List handler returns an error
-// immediately when the context is already cancelled.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called for cancelled context")
@@ -167,8 +169,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_NotFoundIncludesActionableHint verifies list failures explain both
-// licensing and the valid empty-list case for epic boards.
+// TestList_NotFoundIncludesActionableHint verifies that List_NotFoundIncludesActionableHint returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_NotFoundIncludesActionableHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
@@ -185,8 +188,9 @@ func TestList_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
-// TestGet validates the Get handler for group epic boards across success,
-// error, validation, and edge-case scenarios.
+// TestGet verifies the Get handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	tests := []getCase{
 		{
@@ -353,8 +357,9 @@ func runGetCase(t *testing.T, tt getCase) {
 	}
 }
 
-// TestGet_CancelledContext verifies the Get handler returns an error
-// immediately when the context is already cancelled.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called for cancelled context")
@@ -366,8 +371,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_NotFoundIncludesActionableHint verifies missing board errors point
-// callers back to the list action and explain the empty-list case.
+// TestGet_NotFoundIncludesActionableHint verifies that Get_NotFoundIncludesActionableHint returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Board Not Found"}`)
@@ -384,8 +390,9 @@ func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown validates the single-board Markdown formatter
-// for boards with/without labels and lists.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -448,8 +455,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown validates the list Markdown formatter for
-// non-empty boards, empty boards, and pagination output.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

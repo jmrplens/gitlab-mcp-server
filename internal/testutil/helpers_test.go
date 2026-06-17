@@ -1,6 +1,8 @@
 // helpers_test.go validates the shared test utilities used across all domain
 // tool tests. Each helper is exercised directly to ensure correct behavior
-// in both success and failure scenarios.
+// in both success and failure scenarios. Tests use a sentinel [*testing.T]
+// passed to assertion helpers so we can inspect [testing.T.Failed] without
+// failing the surrounding test.
 package testutil
 
 import (
@@ -12,8 +14,11 @@ import (
 	"testing"
 )
 
-// TestCancelledCtx verifies that CancelledCtx returns a context that is
-// already cancelled with context.Canceled error.
+// TestCancelledCtx verifies that [CancelledCtx] returns a context whose
+// [context.Context.Err] is already [context.Canceled]. The test makes no
+// assertions on the cancel function (which is intentionally discarded) and
+// focuses on the immediate-cancellation contract used by handler
+// cancellation paths.
 func TestCancelledCtx(t *testing.T) {
 	ctx := CancelledCtx(t)
 	if ctx.Err() != context.Canceled {
@@ -21,8 +26,14 @@ func TestCancelledCtx(t *testing.T) {
 	}
 }
 
-// TestCaptureSlog verifies that CaptureSlog captures slog output into a
-// buffer and that the output contains the expected JSON fields.
+// TestCaptureSlog verifies that [CaptureSlog] installs a JSON [slog.Handler]
+// whose output is captured in the returned [bytes.Buffer], then restores the
+// original default logger on test exit.
+//
+// The test logs a single Info entry with a custom key and asserts the buffer
+// contains the message, the custom key/value pair, and the INFO level
+// marker. This protects the JSON-shape contract relied on by other tests
+// that assert on structured log fields.
 func TestCaptureSlog(t *testing.T) {
 	buf := CaptureSlog(t)
 	slog.Info("test message", "key", "val")
@@ -34,8 +45,10 @@ func TestCaptureSlog(t *testing.T) {
 	}
 }
 
-// TestAssertRequestMethod verifies AssertRequestMethod does not fail the test
-// when the expected method matches.
+// TestAssertRequestMethod verifies [AssertRequestMethod] does not fail the
+// test when the request method matches the expected value. The test uses a
+// sentinel [*testing.T] and inspects [testing.T.Failed] directly so a real
+// failure inside the helper would be observable.
 func TestAssertRequestMethod(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", nil)
 	fakeT := &testing.T{}
@@ -45,8 +58,10 @@ func TestAssertRequestMethod(t *testing.T) {
 	}
 }
 
-// TestAssertRequestMethod_Mismatch verifies AssertRequestMethod marks the
-// test as failed when the method does not match.
+// TestAssertRequestMethod_Mismatch verifies [AssertRequestMethod] marks the
+// test as failed when the request method does not match the expected value.
+// The test wires a GET request, asks the helper to expect POST, and asserts
+// the sentinel [*testing.T] is now failed.
 func TestAssertRequestMethod_Mismatch(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	fakeT := &testing.T{}
@@ -56,8 +71,10 @@ func TestAssertRequestMethod_Mismatch(t *testing.T) {
 	}
 }
 
-// TestAssertRequestPath verifies AssertRequestPath does not fail the test
-// when the expected path matches.
+// TestAssertRequestPath verifies [AssertRequestPath] does not fail when the
+// request URL path matches the expected value. The sentinel [*testing.T]
+// pattern keeps the helper from failing the surrounding test, allowing us
+// to inspect [testing.T.Failed] instead.
 func TestAssertRequestPath(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v4/projects", nil)
 	fakeT := &testing.T{}
@@ -67,8 +84,10 @@ func TestAssertRequestPath(t *testing.T) {
 	}
 }
 
-// TestAssertRequestPath_Mismatch verifies AssertRequestPath marks the test
-// as failed when the path does not match.
+// TestAssertRequestPath_Mismatch verifies [AssertRequestPath] marks the test
+// as failed when the request URL path does not match the expected value.
+// The test asks the helper to expect "/api/v4/issues" against a request
+// that targets "/api/v4/projects".
 func TestAssertRequestPath_Mismatch(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v4/projects", nil)
 	fakeT := &testing.T{}
@@ -78,8 +97,10 @@ func TestAssertRequestPath_Mismatch(t *testing.T) {
 	}
 }
 
-// TestAssertQueryParam verifies AssertQueryParam does not fail when the
-// query parameter matches.
+// TestAssertQueryParam verifies [AssertQueryParam] does not fail when the
+// query parameter value matches the expected string. The sentinel
+// [*testing.T] pattern lets the test observe [testing.T.Failed] directly
+// while leaving the surrounding test green on success.
 func TestAssertQueryParam(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test?page=2&per_page=20", nil)
 	fakeT := &testing.T{}
@@ -89,8 +110,10 @@ func TestAssertQueryParam(t *testing.T) {
 	}
 }
 
-// TestAssertQueryParam_Mismatch verifies AssertQueryParam marks the test
-// as failed when the parameter value does not match.
+// TestAssertQueryParam_Mismatch verifies [AssertQueryParam] marks the test
+// as failed when the URL query parameter value disagrees with the expected
+// string. The test posts a "page=1" request and asks the helper to expect
+// "page=2".
 func TestAssertQueryParam_Mismatch(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test?page=1", nil)
 	fakeT := &testing.T{}
@@ -100,8 +123,10 @@ func TestAssertQueryParam_Mismatch(t *testing.T) {
 	}
 }
 
-// TestAssertQueryParam_Missing verifies AssertQueryParam fails when the
-// parameter is not present in the URL.
+// TestAssertQueryParam_Missing verifies [AssertQueryParam] marks the test
+// as failed when the requested query parameter is absent from the URL.
+// The test posts a request with no query string and asks the helper to
+// expect a value for "page".
 func TestAssertQueryParam_Missing(t *testing.T) {
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	fakeT := &testing.T{}
@@ -111,9 +136,14 @@ func TestAssertQueryParam_Missing(t *testing.T) {
 	}
 }
 
-// TestNewTestClient verifies that NewTestClient creates a functional GitLab
-// client connected to the mock server. The mock returns a canned response
-// to validate the client can make API calls.
+// TestNewTestClient verifies that [NewTestClient] returns a non-nil
+// [gitlabclient.Client] backed by a live mock server.
+//
+// The mock handler responds to the GitLab version endpoint with a canned
+// {"version":"17.0.0","revision":"abc"} payload so the helper has no reason
+// to abort. The test asserts both the outer client and the underlying
+// client-go handle ([gitlabclient.Client.GL]) are non-nil, protecting the
+// factory contract relied on by every tool test.
 func TestNewTestClient(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -130,8 +160,13 @@ func TestNewTestClient(t *testing.T) {
 	}
 }
 
-// TestRespondJSON verifies the JSON response writer sets correct headers,
-// status code, and body content.
+// TestRespondJSON verifies that [RespondJSON] writes the supplied status
+// code, sets Content-Type to "application/json", and writes the body
+// verbatim.
+//
+// The test uses [httptest.NewRecorder] so it can assert on the captured
+// status, headers, and body bytes. It guards the response-shape contract
+// that every mock handler in the project depends on.
 func TestRespondJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	RespondJSON(w, http.StatusCreated, `{"id":42}`)
@@ -147,8 +182,14 @@ func TestRespondJSON(t *testing.T) {
 	}
 }
 
-// TestRespondJSONWithPagination verifies that all pagination headers are set
-// correctly on the response.
+// TestRespondJSONWithPagination verifies that [RespondJSONWithPagination]
+// sets every GitLab pagination header in the supplied [PaginationHeaders]
+// struct.
+//
+// The test populates all six fields and asserts the response contains each
+// X-Page, X-Per-Page, X-Total, X-Total-Pages, X-Next-Page, and
+// X-Prev-Page header with the expected value. This protects the pagination
+// contract that list-tool tests rely on when validating handler output.
 func TestRespondJSONWithPagination(t *testing.T) {
 	w := httptest.NewRecorder()
 	p := PaginationHeaders{
@@ -181,8 +222,13 @@ func TestRespondJSONWithPagination(t *testing.T) {
 	}
 }
 
-// TestRespondJSONWithPagination_PartialHeaders verifies that omitted
-// pagination fields do not produce empty headers.
+// TestRespondJSONWithPagination_PartialHeaders verifies that
+// [RespondJSONWithPagination] omits headers whose [PaginationHeaders]
+// field is the empty string. The test sets only Page and PerPage, then
+// asserts X-Page is set while X-Total, X-Total-Pages, X-Next-Page, and
+// X-Prev-Page remain absent. This guards the contract that handlers can
+// populate only the headers a given scenario exercises without leaking
+// empty values into the response.
 func TestRespondJSONWithPagination_PartialHeaders(t *testing.T) {
 	w := httptest.NewRecorder()
 	p := PaginationHeaders{

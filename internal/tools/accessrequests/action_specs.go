@@ -10,13 +10,21 @@ import (
 // ActionSpecs returns canonical specs for project and group access request actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_access_request_list_project — list pending project access requests.
 		accessRequestReadSpec("request_list_project", toolutil.RouteAction(client, ListProject), "gitlab_access_request_list_project"),
+		// gitlab_access_request_list_group — list pending group access requests.
 		accessRequestReadSpec("request_list_group", toolutil.RouteAction(client, ListGroup), "gitlab_access_request_list_group"),
+		// gitlab_access_request_request_project — request access to a project.
 		accessRequestCreateSpec("request_project", toolutil.RouteAction(client, RequestProject), "gitlab_access_request_request_project"),
+		// gitlab_access_request_request_group — request access to a group.
 		accessRequestCreateSpec("request_group", toolutil.RouteAction(client, RequestGroup), "gitlab_access_request_request_group"),
+		// gitlab_access_request_approve_project — approve a pending project access request.
 		accessRequestUpdateSpec("approve_project", toolutil.RouteAction(client, ApproveProject), "gitlab_access_request_approve_project"),
+		// gitlab_access_request_approve_group — approve a pending group access request.
 		accessRequestUpdateSpec("approve_group", toolutil.RouteAction(client, ApproveGroup), "gitlab_access_request_approve_group"),
+		// gitlab_access_request_deny_project — deny a pending project access request.
 		accessRequestDeleteSpec("deny_project", toolutil.RouteAction(client, DenyProjectOutput), "gitlab_access_request_deny_project"),
+		// gitlab_access_request_deny_group — deny a pending group access request.
 		accessRequestDeleteSpec("deny_group", toolutil.RouteAction(client, DenyGroupOutput), "gitlab_access_request_deny_group"),
 	}
 }

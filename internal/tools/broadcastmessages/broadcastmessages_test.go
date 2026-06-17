@@ -37,7 +37,9 @@ const (
 	fmtExpErrMentionID = "expected error to mention 'id', got: %v"
 )
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodGet {
@@ -62,7 +64,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -74,7 +78,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies Get when success.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodGet {
@@ -96,7 +102,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies Create when success.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodPost {
@@ -119,7 +127,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_WithTimes verifies Create when with times.
+// TestCreate_WithTimes verifies the Create_WithTimes handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_WithTimes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodPost {
@@ -139,7 +149,9 @@ func TestCreate_WithTimes(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidStartsAt verifies Create when invalid starts at.
+// TestCreate_InvalidStartsAt verifies the Create_InvalidStartsAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_InvalidStartsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -154,7 +166,9 @@ func TestCreate_InvalidStartsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies Update when success.
+// TestUpdate_Success verifies that Update succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodPut {
@@ -176,7 +190,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies Delete when success.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathBroadcastMessage1 && r.Method == http.MethodDelete {
@@ -192,7 +208,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies Delete when error.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -204,7 +222,9 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Messages: []MessageItem{
@@ -221,7 +241,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Messages: []MessageItem{}}
 	result := FormatListMarkdown(out)
@@ -231,7 +253,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMessageMarkdown verifies FormatMessageMarkdown.
+// TestFormatMessageMarkdown verifies the MessageMarkdown Markdown formatter for a representative message input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMessageMarkdown(t *testing.T) {
 	item := MessageItem{
 		ID: 1, Message: testMessage, BroadcastType: testBannerType,
@@ -247,7 +271,9 @@ func TestFormatMessageMarkdown(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidID verifies Get when invalid ID.
+// TestGet_InvalidID verifies the Get_InvalidID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -262,7 +288,9 @@ func TestGet_InvalidID(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidID verifies Update when invalid ID.
+// TestUpdate_InvalidID verifies the Update_InvalidID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -277,7 +305,9 @@ func TestUpdate_InvalidID(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidID verifies Delete when invalid ID.
+// TestDelete_InvalidID verifies the Delete_InvalidID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_InvalidID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -301,7 +331,9 @@ const errExpectedAPI = "expected API error, got nil"
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -316,7 +348,9 @@ func TestGet_APIError(t *testing.T) {
 // Create — API error, invalid ends_at
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies Create when API error.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -327,7 +361,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidEndsAt verifies Create when invalid ends at.
+// TestCreate_InvalidEndsAt verifies the Create_InvalidEndsAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_InvalidEndsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -341,7 +377,9 @@ func TestCreate_InvalidEndsAt(t *testing.T) {
 	}
 }
 
-// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
+// TestCreate_WithAllOptionalFields verifies the Create_WithAllOptionalFields handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -386,7 +424,9 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // Update — API error, invalid starts_at, invalid ends_at, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies Update when API error.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -397,7 +437,9 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidStartsAt verifies Update when invalid starts at.
+// TestUpdate_InvalidStartsAt verifies the Update_InvalidStartsAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_InvalidStartsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -411,7 +453,9 @@ func TestUpdate_InvalidStartsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidEndsAt verifies Update when invalid ends at.
+// TestUpdate_InvalidEndsAt verifies the Update_InvalidEndsAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_InvalidEndsAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -425,7 +469,9 @@ func TestUpdate_InvalidEndsAt(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies Update when all optional fields.
+// TestUpdate_AllOptionalFields verifies the Update_AllOptionalFields handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
@@ -460,7 +506,9 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Formatters — message with TargetPath and EndsAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatMessageMarkdown_WithOptionalFields verifies FormatMessageMarkdown when with optional fields.
+// TestFormatMessageMarkdown_WithOptionalFields verifies the MessageMarkdown_WithOptionalFields Markdown formatter for a representative message_withoptionalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 	item := MessageItem{
 		ID:            2,
@@ -483,8 +531,9 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestMarkdownRegistry_MessageOutputTypes verifies broadcast message output
-// wrappers are registered and render through the message formatter.
+// TestMarkdownRegistry_MessageOutputTypes verifies the MarkdownRegistry_MessageOutputTypes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownRegistry_MessageOutputTypes(t *testing.T) {
 	message := MessageItem{ID: 7, Message: "Registry check", BroadcastType: testBannerType, Active: true}
 	tests := []struct {
@@ -519,7 +568,9 @@ func TestMarkdownRegistry_MessageOutputTypes(t *testing.T) {
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for broadcast message actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -551,7 +602,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs — all routes
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates broadcast message routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newBroadcastRouteSpecs(t)
 

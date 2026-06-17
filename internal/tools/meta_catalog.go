@@ -7,8 +7,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// RegisterMetaCatalog registers visible meta-tools from the canonical action
-// catalog.
+// RegisterMetaCatalog registers visible meta-tools from the canonical
+// action catalog. Each catalog group becomes one visible MCP meta-tool
+// whose name matches the group ToolName and whose routes come from the
+// group's [actioncatalog.Group.ActionMap]. Read-only groups use
+// [toolutil.AddReadOnlyMetaTool] so the registered annotations reflect
+// the read-only semantics; mutating groups use [toolutil.AddMetaTool].
+// Nil server or catalog inputs are accepted as no-ops.
 func RegisterMetaCatalog(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	if server == nil || catalog == nil {
 		return

@@ -15,9 +15,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// RegisterMCPMeta registers the gitlab_server meta-tool consolidating MCP server
-// health/status and update operations. If updater is nil, only the status
-// action is available.
+// RegisterMCPMeta registers the gitlab_server meta-tool consolidating MCP
+// server health/status and update operations. If updater is nil, only
+// the status action is available. Catalog construction failures are
+// logged and the function returns without registering.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
 	catalog := actioncatalog.NewCatalog()
 	if err := catalog.AddGroup(BuildMCPActionGroup(client, updater)); err != nil {
@@ -27,7 +28,12 @@ func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *a
 	RegisterMetaCatalog(server, catalog)
 }
 
-// BuildMCPActionGroup builds the registry group backing the gitlab_server meta-tool.
+// BuildMCPActionGroup builds the registry group backing the
+// gitlab_server meta-tool. The group always exposes status and
+// health_check actions; when updater is non-nil it also exposes
+// check_update (read-only) and apply_update (destructive). The custom
+// description documents the available actions and their semantics for
+// the schema resource.
 func BuildMCPActionGroup(client *gitlabclient.Client, updater *autoupdate.Updater) actioncatalog.Group {
 	routes := actionMap{
 		"status":       routeAction(client, health.Check),
@@ -98,8 +104,10 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 	return group
 }
 
-// wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead
-// of *gitlabclient.Client) into an actionFunc for meta-tool dispatch.
+// wrapUpdaterAction wraps a function that takes an *autoupdate.Updater
+// (instead of *gitlabclient.Client) into an [actionFunc] for meta-tool
+// dispatch. Used by the self-update routes that need access to the
+// updater rather than the GitLab client.
 func wrapUpdaterAction[T, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := unmarshalParams[T](params)

@@ -26,7 +26,9 @@ const testFilename = "test.png"
 // errMissingAlertIID identifies the err missing alert IID constant used by this package.
 const errMissingAlertIID = "expected error for missing alert_iid"
 
-// TestListMetricImages verifies ListMetricImages.
+// TestListMetricImages verifies the ListMetricImages handler.
+// The mock GitLab API at /api/v4/projects/1/alert_management_alerts/5/metric_images (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListMetricImages(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images" || r.Method != http.MethodGet {
@@ -47,7 +49,9 @@ func TestListMetricImages(t *testing.T) {
 	}
 }
 
-// TestListMetricImages_Error verifies ListMetricImages when error.
+// TestListMetricImages_Error verifies that ListMetricImages returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListMetricImages_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -58,7 +62,9 @@ func TestListMetricImages_Error(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage verifies UpdateMetricImage.
+// TestUpdateMetricImage verifies the UpdateMetricImage handler.
+// The mock GitLab API at /api/v4/projects/1/alert_management_alerts/5/metric_images/10 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdateMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images/10" || r.Method != http.MethodPut {
@@ -77,7 +83,9 @@ func TestUpdateMetricImage(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_Error verifies UpdateMetricImage when error.
+// TestUpdateMetricImage_Error verifies that UpdateMetricImage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -88,7 +96,9 @@ func TestUpdateMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage verifies UploadMetricImage.
+// TestUploadMetricImage verifies the UploadMetricImage handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -107,7 +117,9 @@ func TestUploadMetricImage(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_Error verifies UploadMetricImage when error.
+// TestUploadMetricImage_Error verifies that UploadMetricImage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUploadMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -119,7 +131,9 @@ func TestUploadMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage verifies DeleteMetricImage.
+// TestDeleteMetricImage verifies the DeleteMetricImage handler.
+// The mock GitLab API at /api/v4/projects/1/alert_management_alerts/5/metric_images/10 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMetricImage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images/10" || r.Method != http.MethodDelete {
@@ -134,7 +148,9 @@ func TestDeleteMetricImage(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_Error verifies DeleteMetricImage when error.
+// TestDeleteMetricImage_Error verifies that DeleteMetricImage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMetricImage_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -145,7 +161,9 @@ func TestDeleteMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListMetricImagesOutput{Images: []MetricImageItem{{ID: 1, Filename: "img.png", URL: "https://example.com"}}}
 	md := FormatListMarkdown(out)
@@ -154,7 +172,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatImageMarkdown verifies FormatImageMarkdown.
+// TestFormatImageMarkdown verifies the ImageMarkdown Markdown formatter for a representative image input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatImageMarkdown(t *testing.T) {
 	md := FormatImageMarkdown(MetricImageItem{ID: 1, Filename: testFilename})
 	if md == "" {
@@ -162,7 +182,9 @@ func TestFormatImageMarkdown(t *testing.T) {
 	}
 }
 
-// TestListMetricImages_MissingAlertIID verifies ListMetricImages when missing alert IID.
+// TestListMetricImages_MissingAlertIID verifies that ListMetricImages_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListMetricImages_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -173,7 +195,9 @@ func TestListMetricImages_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_MissingAlertIID verifies UpdateMetricImage when missing alert IID.
+// TestUpdateMetricImage_MissingAlertIID verifies that UpdateMetricImage_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -184,7 +208,9 @@ func TestUpdateMetricImage_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestUpdateMetricImage_MissingImageID verifies UpdateMetricImage when missing image ID.
+// TestUpdateMetricImage_MissingImageID verifies that UpdateMetricImage_MissingImageID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateMetricImage_MissingImageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -195,7 +221,9 @@ func TestUpdateMetricImage_MissingImageID(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_MissingAlertIID verifies UploadMetricImage when missing alert IID.
+// TestUploadMetricImage_MissingAlertIID verifies that UploadMetricImage_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUploadMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -207,7 +235,9 @@ func TestUploadMetricImage_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_FilePath_Success verifies upload with file_path.
+// TestUploadMetricImage_FilePath_Success verifies that UploadMetricImage_FilePath succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_FilePath_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -229,7 +259,9 @@ func TestUploadMetricImage_FilePath_Success(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_FilePathInvalid verifies local file validation errors.
+// TestUploadMetricImage_FilePathInvalid verifies the UploadMetricImage_FilePathInvalid handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_FilePathInvalid(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -248,7 +280,9 @@ func TestUploadMetricImage_FilePathInvalid(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_BothInputs verifies error when both file_path and content_base64 provided.
+// TestUploadMetricImage_BothInputs verifies the UploadMetricImage_BothInputs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_BothInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -259,7 +293,9 @@ func TestUploadMetricImage_BothInputs(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_NeitherInput verifies error when neither input provided.
+// TestUploadMetricImage_NeitherInput verifies the UploadMetricImage_NeitherInput handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_NeitherInput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -270,7 +306,9 @@ func TestUploadMetricImage_NeitherInput(t *testing.T) {
 	}
 }
 
-// TestUploadMetricImage_InvalidBase64 verifies error for invalid base64.
+// TestUploadMetricImage_InvalidBase64 verifies the UploadMetricImage_InvalidBase64 handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_InvalidBase64(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -281,7 +319,9 @@ func TestUploadMetricImage_InvalidBase64(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_MissingAlertIID verifies DeleteMetricImage when missing alert IID.
+// TestDeleteMetricImage_MissingAlertIID verifies that DeleteMetricImage_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMetricImage_MissingAlertIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -292,7 +332,9 @@ func TestDeleteMetricImage_MissingAlertIID(t *testing.T) {
 	}
 }
 
-// TestDeleteMetricImage_MissingImageID verifies DeleteMetricImage when missing image ID.
+// TestDeleteMetricImage_MissingImageID verifies that DeleteMetricImage_MissingImageID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMetricImage_MissingImageID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -312,7 +354,9 @@ const covImageJSON = `{"id":1,"filename":"img.png","file_path":"/uploads/img.png
 // ListMetricImages — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestListMetricImages_WithPagination verifies ListMetricImages when with pagination.
+// TestListMetricImages_WithPagination verifies that ListMetricImages_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/alert_management_alerts/5/metric_images (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListMetricImages_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/alert_management_alerts/5/metric_images" && r.Method == http.MethodGet {
@@ -339,7 +383,9 @@ func TestListMetricImages_WithPagination(t *testing.T) {
 // UploadMetricImage — with optional URL and URLText
 // ---------------------------------------------------------------------------.
 
-// TestUploadMetricImage_WithOptionalFields verifies UploadMetricImage when with optional fields.
+// TestUploadMetricImage_WithOptionalFields verifies the UploadMetricImage_WithOptionalFields handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -374,7 +420,9 @@ func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 // FormatListMarkdown — empty images
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListMetricImagesOutput{})
 	if !strings.Contains(md, "No metric images found") {
@@ -385,7 +433,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies alert management action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -405,7 +455,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates all alert management canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtHandler())
 
@@ -441,7 +493,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // ActionSpec route execution error paths
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRouteErrors validates canonical route error paths.
+// TestActionSpecs_CallRouteErrors validates the CallRouteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtErrorHandler())
 

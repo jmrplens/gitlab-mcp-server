@@ -3,6 +3,8 @@
 // customemoji_ce_test.go tests the custom emoji MCP tools against a live
 // GitLab instance using both individual tools and the gitlab_custom_emoji
 // meta-tool. Exercises custom emoji create → list → delete lifecycle.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -14,8 +16,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestIndividual_CustomEmoji exercises custom emoji CRUD via individual tools:
-// create → list → delete.
+// TestIndividual_CustomEmoji exercises custom emoji CRUD via individual
+// tools: create → list → delete.
+//
+// The test creates a temporary group fixture (deferred deletion), then
+// runs three subtests: create a custom emoji whose URL points at the
+// E2E fixture service, list the group's custom emoji, and delete the
+// created emoji. Each subtest asserts the expected name or ID round-trips
+// and that the list contains the created emoji.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_CustomEmoji(t *testing.T) {
 	t.Parallel()
 
@@ -68,8 +78,15 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 	})
 }
 
-// TestMeta_CustomEmoji exercises custom emoji CRUD via the gitlab_custom_emoji meta-tool:
-// create → list → delete.
+// TestMeta_CustomEmoji exercises custom emoji CRUD via the
+// gitlab_custom_emoji meta-tool: create → list → delete.
+//
+// The test mirrors [TestIndividual_CustomEmoji] but drives every step
+// with {action, params} arguments through the catalog-backed
+// gitlab_custom_emoji tool. The temporary group fixture is cleaned up via
+// t.Cleanup so the GitLab instance stays clean even when subtests fail.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CustomEmoji(t *testing.T) {
 	t.Parallel()
 

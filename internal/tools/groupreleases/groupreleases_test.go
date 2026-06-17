@@ -62,8 +62,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Simple validates that the simple=true query parameter is forwarded
-// to the GitLab API and that the result is parsed correctly.
+// TestList_Simple verifies the List_Simple handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Simple(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -83,8 +84,9 @@ func TestList_Simple(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List returns an error when the
-// required group_id field is empty.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -95,8 +97,9 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when
-// the context is already cancelled before the API call is made.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -108,8 +111,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResults verifies that List returns an empty slice (not nil)
-// when the API responds with an empty JSON array.
+// TestList_EmptyResults verifies the List_EmptyResults handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResults(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -128,8 +132,9 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
-// TestList_APIError validates that List wraps and returns the error when the
-// GitLab API responds with a non-2xx status (e.g., 404 Not Found).
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -145,8 +150,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_ServerError validates that List returns an error when the GitLab
-// API responds with a 500 Internal Server Error.
+// TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -162,8 +168,9 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
-// TestList_Pagination validates that List forwards page/per_page parameters
-// to the API and returns correct pagination metadata.
+// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -203,8 +210,9 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
-// TestList_MinimalRelease verifies that toOutput handles releases with nil
-// dates, empty author username, and no self-link without errors.
+// TestList_MinimalRelease verifies the List_MinimalRelease handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_MinimalRelease(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -239,8 +247,9 @@ func TestList_MinimalRelease(t *testing.T) {
 	}
 }
 
-// TestList_UpcomingRelease verifies that the upcoming_release boolean is
-// correctly mapped to the output struct.
+// TestList_UpcomingRelease verifies the List_UpcomingRelease handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_UpcomingRelease(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
@@ -262,8 +271,9 @@ func TestList_UpcomingRelease(t *testing.T) {
 	}
 }
 
-// TestList_MultipleReleases verifies that List correctly maps multiple
-// releases from the API response to output structs.
+// TestList_MultipleReleases verifies the List_MultipleReleases handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_MultipleReleases(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {

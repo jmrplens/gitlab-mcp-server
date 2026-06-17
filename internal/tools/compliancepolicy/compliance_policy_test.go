@@ -1,3 +1,4 @@
+// compliance_policy_test.go contains unit tests for the GitLab group compliance framework policy MCP tool handlers (get, update).
 package compliancepolicy
 
 import (
@@ -15,8 +16,9 @@ import (
 // Get
 // ---------------------------------------------------------------------------
 
-// TestGet validates the Get function across success, error, nil-field, and
-// context-cancellation scenarios.
+// TestGet verifies the Get handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -103,8 +105,9 @@ func TestGet(t *testing.T) {
 // Update
 // ---------------------------------------------------------------------------
 
-// TestUpdate validates the Update function across success, error, nil-input, and
-// context-cancellation scenarios.
+// TestUpdate verifies the Update handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate(t *testing.T) {
 	nsID := int64(456)
 	zeroID := int64(0)
@@ -204,8 +207,9 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_BadRequestHint verifies that invalid CSP namespace IDs return
-// actionable guidance about top-level groups and GitLab's update lock.
+// TestUpdate_BadRequestHint verifies the Update_BadRequestHint handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_BadRequestHint(t *testing.T) {
 	nsID := int64(999)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -283,7 +287,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------
 
-// TestActionSpecs_Metadata verifies compliance policy action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -305,7 +311,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes validates that both canonical routes return valid results.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := newCompliancePolicyRouteClient(t)
 	specs := ActionSpecs(client)

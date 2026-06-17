@@ -1,3 +1,10 @@
+// register_meta_audit_test.go covers the package-level RegisterMeta
+// detection logic used by the audit_tools command.
+//
+// Tests build temporary Go sources with hand-written RegisterMeta functions
+// and exercise the discover / reference / classify pipeline. Each test
+// asserts the resulting classification, the referenced-from-hub flag, and
+// the human-readable reason returned for unexpected definitions.
 package main
 
 import (

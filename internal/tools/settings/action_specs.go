@@ -8,15 +8,19 @@ import (
 // ActionSpecs returns canonical specs for application settings tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_settings — read current instance-wide application settings.
 		settingsReadSpec("settings_get", toolutil.RouteAction(client, Get), "gitlab_get_settings"),
+		// gitlab_update_settings — apply a settings patch using snake_case keys.
 		settingsUpdateSpec("settings_update", toolutil.RouteAction(client, Update), "gitlab_update_settings"),
 	}
 }
 
+// settingsReadSpec builds the canonical read-only spec for an application settings tool.
 func settingsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, settingsOptions(name, individualTool))
 }
 
+// settingsUpdateSpec builds the canonical update spec for an application settings tool.
 func settingsUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, settingsOptions(name, individualTool))
 }

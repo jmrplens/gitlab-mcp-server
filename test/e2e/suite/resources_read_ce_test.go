@@ -400,6 +400,9 @@ func TestResources_ReadAll(t *testing.T) {
 	})
 }
 
+// readResourceJSON asserts that ReadResource for uri returns application/json
+// content with a matching URI field. Marks itself as a test helper so failures
+// report the caller's line number.
 func readResourceJSON(ctx context.Context, t *testing.T, uri string) {
 	t.Helper()
 	content := readResourceContent(ctx, t, uri)
@@ -411,6 +414,9 @@ func readResourceJSON(ctx context.Context, t *testing.T, uri string) {
 	}
 }
 
+// readResourceMarkdown asserts that ReadResource for uri returns text/markdown
+// content (used for the gitlab://guides/* workflow guides). Marks itself as a
+// test helper so failures report the caller's line number.
 func readResourceMarkdown(ctx context.Context, t *testing.T, uri string) {
 	t.Helper()
 	content := readResourceContent(ctx, t, uri)
@@ -419,6 +425,11 @@ func readResourceMarkdown(ctx context.Context, t *testing.T, uri string) {
 	}
 }
 
+// readResourceContent performs a ReadResource call for uri and returns the
+// first content entry. It fails the test if the call errors or returns an
+// empty Contents slice, and records a non-fatal error when the returned Text
+// payload is empty. Marks itself as a test helper so failures report the
+// caller's line number.
 func readResourceContent(ctx context.Context, t *testing.T, uri string) *mcp.ResourceContents {
 	t.Helper()
 	result, err := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
@@ -435,6 +446,11 @@ func readResourceContent(ctx context.Context, t *testing.T, uri string) *mcp.Res
 	return content
 }
 
+// waitForResourceID polls a ReadResource call for uri every two seconds until
+// the returned payload contains a positive integer ID or the timeout elapses.
+// Used by the CI/PipelinesLatest and CI/PipelineJobs subtests that wait for a
+// registered runner to produce a pipeline and a job. Returns 0 when the
+// timeout is reached without an observable ID.
 func waitForResourceID(ctx context.Context, t *testing.T, uri string, timeout time.Duration) int64 {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

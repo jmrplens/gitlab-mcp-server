@@ -3,6 +3,8 @@
 // miscmeta_ce_test.go tests miscellaneous MCP tools against a live GitLab instance.
 // Covers feature flags, feature flag user lists, branch rules (GraphQL), CI/CD catalog (GraphQL),
 // deployments, and user SSH/GPG key listing for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -16,8 +18,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/ffuserlists"
 )
 
-// TestMeta_FeatureFlags exercises feature flag listing via the gitlab_feature_flags meta-tool.
-// Feature flags may require a Premium/Ultimate license; errors are fatal.
+// TestMeta_FeatureFlags exercises feature flag listing via the
+// gitlab_feature_flags meta-tool. Feature flags may require a
+// Premium/Ultimate license; errors are fatal.
+//
+// The test creates a project fixture and lists the project's feature
+// flags through feature_flag_list, logging the count. The assertion
+// treats errors as fatal because the meta-tool requires the feature
+// flag API to be available in the running GitLab edition.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_FeatureFlags(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -35,7 +45,15 @@ func TestMeta_FeatureFlags(t *testing.T) {
 	})
 }
 
-// TestMeta_BranchRules exercises branch rule listing via the gitlab_branch meta-tool.
+// TestMeta_BranchRules exercises branch rule listing via the gitlab_branch
+// meta-tool (GraphQL backend).
+//
+// The test creates a project fixture and lists the project's branch
+// rules through rule_list. The list may be empty when no branch rules
+// have been defined; the assertion checks the call succeeds and logs
+// the count for visibility.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_BranchRules(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -53,7 +71,15 @@ func TestMeta_BranchRules(t *testing.T) {
 	})
 }
 
-// TestMeta_CICatalog exercises CI/CD catalog listing via the gitlab_ci_catalog meta-tool.
+// TestMeta_CICatalog exercises CI/CD catalog listing via the
+// gitlab_ci_catalog meta-tool.
+//
+// The test calls list without a project fixture to enumerate instance-wide
+// CI/CD catalog resources. The list may be empty when no catalog resources
+// have been published; the assertion checks the call succeeds and logs the
+// count for visibility.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CICatalog(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -68,7 +94,15 @@ func TestMeta_CICatalog(t *testing.T) {
 	})
 }
 
-// TestMeta_Deployments exercises deployment listing via the gitlab_environment meta-tool.
+// TestMeta_Deployments exercises deployment listing via the
+// gitlab_environment meta-tool.
+//
+// The test creates a project fixture and lists its deployments through
+// deployment_list. The list may be empty when no CI pipeline has been
+// triggered; the assertion checks the call succeeds and logs the count
+// for visibility.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Deployments(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -86,7 +120,16 @@ func TestMeta_Deployments(t *testing.T) {
 	})
 }
 
-// TestMeta_UserKeys exercises SSH and GPG key listing via the gitlab_user meta-tool.
+// TestMeta_UserKeys exercises SSH and GPG key listing via the
+// gitlab_user meta-tool.
+//
+// The test calls ssh_keys and gpg_keys on the authenticated user
+// without a project fixture, asserting both calls succeed. The list
+// outputs are discarded because key listings can be long; the test's
+// purpose is to verify the meta-tool route works against the live
+// GitLab instance.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserKeys(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -110,7 +153,14 @@ func TestMeta_UserKeys(t *testing.T) {
 	})
 }
 
-// TestIndividual_BranchRules exercises the gitlab_list_branch_rules individual tool (GraphQL).
+// TestIndividual_BranchRules exercises the gitlab_list_branch_rules
+// individual tool (GraphQL backend).
+//
+// The test creates a project fixture and lists the project's branch
+// rules. The list may be empty when no branch rules have been defined;
+// the assertion checks the call succeeds and logs the count.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_BranchRules(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -1208,6 +1208,17 @@ func TestDynamicSingleTaskPrompt_UsesFindFirstForHighRiskShapes(t *testing.T) {
 	}
 }
 
+// TestDynamicSingleTaskPrompt_TerraformStateUnlockExactCallAvoidsLegacyEnvelope
+// verifies that the dynamic-surface task prompt for a single destructive
+// Terraform state unlock points the model at gitlab_find_action first,
+// includes the new schema-driven guidance, and never carries the legacy
+// meta-tool terraform_state.unlock envelope from earlier iterations.
+//
+// The test asserts the rendered prompt contains the find-first guidance,
+// top-level confirm:true, and the explicit warning to avoid action IDs from
+// memory, and rejects three legacy envelope patterns. This protects the
+// dynamic surface from regressions that would reintroduce the deprecated
+// terraform state envelope.
 func TestDynamicSingleTaskPrompt_TerraformStateUnlockExactCallAvoidsLegacyEnvelope(t *testing.T) {
 	task := evalTask{ID: "MT-114", Prompt: "Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"confirm"}, Destructive: true},
@@ -2538,6 +2549,16 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	)
 }
 
+// TestDynamicSingleTaskPrompt_ProjectPathUsesProjectID verifies that the
+// dynamic-surface task prompt for an issue.update call instructs the model to
+// pass the project path as params.project_id and explicitly warns against
+// using full_path, path, or remote_url keys.
+//
+// The test asserts the rendered prompt contains the find-first guidance, the
+// literal project path, the params.project_id mention, and the negative
+// guidance about alternative keys, and rejects any exact "issue.update"
+// action mention. This protects dynamic issue workflows from regressing to
+// the wrong key name or hard-coding the action.
 func TestDynamicSingleTaskPrompt_ProjectPathUsesProjectID(t *testing.T) {
 	task := evalTask{ID: "MT-012", Prompt: "Close issue `10` in project `my-org/tools/gitlab-mcp-server` by setting `state_event` to `close`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "state_event"}},
@@ -5318,6 +5339,15 @@ func TestAggregateUsage_SumsRequestsToolCallsAndTokens(t *testing.T) {
 	}
 }
 
+// TestCollectCapabilityBridgeUsage_GroupsToolTargetsAndModels verifies that
+// collectCapabilityBridgeUsage aggregates capability bridge tool_use events
+// from the task trace into per-tool, per-target, per-model buckets.
+//
+// The test seeds two task results with overlapping tool calls (a resource
+// read for project.get and a prompt get for project_overview) and asserts
+// the resulting usage slice contains three grouped entries covering the
+// shared targets and the model-specific call counts. This protects the
+// report from losing capability bridge utilisation metrics.
 func TestCollectCapabilityBridgeUsage_GroupsToolTargetsAndModels(t *testing.T) {
 	results := []taskResult{
 		{
@@ -5565,6 +5595,14 @@ func TestWriteReportHeader_MetaTitle(t *testing.T) {
 	})
 }
 
+// TestWriteReportHeader_ResourceAccessState verifies that writeReportHeader
+// emits the correct "Resource access" label for each of the three states the
+// evaluator can produce: disabled, requested-but-not-active, and enabled.
+//
+// The test uses table-driven subtests to assert the exact label text in the
+// rendered header for each option combination. This protects the report
+// header from regressing to a single label that hides whether the run
+// actually exposed MCP resources.
 func TestWriteReportHeader_ResourceAccessState(t *testing.T) {
 	tests := []struct {
 		name string
@@ -5585,6 +5623,15 @@ func TestWriteReportHeader_ResourceAccessState(t *testing.T) {
 	}
 }
 
+// TestProbeCapabilityBridgeSupport_RequiresAdvertisedResources verifies that
+// probeCapabilityBridgeSupport returns Resources=true only when the MCP session
+// advertises the resources capability.
+//
+// The test calls the helper with two sessions: one without the resources
+// capability and one with it, and asserts the bool flag flips correctly.
+// This protects the runtime from enabling the capability bridge tools
+// against servers that cannot serve them, which would otherwise produce
+// empty responses and noisy trace events.
 func TestProbeCapabilityBridgeSupport_RequiresAdvertisedResources(t *testing.T) {
 	if support := probeCapabilityBridgeSupport(newProjectGetSession(t)); support.Resources {
 		t.Fatalf("probeCapabilityBridgeSupport().Resources = true for session without resources capability, want false; support = %+v", support)

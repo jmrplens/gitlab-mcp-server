@@ -10,7 +10,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestAssertEmbeddedResource_TogglesEmbeddedContent verifies AssertEmbeddedResource checks enabled and disabled embed states.
+// TestAssertEmbeddedResource_TogglesEmbeddedContent drives
+// [AssertEmbeddedResource] through a complete enabled/disabled cycle to make
+// sure both subtests pass and the toggle is restored to enabled afterwards.
+//
+// The test spins up an in-memory MCP server whose "test_embed" tool embeds
+// a JSON resource, connects a client session over [mcp.NewInMemoryTransports],
+// and hands the session to AssertEmbeddedResource together with the real
+// [toolutil.EnableEmbeddedResources] toggle. After the assertion the test
+// re-checks [toolutil.EmbeddedResourcesEnabled] so the suite leaves the
+// global flag in its production default state.
 func TestAssertEmbeddedResource_TogglesEmbeddedContent(t *testing.T) {
 	const resourceURI = "gitlab://test/resources/1"
 
@@ -45,8 +54,14 @@ func TestAssertEmbeddedResource_TogglesEmbeddedContent(t *testing.T) {
 	}
 }
 
-// TestFirstEmbeddedResource_Found verifies the helper returns the first
-// EmbeddedResource content block from a result.
+// TestFirstEmbeddedResource_Found confirms that [firstEmbeddedResource]
+// returns the first [*mcp.EmbeddedResource] in the content slice when one is
+// present.
+//
+// The test builds a result containing a text block followed by an embedded
+// resource, calls the helper, and asserts that the returned pointer equals
+// the embedded resource we constructed. It protects against regressions
+// where non-embedded content blocks would be returned instead.
 func TestFirstEmbeddedResource_Found(t *testing.T) {
 	embed := &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: "u", MIMEType: "application/json"}}
 	result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "x"}, embed}}
@@ -55,8 +70,12 @@ func TestFirstEmbeddedResource_Found(t *testing.T) {
 	}
 }
 
-// TestFirstEmbeddedResource_None verifies the helper returns nil when the
-// result has no EmbeddedResource blocks.
+// TestFirstEmbeddedResource_None confirms that [firstEmbeddedResource]
+// returns nil when the result has no embedded resource blocks.
+//
+// The test constructs a result with only a text content block and verifies
+// that the helper yields a nil pointer rather than panicking or returning
+// a zero value. This guards callers that range over the returned block.
 func TestFirstEmbeddedResource_None(t *testing.T) {
 	result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "x"}}}
 	if got := firstEmbeddedResource(result); got != nil {
@@ -64,9 +83,15 @@ func TestFirstEmbeddedResource_None(t *testing.T) {
 	}
 }
 
-// TestAssertEmbeddedResourcePayload_MismatchFields verifies that the payload
-// assertion helper fails the test when the URI, MIME type, or text payload
-// does not match the expected values.
+// TestAssertEmbeddedResourcePayload_MismatchFields is a table-driven check
+// that [assertEmbeddedResourcePayload] records a failure for each kind of
+// embedded-resource mismatch the helper guards against.
+//
+// Each subtest feeds a hand-crafted [*mcp.ResourceContents] whose URI,
+// MIME type, or Text field disagrees with the expected values, then verifies
+// that the helper marked a sentinel [*testing.T] as failed. The cases cover
+// URI mismatch, MIME type mismatch, and an empty Text payload — the three
+// failure modes a real MCP server response can produce.
 func TestAssertEmbeddedResourcePayload_MismatchFields(t *testing.T) {
 	tests := []struct {
 		name      string

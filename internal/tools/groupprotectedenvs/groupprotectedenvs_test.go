@@ -1,3 +1,4 @@
+// groupprotectedenvs_test.go contains unit tests for the GitLab group protected environment MCP tool handlers.
 package groupprotectedenvs
 
 import (
@@ -29,8 +30,9 @@ const fullEnvJSON = `{
 
 // --- List tests ---
 
-// TestList covers success, pagination, empty results, API errors, context
-// cancellation, and missing group_id validation for the List handler.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -124,8 +126,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_FullOutputFields verifies that List correctly maps deploy access
-// levels and approval rules from the API response.
+// TestList_FullOutputFields verifies the List_FullOutputFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_FullOutputFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+fullEnvJSON+`]`)
@@ -154,8 +157,9 @@ func TestList_FullOutputFields(t *testing.T) {
 
 // --- Get tests ---
 
-// TestGet covers success, API errors, context cancellation, and missing field
-// validation for the Get handler.
+// TestGet verifies the Get handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -227,8 +231,9 @@ func TestGet(t *testing.T) {
 
 // --- Protect tests ---
 
-// TestProtect covers success (with and without access levels/rules),
-// API errors, context cancellation, and input validation.
+// TestProtect verifies the Protect handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtect(t *testing.T) {
 	accessLevel30 := 30
 	accessLevel40 := 40
@@ -346,8 +351,9 @@ func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
 
 // --- Update tests ---
 
-// TestUpdate covers success (with/without rename, access levels, rules),
-// API errors, context cancellation, and input validation.
+// TestUpdate verifies the Update handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate(t *testing.T) {
 	accessLevel40 := 40
 	accessLevel30 := 30
@@ -445,7 +451,9 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_NotFoundIncludesActionableHint verifies validation-like update errors include tier and merge guidance.
+// TestUpdate_NotFoundIncludesActionableHint verifies that Update_NotFoundIncludesActionableHint returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPut)
@@ -466,8 +474,9 @@ func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
 
 // --- Unprotect tests ---
 
-// TestUnprotect covers success, API errors, context cancellation, and input
-// validation for the Unprotect handler.
+// TestUnprotect verifies the Unprotect handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUnprotect(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -532,7 +541,9 @@ func TestUnprotect(t *testing.T) {
 	}
 }
 
-// TestUnprotect_ServerErrorUsesGenericMessage verifies non-auth/not-found failures use the generic mutating error path.
+// TestUnprotect_ServerErrorUsesGenericMessage verifies that Unprotect_ServerErrorUsesGenericMessage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUnprotect_ServerErrorUsesGenericMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodDelete)
@@ -551,8 +562,9 @@ func TestUnprotect_ServerErrorUsesGenericMessage(t *testing.T) {
 
 // --- Markdown formatter tests ---
 
-// TestFormatOutputMarkdown verifies the single-environment markdown renderer
-// including deploy access levels and approval rules tables.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -605,8 +617,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoTables verifies the markdown renderer omits
-// table sections when there are no deploy access levels or approval rules.
+// TestFormatOutputMarkdown_NoTables verifies the OutputMarkdown_NoTables Markdown formatter for a representative output_notables input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoTables(t *testing.T) {
 	got := FormatOutputMarkdown(Output{Name: "dev", RequiredApprovalCount: 0})
 	if strings.Contains(got, "### Deploy Access Levels") {
@@ -617,8 +630,9 @@ func TestFormatOutputMarkdown_NoTables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the list markdown renderer including the
-// empty-list case and populated environments.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -666,7 +680,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_RoundTrip verifies that all group protected environment routes execute successfully.
+// TestActionSpecs_RoundTrip validates the RoundTrip route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_RoundTrip(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/mygroup/protected_environments", func(w http.ResponseWriter, _ *http.Request) {

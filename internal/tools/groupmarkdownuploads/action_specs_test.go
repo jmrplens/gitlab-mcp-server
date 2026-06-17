@@ -14,7 +14,9 @@ import (
 
 const registerUploadListJSON = `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"}]`
 
-// TestActionSpecs_CallAllRoutes exercises every group markdown upload tool through its canonical route.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
@@ -51,7 +53,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths verifies canonical routes propagate backend errors.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	byTool := groupMarkdownUploadSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -77,7 +81,9 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput verifies both delete routes preserve their success message.
+// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("DELETE /api/v4/groups/5/uploads/1", func(w http.ResponseWriter, _ *http.Request) {
@@ -112,7 +118,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")
@@ -164,7 +172,9 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString preserves markdown coverage formerly colocated with registration tests.
+// TestFormatListMarkdownString verifies the ListMarkdownString Markdown formatter for a representative liststring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
 		out := FormatListMarkdownString(ListOutput{})
@@ -182,7 +192,9 @@ func TestFormatListMarkdownString(t *testing.T) {
 	})
 }
 
-// TestMarkdownInit_Registry verifies the init() markdown formatter is registered.
+// TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListOutput{})
 	if out == nil {

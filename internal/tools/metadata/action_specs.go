@@ -5,17 +5,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ActionSpecs returns canonical specs for metadata tools.
+// ActionSpecs returns canonical specs for metadata actions exposed as
+// MCP tools. The single get route is projected into the dynamic,
+// meta, individual, and audit surfaces by the action catalog
+// (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_metadata — read the GitLab instance metadata.
 		metadataReadSpec("metadata_get", toolutil.RouteAction(client, Get), "gitlab_get_metadata"),
 	}
 }
 
+// metadataReadSpec builds a read-only [toolutil.ActionSpec] for the
+// metadata get action using the package's default [metadataOptions].
 func metadataReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, metadataOptions(individualTool))
 }
 
+// metadataOptions returns the base [toolutil.ActionSpecOptions] for
+// the metadata action, with rich aliases and a custom
+// IndividualTool.Description.
 func metadataOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases:        []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"},

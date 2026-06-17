@@ -7,16 +7,23 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// EmbedToggle is the signature of the toolutil.EnableEmbeddedResources
-// setter, declared here so testutil can drive the toggle without importing
-// toolutil (which would create an import cycle through other packages).
+// EmbedToggle is the signature of the [toolutil.EnableEmbeddedResources]
+// setter. testutil reproduces the type locally so callers can drive the
+// embedded-resource global flag without importing toolutil (which would
+// introduce an import cycle through the tool sub-packages).
 type EmbedToggle func(bool)
 
-// AssertEmbeddedResource invokes the named tool with args twice: first with
-// the embed toggle enabled (expecting an *mcp.EmbeddedResource block whose
-// URI matches wantURI and MIME type is application/json), then with the
-// toggle disabled (expecting no EmbeddedResource blocks). The toggle is
-// always restored to enabled (the production default) on test exit.
+// AssertEmbeddedResource verifies that an MCP tool behaves correctly under
+// both states of the embedded-resource toggle. It invokes the named tool via
+// session twice:
+//
+//  1. With toggle(true) — expects an [*mcp.EmbeddedResource] block whose
+//     URI matches wantURI and whose MIME type is "application/json".
+//  2. With toggle(false) — expects no EmbeddedResource blocks.
+//
+// The toggle is always restored to its enabled (production default) state on
+// test exit via [testing.T.Cleanup]. The test fails the surrounding run if
+// either subtest fails.
 //
 //nolint:revive // *testing.T is conventionally the first parameter for test helpers.
 func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.ClientSession, name string, args map[string]any, wantURI string, toggle EmbedToggle) {
@@ -41,6 +48,8 @@ func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.Clie
 	})
 }
 
+// callToolSuccessfully invokes an MCP tool and fails the test on transport
+// error or IsError=true. It returns the successful [*mcp.CallToolResult].
 func callToolSuccessfully(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
@@ -53,6 +62,8 @@ func callToolSuccessfully(ctx context.Context, t *testing.T, session *mcp.Client
 	return result
 }
 
+// firstEmbeddedResource returns the first [*mcp.EmbeddedResource] in result's
+// content slice, or nil if the result contains no embedded resource blocks.
 func firstEmbeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
 	for _, content := range result.Content {
 		if embedded, ok := content.(*mcp.EmbeddedResource); ok {
@@ -62,6 +73,9 @@ func firstEmbeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
 	return nil
 }
 
+// assertEmbeddedResourcePayload checks that resource has wantURI, MIME type
+// "application/json", and a non-empty Text payload. Mismatches are recorded
+// via t.Errorf so a single subtest can report every problem at once.
 func assertEmbeddedResourcePayload(t *testing.T, resource *mcp.ResourceContents, wantURI string) {
 	t.Helper()
 	if resource.URI != wantURI {

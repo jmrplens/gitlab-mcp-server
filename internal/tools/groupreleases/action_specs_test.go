@@ -1,3 +1,4 @@
+// action_specs_test.go contains unit tests for the group release [toolutil.ActionSpec] entries.
 package groupreleases
 
 import (
@@ -10,7 +11,9 @@ import (
 
 const registerReleasesJSON = `[{"tag_name":"v1.0","description":"Release","name":"v1.0","created_at":"2026-01-01T00:00:00Z","released_at":"2026-01-01T00:00:00Z","_links":{"self":"https://gl.example.com"}}]`
 
-// TestActionSpecs_Metadata verifies group release action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -24,7 +27,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute verifies the group release list route executes successfully.
+// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

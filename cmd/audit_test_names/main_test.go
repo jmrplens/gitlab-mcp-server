@@ -1,3 +1,9 @@
+// main_test.go covers the audit_test_names command's classification rules
+// and CSV/stderr output contract.
+//
+// Tests use table-driven cases for the naming heuristics and exercise the
+// scanner with temporary Go sources to verify subtest filtering, hidden
+// helpers, Benchmark/TestMain exclusion, and the legacy section marks.
 package main
 
 import (

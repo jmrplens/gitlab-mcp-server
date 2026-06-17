@@ -25,7 +25,9 @@ const (
 
 // ---------- List ----------.
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupVars {
@@ -51,7 +53,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies List when missing group ID.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -65,7 +69,9 @@ func TestList_MissingGroupID(t *testing.T) {
 
 // ---------- Get ----------.
 
-// TestGet_Success verifies Get when success.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
@@ -87,7 +93,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_WithEnvironmentScope verifies Get when with environment scope.
+// TestGet_WithEnvironmentScope verifies the Get_WithEnvironmentScope handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
@@ -107,7 +115,9 @@ func TestGet_WithEnvironmentScope(t *testing.T) {
 	}
 }
 
-// TestGet_MissingKey verifies Get when missing key.
+// TestGet_MissingKey verifies that Get_MissingKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -121,7 +131,9 @@ func TestGet_MissingKey(t *testing.T) {
 
 // ---------- Create ----------.
 
-// TestCreate_Success verifies Create when success.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupVars {
@@ -140,7 +152,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingValue verifies Create when missing value.
+// TestCreate_MissingValue verifies that Create_MissingValue returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingValue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -152,7 +166,9 @@ func TestCreate_MissingValue(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingGroupID verifies Create when missing group ID.
+// TestCreate_MissingGroupID verifies that Create_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -166,7 +182,9 @@ func TestCreate_MissingGroupID(t *testing.T) {
 
 // ---------- Update ----------.
 
-// TestUpdate_Success verifies Update when success.
+// TestUpdate_Success verifies that Update succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
@@ -185,7 +203,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingKey verifies Update when missing key.
+// TestUpdate_MissingKey verifies that Update_MissingKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -199,7 +219,9 @@ func TestUpdate_MissingKey(t *testing.T) {
 
 // ---------- Delete ----------.
 
-// TestDelete_Success verifies Delete when success.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathVar1 {
@@ -215,7 +237,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID verifies Delete when missing group ID.
+// TestDelete_MissingGroupID verifies that Delete_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -227,7 +251,9 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingKey verifies Delete when missing key.
+// TestDelete_MissingKey verifies that Delete_MissingKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -241,7 +267,9 @@ func TestDelete_MissingKey(t *testing.T) {
 
 // ---------- Formatters ----------.
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}
 	md := FormatOutputMarkdown(out)
@@ -250,7 +278,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Masked verifies FormatOutputMarkdown when masked.
+// TestFormatOutputMarkdown_Masked verifies the OutputMarkdown_Masked Markdown formatter for a representative output_masked input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Masked(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", Masked: true, VariableType: "env_var"}
 	md := FormatOutputMarkdown(out)
@@ -259,7 +289,9 @@ func TestFormatOutputMarkdown_Masked(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty_NilVariables verifies FormatListMarkdown with nil Variables slice.
+// TestFormatListMarkdown_Empty_NilVariables verifies the ListMarkdown_Empty_NilVariables Markdown formatter for a representative list_empty_nilvariables input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty_NilVariables(t *testing.T) {
 	out := ListOutput{
 		Variables:  nil,
@@ -271,7 +303,9 @@ func TestFormatListMarkdown_Empty_NilVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Variables:  []Output{{Key: "MY_VAR", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}},
@@ -298,7 +332,9 @@ const errExpectedCtxCancelled = "expected canceled context error, got nil"
 // List — API error, canceled context, pagination parameters, empty result
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies List when API error.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -309,7 +345,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies List when cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -321,7 +359,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/groups/42/variables (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/variables" && r.Method == http.MethodGet {
@@ -358,7 +398,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies List when empty result.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The mock GitLab API at /api/v4/groups/10/variables (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables" && r.Method == http.MethodGet {
@@ -381,7 +423,9 @@ func TestList_EmptyResult(t *testing.T) {
 // Get — API error, canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -392,7 +436,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies Get when cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -404,7 +450,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID verifies Get when missing group ID.
+// TestGet_MissingGroupID verifies that Get_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -419,7 +467,9 @@ func TestGet_MissingGroupID(t *testing.T) {
 // Create — API error, canceled context, missing key, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_APIError verifies Create when API error.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -430,7 +480,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_BadRequest verifies invalid key/environment-scope hints.
+// TestCreate_BadRequest verifies the Create_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
@@ -444,7 +496,9 @@ func TestCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies Create when cancelled context.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -456,7 +510,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingKey verifies Create when missing key.
+// TestCreate_MissingKey verifies that Create_MissingKey returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -467,7 +523,9 @@ func TestCreate_MissingKey(t *testing.T) {
 	}
 }
 
-// TestCreate_AllOptionalFields verifies Create when all optional fields.
+// TestCreate_AllOptionalFields verifies the Create_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/10/variables (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables" && r.Method == http.MethodPost {
@@ -518,7 +576,9 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, canceled context, missing group_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_APIError verifies Update when API error.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -529,7 +589,9 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_NotFound verifies missing variable hints.
+// TestUpdate_NotFound verifies that Update_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -543,7 +605,9 @@ func TestUpdate_NotFound(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies Update when cancelled context.
+// TestUpdate_CancelledContext verifies the Update_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -555,7 +619,9 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingGroupID verifies Update when missing group ID.
+// TestUpdate_MissingGroupID verifies that Update_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -566,7 +632,9 @@ func TestUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies Update when all optional fields.
+// TestUpdate_AllOptionalFields verifies the Update_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/10/variables/DB_HOST (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -618,7 +686,9 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, canceled context, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestDelete_APIError verifies Delete when API error.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -629,7 +699,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_NotFound verifies already-deleted variable hints.
+// TestDelete_NotFound verifies that Delete_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -643,7 +715,9 @@ func TestDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies Delete when cancelled context.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -655,7 +729,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_WithEnvironmentScope verifies Delete when with environment scope.
+// TestDelete_WithEnvironmentScope verifies the Delete_WithEnvironmentScope handler.
+// The mock GitLab API at /api/v4/groups/10/variables/DB_HOST (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestDelete_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -679,7 +755,9 @@ func TestDelete_WithEnvironmentScope(t *testing.T) {
 // FormatOutputMarkdown — empty key, full unmasked, masked, hidden, no desc
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyKey verifies FormatOutputMarkdown when empty key.
+// TestFormatOutputMarkdown_EmptyKey verifies the OutputMarkdown_EmptyKey Markdown formatter for a representative output_emptykey input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -687,7 +765,9 @@ func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_FullUnmasked verifies FormatOutputMarkdown when full unmasked.
+// TestFormatOutputMarkdown_FullUnmasked verifies the OutputMarkdown_FullUnmasked Markdown formatter for a representative output_fullunmasked input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "DB_HOST",
@@ -720,7 +800,9 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MaskedValue verifies FormatOutputMarkdown when masked value.
+// TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SECRET",
@@ -738,7 +820,9 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_HiddenValue verifies FormatOutputMarkdown when hidden value.
+// TestFormatOutputMarkdown_HiddenValue verifies the OutputMarkdown_HiddenValue Markdown formatter for a representative output_hiddenvalue input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "TOKEN",
@@ -756,7 +840,9 @@ func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown when no description.
+// TestFormatOutputMarkdown_NoDescription verifies the OutputMarkdown_NoDescription Markdown formatter for a representative output_nodescription input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SIMPLE",
@@ -774,7 +860,9 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // FormatListMarkdown — with variables, empty, escape table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies FormatListMarkdown when with variables.
+// TestFormatListMarkdown_WithVariables verifies the ListMarkdown_WithVariables Markdown formatter for a representative list_withvariables input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -800,7 +888,9 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No group CI/CD variables found") {
@@ -811,7 +901,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies FormatListMarkdown when escapes table cells.
+// TestFormatListMarkdown_EscapesTableCells verifies the ListMarkdown_EscapesTableCells Markdown formatter for a representative list_escapestablecells input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{

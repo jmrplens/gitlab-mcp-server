@@ -139,8 +139,13 @@ func retryWithBackoffInterval[O any](ctx context.Context, t *testing.T, label st
 	return output, fmt.Errorf("%s failed without executing retry operation", label)
 }
 
-// TestPoll_ImmediateSuccess verifies that Poll returns immediately when the
-// condition reports success on the first call.
+// TestPoll_ImmediateSuccess verifies that Poll returns immediately when
+// the condition reports success on the first call.
+//
+// The test calls Poll with a 1-second budget and a condition that returns
+// (true, "ready", nil) on its first invocation. The assertion is that
+// Poll returns nil error and the condition ran exactly once, with no
+// extra sleep before returning.
 func TestPoll_ImmediateSuccess(t *testing.T) {
 	calls := 0
 	err := Poll(context.Background(), time.Millisecond, time.Second, func() (bool, string, error) {
@@ -155,8 +160,14 @@ func TestPoll_ImmediateSuccess(t *testing.T) {
 	}
 }
 
-// TestPoll_RetrySuccess verifies that Poll keeps evaluating retryable state
-// observations until a later condition call reports success.
+// TestPoll_RetrySuccess verifies that Poll keeps evaluating retryable
+// state observations until a later condition call reports success.
+//
+// The test calls Poll with a 100ms budget and a condition that returns
+// (false, "attempt N", nil) for the first two calls and (true, "ready",
+// nil) on the third. The assertion is that Poll returns nil and the
+// condition ran three times, exercising the inner wait loop without
+// triggering the timeout path.
 func TestPoll_RetrySuccess(t *testing.T) {
 	calls := 0
 	err := Poll(context.Background(), time.Millisecond, 100*time.Millisecond, func() (bool, string, error) {
@@ -213,6 +224,11 @@ func TestPoll_ReturnsTimeoutWithLastState(t *testing.T) {
 
 // TestPoll_ReturnsConditionError verifies that Poll stops and returns a
 // non-retryable condition error unchanged for [errors.Is] checks.
+//
+// The test calls Poll with a condition that always returns
+// (false, "failed", conditionErr). The assertion is that Poll returns
+// the original error wrapped only by Go's standard error chain, so
+// callers can use [errors.Is] to match the underlying sentinel.
 func TestPoll_ReturnsConditionError(t *testing.T) {
 	conditionErr := errors.New("condition failed")
 	err := Poll(context.Background(), time.Millisecond, time.Second, func() (bool, string, error) {
@@ -224,8 +240,15 @@ func TestPoll_ReturnsConditionError(t *testing.T) {
 	}
 }
 
-// TestRetryWithBackoffInterval_RetrySuccess verifies that retryWithBackoffInterval
-// retries a retryable failure and returns the later successful result.
+// TestRetryWithBackoffInterval_RetrySuccess verifies that
+// retryWithBackoffInterval retries a retryable failure and returns the
+// later successful result.
+//
+// The test calls retryWithBackoffInterval with maxRetries=3 and a
+// 1ms base delay. The operation marks its first call as retryable and
+// returns success on the second call. The assertion is that the
+// function returns (42, nil) and the operation ran exactly twice,
+// exercising the retry path without exhausting the budget.
 func TestRetryWithBackoffInterval_RetrySuccess(t *testing.T) {
 	attempts := 0
 	result, err := retryWithBackoffInterval(context.Background(), t, "retry test", 3, time.Millisecond, func(int) (int, bool, string, error) {

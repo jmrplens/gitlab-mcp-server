@@ -1,3 +1,9 @@
+// main_test.go covers the gen_docker_tools generator output for the
+// Docker MCP Registry.
+//
+// Tests verify default base, enterprise, and individual surface emission,
+// deterministic property sorting, schema normalization, and error
+// propagation when stdout or flags reject writes.
 package main
 
 import (

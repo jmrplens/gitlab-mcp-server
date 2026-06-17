@@ -1,10 +1,11 @@
 //go:build e2e
 
-package suite
-
 // setup_test.go contains the main E2E test infrastructure: [TestMain], six
-// in-process MCP server/client pairs, snapshot guardrails for self-hosted mode,
-// and shared helpers used across all domain test files.
+// in-process MCP server/client pairs, snapshot guardrails for self-hosted
+// mode, and shared helpers used across all domain test files.
+//
+// Build tag: e2e.
+package suite
 
 import (
 	"context"

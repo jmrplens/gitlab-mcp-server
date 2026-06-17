@@ -5,9 +5,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ActionSpecs returns canonical specs for Model Registry actions.
+// ActionSpecs returns canonical specs for Model Registry actions
+// exposed as MCP tools. The download route is projected into the
+// dynamic, meta, individual, and audit surfaces by the action catalog
+// (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_download_ml_model_package — download a file from a model package version.
 		toolutil.NewReadActionSpec("download", toolutil.RouteAction(client, Download), toolutil.ActionSpecOptions{
 			Aliases:        []string{"gitlab_download_ml_model_package"},
 			Tags:           []string{"model_registry", "package", "download"},

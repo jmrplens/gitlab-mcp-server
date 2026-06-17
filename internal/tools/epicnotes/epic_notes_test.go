@@ -102,8 +102,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
-// TestResolveWorkItemGID_ErrorPaths verifies GraphQL and missing-epic errors
-// while resolving an epic work item GID.
+// TestResolveWorkItemGID_ErrorPaths verifies that ResolveWorkItemGIDPaths returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -140,8 +141,9 @@ func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestList validates List handler across success, validation, API error,
-// empty results, and context cancellation scenarios.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -286,8 +288,9 @@ func assertEpicNote(t *testing.T, got Output, wantID int64, wantBody, wantAuthor
 	}
 }
 
-// TestGet validates Get handler across success, all validation errors,
-// API errors, and context cancellation.
+// TestGet verifies the Get handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -408,8 +411,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestCreate validates Create handler across success, all validation errors,
-// API errors, and context cancellation.
+// TestCreate verifies the Create handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -536,8 +540,9 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestUpdate validates Update handler across success, all validation errors,
-// API errors, and context cancellation.
+// TestUpdate verifies the Update handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -648,8 +653,9 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestDelete validates Delete handler across success, all validation errors,
-// API errors, and context cancellation.
+// TestDelete verifies the Delete handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -731,8 +737,9 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown validates Markdown rendering of a single epic
-// note, covering both regular and system notes.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -785,8 +792,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown validates Markdown rendering of a paginated list
-// of epic notes, including the zero-notes scenario.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

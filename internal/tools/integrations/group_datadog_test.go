@@ -32,8 +32,9 @@ func matchGroupDatadogPath(path string) bool {
 
 // GetGroupDatadog.
 
-// TestGetGroupDatadog_Success verifies GetGroupDatadog when the API returns a
-// full payload.
+// TestGetGroupDatadog_Success verifies that GetGroupDatadog succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroupDatadog_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodGet {
@@ -82,7 +83,9 @@ func TestGetGroupDatadog_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupDatadog_NotFound verifies the 404 status hint.
+// TestGetGroupDatadog_NotFound verifies that GetGroupDatadog_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroupDatadog_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -97,7 +100,9 @@ func TestGetGroupDatadog_NotFound(t *testing.T) {
 	}
 }
 
-// TestGetGroupDatadog_Forbidden verifies the 403 status hint.
+// TestGetGroupDatadog_Forbidden verifies the GetGroupDatadog_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroupDatadog_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -185,8 +190,9 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 	}
 }
 
-// TestSetGroupDatadog_UseInheritedSettings verifies that supplying only the
-// use_inherited_settings flag is enough to satisfy the validation guard.
+// TestSetGroupDatadog_UseInheritedSettings verifies the SetGroupDatadog_UseInheritedSettings handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetGroupDatadog_UseInheritedSettings(t *testing.T) {
 	inherited := true
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,8 +212,9 @@ func TestSetGroupDatadog_UseInheritedSettings(t *testing.T) {
 	}
 }
 
-// TestSetGroupDatadog_EmptyInputRejected verifies the validation guard when
-// the caller supplies no Datadog fields.
+// TestSetGroupDatadog_EmptyInputRejected verifies the SetGroupDatadog_EmptyInputRejected handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetGroupDatadog_EmptyInputRejected(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("transport should not be called when input is empty")
@@ -250,7 +257,9 @@ func TestSetGroupDatadog_NilIntegration(t *testing.T) {
 	}
 }
 
-// TestSetGroupDatadog_Forbidden verifies the 403 status hint.
+// TestSetGroupDatadog_Forbidden verifies the SetGroupDatadog_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetGroupDatadog_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -271,8 +280,9 @@ func TestSetGroupDatadog_Forbidden(t *testing.T) {
 
 // DeleteGroupDatadog.
 
-// TestDeleteGroupDatadog_Success verifies DeleteGroupDatadog returns no error
-// when the API responds 204.
+// TestDeleteGroupDatadog_Success verifies that DeleteGroupDatadog succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroupDatadog_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodDelete {
@@ -287,7 +297,9 @@ func TestDeleteGroupDatadog_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupDatadog_Forbidden verifies the 403 status hint.
+// TestDeleteGroupDatadog_Forbidden verifies the DeleteGroupDatadog_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroupDatadog_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -300,14 +312,18 @@ func TestDeleteGroupDatadog_Forbidden(t *testing.T) {
 
 // groupDatadogToItem.
 
-// TestGroupDatadogToItem_Nil verifies the nil-input contract.
+// TestGroupDatadogToItem_Nil verifies the GroupDatadogToItem_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupDatadogToItem_Nil(t *testing.T) {
 	if got := groupDatadogToItem(nil); got != (GroupDatadogItem{}) {
 		t.Errorf("got = %+v, want zero value", got)
 	}
 }
 
-// TestGroupDatadogToItem_AllFields verifies every field is copied.
+// TestGroupDatadogToItem_AllFields verifies the GroupDatadogToItem_AllFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupDatadogToItem_AllFields(t *testing.T) {
 	archive := true
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
@@ -347,7 +363,9 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 	}
 }
 
-// TestGroupDatadogToItem_NilTimestamps verifies the optional timestamp path.
+// TestGroupDatadogToItem_NilTimestamps verifies the GroupDatadogToItem_NilTimestamps handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupDatadogToItem_NilTimestamps(t *testing.T) {
 	got := groupDatadogToItem(&gl.GroupDatadogIntegration{
 		Integration: gl.Integration{ID: 1, Title: "Datadog", Slug: "datadog", Active: true},
@@ -359,8 +377,9 @@ func TestGroupDatadogToItem_NilTimestamps(t *testing.T) {
 
 // Markdown formatters.
 
-// TestFormatGetGroupDatadogMarkdown_Minimal verifies the formatter does not
-// panic on a sparse input.
+// TestFormatGetGroupDatadogMarkdown_Minimal verifies the GetGroupDatadogMarkdown_Minimal Markdown formatter for a representative getgroupdatadog_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetGroupDatadogMarkdown_Minimal(t *testing.T) {
 	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{Integration: GroupDatadogItem{ID: 1, Active: true}})
 	if result == nil {
@@ -377,8 +396,9 @@ func TestFormatGetGroupDatadogMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatGetGroupDatadogMarkdown_Full verifies the formatter renders every
-// populated field.
+// TestFormatGetGroupDatadogMarkdown_Full verifies the GetGroupDatadogMarkdown_Full Markdown formatter for a representative getgroupdatadog_full input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	archive := true
 	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{
@@ -421,7 +441,9 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatSetGroupDatadogMarkdown verifies the set-action formatter.
+// TestFormatSetGroupDatadogMarkdown verifies the SetGroupDatadogMarkdown Markdown formatter for a representative setgroupdatadog input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetGroupDatadogMarkdown(t *testing.T) {
 	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
 		Integration: GroupDatadogItem{ID: 1, Active: true, DatadogSite: testDatadogSite},
@@ -440,8 +462,9 @@ func TestFormatSetGroupDatadogMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatSetGroupDatadogMarkdown_Full exercises every populated
-// field on the set-output formatter (mirrors the get-output Full test).
+// TestFormatSetGroupDatadogMarkdown_Full verifies the SetGroupDatadogMarkdown_Full Markdown formatter for a representative setgroupdatadog_full input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 	archive := true
 	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
@@ -499,8 +522,9 @@ func TestDeleteGroupDatadogOutput_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupDatadogOutput_Forbidden covers the error path of the
-// destructive output wrapper.
+// TestDeleteGroupDatadogOutput_Forbidden verifies the DeleteGroupDatadogOutput_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroupDatadogOutput_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

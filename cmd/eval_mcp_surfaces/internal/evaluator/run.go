@@ -1,4 +1,3 @@
-// Package evaluator implements the eval_mcp_surfaces command workflow.
 package evaluator
 
 import (

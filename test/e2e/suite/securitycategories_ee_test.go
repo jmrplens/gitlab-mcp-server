@@ -19,8 +19,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
 )
 
-// TestMeta_SecurityCategories exercises security category lifecycle
-// (create/update/delete) via the gitlab_security_category meta-tool.
+// TestMeta_SecurityCategories exercises the security category lifecycle
+// (create, update, delete) through the gitlab_security_category meta-tool
+// against a live GitLab EE Ultimate instance.
+//
+// The test walks category_create, category_update, and category_delete via
+// {action, params} arguments through the catalog-backed tool. Each
+// subtest asserts the meta-tool returns the expected category payload and
+// that mutations are observable through subsequent reads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Ultimate.
 func TestMeta_SecurityCategories(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("security categories require GitLab Ultimate")

@@ -72,8 +72,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies list rendering for empty identity lists
-// and populated lists with table headers and hint text.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -142,8 +143,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestToOutput_Nil verifies that toOutput returns a zero-value Output
-// when given a nil GroupSCIMIdentity pointer.
+// TestToOutput_Nil verifies the ToOutput_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_Nil(t *testing.T) {
 	out := toOutput(nil)
 	if out.ExternalUID != "" {

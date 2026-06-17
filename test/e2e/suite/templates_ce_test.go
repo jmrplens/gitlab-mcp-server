@@ -14,7 +14,16 @@ import (
 	markdowntool "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/markdown"
 )
 
-// TestMeta_Templates exercises template listing via the gitlab_template meta-tool.
+// TestMeta_Templates exercises GitLab template listing through the
+// gitlab_template meta-tool against a live GitLab instance.
+//
+// The test walks gitignore_list, gitignore_get, license_list, license_get,
+// ci_yaml_list, and ci_yaml_get subtests via {action, params} arguments
+// through the catalog-backed tool. Each subtest asserts the meta-tool
+// returns the expected template payload and that get operations return
+// non-empty template content.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Templates(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -40,7 +49,15 @@ func TestMeta_Templates(t *testing.T) {
 	})
 }
 
-// TestMeta_MarkdownRender exercises markdown rendering via the gitlab_repository meta-tool.
+// TestMeta_MarkdownRender exercises the markdown rendering action exposed
+// through the gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test submits a sample markdown document to the render action and
+// asserts the meta-tool returns a non-empty HTML payload that includes
+// the rendered headings and links from the input. The test does not create
+// any GitLab resources and runs without a project fixture.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_MarkdownRender(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

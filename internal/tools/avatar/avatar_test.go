@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestGet verifies Get.
+// TestGet verifies the Get handler.
+// The mock GitLab API at /api/v4/avatar (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/avatar" || r.Method != http.MethodGet {
@@ -30,7 +32,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -41,7 +45,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies FormatMarkdown.
+// TestFormatMarkdown verifies the Markdown Markdown formatter for a representative  input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown(t *testing.T) {
 	md := FormatMarkdown(GetOutput{AvatarURL: "https://example.com/avatar.png"})
 	if md == "" {
@@ -51,7 +57,9 @@ func TestFormatMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestGet_APIError_Coverage verifies Get when API error coverage.
+// TestGet_APIError_Coverage verifies that Get_Coverage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
@@ -62,7 +70,9 @@ func TestGet_APIError_Coverage(t *testing.T) {
 	}
 }
 
-// TestGet_Success_Coverage verifies Get when success coverage.
+// TestGet_Success_Coverage verifies the Get_Success_Coverage handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://img.example.com/a.png"}`)
@@ -76,7 +86,9 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Coverage verifies FormatMarkdown when coverage.
+// TestFormatMarkdown_Coverage verifies the Markdown_Coverage Markdown formatter for a representative _coverage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Coverage(t *testing.T) {
 	md := FormatMarkdown(GetOutput{AvatarURL: "https://img.example.com/a.png"})
 	if !strings.Contains(md, "https://img.example.com/a.png") {
@@ -84,7 +96,9 @@ func TestFormatMarkdown_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata_Coverage verifies avatar action spec metadata.
+// TestActionSpecs_Metadata_Coverage validates the Metadata_Coverage route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"x"}`)
@@ -113,7 +127,9 @@ func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute_Coverage verifies the avatar canonical route.
+// TestActionSpecs_CallRoute_Coverage validates the CallRoute_Coverage route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://x.com/a.png"}`)
@@ -130,7 +146,9 @@ func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError covers the avatar canonical route error path.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)

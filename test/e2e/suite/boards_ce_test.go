@@ -3,6 +3,8 @@
 // boards_ce_test.go tests the issue board MCP tools via the gitlab_project
 // meta-tool against a live GitLab instance. Exercises the full board
 // lifecycle: create → list → get → delete.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,7 +15,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/boards"
 )
 
-// TestMeta_Boards exercises issue board CRUD via the gitlab_project meta-tool.
+// TestMeta_Boards exercises issue board CRUD via the gitlab_project
+// meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture, runs board_create, board_list,
+// board_get, and board_delete as subtests against the catalog-backed
+// gitlab_project tool, and asserts each step's expected ID round-trips.
+// Cleanup relies on the explicit delete subtest; project removal is
+// handled by the per-test resource ledger.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Boards(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

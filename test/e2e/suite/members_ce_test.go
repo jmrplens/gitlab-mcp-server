@@ -3,6 +3,8 @@
 // members_ce_test.go tests the project member MCP tools against a live GitLab
 // instance. Covers member listing and retrieval of the project owner for both
 // individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,8 +15,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/members"
 )
 
-// TestIndividual_Members exercises project member tools: list members and get
-// the owner member by ID. Asserts at least one member (the project owner) exists.
+// TestIndividual_Members exercises project member tools: list members and
+// get the owner member by ID. Asserts at least one member (the project
+// owner) exists.
+//
+// The test creates a project fixture and runs two subtests. The first lists
+// project members and asserts the list contains at least one entry (the
+// project owner, who is always present). The second fetches that owner by
+// member ID and asserts the round-trip.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Members(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -56,6 +66,13 @@ func TestIndividual_Members(t *testing.T) {
 
 // TestMeta_Members exercises project member tools via the gitlab_project
 // meta-tool with members and member_get actions.
+//
+// The test mirrors [TestIndividual_Members] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_project
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Members(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -65,8 +65,9 @@ func TestFileGet_Success(t *testing.T) {
 	}
 }
 
-// TestFileGet_NotFound verifies that fileGet returns an error when the
-// requested file does not exist in the repository. The mock returns HTTP 404.
+// TestFileGet_NotFound verifies that FileGet_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 File Not Found"}`)
@@ -182,8 +183,9 @@ func TestFileGet_ImageFile(t *testing.T) {
 	}
 }
 
-// TestFileGet_BinaryFile verifies that fileGet detects binary files by extension,
-// empties Content, and sets ContentCategory="binary".
+// TestFileGet_BinaryFile verifies the FileGet_BinaryFile handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileGet_BinaryFile(t *testing.T) {
 	rawPDF := []byte("%PDF-1.4 fake content")
 	b64 := base64.StdEncoding.EncodeToString(rawPDF)
@@ -225,8 +227,9 @@ func TestFileGet_BinaryFile(t *testing.T) {
 	}
 }
 
-// TestFileGet_TextContentCategory verifies that regular text files get
-// ContentCategory="text" and ImageData remains nil.
+// TestFileGet_TextContentCategory verifies the FileGet_TextContentCategory handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileGet_TextContentCategory(t *testing.T) {
 	content := "package main\n"
 	b64 := base64.StdEncoding.EncodeToString([]byte(content))
@@ -264,7 +267,9 @@ func TestFileGet_TextContentCategory(t *testing.T) {
 // CreateFile
 // ---------------------------------------------------------------------------.
 
-// TestFileCreate_Success verifies FileCreate when success.
+// TestFileCreate_Success verifies that FileCreate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/new_file.txt (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestFileCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/files/new_file.txt" {
@@ -292,7 +297,9 @@ func TestFileCreate_Success(t *testing.T) {
 	}
 }
 
-// TestFileCreate_EmptyProjectID verifies FileCreate when empty project ID.
+// TestFileCreate_EmptyProjectID verifies the FileCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -304,7 +311,9 @@ func TestFileCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestFileCreate_MissingBranch verifies FileCreate when missing branch.
+// TestFileCreate_MissingBranch verifies that FileCreate_MissingBranch returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileCreate_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -320,7 +329,9 @@ func TestFileCreate_MissingBranch(t *testing.T) {
 // UpdateFile
 // ---------------------------------------------------------------------------.
 
-// TestFileUpdate_Success verifies FileUpdate when success.
+// TestFileUpdate_Success verifies that FileUpdate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestFileUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/repository/files/main.go" {
@@ -345,7 +356,9 @@ func TestFileUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_EmptyProjectID verifies FileUpdate when empty project ID.
+// TestFileUpdate_EmptyProjectID verifies the FileUpdate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileUpdate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -361,7 +374,9 @@ func TestFileUpdate_EmptyProjectID(t *testing.T) {
 // DeleteFile
 // ---------------------------------------------------------------------------.
 
-// TestFileDelete_Success verifies FileDelete when success.
+// TestFileDelete_Success verifies that FileDelete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/old_file.txt (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestFileDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/files/old_file.txt" {
@@ -382,7 +397,9 @@ func TestFileDelete_Success(t *testing.T) {
 	}
 }
 
-// TestFileDelete_EmptyProjectID verifies FileDelete when empty project ID.
+// TestFileDelete_EmptyProjectID verifies the FileDelete_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -398,7 +415,9 @@ func TestFileDelete_EmptyProjectID(t *testing.T) {
 // GetFileBlame
 // ---------------------------------------------------------------------------.
 
-// TestFileBlame_Success verifies FileBlame when success.
+// TestFileBlame_Success verifies that FileBlame succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go/blame (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestFileBlame_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/blame" {
@@ -431,7 +450,9 @@ func TestFileBlame_Success(t *testing.T) {
 	}
 }
 
-// TestFileBlame_EmptyProjectID verifies FileBlame when empty project ID.
+// TestFileBlame_EmptyProjectID verifies the FileBlame_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileBlame_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -447,7 +468,9 @@ func TestFileBlame_EmptyProjectID(t *testing.T) {
 // GetFileMetaData
 // ---------------------------------------------------------------------------.
 
-// TestFileMetaData_Success verifies FileMetaData when success.
+// TestFileMetaData_Success verifies that FileMetaData succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go (HEAD) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go" && (r.Method == http.MethodHead || r.Method == http.MethodGet) {
@@ -485,7 +508,9 @@ func TestFileMetaData_Success(t *testing.T) {
 	}
 }
 
-// TestFileMetaData_EmptyProjectID verifies FileMetaData when empty project ID.
+// TestFileMetaData_EmptyProjectID verifies the FileMetaData_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileMetaData_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -501,7 +526,9 @@ func TestFileMetaData_EmptyProjectID(t *testing.T) {
 // GetRawFile
 // ---------------------------------------------------------------------------.
 
-// TestFileGetRaw_Success verifies FileGetRaw when success.
+// TestFileGetRaw_Success verifies that FileGetRaw succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go/raw (GET) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestFileGetRaw_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
@@ -528,7 +555,9 @@ func TestFileGetRaw_Success(t *testing.T) {
 	}
 }
 
-// TestFileGetRaw_EmptyProjectID verifies FileGetRaw when empty project ID.
+// TestFileGetRaw_EmptyProjectID verifies the FileGetRaw_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileGetRaw_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -540,8 +569,9 @@ func TestFileGetRaw_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestFileGetRaw_ImageFile verifies that GetRaw detects image files,
-// stores raw bytes in ImageData, and sets ContentCategory="image".
+// TestFileGetRaw_ImageFile verifies the FileGetRaw_ImageFile handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileGetRaw_ImageFile(t *testing.T) {
 	rawPNG := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 
@@ -576,8 +606,9 @@ func TestFileGetRaw_ImageFile(t *testing.T) {
 	}
 }
 
-// TestFileGetRaw_BinaryFile verifies that GetRaw detects binary files,
-// empties Content, and sets ContentCategory="binary".
+// TestFileGetRaw_BinaryFile verifies the FileGetRaw_BinaryFile handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileGetRaw_BinaryFile(t *testing.T) {
 	rawPDF := []byte("%PDF-1.4 fake content")
 
@@ -610,7 +641,9 @@ func TestFileGetRaw_BinaryFile(t *testing.T) {
 // Canceled-context tests for ALL handlers
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies Get when cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -623,7 +656,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies Create when cancelled context.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -636,7 +671,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies Update when cancelled context.
+// TestUpdate_CancelledContext verifies the Update_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -649,7 +686,9 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies Delete when cancelled context.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -662,7 +701,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBlame_CancelledContext verifies Blame when cancelled context.
+// TestBlame_CancelledContext verifies the Blame_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBlame_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -675,7 +716,9 @@ func TestBlame_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetMetaData_CancelledContext verifies GetMetaData when cancelled context.
+// TestGetMetaData_CancelledContext verifies the GetMetaData_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -688,7 +731,9 @@ func TestGetMetaData_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRaw_CancelledContext verifies GetRaw when cancelled context.
+// TestGetRaw_CancelledContext verifies the GetRaw_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetRaw_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -701,7 +746,9 @@ func TestGetRaw_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_CancelledContext verifies GetRawFileMetaData when cancelled context.
+// TestGetRawFileMetaData_CancelledContext verifies the GetRawFileMetaData_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetRawFileMetaData_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -718,7 +765,9 @@ func TestGetRawFileMetaData_CancelledContext(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestGet_EmptyProjectID verifies Get when empty project ID.
+// TestGet_EmptyProjectID verifies the Get_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -733,7 +782,9 @@ func TestGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies Create when API error.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -747,7 +798,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingCommitMessage verifies Create when missing commit message.
+// TestCreate_MissingCommitMessage verifies that Create_MissingCommitMessage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -762,7 +815,9 @@ func TestCreate_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies Update when API error.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -776,7 +831,9 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingBranch verifies Update when missing branch.
+// TestUpdate_MissingBranch verifies that Update_MissingBranch returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -791,7 +848,9 @@ func TestUpdate_MissingBranch(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingCommitMessage verifies Update when missing commit message.
+// TestUpdate_MissingCommitMessage verifies that Update_MissingCommitMessage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -806,7 +865,9 @@ func TestUpdate_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies Delete when API error.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -820,7 +881,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingBranch verifies Delete when missing branch.
+// TestDelete_MissingBranch verifies that Delete_MissingBranch returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -835,7 +898,9 @@ func TestDelete_MissingBranch(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingCommitMessage verifies Delete when missing commit message.
+// TestDelete_MissingCommitMessage verifies that Delete_MissingCommitMessage returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingCommitMessage(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -850,7 +915,9 @@ func TestDelete_MissingCommitMessage(t *testing.T) {
 	}
 }
 
-// TestBlame_APIError verifies Blame when API error.
+// TestBlame_APIError verifies that Blame returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBlame_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -862,7 +929,9 @@ func TestBlame_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMetaData_APIError verifies GetMetaData when API error.
+// TestGetMetaData_APIError verifies that GetMetaData returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMetaData_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -874,7 +943,9 @@ func TestGetMetaData_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRaw_APIError verifies GetRaw when API error.
+// TestGetRaw_APIError verifies that GetRaw returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetRaw_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -890,7 +961,9 @@ func TestGetRaw_APIError(t *testing.T) {
 // GetRawFileMetaData
 // ---------------------------------------------------------------------------.
 
-// TestGetRawFileMetaData_Success verifies GetRawFileMetaData when success.
+// TestGetRawFileMetaData_Success verifies that GetRawFileMetaData succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go/raw (HEAD) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestGetRawFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" && r.Method == http.MethodHead {
@@ -929,7 +1002,9 @@ func TestGetRawFileMetaData_Success(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_EmptyProjectID verifies GetRawFileMetaData when empty project ID.
+// TestGetRawFileMetaData_EmptyProjectID verifies the GetRawFileMetaData_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetRawFileMetaData_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -944,7 +1019,9 @@ func TestGetRawFileMetaData_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetRawFileMetaData_APIError verifies GetRawFileMetaData when API error.
+// TestGetRawFileMetaData_APIError verifies that GetRawFileMetaData returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetRawFileMetaData_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -962,7 +1039,9 @@ func TestGetRawFileMetaData_APIError(t *testing.T) {
 // Optional fields — Create with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
+// TestCreate_WithAllOptionalFields verifies the Create_WithAllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1009,7 +1088,9 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // Optional fields — Update with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_WithAllOptionalFields verifies Update when with all optional fields.
+// TestUpdate_WithAllOptionalFields verifies the Update_WithAllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1053,7 +1134,9 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 // Optional fields — Delete with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestDelete_WithAllOptionalFields verifies Delete when with all optional fields.
+// TestDelete_WithAllOptionalFields verifies the Delete_WithAllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/old.txt (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_WithAllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/files/old.txt" {
@@ -1082,7 +1165,9 @@ func TestDelete_WithAllOptionalFields(t *testing.T) {
 // Blame with ref and range options
 // ---------------------------------------------------------------------------.
 
-// TestBlame_WithRefAndRange verifies Blame when with ref and range.
+// TestBlame_WithRefAndRange verifies the Blame_WithRefAndRange handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go/blame (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestBlame_WithRefAndRange(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/blame" {
@@ -1129,7 +1214,9 @@ func TestBlame_WithRefAndRange(t *testing.T) {
 // MetaData with ref option
 // ---------------------------------------------------------------------------.
 
-// TestGetMetaData_WithRef verifies GetMetaData when with ref.
+// TestGetMetaData_WithRef verifies the GetMetaData_WithRef handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go (GET) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestGetMetaData_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go" {
@@ -1168,7 +1255,9 @@ func TestGetMetaData_WithRef(t *testing.T) {
 // Raw with ref option
 // ---------------------------------------------------------------------------.
 
-// TestGetRaw_WithRef verifies GetRaw when with ref.
+// TestGetRaw_WithRef verifies the GetRaw_WithRef handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/main.go/raw (GET) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestGetRaw_WithRef(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
@@ -1199,7 +1288,9 @@ func TestGetRaw_WithRef(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	t.Run("empty file path returns empty string", func(t *testing.T) {
 		got := FormatOutputMarkdown(Output{})
@@ -1230,7 +1321,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatFileInfoMarkdown verifies FormatFileInfoMarkdown.
+// TestFormatFileInfoMarkdown verifies the FileInfoMarkdown Markdown formatter for a representative fileinfo input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFileInfoMarkdown(t *testing.T) {
 	t.Run("without commit IDs", func(t *testing.T) {
 		got := FormatFileInfoMarkdown(FileInfoOutput{
@@ -1266,7 +1359,9 @@ func TestFormatFileInfoMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatBlameMarkdown verifies FormatBlameMarkdown.
+// TestFormatBlameMarkdown verifies the BlameMarkdown Markdown formatter for a representative blame input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBlameMarkdown(t *testing.T) {
 	t.Run("empty ranges", func(t *testing.T) {
 		got := FormatBlameMarkdown(BlameOutput{
@@ -1327,7 +1422,9 @@ func TestFormatBlameMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatMetaDataMarkdown verifies FormatMetaDataMarkdown.
+// TestFormatMetaDataMarkdown verifies the MetaDataMarkdown Markdown formatter for a representative metadata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMetaDataMarkdown(t *testing.T) {
 	t.Run("without execute filemode", func(t *testing.T) {
 		got := FormatMetaDataMarkdown(MetaDataOutput{
@@ -1368,7 +1465,9 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatRawMarkdown verifies FormatRawMarkdown.
+// TestFormatRawMarkdown verifies the RawMarkdown Markdown formatter for a representative raw input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatRawMarkdown(t *testing.T) {
 	got := FormatRawMarkdown(RawOutput{
 		FilePath: "readme.md",
@@ -1391,7 +1490,9 @@ func TestFormatRawMarkdown(t *testing.T) {
 // minLen helper
 // ---------------------------------------------------------------------------.
 
-// TestMinLen covers MinLen with table-driven subtests.
+// TestMinLen verifies the MinLen handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMinLen(t *testing.T) {
 	tests := []struct {
 		a, b, want int
@@ -1413,7 +1514,9 @@ func TestMinLen(t *testing.T) {
 // Get: invalid base64 content triggers decode error
 // ---------------------------------------------------------------------------.
 
-// TestGet_InvalidBase64Content verifies Get when invalid base 64 content.
+// TestGet_InvalidBase64Content verifies the Get_InvalidBase64Content handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/bad.txt (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidBase64Content(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/bad.txt" {
@@ -1449,7 +1552,9 @@ func TestGet_InvalidBase64Content(t *testing.T) {
 // Get: non-base64 encoding (content returned as-is)
 // ---------------------------------------------------------------------------.
 
-// TestGet_NonBase64Encoding verifies Get when non base 64 encoding.
+// TestGet_NonBase64Encoding verifies the Get_NonBase64Encoding handler.
+// The mock GitLab API at /api/v4/projects/42/repository/files/plain.txt (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_NonBase64Encoding(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/plain.txt" {
@@ -1488,7 +1593,9 @@ func TestGet_NonBase64Encoding(t *testing.T) {
 // Get: API error (not found)
 // ---------------------------------------------------------------------------.
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1597,7 +1704,9 @@ func TestLangFromPath(t *testing.T) {
 	}
 }
 
-// TestFileGet_ServerError covers the generic (non-404) error path in Get.
+// TestFileGet_ServerError verifies that FileGet_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileGet_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -1608,7 +1717,9 @@ func TestFileGet_ServerError(t *testing.T) {
 	}
 }
 
-// TestFileCreate_BadRequest covers the 400 error hint in Create.
+// TestFileCreate_BadRequest verifies the FileCreate_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileCreate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"file already exists"}`)
@@ -1621,7 +1732,9 @@ func TestFileCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestFileCreate_ServerError covers the generic (non-400) error path in Create.
+// TestFileCreate_ServerError verifies that FileCreate_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileCreate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -1634,7 +1747,9 @@ func TestFileCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_BadRequest covers the 400 error hint in Update.
+// TestFileUpdate_BadRequest verifies the FileUpdate_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileUpdate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad encoding"}`)
@@ -1647,7 +1762,9 @@ func TestFileUpdate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_Conflict covers the 409 error hint in Update.
+// TestFileUpdate_Conflict verifies the FileUpdate_Conflict handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileUpdate_Conflict(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"file modified"}`)
@@ -1660,7 +1777,9 @@ func TestFileUpdate_Conflict(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_ServerError covers the generic error branch in Update.
+// TestFileUpdate_ServerError verifies that FileUpdate_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileUpdate_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -1673,7 +1792,9 @@ func TestFileUpdate_ServerError(t *testing.T) {
 	}
 }
 
-// TestFileDelete_ServerError covers the generic (non-404) error path in Delete.
+// TestFileDelete_ServerError verifies that FileDelete_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFileDelete_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -1686,7 +1807,9 @@ func TestFileDelete_ServerError(t *testing.T) {
 	}
 }
 
-// TestFileCreate_OptionalFields covers optional fields in Create.
+// TestFileCreate_OptionalFields verifies the FileCreate_OptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileCreate_OptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -1708,7 +1831,9 @@ func TestFileCreate_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestFileUpdate_OptionalFields covers optional fields in Update.
+// TestFileUpdate_OptionalFields verifies the FileUpdate_OptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileUpdate_OptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -1734,7 +1859,9 @@ func TestFileUpdate_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestFileDelete_OptionalFields covers optional fields in Delete.
+// TestFileDelete_OptionalFields verifies the FileDelete_OptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestFileDelete_OptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

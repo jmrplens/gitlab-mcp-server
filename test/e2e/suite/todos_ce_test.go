@@ -13,8 +13,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/todos"
 )
 
-// TestIndividual_Todos exercises the todo tools via individual MCP tools:
-// list all todos, then mark all as done.
+// TestIndividual_Todos exercises todo tools through individual MCP tools
+// against a live GitLab CE instance.
+//
+// The test runs inside [RunWithCapabilities] with [CapabilityCurrentUserState]
+// so current-user state is snapshotted before mutation. It creates a
+// project and an issue (to seed a todo), then walks gitlab_todo_list and
+// gitlab_todo_mark_all_done via the individual tool surface. Each subtest
+// asserts the todo payload shape and that mark_all_done clears pending
+// todos in a follow-up list call.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -38,8 +47,16 @@ func TestIndividual_Todos(t *testing.T) {
 	})
 }
 
-// TestMeta_Todos exercises the same todo lifecycle via the gitlab_user meta-tool:
-// todo_list and todo_mark_all_done actions.
+// TestMeta_Todos exercises the todo lifecycle through the gitlab_user
+// meta-tool against a live GitLab CE instance.
+//
+// The test mirrors [TestIndividual_Todos] but drives every step with
+// {action, params} arguments through the catalog-backed tool. Subtests
+// cover todo_list and todo_mark_all_done actions, verifying the meta-tool
+// returns consistent todo payloads and that mark_all_done clears pending
+// todos in a follow-up list call.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

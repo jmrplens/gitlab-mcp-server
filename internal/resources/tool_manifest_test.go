@@ -1,3 +1,7 @@
+// tool_manifest_test.go contains unit tests for the surface-aware
+// tool manifest resources registered by [RegisterToolSurfaceResources].
+// Tests build a small action catalog, register the manifest against an
+// in-memory MCP server, and read entries via the URI template.
 package resources
 
 import (
@@ -11,6 +15,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// toolManifestSession registers the tool manifest resources against an
+// in-memory MCP server and returns a connected client session. The
+// session and server are torn down via [testing.T.Cleanup] callbacks.
 func toolManifestSession(t *testing.T, opts ToolSurfaceResourceOptions) *mcp.ClientSession {
 	t.Helper()
 
@@ -33,6 +40,13 @@ func toolManifestSession(t *testing.T, opts ToolSurfaceResourceOptions) *mcp.Cli
 	return session
 }
 
+// TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs verifies that
+// in dynamic mode the manifest uses the canonical "domain.action" IDs
+// from the action catalog, sorted alphabetically, and that the
+// per-entry detail resource exposes the dynamic call shape
+// (params + top-level confirm for destructive actions). The
+// x_confirmation extension is added on top of the params schema so
+// LLMs know where to set the confirmation.
 func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	catalog := widgetCatalog(t)
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
@@ -73,6 +87,11 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	}
 }
 
+// TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool
+// verifies that in dynamic mode the manifest is empty when the
+// gitlab_execute_action tool is not in the visible tools list, even if
+// the action catalog is populated. The visible "find" tool is still
+// reported in VisibleToolCount.
 func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T) {
 	catalog := widgetCatalog(t)
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
@@ -87,6 +106,11 @@ func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T)
 	}
 }
 
+// TestToolManifest_UnknownSurfaceUsesIndividualDefaults verifies that
+// an unrecognized surface value falls back to individual mode and that
+// nil or empty tools are silently skipped. The remaining valid tool is
+// rendered as a direct individual entry with the destructive
+// confirmation flag wired to arguments.confirm.
 func TestToolManifest_UnknownSurfaceUsesIndividualDefaults(t *testing.T) {
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
 		Surface: "unknown",
@@ -107,6 +131,11 @@ func TestToolManifest_UnknownSurfaceUsesIndividualDefaults(t *testing.T) {
 	}
 }
 
+// TestToolManifest_MetaSurfaceUsesToolActionIDs verifies that in
+// meta mode each entry uses the "gitlab_<tool>.<action>" ID format
+// and that the params.confirm field is present in the per-action
+// schema. The visible meta tool itself is also exposed as a
+// "visible_tool" entry with arguments-based params.
 func TestToolManifest_MetaSurfaceUsesToolActionIDs(t *testing.T) {
 	catalog := widgetCatalog(t)
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
@@ -147,6 +176,10 @@ func TestToolManifest_MetaSurfaceUsesToolActionIDs(t *testing.T) {
 	}
 }
 
+// TestToolManifest_MetaSurfaceIncludesRouteOnlyActions verifies that
+// actions present in the route map but not in the action catalog
+// (route-only actions) are still surfaced in the meta-surface
+// manifest with the right ID and required-params projection.
 func TestToolManifest_MetaSurfaceIncludesRouteOnlyActions(t *testing.T) {
 	catalog := widgetCatalog(t)
 	routes := catalog.ActionMaps()
@@ -170,6 +203,10 @@ func TestToolManifest_MetaSurfaceIncludesRouteOnlyActions(t *testing.T) {
 	}
 }
 
+// TestToolManifest_MetaSurfaceSkipsCatalogActionsMissingFromRoutes
+// verifies that catalog actions whose route is not present in the
+// visible route map are filtered out in meta mode. The remaining
+// route-visible action is exposed in the manifest.
 func TestToolManifest_MetaSurfaceSkipsCatalogActionsMissingFromRoutes(t *testing.T) {
 	catalog := widgetCatalog(t)
 	routes := map[string]toolutil.ActionMap{
@@ -190,6 +227,9 @@ func TestToolManifest_MetaSurfaceSkipsCatalogActionsMissingFromRoutes(t *testing
 	}
 }
 
+// TestToolManifestHelpers_DefensiveBranches verifies the defensive
+// branches of [actionTitle] (no individual tool title, no tool/action
+// names) and [metaRouteVisible] (nil route map).
 func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
 	if title := actionTitle(actioncatalog.Action{}); title != "" {
 		t.Fatalf("actionTitle(empty) = %q, want empty", title)
@@ -199,6 +239,11 @@ func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
 	}
 }
 
+// TestToolManifest_IndividualSurfaceUsesDirectToolIDs verifies that
+// in individual mode the manifest uses the bare MCP tool name as the
+// entry ID, that the per-entry detail exposes arguments-based params
+// and a destructive argument.confirm location, and that the tool's
+// ReadOnly annotation is reflected in the detail payload.
 func TestToolManifest_IndividualSurfaceUsesDirectToolIDs(t *testing.T) {
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
 		Surface: toolSurfaceIndividual,
@@ -228,6 +273,10 @@ func TestToolManifest_IndividualSurfaceUsesDirectToolIDs(t *testing.T) {
 	}
 }
 
+// TestToolManifestTemplate_NotFound verifies that the
+// "gitlab://tools/{id}" template resource returns a
+// ResourceNotFoundError for unknown IDs, empty IDs, slash-separated
+// IDs, and unrelated URI schemes.
 func TestToolManifestTemplate_NotFound(t *testing.T) {
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{Surface: toolSurfaceIndividual})
 
@@ -246,6 +295,10 @@ func TestToolManifestTemplate_NotFound(t *testing.T) {
 	}
 }
 
+// widgetCatalog builds a small in-memory action catalog with a
+// "widget" domain that contains one destructive "delete" action and
+// one "create" action. Used as test input for the tool manifest
+// surface tests.
 func widgetCatalog(t *testing.T) *actioncatalog.Catalog {
 	t.Helper()
 	catalog := actioncatalog.NewCatalog()
@@ -265,6 +318,8 @@ func widgetCatalog(t *testing.T) *actioncatalog.Catalog {
 	return catalog
 }
 
+// readToolManifest reads a tool manifest resource and decodes it as a
+// [ToolSurfaceManifest]. It fails the test on read or unmarshal error.
 func readToolManifest(t *testing.T, session *mcp.ClientSession, uri string) ToolSurfaceManifest {
 	t.Helper()
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
@@ -278,6 +333,9 @@ func readToolManifest(t *testing.T, session *mcp.ClientSession, uri string) Tool
 	return manifest
 }
 
+// readToolDetail reads a per-entry tool manifest detail and decodes it
+// as a [ToolSurfaceDetail]. It fails the test on read or unmarshal
+// error.
 func readToolDetail(t *testing.T, session *mcp.ClientSession, uri string) ToolSurfaceDetail {
 	t.Helper()
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})

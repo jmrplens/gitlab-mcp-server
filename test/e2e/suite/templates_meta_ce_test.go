@@ -17,7 +17,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projecttemplates"
 )
 
-// TestMeta_TemplatesCIYml exercises CI YAML template list/get actions.
+// TestMeta_TemplatesCIYml exercises CI YAML template list and get actions
+// through the gitlab_template meta-tool against a live GitLab instance.
+//
+// The test calls ci_yaml_list and ci_yaml_get (for a known template) via
+// {action, params} arguments through the catalog-backed tool. Each subtest
+// asserts the meta-tool returns the expected template payload and that the
+// fetched template content is non-empty.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TemplatesCIYml(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -49,7 +57,15 @@ func TestMeta_TemplatesCIYml(t *testing.T) {
 	})
 }
 
-// TestMeta_TemplatesDockerfile exercises Dockerfile template list/get actions.
+// TestMeta_TemplatesDockerfile exercises Dockerfile template list and get
+// actions through the gitlab_template meta-tool against a live GitLab instance.
+//
+// The test calls dockerfile_list and dockerfile_get (for a known template)
+// via {action, params} arguments through the catalog-backed tool. Each
+// subtest asserts the meta-tool returns the expected template payload and
+// that the fetched Dockerfile content is non-empty.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TemplatesDockerfile(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -80,7 +96,15 @@ func TestMeta_TemplatesDockerfile(t *testing.T) {
 	})
 }
 
-// TestMeta_TemplatesGitignore exercises .gitignore template list/get actions.
+// TestMeta_TemplatesGitignore exercises .gitignore template list and get
+// actions through the gitlab_template meta-tool against a live GitLab instance.
+//
+// The test calls gitignore_list and gitignore_get (for a known template)
+// via {action, params} arguments through the catalog-backed tool. Each
+// subtest asserts the meta-tool returns the expected template payload and
+// that the fetched gitignore content is non-empty.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TemplatesGitignore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -111,7 +135,15 @@ func TestMeta_TemplatesGitignore(t *testing.T) {
 	})
 }
 
-// TestMeta_TemplatesLicense exercises license template list/get actions.
+// TestMeta_TemplatesLicense exercises license template list and get actions
+// through the gitlab_template meta-tool against a live GitLab instance.
+//
+// The test calls license_list and license_get (for a known template like
+// "mit") via {action, params} arguments through the catalog-backed tool.
+// Each subtest asserts the meta-tool returns the expected template payload
+// and that the fetched license content is non-empty.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TemplatesLicense(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -142,7 +174,14 @@ func TestMeta_TemplatesLicense(t *testing.T) {
 	})
 }
 
-// TestMeta_TemplatesProject exercises project template list/get actions.
+// TestMeta_TemplatesProject exercises project template list and get actions
+// through the gitlab_template meta-tool against a live GitLab instance.
+//
+// The test calls project_list (when available) and validates that the
+// meta-tool returns the expected template payload. Get actions verify the
+// fetched project template content is non-empty.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TemplatesProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

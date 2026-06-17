@@ -4,6 +4,8 @@
 // gitlab_admin meta-tool against a live GitLab instance. Covers topics,
 // settings, appearance, broadcast messages, feature flags, system hooks,
 // Sidekiq metrics, plan limits, metadata, applications, and custom attributes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -26,7 +28,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/topics"
 )
 
-// TestMeta_AdminTopics exercises gitlab_admin topic CRUD actions.
+// TestMeta_AdminTopics exercises gitlab_admin topic CRUD actions on the
+// instance-scoped topics endpoint.
+//
+// The test acquires the admin and instance-global capabilities (skips when
+// the token is not an admin or shared state is locked), then creates a unique
+// topic, fetches it, and updates its description. Cleanup deletes the topic
+// via a deferred call so the instance stays clean even when subtests fail.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminTopics(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -87,7 +97,16 @@ func TestMeta_AdminTopics(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminSettingsAppearance exercises settings and appearance actions.
+// TestMeta_AdminSettingsAppearance exercises settings and appearance
+// actions on the gitlab_admin meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, then runs
+// three subtests: update settings (set default_branch_name), get appearance,
+// and update appearance title. The settings update is non-destructive — it
+// changes only the default branch name to "main" — and runs in isolation
+// because instance-global state is touched.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminSettingsAppearance(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -131,7 +150,16 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminBroadcast exercises broadcast message CRUD.
+// TestMeta_AdminBroadcast exercises the broadcast message CRUD cycle on the
+// gitlab_admin meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, lists
+// existing broadcast messages, creates a new one with a unique message,
+// fetches it by ID, updates its message, and defers deletion so the instance
+// stays clean. Each subtest asserts the expected ID round-trips and the
+// operation reports no error.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminBroadcast(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -198,7 +226,15 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminFeatures exercises feature flag actions.
+// TestMeta_AdminFeatures exercises feature flag actions on the gitlab_admin
+// meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, lists both
+// feature flags and feature flag definitions, sets a unique feature flag to
+// true, and then deletes it. The feature name is suffixed with the current
+// millisecond timestamp so parallel runs cannot collide on the same flag.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminFeatures(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -251,7 +287,16 @@ func TestMeta_AdminFeatures(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminSystemHooks exercises system hook CRUD.
+// TestMeta_AdminSystemHooks exercises the system hook CRUD cycle on the
+// gitlab_admin meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, lists
+// existing system hooks, registers a new HTTP hook against an example.com
+// placeholder URL, fetches it, triggers a test event, and defers deletion.
+// The test event is allowed to fail silently on isolated networks because
+// the example.com URL will not deliver; the deletion still runs.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminSystemHooks(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -315,7 +360,15 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminSidekiqMetrics exercises Sidekiq metrics (read-only).
+// TestMeta_AdminSidekiqMetrics exercises read-only Sidekiq metrics on the
+// gitlab_admin meta-tool.
+//
+// The test acquires the admin capability and runs four subtests that fetch
+// queue metrics, process metrics, job stats, and compound metrics. No state
+// is mutated, so the test can run in parallel with other admin-only tests
+// that touch different instance endpoints.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminSidekiqMetrics(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -360,7 +413,16 @@ func TestMeta_AdminSidekiqMetrics(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminPlanLimitsMetadata exercises plan_limits, metadata, and app_statistics.
+// TestMeta_AdminPlanLimitsMetadata exercises plan_limits, metadata, and
+// app_statistics read-only admin actions on the gitlab_admin meta-tool.
+//
+// The test acquires the admin capability and runs three subtests. The plan
+// limits call retries on transient network errors because the request
+// frequently times out while sidekiq is busy at run start; the metadata
+// call asserts that the GitLab version is non-empty so an empty response
+// (proxy misroute) is caught early.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -407,7 +469,16 @@ func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminApplications exercises OAuth application CRUD.
+// TestMeta_AdminApplications exercises OAuth application CRUD on the
+// gitlab_admin meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, lists
+// existing OAuth applications, creates a new application with a unique name
+// and a placeholder redirect URI, and defers deletion. The redirect URI is
+// intentionally non-deliverable so the application cannot be exercised
+// against a real callback endpoint.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminApplications(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -453,7 +524,16 @@ func TestMeta_AdminApplications(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminCustomAttributes exercises custom attribute CRUD on the current user.
+// TestMeta_AdminCustomAttributes exercises custom attribute CRUD on the
+// current user through the gitlab_admin meta-tool.
+//
+// The test acquires the admin and instance-global capabilities, fetches the
+// authenticated user ID through gitlab_user{action=current}, then sets,
+// gets, and lists a custom attribute named "e2e_test_attr" on the user.
+// Cleanup deletes the attribute via a deferred call so the user is restored
+// even when subtests fail.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AdminCustomAttributes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

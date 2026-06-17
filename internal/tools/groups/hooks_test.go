@@ -37,7 +37,9 @@ var groupHookListJSON = `[` + groupHookJSON + `]`
 // ListHooks tests
 // ---------------------------------------------------------------------------.
 
-// TestListHooks_Success verifies ListHooks when success.
+// TestListHooks_Success verifies that ListHooks succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListHooks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupHooks {
@@ -84,7 +86,9 @@ func TestListHooks_Success(t *testing.T) {
 	}
 }
 
-// TestListHooks_APIError verifies ListHooks when API error.
+// TestListHooks_APIError verifies that ListHooks returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListHooks_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -100,7 +104,9 @@ func TestListHooks_APIError(t *testing.T) {
 // GetHook tests
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_Success verifies GetHook when success.
+// TestGetHook_Success verifies that GetHook succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupHook10 {
@@ -140,7 +146,9 @@ func TestGetHook_Success(t *testing.T) {
 	}
 }
 
-// TestGetHook_APIError verifies GetHook when API error.
+// TestGetHook_APIError verifies that GetHook returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -156,7 +164,9 @@ func TestGetHook_APIError(t *testing.T) {
 // AddHook tests
 // ---------------------------------------------------------------------------.
 
-// TestAddHook_Success verifies AddHook when success.
+// TestAddHook_Success verifies that AddHook succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddHook_Success(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +216,9 @@ func TestAddHook_Success(t *testing.T) {
 	}
 }
 
-// TestAddHook_APIError verifies AddHook when API error.
+// TestAddHook_APIError verifies that AddHook returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -225,7 +237,9 @@ func TestAddHook_APIError(t *testing.T) {
 // EditHook tests
 // ---------------------------------------------------------------------------.
 
-// TestEditHook_Success verifies EditHook when success.
+// TestEditHook_Success verifies that EditHook succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditHook_Success(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +280,9 @@ func TestEditHook_Success(t *testing.T) {
 	}
 }
 
-// TestEditHook_APIError verifies EditHook when API error.
+// TestEditHook_APIError verifies that EditHook returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -286,7 +302,9 @@ func TestEditHook_APIError(t *testing.T) {
 // DeleteHook tests
 // ---------------------------------------------------------------------------.
 
-// TestDeleteHook_Success verifies DeleteHook when success.
+// TestDeleteHook_Success verifies that DeleteHook succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteHook_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupHook10 {
@@ -302,7 +320,9 @@ func TestDeleteHook_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_APIError verifies DeleteHook when API error.
+// TestDeleteHook_APIError verifies that DeleteHook returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteHook_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -318,7 +338,9 @@ func TestDeleteHook_APIError(t *testing.T) {
 // HookID validation tests
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_InvalidHookID verifies GetHook when invalid hook ID.
+// TestGetHook_InvalidHookID verifies the GetHook_InvalidHookID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -333,7 +355,9 @@ func TestGetHook_InvalidHookID(t *testing.T) {
 	}
 }
 
-// TestEditHook_InvalidHookID verifies EditHook when invalid hook ID.
+// TestEditHook_InvalidHookID verifies the EditHook_InvalidHookID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -348,7 +372,9 @@ func TestEditHook_InvalidHookID(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_InvalidHookID verifies DeleteHook when invalid hook ID.
+// TestDeleteHook_InvalidHookID verifies the DeleteHook_InvalidHookID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteHook_InvalidHookID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -363,8 +389,9 @@ func TestDeleteHook_InvalidHookID(t *testing.T) {
 	}
 }
 
-// TestGetHook_URLVariables verifies that URL variables (added in
-// gitlab.com/gitlab-org/api/client-go/v2 v2.21.0) are surfaced in the output.
+// TestGetHook_URLVariables verifies the GetHook_URLVariables handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetHook_URLVariables(t *testing.T) {
 	body := `{"id":10,"url":"https://example.com/hook","group_id":99,"push_events":true,"enable_ssl_verification":true,"url_variables":[{"key":"token","value":""},{"key":"api_key","value":""}]}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,9 @@
 // main_test.go verifies README generation helpers used by cmd/gen_readme.
+//
+// Tests cover the token-footprint renderer (row order, column structure,
+// total tokens), the live measurement path against the mock-backed base
+// catalog, the byte/4 token heuristic, and the META_PARAM_SCHEMA env
+// parser (including invalid-value rejection).
 package main
 
 import (

@@ -135,7 +135,9 @@ type ListAllDomainsOutput struct {
 // Handlers — PagesService
 // ---------------------------------------------------------------------------.
 
-// GetPages retrieves Pages settings for a project.
+// GetPages retrieves the Pages settings (URL, unique domain, force
+// HTTPS, deployments) for a project via the GitLab Pages API
+// (GET /projects/:id/pages).
 func GetPages(ctx context.Context, client *gitlabclient.Client, input GetPagesInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
@@ -150,7 +152,10 @@ func GetPages(ctx context.Context, client *gitlabclient.Client, input GetPagesIn
 	return toPagesOutput(pages), nil
 }
 
-// UpdatePages updates Pages settings for a project.
+// UpdatePages updates the Pages settings for a project via the GitLab
+// Pages API (PUT /projects/:id/pages). Only non-nil fields are
+// applied; pages_primary_domain must reference a domain previously
+// added via [CreateDomain].
 func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdatePagesInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
@@ -176,7 +181,9 @@ func UpdatePages(ctx context.Context, client *gitlabclient.Client, input UpdateP
 	return toPagesOutput(pages), nil
 }
 
-// UnpublishPages unpublishes Pages for a project.
+// UnpublishPages removes the published Pages site for a project via
+// the GitLab Pages API (DELETE /projects/:id/pages). Requires
+// Maintainer or Owner role.
 func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input UnpublishPagesInput) error {
 	if input.ProjectID == "" {
 		return toolutil.ErrFieldRequired("project_id")
@@ -195,7 +202,9 @@ func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input Unpu
 // Handlers — PagesDomainsService
 // ---------------------------------------------------------------------------.
 
-// ListAllDomains returns all Pages domains across all projects.
+// ListAllDomains returns every Pages domain across the entire
+// instance via the GitLab Pages domains admin API
+// (GET /pages/domains). Requires administrator access.
 func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllDomainsInput) (ListAllDomainsOutput, error) {
 	domains, _, err := client.GL().PagesDomains.ListAllPagesDomains(gl.WithContext(ctx))
 	if err != nil {
@@ -211,7 +220,9 @@ func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllD
 	return out, nil
 }
 
-// ListDomains returns Pages domains for a specific project.
+// ListDomains returns the custom Pages domains configured for a
+// project via the GitLab Pages domains API
+// (GET /projects/:id/pages/domains). Supports pagination.
 func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDomainsInput) (ListDomainsOutput, error) {
 	if input.ProjectID == "" {
 		return ListDomainsOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -243,7 +254,8 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 	return out, nil
 }
 
-// GetDomain retrieves a single Pages domain.
+// GetDomain retrieves a single Pages domain by name via the GitLab
+// Pages domains API (GET /projects/:id/pages/domains/:domain).
 func GetDomain(ctx context.Context, client *gitlabclient.Client, input GetDomainInput) (DomainOutput, error) {
 	if input.ProjectID == "" {
 		return DomainOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -263,7 +275,10 @@ func GetDomain(ctx context.Context, client *gitlabclient.Client, input GetDomain
 	return out, nil
 }
 
-// CreateDomain creates a new Pages domain for a project.
+// CreateDomain adds a new custom domain to a project's Pages
+// configuration via the GitLab Pages domains API
+// (POST /projects/:id/pages/domains). Optional AutoSslEnabled,
+// Certificate, and Key fields are forwarded to the API.
 func CreateDomain(ctx context.Context, client *gitlabclient.Client, input CreateDomainInput) (DomainOutput, error) {
 	if input.ProjectID == "" {
 		return DomainOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -296,7 +311,9 @@ func CreateDomain(ctx context.Context, client *gitlabclient.Client, input Create
 	return out, nil
 }
 
-// UpdateDomain updates an existing Pages domain.
+// UpdateDomain updates the auto-SSL flag and/or custom certificate
+// of an existing Pages domain via the GitLab Pages domains API
+// (PUT /projects/:id/pages/domains/:domain).
 func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input UpdateDomainInput) (DomainOutput, error) {
 	if input.ProjectID == "" {
 		return DomainOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -327,7 +344,10 @@ func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input Update
 	return out, nil
 }
 
-// DeleteDomain deletes a Pages domain.
+// DeleteDomain removes a custom Pages domain from a project via the
+// GitLab Pages domains API
+// (DELETE /projects/:id/pages/domains/:domain). Requires Maintainer
+// or Owner role.
 func DeleteDomain(ctx context.Context, client *gitlabclient.Client, input DeleteDomainInput) error {
 	if input.ProjectID == "" {
 		return toolutil.ErrFieldRequired("project_id")
@@ -349,7 +369,9 @@ func DeleteDomain(ctx context.Context, client *gitlabclient.Client, input Delete
 // Converters
 // ---------------------------------------------------------------------------.
 
-// toPagesOutput converts the GitLab API response to the tool output format.
+// toPagesOutput converts a [gl.Pages] response into the package's
+// [Output], formatting each deployment timestamp with
+// [toolutil.DateTimeFormat].
 func toPagesOutput(p *gl.Pages) Output {
 	if p == nil {
 		return Output{}
@@ -371,7 +393,10 @@ func toPagesOutput(p *gl.Pages) Output {
 	return out
 }
 
-// toDomainOutput converts the GitLab API response to the tool output format.
+// toDomainOutput converts a [gl.PagesDomain] response into the
+// package's [DomainOutput], formatting the optional EnabledUntil
+// and certificate expiration timestamps with
+// [toolutil.DateTimeFormat].
 func toDomainOutput(d *gl.PagesDomain) DomainOutput {
 	if d == nil {
 		return DomainOutput{}
@@ -403,8 +428,9 @@ func toDomainOutput(d *gl.PagesDomain) DomainOutput {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// projectDisplay returns a human-readable project identifier, preferring
-// the full path (e.g. "group/project") over a numeric ID.
+// projectDisplay returns a human-readable project identifier,
+// preferring the full path (for example "group/project") over a
+// numeric ID. Used by the Markdown formatters.
 func projectDisplay(path string, id int64) string {
 	if path != "" {
 		return path
@@ -412,8 +438,9 @@ func projectDisplay(path string, id int64) string {
 	return fmt.Sprintf("#%d", id)
 }
 
-// setProjectPathFromInput copies the caller-supplied project identifier into
-// out.ProjectPath when it looks like a path (contains '/').
+// setProjectPathFromInput copies the caller-supplied project
+// identifier into [DomainOutput.ProjectPath] when the input looks
+// like a path (contains a '/'). Numeric IDs are left as IDs.
 func setProjectPathFromInput(out *DomainOutput, input toolutil.StringOrInt) {
 	if strings.Contains(string(input), "/") {
 		out.ProjectPath = string(input)

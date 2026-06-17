@@ -16,7 +16,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/7/merge_requests (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/deployments/7/merge_requests" {
@@ -81,7 +83,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies List when empty.
+// TestList_Empty verifies the List_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -100,7 +104,9 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies List when with filters.
+// TestList_WithFilters verifies the List_WithFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithFilters(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -129,7 +135,9 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_InvalidDeploymentID verifies List when invalid deployment ID.
+// TestList_InvalidDeploymentID verifies the List_InvalidDeploymentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidDeploymentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -147,7 +155,9 @@ func TestList_InvalidDeploymentID(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -164,7 +174,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -172,7 +184,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -197,7 +211,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // List — API error (404), canceled context, pagination, nil author
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError404 verifies List when API error 404.
+// TestList_APIError404 verifies that List404 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError404(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -211,7 +227,9 @@ func TestList_APIError404(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies List when cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -221,7 +239,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/deployments/5/merge_requests (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/deployments/5/merge_requests" {
@@ -255,7 +275,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_NilAuthor verifies List when nil author.
+// TestList_NilAuthor verifies the List_NilAuthor handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_NilAuthor(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -275,7 +297,9 @@ func TestList_NilAuthor(t *testing.T) {
 	}
 }
 
-// TestList_AllOptionalFilters verifies List when all optional filters.
+// TestList_AllOptionalFilters verifies the List_AllOptionalFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -315,7 +339,9 @@ func TestList_AllOptionalFilters(t *testing.T) {
 // FormatListMarkdown — multiple items, special characters, pagination info
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
+// TestFormatListMarkdown_MultipleItems verifies the ListMarkdown_MultipleItems Markdown formatter for a representative list_multipleitems input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -355,7 +381,9 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharacters verifies FormatListMarkdown when special characters.
+// TestFormatListMarkdown_SpecialCharacters verifies the ListMarkdown_SpecialCharacters Markdown formatter for a representative list_specialcharacters input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []MergeRequestItem{
@@ -372,7 +400,9 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EmptyOutput verifies FormatListMarkdown when empty output.
+// TestFormatListMarkdown_EmptyOutput verifies the ListMarkdown_EmptyOutput Markdown formatter for a representative list_emptyoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{MergeRequests: []MergeRequestItem{}})
 	if result == nil {
@@ -387,7 +417,9 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NilSlice verifies FormatListMarkdown when nil slice.
+// TestFormatListMarkdown_NilSlice verifies the ListMarkdown_NilSlice Markdown formatter for a representative list_nilslice input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_NilSlice(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -403,7 +435,9 @@ func TestFormatListMarkdown_NilSlice(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for deployment merge request actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -426,7 +460,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates deployment merge request route coverage.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newDeploymentMRSpecsByTool(t)
 
@@ -453,7 +489,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteWithFilters verifies the list route accepts filters.
+// TestActionSpecs_CallRouteWithFilters validates the CallRouteWithFilters route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRouteWithFilters(t *testing.T) {
 	byTool := newDeploymentMRSpecsByTool(t)
 
@@ -474,7 +512,9 @@ func TestActionSpecs_CallRouteWithFilters(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteEmptyResult verifies the list route handles empty results.
+// TestActionSpecs_CallRouteEmptyResult validates the CallRouteEmptyResult route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRouteEmptyResult(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/42/deployments/7/merge_requests", func(w http.ResponseWriter, _ *http.Request) {

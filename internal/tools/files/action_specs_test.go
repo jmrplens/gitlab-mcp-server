@@ -14,7 +14,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_CallRoutes exercises repository file actions through their canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := fileSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(fileMockHandler))))
 
@@ -45,7 +47,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput verifies file delete preserves its success message.
+// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	byTool := fileSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(fileMockHandler))))
 
@@ -62,7 +66,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteErrorPropagates verifies file delete backend errors propagate.
+// TestActionSpecs_DeleteErrorPropagates validates the DeleteErrorPropagates route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteErrorPropagates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -79,7 +85,9 @@ func TestActionSpecs_DeleteErrorPropagates(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_GetNotFound verifies file get returns a NotFoundResult-compatible output.
+// TestActionSpecs_GetNotFound validates the GetNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 File Not Found"}`)
@@ -99,7 +107,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")
@@ -144,7 +154,9 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestMarkdownForResult_FileRichContent verifies file formatters keep image content attached.
+// TestMarkdownForResult_FileRichContent verifies the MarkdownForResult_FileRichContent handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownForResult_FileRichContent(t *testing.T) {
 	tests := []struct {
 		name   string

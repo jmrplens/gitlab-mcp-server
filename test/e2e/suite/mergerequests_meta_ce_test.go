@@ -610,6 +610,18 @@ func TestMeta_MRDeep(t *testing.T) {
 	})
 }
 
+// exerciseApprovalResetWithGroupBot is an Enterprise-only sub-flow that
+// verifies the approval_reset meta-tool action clears prior approvals when
+// invoked by a non-author group bot. The scenario:
+//
+//  1. Create a fresh group, a group-scoped project, and a feature MR.
+//  2. Mint a group access token (acting as the bot).
+//  3. Add the bot as the only approver via approval_rule_create.
+//  4. Approve the MR from a second MCP session that uses the bot token.
+//  5. Call approval_reset from the bot session and assert the approvals
+//     list is empty afterwards.
+//
+// No-op on Community Edition sessions.
 func exerciseApprovalResetWithGroupBot(ctx context.Context, t *testing.T) {
 	t.Helper()
 	if !sess.enterprise {
@@ -642,6 +654,8 @@ func exerciseApprovalResetWithGroupBot(ctx context.Context, t *testing.T) {
 	assertApprovalResetCleared(ctx, t, approvalProject, approvalMR)
 }
 
+// createApprovalResetGroup provisions a fresh top-level group for the
+// approval_reset sub-flow and registers its deletion with [t.Cleanup].
 func createApprovalResetGroup(ctx context.Context, t *testing.T) GroupFixture {
 	t.Helper()
 	groupName := uniqueName("approval-reset-grp-")
@@ -665,6 +679,9 @@ func createApprovalResetGroup(ctx context.Context, t *testing.T) GroupFixture {
 	return group
 }
 
+// createApprovalResetProject provisions a private project nested under the
+// approval_reset group, waits for the default branch to become available,
+// and registers its deletion with [t.Cleanup].
 func createApprovalResetProject(ctx context.Context, t *testing.T, group GroupFixture) ProjectFixture {
 	t.Helper()
 	projectName := uniqueName(e2eProjectPrefix + "approval-reset-")
@@ -698,6 +715,10 @@ func createApprovalResetProject(ctx context.Context, t *testing.T, group GroupFi
 	return project
 }
 
+// createApprovalResetGroupBot mints a seven-day, api-scoped group access
+// token that impersonates a bot inside the approval_reset group. The token
+// and its cleanup are tracked with [t.Cleanup] so the bot identity is
+// revoked at the end of the test even if subtests fail mid-flight.
 func createApprovalResetGroupBot(ctx context.Context, t *testing.T, group GroupFixture) accesstokens.Output {
 	t.Helper()
 	botToken, err := callToolOn[accesstokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
@@ -724,6 +745,9 @@ func createApprovalResetGroupBot(ctx context.Context, t *testing.T, group GroupF
 	return botToken
 }
 
+// createApprovalResetBotRule adds a single-user approval rule that names the
+// bot, with retries for the eventual-consistency window after the bot is
+// added to the group.
 func createApprovalResetBotRule(ctx context.Context, t *testing.T, project ProjectFixture, mr MRFixture, botUserID int64) {
 	t.Helper()
 	_, err := retryWithBackoffInterval(ctx, t, "approval_reset rule for group bot", 5, 2*time.Second,
@@ -747,6 +771,9 @@ func createApprovalResetBotRule(ctx context.Context, t *testing.T, project Proje
 	requireNoError(t, err, "create approval rule for group bot")
 }
 
+// startApprovalResetBotSession builds a separate MCP server+client pair
+// that authenticates as the group bot. Returns the in-memory client session
+// and a cleanup func that closes both ends of the transport.
 func startApprovalResetBotSession(ctx context.Context, t *testing.T, gitlabURL, botToken string) (*mcp.ClientSession, func()) {
 	t.Helper()
 	botClient, err := gitlabclient.NewClientWithToken(gitlabURL, botToken, true)
@@ -767,6 +794,9 @@ func startApprovalResetBotSession(ctx context.Context, t *testing.T, gitlabURL, 
 	}
 }
 
+// approveApprovalResetMR submits an approval from the bot session and
+// retries transient bot-propagation failures until the approval is
+// recorded on the MR.
 func approveApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.ClientSession, project ProjectFixture, mr MRFixture) {
 	t.Helper()
 	approveOut, err := retryWithBackoffInterval(ctx, t, "approval_reset bot approval", 5, 2*time.Second,
@@ -784,6 +814,8 @@ func approveApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.C
 	requireTruef(t, approveOut.ApprovedBy > 0, "expected group bot approval to be recorded")
 }
 
+// resetApprovalResetMR invokes approval_reset from the bot session,
+// retrying transient bot-token-propagation failures until the call lands.
 func resetApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.ClientSession, project ProjectFixture, mr MRFixture) {
 	t.Helper()
 	_, err := retryWithBackoffInterval(ctx, t, "approval_reset (group bot session)", 5, 2*time.Second,
@@ -800,6 +832,8 @@ func resetApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.Cli
 	requireNoError(t, err, "approval_reset (bot session)")
 }
 
+// assertApprovalResetCleared re-fetches the MR approval config from the
+// primary session and asserts no approvers remain after approval_reset.
 func assertApprovalResetCleared(ctx context.Context, t *testing.T, project ProjectFixture, mr MRFixture) {
 	t.Helper()
 	cfg, err := callToolOn[mrapprovals.ConfigOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
@@ -811,6 +845,9 @@ func assertApprovalResetCleared(ctx context.Context, t *testing.T, project Proje
 	t.Log("Reset approvals via group bot session")
 }
 
+// isApprovalResetRuleRetryable reports whether an approval_rule_create
+// failure is the eventual-consistency window after the bot is added to
+// the group, in which case the rule create should be retried.
 func isApprovalResetRuleRetryable(err error) bool {
 	if err == nil {
 		return false
@@ -819,6 +856,9 @@ func isApprovalResetRuleRetryable(err error) bool {
 	return strings.Contains(msg, "400") || strings.Contains(msg, "403") || strings.Contains(msg, "404") || strings.Contains(msg, "member")
 }
 
+// isApprovalResetBotRetryable reports whether an approval action invoked
+// through the bot session failed because the bot token had not yet been
+// recognized, in which case the call should be retried.
 func isApprovalResetBotRetryable(err error) bool {
 	if err == nil {
 		return false

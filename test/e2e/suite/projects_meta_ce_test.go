@@ -25,6 +25,14 @@ import (
 // TestMeta_ProjectCore exercises core project CRUD, fork, star, archive, and
 // user/group listing actions on the gitlab_project meta-tool that are not
 // already covered by other domain test files (labels, milestones, badges, etc.).
+//
+// The test creates a project fixture, then walks the meta-tool through the
+// full lifecycle: create → get → update → list → archive → unarchive →
+// star → unstar → fork → transfer → delete. Each subtest asserts the
+// documented action returns the expected payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectCore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -215,8 +223,16 @@ func TestMeta_ProjectCore(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectHooks exercises the project webhook lifecycle via
-// gitlab_project meta-tool (hook_*).
+// TestMeta_ProjectHooks exercises the project webhook lifecycle through the
+// gitlab_project meta-tool (hook_* actions) against a live GitLab instance.
+//
+// The test creates a project fixture, then walks hook_create, hook_list,
+// hook_get, hook_update, and hook_delete via {action, params} arguments
+// through the catalog-backed tool. Each subtest asserts the meta-tool
+// returns the expected webhook metadata and that mutations are observable
+// through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectHooks(t *testing.T) {
 	t.Parallel()
 
@@ -382,8 +398,17 @@ func TestMeta_ProjectHooks(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectLabelsDeep tests label subscribe/unsubscribe/promote
-// actions that are not covered by labels_test.go.
+// TestMeta_ProjectLabelsDeep exercises label subscribe, unsubscribe, and
+// promote actions through the gitlab_project meta-tool that are not
+// covered by labels_test.go.
+//
+// The test creates a project fixture with a known label, then walks
+// label_subscribe, label_unsubscribe, and label_promote via {action, params}
+// arguments through the catalog-backed tool. Each subtest asserts the
+// meta-tool returns the expected payload and that subscription/promotion
+// mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectLabelsDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -468,8 +493,18 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectMilestonesDeep tests milestone list, issues, and MRs
-// actions not covered by milestones_test.go.
+// TestMeta_ProjectMilestonesDeep exercises milestone list, milestone issues,
+// and milestone MRs listing actions through the gitlab_project meta-tool
+// that are not covered by milestones_test.go.
+//
+// The test creates a project fixture with a known milestone and seeded
+// issues/MRs, then walks the milestone_list, milestone_issues, and
+// milestone_mrs actions via {action, params} arguments through the
+// catalog-backed tool. Each subtest asserts the meta-tool returns the
+// expected payload and that filtering by milestone ID produces non-empty
+// result sets.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -533,8 +568,17 @@ func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectMembersDeep tests member add/edit/delete/inherited actions
-// not covered by members_test.go.
+// TestMeta_ProjectMembersDeep exercises member add, edit, delete, and
+// inherited actions through the gitlab_project meta-tool that are not
+// covered by members_test.go.
+//
+// The test creates a project fixture, then walks member_add, member_edit,
+// member_delete, and member_inherited via {action, params} arguments
+// through the catalog-backed tool. Each subtest asserts the meta-tool
+// returns the expected membership payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectMembersDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -560,8 +604,15 @@ func TestMeta_ProjectMembersDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectBadgesDeep tests badge_get and badge_preview actions
-// not covered by badges_test.go.
+// TestMeta_ProjectBadgesDeep exercises badge_get and badge_preview actions
+// through the gitlab_project meta-tool that are not covered by badges_test.go.
+//
+// The test creates a project fixture, then walks badge_get (for a known
+// badge key) and badge_preview via {action, params} arguments through the
+// catalog-backed tool. Each subtest asserts the meta-tool returns the
+// expected payload with non-empty badge metadata and rendered SVG content.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectBadgesDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -619,8 +670,17 @@ func TestMeta_ProjectBadgesDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectBoardsDeep tests board update and board list CRUD actions
-// not covered by boards_test.go.
+// TestMeta_ProjectBoardsDeep exercises board update and board list CRUD
+// actions through the gitlab_project meta-tool that are not covered by
+// boards_test.go.
+//
+// The test creates a project fixture with a known board, then walks
+// board_update, board_list_create, board_list_update, and board_list_delete
+// via {action, params} arguments through the catalog-backed tool. Each
+// subtest asserts the meta-tool returns the expected board payload and that
+// mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectBoardsDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -751,8 +811,18 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectApprovals tests project-level approval configuration and
-// approval rules via the gitlab_project meta-tool.
+// TestMeta_ProjectApprovals exercises project-level approval configuration
+// and approval rule management actions through the gitlab_project meta-tool
+// against a live GitLab instance.
+//
+// The test creates a project fixture, then walks approval_configuration_get,
+// approval_configuration_update, approval_rule_create, approval_rule_list,
+// approval_rule_update, and approval_rule_delete via {action, params}
+// arguments through the catalog-backed tool. Each subtest asserts the
+// meta-tool returns the expected approval payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectApprovals(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -873,7 +943,16 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectExport tests project export/import status actions.
+// TestMeta_ProjectExport exercises project export and import status actions
+// through the gitlab_project meta-tool against a live GitLab instance.
+//
+// The test creates a project, kicks off a project export, polls the export
+// status until it reports a finished state, then walks the corresponding
+// import_status flow on the same project. Assertions check the action names
+// map to the documented meta-tool routes and that the export payload matches
+// the requested export options.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectExport(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -913,7 +992,15 @@ func TestMeta_ProjectExport(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectIntegrations tests project integration actions.
+// TestMeta_ProjectIntegrations exercises project integration actions through
+// the gitlab_project meta-tool against a live GitLab instance.
+//
+// The test creates a project, registers a sample integration via the
+// meta-tool, lists integrations, then updates and removes the entry. Each
+// step asserts the meta-tool returns the expected integration metadata and
+// that mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectIntegrations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -935,7 +1022,15 @@ func TestMeta_ProjectIntegrations(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectPages tests Pages read actions.
+// TestMeta_ProjectPages exercises the Pages read actions of the gitlab_project
+// meta-tool against a live GitLab instance.
+//
+// The test creates a project with Pages enabled, then walks pages_get and
+// pages_list (where applicable) to verify the meta-tool returns the expected
+// Pages metadata. Assertions cover the project ID round-trip and the presence
+// of the documented Pages fields in the response payload.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProjectPages(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

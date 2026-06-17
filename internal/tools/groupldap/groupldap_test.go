@@ -1,3 +1,4 @@
+// groupldap_test.go contains unit tests for the GitLab group LDAP link MCP tool handlers.
 package groupldap
 
 import (
@@ -13,8 +14,9 @@ const (
 	pathGroupLDAP = "/api/v4/groups/mygroup/ldap_group_links"
 )
 
-// TestList validates the List handler covering success, empty results,
-// validation errors, and API failure responses.
+// TestList verifies the List handler.
+// The mock GitLab API at /api/v4/groups/mygroup (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -102,7 +104,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_FieldMapping verifies toOutput maps all fields from the API response.
+// TestList_FieldMapping verifies the List_FieldMapping handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_FieldMapping(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[
@@ -155,8 +159,9 @@ func TestAPIErrorIncludesActionableHint(t *testing.T) {
 	}
 }
 
-// TestAdd validates the Add handler covering success with CN, Filter,
-// MemberRoleID, validation errors, and API failure responses.
+// TestAdd verifies the Add handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAdd(t *testing.T) {
 	roleID := int64(77)
 	tests := []struct {
@@ -334,8 +339,9 @@ func TestDeleteWithCNOrFilter(t *testing.T) {
 	}
 }
 
-// TestDeleteForProvider validates the DeleteForProvider handler covering
-// success, all three validation errors, and API failure responses.
+// TestDeleteForProvider verifies the DeleteForProvider handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteForProvider(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -391,8 +397,9 @@ func TestDeleteForProvider(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown validates markdown rendering for a single LDAP link,
-// including optional Filter and MemberRoleID fields.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -468,8 +475,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown validates markdown rendering for an LDAP link list,
-// including empty and multi-item cases.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

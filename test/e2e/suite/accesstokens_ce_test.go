@@ -3,6 +3,8 @@
 // accesstokens_ce_test.go tests the project access token MCP tools against a
 // live GitLab instance using both individual tools and the gitlab_access
 // meta-tool. Exercises the full token lifecycle: create → get → list → revoke.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -21,6 +23,13 @@ func expiresAtNextYear() string {
 
 // TestIndividual_AccessTokens exercises the project access token lifecycle
 // using individual MCP tools: create → get → list → revoke.
+//
+// The test creates a project fixture, runs each lifecycle step as a subtest,
+// and asserts that the returned token ID round-trips through get and list.
+// Revoke runs last and confirms the tool returns no error for a valid ID.
+// The created project is auto-deleted by [createProject]'s ledger entry.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -77,6 +86,13 @@ func TestIndividual_AccessTokens(t *testing.T) {
 
 // TestMeta_AccessTokens exercises the same token lifecycle via the
 // gitlab_access meta-tool.
+//
+// The test mirrors [TestIndividual_AccessTokens] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_access tool,
+// asserting the same create → get → list → revoke outcome and verifying the
+// tool name stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

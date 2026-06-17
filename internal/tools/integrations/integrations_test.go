@@ -58,7 +58,9 @@ func firstMarkdownText(t *testing.T, r *mcp.CallToolResult) string {
 
 // List.
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/services") && r.Method == http.MethodGet {
@@ -89,7 +91,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies List when empty.
+// TestList_Empty verifies the List_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -104,7 +108,9 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -118,7 +124,9 @@ func TestList_Error(t *testing.T) {
 
 // Get.
 
-// TestGet_JiraSuccess verifies Get when jira success.
+// TestGet_JiraSuccess verifies the Get_JiraSuccess handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_JiraSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {
@@ -140,7 +148,9 @@ func TestGet_JiraSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_SlackSuccess verifies Get when slack success.
+// TestGet_SlackSuccess verifies the Get_SlackSuccess handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_SlackSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, "slack") && r.Method == http.MethodGet {
@@ -159,7 +169,9 @@ func TestGet_SlackSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_UnsupportedSlug verifies Get when unsupported slug.
+// TestGet_UnsupportedSlug verifies the Get_UnsupportedSlug handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_UnsupportedSlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -171,7 +183,9 @@ func TestGet_UnsupportedSlug(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -185,7 +199,9 @@ func TestGet_APIError(t *testing.T) {
 
 // Delete.
 
-// TestDelete_JiraSuccess verifies Delete when jira success.
+// TestDelete_JiraSuccess verifies the Delete_JiraSuccess handler.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_JiraSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodDelete {
@@ -201,7 +217,9 @@ func TestDelete_JiraSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_SlackApplicationSuccess verifies Delete when slack application success.
+// TestDelete_SlackApplicationSuccess verifies the Delete_SlackApplicationSuccess handler.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_SlackApplicationSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, "gitlab-slack-application") && r.Method == http.MethodDelete {
@@ -217,7 +235,9 @@ func TestDelete_SlackApplicationSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_UnsupportedSlug verifies Delete when unsupported slug.
+// TestDelete_UnsupportedSlug verifies the Delete_UnsupportedSlug handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_UnsupportedSlug(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -229,7 +249,9 @@ func TestDelete_UnsupportedSlug(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies Delete when error.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -243,7 +265,9 @@ func TestDelete_Error(t *testing.T) {
 
 // SetJira.
 
-// TestSetJira_Success verifies SetJira when success.
+// TestSetJira_Success verifies that SetJira succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetJira_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodPut {
@@ -270,7 +294,9 @@ func TestSetJira_Success(t *testing.T) {
 	}
 }
 
-// TestSetJira_Error verifies SetJira when error.
+// TestSetJira_Error verifies that SetJira returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetJira_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -287,7 +313,9 @@ func TestSetJira_Error(t *testing.T) {
 
 // Markdown Formatters.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == nil {
@@ -295,7 +323,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{
 		Integrations: []IntegrationItem{
@@ -308,7 +338,9 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true, CreatedAt: "2026-01-01"},
@@ -327,7 +359,9 @@ const errExpectedNil = "expected error, got nil"
 // List — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError400 verifies List when API error 400.
+// TestList_APIError400 verifies that List400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -342,7 +376,9 @@ func TestList_APIError400(t *testing.T) {
 // Get — all slug dispatches, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestGet_AllSlugsSuccess verifies Get when all slugs success.
+// TestGet_AllSlugsSuccess verifies the Get_AllSlugsSuccess handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_AllSlugsSuccess(t *testing.T) {
 	slugs := []string{
 		"discord", "mattermost", "microsoft-teams", "telegram",
@@ -371,7 +407,9 @@ func TestGet_AllSlugsSuccess(t *testing.T) {
 	}
 }
 
-// TestGet_APIError400 verifies Get when API error 400.
+// TestGet_APIError400 verifies that Get400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -386,7 +424,9 @@ func TestGet_APIError400(t *testing.T) {
 // Delete — all slug dispatches, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestDelete_AllSlugsSuccess verifies Delete when all slugs success.
+// TestDelete_AllSlugsSuccess verifies the Delete_AllSlugsSuccess handler.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_AllSlugsSuccess(t *testing.T) {
 	slugs := []string{
 		"jira", "slack", "discord", "mattermost", "microsoft-teams", "telegram",
@@ -412,7 +452,9 @@ func TestDelete_AllSlugsSuccess(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError400 verifies Delete when API error 400.
+// TestDelete_APIError400 verifies that Delete400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -427,7 +469,9 @@ func TestDelete_APIError400(t *testing.T) {
 // SetJira — optional fields, API error 400
 // ---------------------------------------------------------------------------.
 
-// TestSetJira_WithAllOptionalFields verifies SetJira when with all optional fields.
+// TestSetJira_WithAllOptionalFields verifies the SetJira_WithAllOptionalFields handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -482,7 +526,9 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestSetJira_APIError400 verifies SetJira when API error 400.
+// TestSetJira_APIError400 verifies that SetJira400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetJira_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -500,7 +546,9 @@ func TestSetJira_APIError400(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Inactive verifies FormatGetMarkdown when inactive.
+// TestFormatGetMarkdown_Inactive verifies the GetMarkdown_Inactive Markdown formatter for a representative get_inactive input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_Inactive(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{ID: 2, Title: "Slack", Slug: "slack", Active: false},
@@ -514,7 +562,9 @@ func TestFormatGetMarkdown_Inactive(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_WithUpdatedAt verifies FormatGetMarkdown when with updated at.
+// TestFormatGetMarkdown_WithUpdatedAt verifies the GetMarkdown_WithUpdatedAt Markdown formatter for a representative get_withupdatedat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{
 		Integration: IntegrationItem{
@@ -531,8 +581,9 @@ func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
 	}
 }
 
-// TestGet_WithTimestamps covers the CreatedAt/UpdatedAt != nil branches
-// in integrationToItem by including timestamps in the API response.
+// TestGet_WithTimestamps verifies the Get_WithTimestamps handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_WithTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {
@@ -554,7 +605,9 @@ func TestGet_WithTimestamps(t *testing.T) {
 	}
 }
 
-// TestGet_NilResult covers the result == nil guard in Get().
+// TestGet_NilResult verifies the Get_NilResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_NilResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchIntegrationPath(r.URL.Path, testSlugJira) && r.Method == http.MethodGet {

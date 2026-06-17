@@ -3,6 +3,8 @@
 // issues_ce_test.go tests the core issue CRUD MCP tools against a live GitLab
 // instance. Covers create, get, list, update, note create/list, and delete
 // for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -17,7 +19,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
-// TestIndividual_Issues exercises the issue lifecycle using individual MCP tools.
+// TestIndividual_Issues exercises the issue lifecycle using individual
+// MCP tools (gitlab_issue_create, gitlab_issue_get, etc.).
+//
+// The test creates a project fixture and walks through create, get, list,
+// update, note add, note list, and delete subtests. Each subtest asserts
+// the expected IID, title, or note ID round-trips through the GitLab API.
+// The project is removed by the per-test resource ledger at test exit.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Issues(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -159,7 +169,15 @@ func TestIndividual_Issues(t *testing.T) {
 	})
 }
 
-// TestMeta_Issues exercises the issue lifecycle using the gitlab_issue meta-tool.
+// TestMeta_Issues exercises the issue lifecycle using the gitlab_issue
+// meta-tool.
+//
+// The test mirrors [TestIndividual_Issues] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_issue
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Issues(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

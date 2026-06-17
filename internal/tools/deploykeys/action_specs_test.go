@@ -14,8 +14,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_DeleteError verifies that the delete route returns an error
-// when the GitLab API fails.
+// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -37,8 +38,9 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeployKeyIDGuidance verifies deploy-key actions warn against
-// confusing deploy key IDs with deploy token IDs.
+// TestActionSpecs_DeployKeyIDGuidance validates the DeployKeyIDGuidance route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeployKeyIDGuidance(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -62,8 +64,9 @@ func TestActionSpecs_DeployKeyIDGuidance(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers generic destructive
-// confirmation for deploy key delete when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

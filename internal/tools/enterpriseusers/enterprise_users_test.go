@@ -61,8 +61,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies that List forwards the username, search,
-// active and two_factor filter parameters to the GitLab API.
+// TestList_WithFilters verifies the List_WithFilters handler.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -91,8 +92,9 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List returns a validation error
-// when the required group_id input is empty.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -104,8 +106,9 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when
-// invoked with an already-cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -119,8 +122,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns an error when the GitLab
-// enterprise users endpoint responds with 403 Forbidden.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -136,8 +140,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_InvalidCreatedAfter verifies that List rejects a malformed
-// created_after value before making an API call.
+// TestList_InvalidCreatedAfter verifies the List_InvalidCreatedAfter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidCreatedAfter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -152,8 +157,9 @@ func TestList_InvalidCreatedAfter(t *testing.T) {
 	}
 }
 
-// TestList_InvalidCreatedBefore verifies that List rejects a malformed
-// created_before value before making an API call.
+// TestList_InvalidCreatedBefore verifies the List_InvalidCreatedBefore handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidCreatedBefore(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -168,7 +174,9 @@ func TestList_InvalidCreatedBefore(t *testing.T) {
 	}
 }
 
-// TestList_BlockedFilter verifies the Blocked filter is passed to the API.
+// TestList_BlockedFilter verifies the List_BlockedFilter handler.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_BlockedFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -195,7 +203,9 @@ func TestList_BlockedFilter(t *testing.T) {
 	}
 }
 
-// TestList_ValidDateFilters verifies valid CreatedAfter and CreatedBefore are accepted.
+// TestList_ValidDateFilters verifies the List_ValidDateFilters handler.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_ValidDateFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -218,7 +228,9 @@ func TestList_ValidDateFilters(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResults verifies an empty users list returns zero-length slice.
+// TestList_EmptyResults verifies the List_EmptyResults handler.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResults(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
@@ -239,7 +251,9 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilUser verifies that toOutput with nil returns a zero-value Output.
+// TestToOutput_NilUser verifies the ToOutput_NilUser handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_NilUser(t *testing.T) {
 	out := toOutput(nil)
 	if out.ID != 0 {
@@ -252,8 +266,9 @@ func TestToOutput_NilUser(t *testing.T) {
 
 // --- Get ---.
 
-// TestGet_Success verifies that Get retrieves a single enterprise user by
-// group and user ID, returning all expected fields including created_at.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -290,8 +305,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID verifies that Get returns a validation error
-// when the required group_id input is empty.
+// TestGet_MissingGroupID verifies that Get_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -303,8 +319,9 @@ func TestGet_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_MissingUserID verifies that Get returns a validation error
-// when the required user_id input is zero.
+// TestGet_MissingUserID verifies that Get_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -316,8 +333,9 @@ func TestGet_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies that Get returns an error when
-// invoked with an already-cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -331,8 +349,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get returns an error when the GitLab
-// enterprise users endpoint responds with 404 Not Found.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10 (GET) responds with HTTP NotFound.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -372,8 +391,9 @@ func TestDisable2FA_Success(t *testing.T) {
 	}
 }
 
-// TestDisable2FA_MissingGroupID verifies that Disable2FA returns a
-// validation error when the required group_id input is empty.
+// TestDisable2FA_MissingGroupID verifies that Disable2FA_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDisable2FA_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -385,8 +405,9 @@ func TestDisable2FA_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDisable2FA_MissingUserID verifies that Disable2FA returns a
-// validation error when the required user_id input is zero.
+// TestDisable2FA_MissingUserID verifies that Disable2FA_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDisable2FA_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -398,8 +419,9 @@ func TestDisable2FA_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestDisable2FA_CancelledContext verifies that Disable2FA returns an
-// error when invoked with an already-cancelled context.
+// TestDisable2FA_CancelledContext verifies the Disable2FA_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDisable2FA_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -416,8 +438,9 @@ func TestDisable2FA_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDisable2FA_APIError verifies that Disable2FA returns an error when
-// the GitLab endpoint responds with 403 Forbidden.
+// TestDisable2FA_APIError verifies that Disable2FA returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10/disable_two_factor (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDisable2FA_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10/disable_two_factor" {
@@ -436,9 +459,9 @@ func TestDisable2FA_APIError(t *testing.T) {
 
 // --- Delete ---.
 
-// TestDelete_Success verifies that Delete issues DELETE
-// /api/v4/groups/:id/enterprise_users/:uid and returns no error on 204
-// No Content.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -457,8 +480,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_HardDelete verifies that Delete forwards the hard_delete=true
-// query parameter to the GitLab API when the HardDelete flag is set.
+// TestDelete_HardDelete verifies the Delete_HardDelete handler.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_HardDelete(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
@@ -480,8 +504,9 @@ func TestDelete_HardDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID verifies that Delete returns a validation
-// error when the required group_id input is empty.
+// TestDelete_MissingGroupID verifies that Delete_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -493,8 +518,9 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingUserID verifies that Delete returns a validation
-// error when the required user_id input is zero.
+// TestDelete_MissingUserID verifies that Delete_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -506,8 +532,9 @@ func TestDelete_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies that Delete returns an error when
-// invoked with an already-cancelled context.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -524,8 +551,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns an error when the
-// GitLab enterprise users endpoint responds with 403 Forbidden.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/42/enterprise_users/10 (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {

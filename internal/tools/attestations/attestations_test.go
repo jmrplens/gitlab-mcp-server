@@ -332,7 +332,9 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 
 // --- List ---.
 
-// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/10/attestations/sha256:abc123 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
@@ -366,7 +368,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies that List returns a validation error when project_id is missing.
+// TestList_MissingProjectID verifies that List_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -378,7 +382,9 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestList_MissingSubjectDigest verifies that List returns a validation error when subject_digest is missing.
+// TestList_MissingSubjectDigest verifies that List_MissingSubjectDigest returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingSubjectDigest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -390,7 +396,9 @@ func TestList_MissingSubjectDigest(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -407,7 +415,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns an error when the GitLab API responds with a failure status.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/projects/10/attestations/sha256:abc123 (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
@@ -426,7 +436,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_NotFoundForExistingProject verifies GitLab's attestation 404 is treated as an empty result when the project exists.
+// TestList_NotFoundForExistingProject verifies that List_NotFoundForExistingProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_NotFoundForExistingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -451,7 +463,9 @@ func TestList_NotFoundForExistingProject(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies that List handles an empty API response and returns a non-nil empty result.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The mock GitLab API at /api/v4/projects/10/attestations/sha256:empty (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:empty" {
@@ -475,7 +489,9 @@ func TestList_EmptyResult(t *testing.T) {
 
 // --- Download ---.
 
-// TestDownload_Success verifies that Download returns the expected output when the GitLab API responds successfully.
+// TestDownload_Success verifies that Download succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/10/attestations/1/download (GET) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDownload_Success(t *testing.T) {
 	content := "attestation-binary-content"
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -510,7 +526,9 @@ func TestDownload_Success(t *testing.T) {
 	}
 }
 
-// TestDownload_MissingProjectID verifies that Download returns a validation error when project_id is missing.
+// TestDownload_MissingProjectID verifies that Download_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDownload_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -522,7 +540,9 @@ func TestDownload_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDownload_MissingAttestationIID verifies that Download returns a validation error when attestation_iid is missing.
+// TestDownload_MissingAttestationIID verifies that Download_MissingAttestationIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDownload_MissingAttestationIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -534,7 +554,9 @@ func TestDownload_MissingAttestationIID(t *testing.T) {
 	}
 }
 
-// TestDownload_CancelledContext verifies that Download returns an error when the context is already cancelled.
+// TestDownload_CancelledContext verifies the Download_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDownload_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -551,7 +573,9 @@ func TestDownload_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownload_APIError verifies that Download returns an error when the GitLab API responds with a failure status.
+// TestDownload_APIError verifies that Download returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/projects/10/attestations/1/download (GET) responds with HTTP NotFound.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDownload_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/1/download" {

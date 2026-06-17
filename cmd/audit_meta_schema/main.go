@@ -40,6 +40,10 @@ func main() {
 // run builds an in-memory MCP server with the full meta-tool catalog and
 // compares the generated action parameter schemas across all supported
 // META_PARAM_SCHEMA modes.
+//
+// It exits with an error when the audit client cannot be created, the meta
+// action catalog fails to build, the in-memory MCP handshake fails, or any
+// per-tool schema fails to marshal.
 func run() error {
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
@@ -177,6 +181,9 @@ func run() error {
 // human formats a byte count using compact B, KB, or MB units for the audit
 // table. It keeps raw byte output for small schema sizes so regressions remain
 // easy to spot.
+//
+// Values below 1 KiB render as bytes (e.g. "512 B"); values below 1 MiB
+// render in KiB with one decimal; everything else renders in MiB.
 func human(n int) string {
 	switch {
 	case n >= 1024*1024:

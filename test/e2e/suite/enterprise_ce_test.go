@@ -1,6 +1,8 @@
 //go:build e2e && !enterprise
 
 // enterprise_ce_test.go verifies CE catalog behavior for Enterprise-only tools.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -11,6 +13,15 @@ import (
 
 // TestEnterpriseSecurityTools_NotRegisteredOnCE verifies that CE E2E runs do
 // not expose Premium/Ultimate security classification tools at all.
+//
+// The test returns early when the session was started in enterprise mode
+// (the tool registration is intentionally different in EE). On CE, it
+// calls ListTools on the individual session and asserts that no
+// Enterprise-only tool names (security_classifications_*, security_*
+// _classifications) appear in the catalog. This is a structural check:
+// exposing EE tools on CE would leak Premium/Ultimate endpoints.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: catalog.
 func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
 	t.Parallel()
 	if sess.enterprise {

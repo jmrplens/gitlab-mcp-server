@@ -1,3 +1,9 @@
+// main_test.go covers the format_md_tables command, which normalizes
+// Markdown pipe tables in README.md and docs/.
+//
+// Tests use table-driven cases to validate default discovery, check mode,
+// explicit paths, and invalid arguments. Symlink-escape rejection, write
+// failures, and read errors are exercised end-to-end with temp roots.
 package main
 
 import (
@@ -272,9 +278,9 @@ func TestRun_OpenRootError(t *testing.T) {
 	}
 }
 
-// TestRun_FileMissingDuringIteration verifies that run surfaces errors from
-// formatMarkdownTableFile when a discovered Markdown file disappears between
-// the discovery stat and the read step.
+// TestRun_FormatFileReadError verifies that [formatMarkdownTableFile] surfaces
+// a read error when a discovered Markdown file disappears between the
+// discovery stat and the read step.
 //
 // This is exercised by calling formatMarkdownTableFile directly; the
 // run/discover flow uses a separate stat call that would mask the inner

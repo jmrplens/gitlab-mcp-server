@@ -3,6 +3,8 @@
 // labels_ce_test.go tests the project label MCP tools against a live GitLab
 // instance. Covers label create, list, update, and delete for both individual
 // and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,7 +17,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestIndividual_Labels exercises label CRUD using individual MCP tools.
+// TestIndividual_Labels exercises label CRUD using individual MCP tools
+// (gitlab_create_label, gitlab_list_labels, etc.).
+//
+// The test creates a project fixture, then walks through create, list,
+// update, and delete subtests. Each subtest asserts the expected label
+// ID, name, or color round-trips through the GitLab API. The project is
+// removed by the per-test resource ledger at test exit.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Labels(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -74,6 +84,13 @@ func TestIndividual_Labels(t *testing.T) {
 }
 
 // TestMeta_Labels exercises label CRUD using the gitlab_project meta-tool.
+//
+// The test mirrors [TestIndividual_Labels] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_project
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Labels(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

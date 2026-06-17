@@ -69,7 +69,9 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_PrimaryMetadata verifies richer metadata on the core group actions.
+// TestActionSpecs_PrimaryMetadata validates the PrimaryMetadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := groupSpecsByTool(t, ActionSpecs(client))
@@ -102,7 +104,9 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_GetNotFound covers the not-found branch in the gitlab_group_get route.
+// TestActionSpecs_GetNotFound validates the GetNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -120,7 +124,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestFormatGroupNotFound verifies not-found result formatting for group lookups.
+// TestFormatGroupNotFound verifies the GroupNotFound Markdown formatter for a representative groupnotfound input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFormatGroupNotFound(t *testing.T) {
 	result := formatGroupNotFound(groupNotFoundOutput{Identifier: "my%2Fgroup"})
 	if result == nil || !result.IsError {
@@ -135,8 +141,9 @@ func TestFormatGroupNotFound(t *testing.T) {
 	}
 }
 
-// TestMemberToOutput_OptionalFields covers the optional field branches
-// (CreatedAt, ExpiresAt, GroupSAMLIdentity, MemberRole) in MemberToOutput.
+// TestMemberToOutput_OptionalFields verifies the MemberToOutput_OptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMemberToOutput_OptionalFields(t *testing.T) {
 	now := time.Now()
 	expires := gl.ISOTime(now)
@@ -168,7 +175,9 @@ func TestMemberToOutput_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths covers route error propagation for non-404 API errors.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

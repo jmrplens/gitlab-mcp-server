@@ -284,6 +284,9 @@ func createProjectUnderGroupMeta(ctx context.Context, t *testing.T, session *mcp
 	return CreateProjectUnderGroupMeta(ctx, NewE2EContext(t), session, groupID)
 }
 
+// enterpriseProjectCreateRetryable reports whether the project-create error
+// is a transient EE-side failure worth retrying. Returns false on CE or
+// when err is nil.
 func enterpriseProjectCreateRetryable(err error) bool {
 	if err == nil || !sess.enterprise {
 		return false
@@ -371,6 +374,10 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 	return fixture
 }
 
+// commitFileActionMeta performs the underlying commit_create call for
+// [commitFileMeta]. The retry logic alternates the start_branch parameter
+// in response to the "branch already exists" / "branch not ready" races
+// GitLab CE exposes when several fixture commits fire in quick succession.
 func commitFileActionMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message, action string) (CommitFixture, error) {
 	t.Helper()
 	const maxRetries = 8

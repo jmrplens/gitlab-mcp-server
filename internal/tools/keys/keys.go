@@ -44,7 +44,9 @@ type Output struct {
 
 // Handlers.
 
-// GetKeyWithUser retrieves an SSH key and the user it belongs to.
+// GetKeyWithUser retrieves an SSH key and its owning user via the
+// GitLab admin Keys API (GET /keys/:key_id). Requires administrator
+// access on self-managed GitLab instances.
 func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetByIDInput) (Output, error) {
 	if input.KeyID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("key_get", toolutil.ErrFieldRequired("key_id"))
@@ -57,7 +59,9 @@ func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetB
 	return toOutput(key), nil
 }
 
-// GetKeyByFingerprint retrieves an SSH key by its fingerprint.
+// GetKeyByFingerprint retrieves an SSH key by its fingerprint via the
+// GitLab admin Keys API (GET /keys). The fingerprint may be in the
+// modern SHA256:base64 form or the legacy MD5:hex-pairs form.
 func GetKeyByFingerprint(ctx context.Context, client *gitlabclient.Client, input GetByFingerprintInput) (Output, error) {
 	if input.Fingerprint == "" {
 		return Output{}, toolutil.WrapErrWithMessage("key_get_by_fingerprint", toolutil.ErrFieldRequired("fingerprint"))
@@ -73,7 +77,8 @@ func GetKeyByFingerprint(ctx context.Context, client *gitlabclient.Client, input
 
 // Converters.
 
-// toOutput converts the GitLab API response to the tool output format.
+// toOutput converts a [gl.Key] (with embedded user) into the package's
+// [Output], formatting the created-at timestamp as RFC 3339.
 func toOutput(k *gl.Key) Output {
 	out := Output{
 		ID:    k.ID,

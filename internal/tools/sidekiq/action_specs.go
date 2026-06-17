@@ -8,13 +8,18 @@ import (
 // ActionSpecs returns canonical specs for Sidekiq metrics tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_sidekiq_queue_metrics — read Sidekiq queue backlog and latency metrics.
 		sidekiqReadSpec("sidekiq_queue_metrics", toolutil.RouteAction(client, GetQueueMetrics), "gitlab_get_sidekiq_queue_metrics"),
+		// gitlab_get_sidekiq_process_metrics — read Sidekiq worker process metrics.
 		sidekiqReadSpec("sidekiq_process_metrics", toolutil.RouteAction(client, GetProcessMetrics), "gitlab_get_sidekiq_process_metrics"),
+		// gitlab_get_sidekiq_job_stats — read aggregate Sidekiq job counts.
 		sidekiqReadSpec("sidekiq_job_stats", toolutil.RouteAction(client, GetJobStats), "gitlab_get_sidekiq_job_stats"),
+		// gitlab_get_sidekiq_compound_metrics — read combined Sidekiq queue, process, and job metrics.
 		sidekiqReadSpec("sidekiq_compound_metrics", toolutil.RouteAction(client, GetCompoundMetrics), "gitlab_get_sidekiq_compound_metrics"),
 	}
 }
 
+// sidekiqReadSpec builds the canonical read-only spec for a Sidekiq metrics tool.
 func sidekiqReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, sidekiqOptions(name, individualTool))
 }

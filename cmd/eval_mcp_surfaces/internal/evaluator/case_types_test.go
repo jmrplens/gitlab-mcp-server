@@ -1,3 +1,7 @@
+// case_types_test.go covers the typed [EvalCase] data model and the
+// [taskFromCase] projection that flattens typed cases into the legacy
+// evalTask shape used by the runtime.
+
 package evaluator
 
 import (
@@ -5,6 +9,15 @@ import (
 	"testing"
 )
 
+// TestTaskFromCase_SingleStepPreservesProjectedFields verifies that
+// taskFromCase projects every scalar and slice field of a single-step typed
+// case into the resulting evalTask, including route, params, simulation,
+// and the destructive flag.
+//
+// The test feeds an EvalCase with one ExpectedStep and asserts identity,
+// prompt, route, required and optional params, simulation, and the destructive
+// flag. This protects the projection from dropping fields needed by the
+// runtime validators.
 func TestTaskFromCase_SingleStepPreservesProjectedFields(t *testing.T) {
 	evalCase := EvalCase{
 		ID:     "MT-CASE-001",
@@ -35,6 +48,15 @@ func TestTaskFromCase_SingleStepPreservesProjectedFields(t *testing.T) {
 	}
 }
 
+// TestTaskFromCase_MultiStepPreservesStepFields verifies that taskFromCase
+// keeps every step's projected fields intact for multi-step typed cases,
+// including per-step destructive flags and simulation values.
+//
+// The test feeds an EvalCase with create + delete steps and asserts the
+// task exposes both steps, the first route summary points at the create
+// action, and the second step retains destructive semantics and its custom
+// confirm param. This protects multi-step projections from collapsing or
+// dropping step-specific attributes.
 func TestTaskFromCase_MultiStepPreservesStepFields(t *testing.T) {
 	evalCase := EvalCase{
 		ID:     "MS-CASE-001",
@@ -76,6 +98,15 @@ func TestTaskFromCase_MultiStepPreservesStepFields(t *testing.T) {
 	}
 }
 
+// TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps verifies that
+// the new typed-assertion fields on ExpectedStep (ForbiddenParams,
+// AllowedRepairs, ProducedValues, OptionalStep) survive the case-to-task
+// projection so the runtime validators and metric aggregators can consume
+// them.
+//
+// The test feeds an EvalCase with each new field populated and asserts the
+// projected task step retains every value. This protects the typed
+// assertion expansion (Phase 11) from regressing through the projection.
 func TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps(t *testing.T) {
 	evalCase := EvalCase{
 		ID:     "MT-CASE-ASSERTIONS",
@@ -109,6 +140,14 @@ func TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps(t *testing.T) {
 	}
 }
 
+// TestCaseAssertionTypes_CoverPhaseElevenRules verifies that every
+// CaseAssertionType constant introduced for the Phase 11 typed-assertion
+// rules is non-empty so the runtime can dispatch on each rule.
+//
+// The test enumerates the expected assertion type constants and asserts
+// none of them is the empty string. This protects downstream registries
+// from silently dropping a rule when a future rename leaves an empty
+// constant in place.
 func TestCaseAssertionTypes_CoverPhaseElevenRules(t *testing.T) {
 	want := []CaseAssertionType{
 		CaseAssertionExpectedAction,
@@ -128,6 +167,8 @@ func TestCaseAssertionTypes_CoverPhaseElevenRules(t *testing.T) {
 	}
 }
 
+// joinStrings returns values joined by a single comma, used by the case-type
+// tests to produce stable comparison strings for slice fields.
 func joinStrings(values []string) string {
 	return strings.Join(values, ",")
 }

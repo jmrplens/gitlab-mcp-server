@@ -14,18 +14,29 @@ const actionTagGet = "tag.get"
 // ActionSpecs returns canonical specs for tag and protected tag actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_tag_create — create a new tag from a branch, tag, or commit.
 		tagSpec("create", toolutil.RouteAction(client, Create), "gitlab_tag_create", false, false),
+		// gitlab_tag_get — fetch a single tag by name (returns a structured not-found result on 404).
 		tagSpec("get", tagGetRoute(client), "gitlab_tag_get", true, true),
+		// gitlab_tag_list — list tags for a project with optional search and pagination.
 		tagSpec("list", toolutil.RouteAction(client, List), "gitlab_tag_list", true, true),
+		// gitlab_tag_delete — delete a tag (destructive).
 		tagSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_tag_delete", false, true),
+		// gitlab_tag_get_signature — fetch the X.509 signature attached to a tag.
 		tagSpec("get_signature", toolutil.RouteAction(client, GetSignature), "gitlab_tag_get_signature", true, true),
+		// gitlab_tag_list_protected — list protected tags for a project.
 		tagSpec("list_protected", toolutil.RouteAction(client, ListProtectedTags), "gitlab_tag_list_protected", true, true),
+		// gitlab_tag_get_protected — fetch a single protected tag by name.
 		tagSpec("get_protected", toolutil.RouteAction(client, GetProtectedTag), "gitlab_tag_get_protected", true, true),
+		// gitlab_tag_protect — protect a tag (or wildcard pattern) with create access levels.
 		tagSpec("protect", toolutil.RouteAction(client, ProtectTag), "gitlab_tag_protect", false, false),
+		// gitlab_tag_unprotect — remove protection from a tag (destructive).
 		tagSpec("unprotect", toolutil.DestructiveVoidAction(client, UnprotectTag), "gitlab_tag_unprotect", false, true),
 	}
 }
 
+// tagGetRoute wraps the canonical Get route to return a structured not-found output
+// when GitLab responds with HTTP 404, mirroring the branches package behavior.
 func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, Get)
 	baseHandler := route.Handler

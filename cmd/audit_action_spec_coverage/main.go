@@ -51,6 +51,11 @@ var metaOnlyProjectionActions = map[string]string{
 	"server.health_check": "meta-only alias for gitlab_server status; the individual surface uses gitlab_server_status",
 }
 
+// coverageReport is the JSON document written to dist/action-spec-coverage.json.
+//
+// SchemaVersion lets downstream consumers detect breaking changes to the file
+// shape. Architecture and Summary capture catalog-level aggregates, while
+// Domains lists one entry per package under internal/tools.
 type coverageReport struct {
 	SchemaVersion int                `json:"schema_version"`
 	Architecture  architectureReport `json:"architecture"`
@@ -58,6 +63,15 @@ type coverageReport struct {
 	Domains       []domainCoverage   `json:"domains"`
 }
 
+// architectureReport captures the top-level architecture facts that
+// upstream tooling and audits consume alongside the per-domain breakdown.
+//
+// *_Source fields are human-readable strings describing where a given
+// catalog layer originates. SurfaceSpecCount mirrors the summary total so
+// audits can confirm catalog-first invariants without re-walking domains.
+// LegacyBridgeCount and LegacyBridges are populated only when the audit
+// detects non-catalog-first runtime bridges; they are omitted from the JSON
+// when empty to keep clean snapshots compact.
 type architectureReport struct {
 	CatalogSource                          string   `json:"catalog_source"`
 	ManifestSource                         string   `json:"manifest_source"`
@@ -72,6 +86,11 @@ type architectureReport struct {
 	DynamicSpecMetadataParameterAliasCount int      `json:"dynamic_spec_metadata_parameter_alias_count"`
 }
 
+// coverageSummary aggregates package counts and action totals across all
+// internal/tools sub-packages.
+//
+// SurfaceClassificationCounts and SurfaceKindCounts track how many packages
+// fall into each classification and surface kind, respectively.
 type coverageSummary struct {
 	DomainCount                 int            `json:"domain_count"`
 	RegisterToolsCount          int            `json:"register_tools_count"`
@@ -88,6 +107,14 @@ type coverageSummary struct {
 	SurfaceKindCounts           map[string]int `json:"surface_kind_counts"`
 }
 
+// domainCoverage reports the catalog-first coverage status of one
+// internal/tools sub-package.
+//
+// SurfaceClassification is one of the constant strings produced by
+// [classifySurface] (for example "spec-backed" or "surface-backed"). The
+// various Has* flags summarize the static structure observed by walking
+// the package directory; ActionSpecCount and friends tally actions
+// contributed to each catalog layer.
 type domainCoverage struct {
 	Package                   string         `json:"package"`
 	HasRegisterTools          bool           `json:"has_register_tools"`
@@ -114,6 +141,13 @@ type domainCoverage struct {
 	SurfaceKindCounts         map[string]int `json:"surface_kind_counts,omitempty"`
 }
 
+// domainSource is the in-memory representation built while walking a
+// package directory, before action counts and metadata are merged in.
+//
+// The boolean fields are populated by inspecting each top-level Go file for
+// the relevant function names (RegisterTools, RegisterMeta, ActionSpecs,
+// RegisterCatalogFindExecuteTools). ClientType is the textual type of the
+// first non-MCP parameter when a RegisterTools function is present.
 type domainSource struct {
 	Package                       string
 	HasRegisterTools              bool
@@ -125,6 +159,11 @@ type domainSource struct {
 	ClientType                    string
 }
 
+// packageActionCoverage accumulates per-package catalog counts before they
+// are merged into the [domainCoverage] result.
+//
+// MetaGroups tracks the set of meta-tool names whose actions the package
+// contributes to (used to populate the comma-separated MetaGroup field).
 type packageActionCoverage struct {
 	ActionSpecCount           int
 	OrdinaryGitLabActionCount int

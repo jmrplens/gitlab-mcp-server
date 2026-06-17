@@ -24,7 +24,10 @@ type RenderOutput struct {
 	HTML string `json:"html"`
 }
 
-// Render renders arbitrary markdown text to HTML using the GitLab API.
+// Render sends arbitrary Markdown text to the GitLab Markdown render
+// API (POST /markdown) and returns the resulting HTML. When GFM is
+// true, GitLab Flavored Markdown extensions are applied; an optional
+// Project enables reference resolution (e.g. issue/MR links).
 func Render(ctx context.Context, client *gitlabclient.Client, input RenderInput) (RenderOutput, error) {
 	opts := &gl.RenderOptions{
 		Text: new(input.Text),
@@ -42,7 +45,9 @@ func Render(ctx context.Context, client *gitlabclient.Client, input RenderInput)
 	return RenderOutput{HTML: md.HTML}, nil
 }
 
-// FormatRenderMarkdown formats the rendered markdown output.
+// FormatRenderMarkdown wraps the [RenderOutput] HTML in an
+// [mcp.CallToolResult] with a Markdown heading so downstream agents
+// see a stable structure even when the rendered HTML is empty.
 func FormatRenderMarkdown(out RenderOutput) *mcp.CallToolResult {
 	if out.HTML == "" {
 		return toolutil.ToolResultWithMarkdown("Empty markdown rendered.")

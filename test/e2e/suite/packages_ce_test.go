@@ -46,6 +46,8 @@ func TestPackages(t *testing.T) {
 	testMetaPackageLifecycle(ctx, t, projM, fixture)
 }
 
+// packageLifecycleFixture groups the inputs shared across publish/list/
+// file-list/download/file-delete/delete for a single E2E package lifecycle.
 type packageLifecycleFixture struct {
 	pkgName     string
 	pkgVersion  string
@@ -53,6 +55,11 @@ type packageLifecycleFixture struct {
 	fileContent string
 }
 
+// testIndividualPackageLifecycle drives the package lifecycle through the
+// individual MCP tool surface: publish → list → file-list → download →
+// file-delete → package-delete. Each subtest asserts the expected side
+// effect (file listed, download non-empty, etc.) so a regression that
+// silently no-ops one of the calls would still fail.
 func testIndividualPackageLifecycle(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
 	t.Helper()
 	var packageID int64
@@ -86,6 +93,9 @@ func testIndividualPackageLifecycle(ctx context.Context, t *testing.T, proj Proj
 	})
 }
 
+// publishIndividualPackage publishes a generic package via the
+// gitlab_package_publish individual tool and returns the created package
+// and file IDs for downstream lifecycle subtests.
 func publishIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) (int64, int64) {
 	t.Helper()
 	out, err := callToolOn[packages.PublishOutput](ctx, sess.individual, "gitlab_package_publish", packages.PublishInput{
@@ -105,6 +115,8 @@ func publishIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFix
 	return out.PackageID, out.PackageFileID
 }
 
+// assertIndividualPackageListed verifies the package published in
+// [publishIndividualPackage] is visible in the project's package list.
 func assertIndividualPackageListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
 	t.Helper()
 	out, err := callToolOn[packages.ListOutput](ctx, sess.individual, "gitlab_package_list", packages.ListInput{ProjectID: proj.pidOf()})
@@ -119,6 +131,9 @@ func assertIndividualPackageListed(ctx context.Context, t *testing.T, proj Proje
 	t.Fatalf("package %q not found in list", fixture.pkgName)
 }
 
+// assertIndividualPackageFileListed verifies the published package contains
+// the expected file. Returns the file ID so callers can target the
+// file_delete action without re-listing.
 func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture, packageID int64) int64 {
 	t.Helper()
 	out, err := callToolOn[packages.FileListOutput](ctx, sess.individual, "gitlab_package_file_list", packages.FileListInput{
@@ -137,6 +152,8 @@ func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj P
 	return out.Files[0].PackageFileID
 }
 
+// downloadIndividualPackage downloads the published package to a temp
+// directory and asserts the download reports a non-empty payload.
 func downloadIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
 	t.Helper()
 	outPath := t.TempDir() + "/downloaded.txt"
@@ -156,6 +173,8 @@ func downloadIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFi
 	t.Logf("Downloaded %d bytes to %s", out.Size, out.OutputPath)
 }
 
+// deleteIndividualPackageFile removes the package file targeted by
+// packageFileID.
 func deleteIndividualPackageFile(ctx context.Context, t *testing.T, proj ProjectFixture, packageID, packageFileID int64) {
 	t.Helper()
 	err := callToolVoidOn(ctx, sess.individual, "gitlab_package_file_delete", packages.FileDeleteInput{
@@ -168,6 +187,8 @@ func deleteIndividualPackageFile(ctx context.Context, t *testing.T, proj Project
 	}
 }
 
+// deleteIndividualPackage removes the entire package after the file-delete
+// subtest has cleaned up its content.
 func deleteIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, packageID int64) {
 	t.Helper()
 	err := callToolVoidOn(ctx, sess.individual, "gitlab_package_delete", packages.DeleteInput{
@@ -179,6 +200,8 @@ func deleteIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixt
 	}
 }
 
+// testMetaPackageLifecycle mirrors testIndividualPackageLifecycle but
+// drives the lifecycle through the gitlab_package meta-tool surface.
 func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFixture, fixture packageLifecycleFixture) {
 	t.Helper()
 	var mPkgID int64

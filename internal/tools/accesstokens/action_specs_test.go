@@ -14,7 +14,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_RevokeErrors verifies revoke routes return errors when the GitLab API rejects them.
+// TestActionSpecs_RevokeErrors validates the RevokeErrors route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_RevokeErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +48,9 @@ func TestActionSpecs_RevokeErrors(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_AccessTokenGuidance verifies access token actions carry
-// model-facing hints that distinguish token IDs from scope owner IDs.
+// TestActionSpecs_AccessTokenGuidance validates the AccessTokenGuidance route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_AccessTokenGuidance(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -72,7 +75,9 @@ func TestActionSpecs_AccessTokenGuidance(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_RevokeConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_RevokeConfirmDeclined verifies the CatalogSurface_RevokeConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_RevokeConfirmDeclined(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -172,8 +177,9 @@ func TestAccessTokenScopeAndOperation_AllBranches(t *testing.T) {
 	}
 }
 
-// TestAccessTokenOperationPhrase_AllBranches verifies every switch arm and
-// the default fallback (used for unknown operations).
+// TestAccessTokenOperationPhrase_AllBranches verifies the AccessTokenOperationPhrase_AllBranches handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAccessTokenOperationPhrase_AllBranches(t *testing.T) {
 	tests := []struct {
 		operation string
@@ -197,8 +203,9 @@ func TestAccessTokenOperationPhrase_AllBranches(t *testing.T) {
 	}
 }
 
-// TestAccessTokenRelatedActions_AllBranches verifies the related-action
-// switch returns the canonical list for known scopes and nil for unknown.
+// TestAccessTokenRelatedActions_AllBranches verifies the AccessTokenRelatedActions_AllBranches handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAccessTokenRelatedActions_AllBranches(t *testing.T) {
 	if got := accessTokenRelatedActions("project"); len(got) == 0 {
 		t.Errorf("project scope should return related actions")

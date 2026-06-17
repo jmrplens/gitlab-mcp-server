@@ -1,3 +1,7 @@
+// dynamic_schema_test.go contains unit tests for the dynamic action
+// schema resources registered by [RegisterDynamicSchemaResources].
+// Tests build a small in-memory action catalog, register the
+// resources, and read the URI through an in-memory MCP transport.
 package resources
 
 import (
@@ -13,6 +17,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// dynamicSchemaSession registers the dynamic schema resources against
+// an in-memory MCP server and returns a connected client session. The
+// session and server are torn down via [testing.T.Cleanup] callbacks.
 func dynamicSchemaSession(t *testing.T, catalog *actioncatalog.Catalog) *mcp.ClientSession {
 	t.Helper()
 
@@ -35,6 +42,11 @@ func dynamicSchemaSession(t *testing.T, catalog *actioncatalog.Catalog) *mcp.Cli
 	return session
 }
 
+// TestDynamicSchemaIndex_ListsCanonicalActionsSorted verifies that
+// the "gitlab://schema/dynamic/" resource lists every action in the
+// catalog under its canonical "domain.action" ID, sorted alphabetically
+// by ID, and that the per-row metadata (SchemaURI, Destructive,
+// RequiredParams) is derived from the underlying route.
 func TestDynamicSchemaIndex_ListsCanonicalActionsSorted(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
@@ -79,6 +91,13 @@ func TestDynamicSchemaIndex_ListsCanonicalActionsSorted(t *testing.T) {
 	}
 }
 
+// TestDynamicSchemaTemplate_ReturnsDynamicParamsSchema verifies that
+// the "gitlab://schema/dynamic/{action}" resource returns the action's
+// params schema, that slash-separated action IDs are rejected, and
+// that the "confirm" parameter is NOT included (it is added by
+// gitlab_execute_action on top, not in the action-specific schema).
+// For destructive actions the response must also include the
+// x_confirmation extension.
 func TestDynamicSchemaTemplate_ReturnsDynamicParamsSchema(t *testing.T) {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
@@ -112,6 +131,10 @@ func TestDynamicSchemaTemplate_ReturnsDynamicParamsSchema(t *testing.T) {
 	}
 }
 
+// TestDynamicSchemaTemplate_ReturnsDefaultSchemaWhenInputSchemaMissing
+// verifies that an action with no captured InputSchema falls back to a
+// permissive object schema (additionalProperties=true) so clients
+// always receive a valid JSON Schema document.
 func TestDynamicSchemaTemplate_ReturnsDefaultSchemaWhenInputSchemaMissing(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
@@ -134,6 +157,10 @@ func TestDynamicSchemaTemplate_ReturnsDefaultSchemaWhenInputSchemaMissing(t *tes
 	}
 }
 
+// TestDynamicSchemaTemplate_NotFound verifies that the template
+// resource returns a ResourceNotFoundError for unknown action IDs,
+// whitespace-only IDs, slash-separated IDs, and URIs that do not
+// match the dynamic schema prefix at all.
 func TestDynamicSchemaTemplate_NotFound(t *testing.T) {
 	session := dynamicSchemaSession(t, nil)
 
@@ -152,12 +179,20 @@ func TestDynamicSchemaTemplate_NotFound(t *testing.T) {
 	}
 }
 
+// TestReadDynamicSchemaResource_RejectsInvalidURI verifies the direct
+// call to [readDynamicSchemaResource] returns a ResourceNotFoundError
+// for a whitespace-only action ID, bypassing the in-memory MCP
+// transport.
 func TestReadDynamicSchemaResource_RejectsInvalidURI(t *testing.T) {
 	if _, err := readDynamicSchemaResource(actioncatalog.NewCatalog(), "gitlab://schema/dynamic/   "); err == nil {
 		t.Fatal("expected ResourceNotFoundError")
 	}
 }
 
+// TestParseDynamicSchemaURI_NormalizesAndRejectsInvalidURIs verifies
+// that [parseDynamicSchemaURI] lower-cases the action ID and trims
+// whitespace on valid URIs, and returns the empty string for
+// unrelated schemes, empty IDs, and slash-separated IDs.
 func TestParseDynamicSchemaURI_NormalizesAndRejectsInvalidURIs(t *testing.T) {
 	if got := parseDynamicSchemaURI("gitlab://schema/dynamic/Project.Get"); got != "project.get" {
 		t.Fatalf("parseDynamicSchemaURI() = %q, want project.get", got)
@@ -169,6 +204,10 @@ func TestParseDynamicSchemaURI_NormalizesAndRejectsInvalidURIs(t *testing.T) {
 	}
 }
 
+// TestDynamicRequiredParams_IncludesAnyOfAndOneOf verifies the
+// defensive branches of [dynamicRequiredParams] and
+// [dedupeDynamicStrings]: nil input, alternate-required branches in
+// anyOf/oneOf, and deduplication of repeated entries.
 func TestDynamicRequiredParams_IncludesAnyOfAndOneOf(t *testing.T) {
 	if got := dynamicRequiredParams(nil); got != nil {
 		t.Fatalf("dynamicRequiredParams(nil) = %v, want nil", got)

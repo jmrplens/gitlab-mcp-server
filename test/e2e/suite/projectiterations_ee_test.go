@@ -21,8 +21,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectiterations"
 )
 
-// TestMeta_ProjectIterations exercises project iteration list via gitlab_issue.
-// Requires GitLab Premium (GITLAB_ENTERPRISE=true).
+// TestMeta_ProjectIterations exercises the project iteration list action
+// through the gitlab_issue meta-tool against a live GitLab EE Premium/Ultimate
+// instance.
+//
+// The projectiterations package exposes only the iteration_list_project
+// (read-only list) action. Create, update, and delete actions are not
+// registered in the action spec catalog. The test creates a group first,
+// then a project under that group (iterations require a Group namespace,
+// not a User namespace), and asserts the list action returns successfully.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Premium/Ultimate.
 func TestMeta_ProjectIterations(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

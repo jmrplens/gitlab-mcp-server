@@ -61,8 +61,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 
 // Handler tests.
 
-// TestList_Success verifies that listing CI catalog resources returns the
-// expected items when the GraphQL API responds with valid data.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
@@ -111,8 +112,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies that search and scope filters are correctly
-// forwarded to the GraphQL API when listing catalog resources.
+// TestList_WithFilters verifies the List_WithFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithFilters(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +153,9 @@ func TestList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResults verifies that listing CI catalog resources returns
-// an empty result set when no resources match.
+// TestList_EmptyResults verifies the List_EmptyResults handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResults(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
@@ -175,8 +178,9 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
-// TestList_ServerError verifies that listing CI catalog resources propagates
-// errors when the GraphQL API returns a server error.
+// TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {
@@ -191,8 +195,9 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
-// TestList_Pagination verifies that cursor-based pagination parameters
-// are correctly forwarded and page info is returned in the output.
+// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_Pagination(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, r *http.Request) {
@@ -319,8 +324,9 @@ func TestGet_ByFullPath(t *testing.T) {
 	}
 }
 
-// TestGet_ByID verifies that retrieving a CI catalog resource by its
-// numeric ID returns the expected detail.
+// TestGet_ByID verifies the Get_ByID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_ByID(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResource": func(w http.ResponseWriter, r *http.Request) {
@@ -358,8 +364,9 @@ func TestGet_MissingIDAndPath(t *testing.T) {
 	}
 }
 
-// TestGet_NotFound verifies that retrieving a non-existent CI catalog
-// resource returns an error.
+// TestGet_NotFound verifies that Get_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_NotFound(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
@@ -379,8 +386,9 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestGet_NullOptionalFields verifies that a CI catalog resource with null
-// optional fields (description, icon, readme) is handled without errors.
+// TestGet_NullOptionalFields verifies the Get_NullOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_NullOptionalFields(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
@@ -423,8 +431,9 @@ func TestGet_NullOptionalFields(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatListMarkdown_Empty verifies that formatting an empty catalog
-// resource list produces the expected no-results Markdown message.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No catalog resources found.") {
@@ -502,8 +511,9 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 	}
 }
 
-// TestTruncate verifies that the truncate helper correctly shortens strings
-// exceeding the maximum length and leaves shorter strings unchanged.
+// TestTruncate verifies the Truncate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestTruncate(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -525,8 +535,9 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
-// TestFormatDate verifies that formatDate extracts the YYYY-MM-DD portion
-// from ISO 8601 timestamps and handles empty and short inputs.
+// TestFormatDate verifies the Date Markdown formatter for a representative date input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDate(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -547,8 +558,9 @@ func TestFormatDate(t *testing.T) {
 	}
 }
 
-// TestGet_ServerError verifies that Get propagates GraphQL API errors when
-// the server returns a non-200 response.
+// TestGet_ServerError verifies that Get_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
@@ -633,8 +645,9 @@ func TestFormatGetMarkdown_ComponentWithoutInputs(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies that both CI/CD catalog canonical routes
-// execute successfully through ActionSpecs.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"ciCatalogResources": func(w http.ResponseWriter, _ *http.Request) {

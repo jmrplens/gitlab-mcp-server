@@ -140,8 +140,9 @@ func TestActionSpecs_SettingsAndMetadataUsageGuidance(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_AppearanceAndStatisticsGuidance verifies aligned discovery
-// metadata for appearance and application statistics actions.
+// TestActionSpecs_AppearanceAndStatisticsGuidance validates the AppearanceAndStatisticsGuidance route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_AppearanceAndStatisticsGuidance(t *testing.T) {
 	specs := specsByName(t, ActionSpecs(nil))
 

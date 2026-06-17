@@ -19,6 +19,14 @@ func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
 	}
 }
 
+// TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance verifies that
+// dynamic prompts for tasks anchored on a remote URL expose the discovery
+// guidance without leaking the exact discovery action name into the prompt.
+//
+// The test renders the prompt for a task with discover_project.resolve and
+// pipeline.get steps and asserts the prompt contains the expected discovery
+// guidance text and does not expose the literal action name. This protects
+// the runner from leaking catalog action names that should be discovered.
 func TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance(t *testing.T) {
 	task := evalTask{ID: "MS-002", Prompt: "Resolve remote URL `https://gitlab.example.com/group/project.git` then inspect pipeline `1`.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
@@ -32,6 +40,15 @@ func TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance(t *testing.T) {
 	}
 }
 
+// TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped verifies that
+// the remote-URL discovery guidance is only emitted for tasks whose prompt
+// actually contains a remote URL.
+//
+// The test renders a prompt for a project.get task that does not mention a
+// remote URL and asserts the discovery guidance is absent and the literal
+// discover_project.resolve action is not leaked. This protects the dynamic
+// prompt builder from injecting unrelated guidance for tasks that already
+// know the project path.
 func TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped(t *testing.T) {
 	task := evalTask{ID: "MT-002", Prompt: "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
@@ -46,6 +63,17 @@ func TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped(t *testing.T) {
 	}
 }
 
+// TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries verifies that
+// dynamic prompts for analyzer-style multi-step tasks include explicit
+// guidance to avoid placeholder retries and to keep ref identifiers stable
+// across the compare and analyzer steps.
+//
+// The test renders the prompt for a release-summary workflow with
+// release.list, repository.compare, and analyze.release_notes steps and
+// asserts the prompt mentions the placeholder warning, the find retry
+// guidance, and the stable-ref guidance. This protects the prompt builder
+// from regressing to a generic template that lets models hallucinate
+// placeholder values.
 func TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries(t *testing.T) {
 	task := evalTask{ID: "MS-012", Prompt: "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "release.list", RequiredParams: []string{"project_id"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "repository.compare", RequiredParams: []string{"project_id", "from", "to"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "analyze.release_notes", RequiredParams: []string{"project_id", "from", "to"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
@@ -60,6 +88,15 @@ func TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries(t *testing.T) {
 	}
 }
 
+// TestDynamicExampleParamValue_CompareRefsExtractsFromAndTo verifies that
+// dynamicExampleParamValue pulls the correct ref values for repository.compare
+// and analyze.release_notes actions from a prompt that names both refs in
+// backticks.
+//
+// The test invokes the helper with the from/to parameters for each action
+// and asserts the extracted values match the prompt's refs. This protects
+// the prompt builder from binding the wrong ref to the wrong action when a
+// workflow depends on consistent from/to values.
 func TestDynamicExampleParamValue_CompareRefsExtractsFromAndTo(t *testing.T) {
 	prompt := "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes."
 	if got := dynamicExampleParamValue("repository.compare", "from", prompt); got != "main" {

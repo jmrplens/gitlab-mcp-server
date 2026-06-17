@@ -31,7 +31,11 @@ type DownloadOutput struct {
 	SizeBytes      int    `json:"size_bytes"`
 }
 
-// Download retrieves a machine learning model package file.
+// Download retrieves a single file from a machine learning model
+// package via the GitLab Model Registry API
+// (GET /projects/:id/ml/models/:model_version_id/:path/:filename).
+// Returns the raw bytes base64-encoded in ContentBase64, with
+// SizeBytes describing the decoded size.
 func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput) (DownloadOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DownloadOutput{}, err
@@ -60,6 +64,9 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	return downloadOutput(in, reader)
 }
 
+// downloadOutput reads a model package file stream to completion and
+// returns the bytes base64-encoded alongside the original input
+// metadata.
 func downloadOutput(in DownloadInput, reader io.Reader) (DownloadOutput, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {

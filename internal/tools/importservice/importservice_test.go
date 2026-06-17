@@ -28,7 +28,9 @@ const testMyRepoName = "my-repo"
 // testBBSRepoName identifies the test bbs repo name constant used by this package.
 const testBBSRepoName = "bbs-repo"
 
-// TestImportFromGitHub verifies ImportFromGitHub.
+// TestImportFromGitHub verifies the ImportFromGitHub handler.
+// The mock GitLab API at /api/v4/import/github (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromGitHub(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github" {
@@ -53,7 +55,9 @@ func TestImportFromGitHub(t *testing.T) {
 	}
 }
 
-// TestImportFromGitHub_InvalidRepoID verifies ImportFromGitHub when invalid repo ID.
+// TestImportFromGitHub_InvalidRepoID verifies the ImportFromGitHub_InvalidRepoID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestImportFromGitHub_InvalidRepoID(t *testing.T) {
 	_, err := ImportFromGitHub(t.Context(), nil, ImportFromGitHubInput{
 		PersonalAccessToken: testGHPToken,
@@ -68,7 +72,9 @@ func TestImportFromGitHub_InvalidRepoID(t *testing.T) {
 	}
 }
 
-// TestImportFromGitHub_Error verifies ImportFromGitHub when error.
+// TestImportFromGitHub_Error verifies that ImportFromGitHub returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportFromGitHub_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -83,7 +89,9 @@ func TestImportFromGitHub_Error(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport verifies CancelGitHubImport.
+// TestCancelGitHubImport verifies the CancelGitHubImport handler.
+// The mock GitLab API at /api/v4/import/github/cancel (POST) responds with HTTP OK.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancelGitHubImport(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github/cancel" {
@@ -101,7 +109,9 @@ func TestCancelGitHubImport(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport_InvalidProjectID verifies CancelGitHubImport when invalid project ID.
+// TestCancelGitHubImport_InvalidProjectID verifies the CancelGitHubImport_InvalidProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancelGitHubImport_InvalidProjectID(t *testing.T) {
 	_, err := CancelGitHubImport(t.Context(), nil, CancelGitHubImportInput{ProjectID: -1})
 	if err == nil {
@@ -112,7 +122,9 @@ func TestCancelGitHubImport_InvalidProjectID(t *testing.T) {
 	}
 }
 
-// TestCancelGitHubImport_Error verifies CancelGitHubImport when error.
+// TestCancelGitHubImport_Error verifies that CancelGitHubImport returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCancelGitHubImport_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -123,7 +135,9 @@ func TestCancelGitHubImport_Error(t *testing.T) {
 	}
 }
 
-// TestImportGists verifies ImportGists.
+// TestImportGists verifies the ImportGists handler.
+// The mock GitLab API at /api/v4/import/github/gists (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestImportGists(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/github/gists" {
@@ -138,7 +152,9 @@ func TestImportGists(t *testing.T) {
 	}
 }
 
-// TestImportGists_Error verifies ImportGists when error.
+// TestImportGists_Error verifies that ImportGists returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportGists_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -149,7 +165,9 @@ func TestImportGists_Error(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketCloud verifies ImportFromBitbucketCloud.
+// TestImportFromBitbucketCloud verifies the ImportFromBitbucketCloud handler.
+// The mock GitLab API at /api/v4/import/bitbucket (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromBitbucketCloud(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/bitbucket" {
@@ -172,7 +190,9 @@ func TestImportFromBitbucketCloud(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketCloud_Error verifies ImportFromBitbucketCloud when error.
+// TestImportFromBitbucketCloud_Error verifies that ImportFromBitbucketCloud returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportFromBitbucketCloud_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -188,7 +208,9 @@ func TestImportFromBitbucketCloud_Error(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketServer verifies ImportFromBitbucketServer.
+// TestImportFromBitbucketServer verifies the ImportFromBitbucketServer handler.
+// The mock GitLab API at /api/v4/import/bitbucket_server (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromBitbucketServer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/bitbucket_server" {
@@ -212,7 +234,9 @@ func TestImportFromBitbucketServer(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketServer_Error verifies ImportFromBitbucketServer when error.
+// TestImportFromBitbucketServer_Error verifies that ImportFromBitbucketServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportFromBitbucketServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -229,7 +253,9 @@ func TestImportFromBitbucketServer_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGitHubImport verifies FormatGitHubImport.
+// TestFormatGitHubImport verifies the GitHubImport Markdown formatter for a representative githubimport input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGitHubImport(t *testing.T) {
 	out := &GitHubImportOutput{ID: 1, Name: testMyRepoName, FullPath: "ns/my-repo", ImportStatus: "scheduled"}
 	md := FormatGitHubImport(out)
@@ -238,7 +264,9 @@ func TestFormatGitHubImport(t *testing.T) {
 	}
 }
 
-// TestFormatBitbucketServerImport verifies FormatBitbucketServerImport.
+// TestFormatBitbucketServerImport verifies the BitbucketServerImport Markdown formatter for a representative bitbucketserverimport input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBitbucketServerImport(t *testing.T) {
 	out := &BitbucketServerImportOutput{ID: 3, Name: testBBSRepoName, FullPath: "ns/bbs-repo"}
 	md := FormatBitbucketServerImport(out)
@@ -256,7 +284,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // ImportFromGitHub — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromGitHub_WithAllOptionalFields verifies ImportFromGitHub when with all optional fields.
+// TestImportFromGitHub_WithAllOptionalFields verifies the ImportFromGitHub_WithAllOptionalFields handler.
+// The mock GitLab API at /api/v4/import/github (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +326,9 @@ func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 // CancelGitHubImport — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestCancelGitHubImport_APIError400 verifies CancelGitHubImport when API error 400.
+// TestCancelGitHubImport_APIError400 verifies that CancelGitHubImport400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCancelGitHubImport_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -311,7 +343,9 @@ func TestCancelGitHubImport_APIError400(t *testing.T) {
 // ImportGists — API error (400)
 // ---------------------------------------------------------------------------.
 
-// TestImportGists_APIError400 verifies ImportGists when API error 400.
+// TestImportGists_APIError400 verifies that ImportGists400 returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestImportGists_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -326,7 +360,9 @@ func TestImportGists_APIError400(t *testing.T) {
 // ImportFromBitbucketCloud — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromBitbucketCloud_WithOptionalFields verifies ImportFromBitbucketCloud when with optional fields.
+// TestImportFromBitbucketCloud_WithOptionalFields verifies the ImportFromBitbucketCloud_WithOptionalFields handler.
+// The mock GitLab API at /api/v4/import/bitbucket (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromBitbucketCloud_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/bitbucket" {
@@ -354,7 +390,9 @@ func TestImportFromBitbucketCloud_WithOptionalFields(t *testing.T) {
 // ImportFromBitbucketServer — optional fields
 // ---------------------------------------------------------------------------.
 
-// TestImportFromBitbucketServer_WithOptionalFields verifies ImportFromBitbucketServer when with optional fields.
+// TestImportFromBitbucketServer_WithOptionalFields verifies the ImportFromBitbucketServer_WithOptionalFields handler.
+// The mock GitLab API at /api/v4/import/bitbucket_server (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestImportFromBitbucketServer_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/bitbucket_server" {
@@ -385,7 +423,9 @@ func TestImportFromBitbucketServer_WithOptionalFields(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatGitHubImport_WithHumanStatus verifies FormatGitHubImport when with human status.
+// TestFormatGitHubImport_WithHumanStatus verifies the GitHubImport_WithHumanStatus Markdown formatter for a representative githubimport_withhumanstatus input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGitHubImport_WithHumanStatus(t *testing.T) {
 	out := &GitHubImportOutput{
 		ID: 1, Name: "my-repo", FullPath: "ns/my-repo",
@@ -398,7 +438,9 @@ func TestFormatGitHubImport_WithHumanStatus(t *testing.T) {
 	}
 }
 
-// TestFormatCancelledImport verifies FormatCancelledImport.
+// TestFormatCancelledImport verifies the CancelledImport Markdown formatter for a representative cancelledimport input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestFormatCancelledImport(t *testing.T) {
 	out := &CancelledImportOutput{
 		ID: 1, Name: "my-repo", FullPath: "ns/my-repo",
@@ -413,7 +455,9 @@ func TestFormatCancelledImport(t *testing.T) {
 	}
 }
 
-// TestFormatBitbucketCloudImport verifies FormatBitbucketCloudImport.
+// TestFormatBitbucketCloudImport verifies the BitbucketCloudImport Markdown formatter for a representative bitbucketcloudimport input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBitbucketCloudImport(t *testing.T) {
 	out := &BitbucketCloudImportOutput{
 		ID: 2, Name: "bb-repo", FullPath: "ns/bb-repo",
@@ -428,7 +472,9 @@ func TestFormatBitbucketCloudImport(t *testing.T) {
 	}
 }
 
-// TestFormatImportGists verifies FormatImportGists.
+// TestFormatImportGists verifies the ImportGists Markdown formatter for a representative importgists input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatImportGists(t *testing.T) {
 	md := FormatImportGists()
 	if !strings.Contains(md, "gists") {
@@ -439,7 +485,9 @@ func TestFormatImportGists(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for import service actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -466,7 +514,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // MCP round-trip — all tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates all import service routes through the catalog.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, importHandler())
 	byTool := importServiceSpecsByTool(t, ActionSpecs(client))
@@ -551,7 +601,9 @@ func importHandler() *http.ServeMux {
 	return handler
 }
 
-// TestActionSpecs_ErrorPaths covers error returns from import service routes.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

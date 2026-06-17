@@ -21,7 +21,9 @@ const (
 	errMissingFreezePeriodID = "expected error for missing freeze_period_id"
 )
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/1/freeze_periods (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/1/freeze_periods" {
@@ -45,7 +47,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingProjectID verifies List when missing project ID.
+// TestList_MissingProjectID verifies that List_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -56,7 +60,9 @@ func TestList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies Get when success.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/1/freeze_periods/5 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/freeze_periods/5" {
@@ -76,7 +82,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies Create when success.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -101,7 +109,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies Update when success.
+// TestUpdate_Success verifies that Update succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -125,7 +135,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies Delete when success.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -141,7 +153,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -154,7 +168,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies FormatMarkdownString.
+// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:           1,
@@ -169,7 +185,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md != "No freeze periods found.\n" {
@@ -177,7 +195,9 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestGet_MissingFreezePeriodID verifies Get when missing freeze period ID.
+// TestGet_MissingFreezePeriodID verifies that Get_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -188,7 +208,9 @@ func TestGet_MissingFreezePeriodID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingFreezePeriodID verifies Update when missing freeze period ID.
+// TestUpdate_MissingFreezePeriodID verifies that Update_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -199,7 +221,9 @@ func TestUpdate_MissingFreezePeriodID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingFreezePeriodID verifies Delete when missing freeze period ID.
+// TestDelete_MissingFreezePeriodID verifies that Delete_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingFreezePeriodID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -210,7 +234,9 @@ func TestDelete_MissingFreezePeriodID(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns an error when the API fails.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -223,7 +249,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create returns an error when the API fails.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -240,7 +268,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_Forbidden verifies create permission hints.
+// TestCreate_Forbidden verifies the Create_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Forbidden(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -260,7 +290,9 @@ func TestCreate_Forbidden(t *testing.T) {
 	}
 }
 
-// TestCreate_WithTimezone verifies Create sends the optional CronTimezone.
+// TestCreate_WithTimezone verifies the Create_WithTimezone handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_WithTimezone(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -285,7 +317,9 @@ func TestCreate_WithTimezone(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingProjectID verifies that Create returns an error for empty project_id.
+// TestCreate_MissingProjectID verifies that Create_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -296,7 +330,9 @@ func TestCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies that Update returns an error when the API fails.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -313,7 +349,9 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdate_Forbidden verifies update permission hints.
+// TestUpdate_Forbidden verifies the Update_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Forbidden(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -333,7 +371,9 @@ func TestUpdate_Forbidden(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllFields verifies Update sends all optional fields when specified.
+// TestUpdate_AllFields verifies the Update_AllFields handler.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_AllFields(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -359,7 +399,9 @@ func TestUpdate_AllFields(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies that Update returns an error for empty project_id.
+// TestUpdate_MissingProjectID verifies that Update_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -370,7 +412,9 @@ func TestUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns an error when the API responds with error.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -383,7 +427,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies that Delete returns error for empty project_id.
+// TestDelete_MissingProjectID verifies that Delete_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -394,7 +440,9 @@ func TestDelete_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetAPIError_NotFound verifies that Get returns an error when the API responds with error.
+// TestGetAPIError_NotFound verifies that GetAPIError_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetAPIError_NotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -407,7 +455,9 @@ func TestGetAPIError_NotFound(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithItems verifies Markdown output with items.
+// TestFormatListMarkdownString_WithItems verifies the ListMarkdownString_WithItems Markdown formatter for a representative liststring_withitems input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	out := ListOutput{
 		FreezePeriods: []Output{
@@ -433,7 +483,9 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Wrapper verifies the MCP CallToolResult wrapper.
+// TestFormatListMarkdown_Wrapper verifies the ListMarkdown_Wrapper Markdown formatter for a representative list_wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	out := ListOutput{
 		FreezePeriods: []Output{{ID: 1, FreezeStart: "0 0 * * *", FreezeEnd: "0 1 * * *", CronTimezone: "UTC"}},
@@ -447,7 +499,9 @@ func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Wrapper verifies the MCP CallToolResult wrapper for a single item.
+// TestFormatMarkdown_Wrapper verifies the Markdown_Wrapper Markdown formatter for a representative _wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	out := Output{ID: 5, FreezeStart: "0 23 * * 5", FreezeEnd: "0 7 * * 1", CronTimezone: "UTC"}
 	result := FormatMarkdown(out)
@@ -456,7 +510,9 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_AllFields verifies Markdown includes all optional fields.
+// TestFormatMarkdownString_AllFields verifies the MarkdownString_AllFields Markdown formatter for a representative string_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_AllFields(t *testing.T) {
 	out := Output{
 		ID:           5,
@@ -474,7 +530,9 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies that Get returns an error for empty project_id.
+// TestGet_MissingProjectID verifies that Get_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -485,7 +543,9 @@ func TestGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGet_SuccessWithTimestamps verifies Get returns timestamps mapped by toOutput.
+// TestGet_SuccessWithTimestamps verifies the Get_SuccessWithTimestamps handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_SuccessWithTimestamps(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,

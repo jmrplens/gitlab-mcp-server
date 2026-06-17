@@ -21,7 +21,8 @@ type StatisticsOutput struct {
 	Opened int64 `json:"opened"`
 }
 
-// fromGL maps GitLab issue statistics counts into MCP output.
+// fromGL converts a [gl.IssuesStatistics] response into the package's
+// [StatisticsOutput], flattening the nested counts structure.
 func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 	return StatisticsOutput{
 		All:    s.Statistics.Counts.All,
@@ -40,7 +41,10 @@ type GetInput struct {
 	Search    string `json:"search" jsonschema:"Search string"`
 }
 
-// Get retrieves global issue statistics.
+// Get retrieves global issue statistics across all projects visible to
+// the authenticated user via the GitLab Issue statistics API
+// (GET /issues_statistics). Optional filters narrow the result by label,
+// milestone, scope, or free-text search.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (StatisticsOutput, error) {
 	opts := &gl.GetIssuesStatisticsOptions{}
 	if input.Labels != "" {
@@ -74,7 +78,9 @@ type GetGroupInput struct {
 	Search    string `json:"search" jsonschema:"Search string"`
 }
 
-// GetGroup retrieves issue statistics for a group.
+// GetGroup retrieves issue statistics scoped to a group and its
+// descendant projects via the GitLab Group Issue statistics API
+// (GET /groups/:id/issues_statistics).
 func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupInput) (StatisticsOutput, error) {
 	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, groupIssueStatsOptions(statisticsFilters{
 		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
@@ -85,6 +91,9 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	return fromGL(stats), nil
 }
 
+// statisticsFilters is the shared filter set for group and project
+// issue-statistics lookups, used to keep the option-builder helpers in
+// lockstep across the two scopes.
 type statisticsFilters struct {
 	Labels    string
 	Milestone string
@@ -92,6 +101,9 @@ type statisticsFilters struct {
 	Search    string
 }
 
+// applyStatisticsFilters copies non-empty filter values into the supplied
+// option setters, avoiding the need to repeat the same nil checks in
+// every helper.
 func applyStatisticsFilters(filters statisticsFilters, setLabels func(*gl.LabelOptions), setMilestone, setScope, setSearch func(*string)) {
 	if filters.Labels != "" {
 		labels := gl.LabelOptions(strings.Split(filters.Labels, ","))
@@ -108,6 +120,8 @@ func applyStatisticsFilters(filters statisticsFilters, setLabels func(*gl.LabelO
 	}
 }
 
+// groupIssueStatsOptions builds a [gl.GetGroupIssuesStatisticsOptions]
+// from the shared [statisticsFilters] set.
 func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatisticsOptions {
 	opts := &gl.GetGroupIssuesStatisticsOptions{}
 	applyStatisticsFilters(filters,
@@ -129,7 +143,9 @@ type GetProjectInput struct {
 	Search    string `json:"search" jsonschema:"Search string"`
 }
 
-// GetProject retrieves issue statistics for a project.
+// GetProject retrieves issue statistics scoped to a single project via
+// the GitLab Project Issue statistics API
+// (GET /projects/:id/issues_statistics).
 func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProjectInput) (StatisticsOutput, error) {
 	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, projectIssueStatsOptions(statisticsFilters{
 		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
@@ -140,6 +156,8 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	return fromGL(stats), nil
 }
 
+// projectIssueStatsOptions builds a [gl.GetProjectIssuesStatisticsOptions]
+// from the shared [statisticsFilters] set.
 func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesStatisticsOptions {
 	opts := &gl.GetProjectIssuesStatisticsOptions{}
 	applyStatisticsFilters(filters,
