@@ -898,6 +898,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"rate-limit-burst flag", "-rate-limit-burst"},
 		{"max-http-clients flag", "-max-http-clients"},
 		{"session-timeout flag", "-session-timeout"},
+		{"http-idle-timeout flag", "-http-idle-timeout"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -3577,5 +3578,95 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestEffectiveIdleTimeout verifies the mapping from the raw --http-idle-timeout
+// value to the duration applied to http.Server.IdleTimeout. The key case is 0,
+// which must map to the disabled sentinel (not Go's ReadTimeout fallback) so that
+// long-lived Streamable HTTP (SSE) connections are not severed; any positive value
+// must pass through unchanged.
+func TestEffectiveIdleTimeout(t *testing.T) {
+	tests := []struct {
+		name  string
+		input time.Duration
+		want  time.Duration
+	}{
+		{"zero disables via sentinel", 0, idleTimeoutDisabled},
+		{"positive passes through", 30 * time.Second, 30 * time.Second},
+		{"large value passes through", 30 * time.Minute, 30 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := effectiveIdleTimeout(tt.input); got != tt.want {
+				t.Errorf("effectiveIdleTimeout(%s) = %s, want %s", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNewHTTPServer_Timeouts verifies that newHTTPServer applies the timeout
+// policy: fixed request-read guards, IdleTimeout from effectiveIdleTimeout, and
+// WriteTimeout coupled to at least the effective idle timeout so SSE streams are
+// not severed before the idle deadline fires.
+func TestNewHTTPServer_Timeouts(t *testing.T) {
+	tests := []struct {
+		name      string
+		idle      time.Duration
+		wantIdle  time.Duration
+		wantWrite time.Duration
+	}{
+		{"disabled (0)", 0, idleTimeoutDisabled, idleTimeoutDisabled},
+		{"short idle keeps base write", 30 * time.Second, 30 * time.Second, baseHTTPWriteTimeout},
+		{"long idle raises write", 30 * time.Minute, 30 * time.Minute, 30 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newHTTPServer(":0", http.NewServeMux(), tt.idle)
+			if srv.IdleTimeout != tt.wantIdle {
+				t.Errorf("IdleTimeout = %s, want %s", srv.IdleTimeout, tt.wantIdle)
+			}
+			if srv.WriteTimeout != tt.wantWrite {
+				t.Errorf("WriteTimeout = %s, want %s", srv.WriteTimeout, tt.wantWrite)
+			}
+			if srv.WriteTimeout < srv.IdleTimeout {
+				t.Errorf("WriteTimeout (%s) must be >= IdleTimeout (%s)", srv.WriteTimeout, srv.IdleTimeout)
+			}
+			if srv.ReadHeaderTimeout != baseHTTPReadHeaderTimeout {
+				t.Errorf("ReadHeaderTimeout = %s, want %s", srv.ReadHeaderTimeout, baseHTTPReadHeaderTimeout)
+			}
+			if srv.ReadTimeout != baseHTTPReadTimeout {
+				t.Errorf("ReadTimeout = %s, want %s", srv.ReadTimeout, baseHTTPReadTimeout)
+			}
+		})
+	}
+}
+
+// TestRunHTTP_NegativeIdleTimeout_Rejected verifies that runHTTP rejects a
+// negative --http-idle-timeout with an actionable error.
+func TestRunHTTP_NegativeIdleTimeout_Rejected(t *testing.T) {
+	err := runHTTP(context.Background(), &httpConfig{
+		gitlabURL:       "https://gitlab.example.com",
+		maxHTTPClients:  config.DefaultMaxHTTPClients,
+		sessionTimeout:  config.DefaultSessionTimeout,
+		httpIdleTimeout: -1 * time.Second,
+	})
+	if err == nil {
+		t.Fatal("expected error for negative http-idle-timeout")
+	}
+	if !strings.Contains(err.Error(), "http-idle-timeout") {
+		t.Errorf("error should mention http-idle-timeout, got: %v", err)
+	}
+}
+
+// TestDefaultHTTPIdleTimeout_DisabledByDefault documents that the default value
+// disables HTTP-layer idle closure (0), so --session-timeout governs idle session
+// lifetime out of the box.
+func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
+	if defaultHTTPIdleTimeout != 0 {
+		t.Errorf("defaultHTTPIdleTimeout = %s, want 0 (disabled)", defaultHTTPIdleTimeout)
+	}
+	if got := effectiveIdleTimeout(defaultHTTPIdleTimeout); got != idleTimeoutDisabled {
+		t.Errorf("effectiveIdleTimeout(default) = %s, want %s", got, idleTimeoutDisabled)
 	}
 }

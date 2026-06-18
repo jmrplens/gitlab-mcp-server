@@ -122,7 +122,8 @@ When running the MCP server behind nginx, Caddy, or a cloud load balancer:
 | ------------------------------ | ---------------------- | --------------------------------------------------------------------------------- |
 | `400 Bad Request`              | Missing token header   | Send `PRIVATE-TOKEN` or `Authorization: Bearer <token>` header with every request |
 | Pool eviction too frequent     | Too many unique tokens | Increase `--max-http-clients` (default: 100)                                      |
-| Sessions expiring unexpectedly | Idle timeout too short | Increase `--session-timeout` (default: 30m)                                       |
+| Sessions expiring unexpectedly | MCP idle timeout too short | Increase `--session-timeout` (default: 30m)                                       |
+| MCP sessions drop every ~2 min / `keepalive ping failed; closing session` | A low `--http-idle-timeout` (or a proxy timeout) is closing long-lived SSE streams | Default `--http-idle-timeout=0` disables HTTP-layer idle closure; if you set a low value, raise it or use `0`. Behind a reverse proxy, also raise its read/idle timeout |
 
 ## OAuth mode (`--auth-mode=oauth`)
 

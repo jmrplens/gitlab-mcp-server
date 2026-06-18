@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.2.0                                               |
+| Version       | 2.2.1                                               |
 
 ### Scale
 
@@ -149,7 +149,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.2.0)
+└── VERSION                      # Semantic version (2.2.1)
 ```
 
 ## Key Development Patterns
@@ -310,6 +310,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
+| `--http-idle-timeout` | `0` (disabled) | HTTP server idle connection timeout; `0` (default) disables idle closure so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |
 | `--http-addr`         | `:8080` | HTTP listen address                                      |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |

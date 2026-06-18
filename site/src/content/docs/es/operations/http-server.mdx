@@ -51,6 +51,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--embedded-resources`   | `true`                       | Incrustar URIs canónicas de recursos MCP en resultados de herramientas get\_\*                                                                         |
 | `--max-http-clients`     | `100`                        | Máximo de entradas únicas token+URL en el pool del servidor                                                                                            |
 | `--session-timeout`      | `30m`                        | Timeout de sesión MCP inactiva                                                                                                                         |
+| `--http-idle-timeout`    | `0` (desactivado)            | Timeout de conexión inactiva del servidor HTTP. `0` (por defecto) desactiva el cierre por inactividad, de modo que `--session-timeout` es la vida efectiva; usa una duración positiva para reciclar conexiones inactivas antes |
 | `--auto-update`          | `true`                       | Modo de actualización automática: `true`, `check` o `false`                                                                                            |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                                                                                                          |
 | `--auto-update-interval` | `1h`                         | Intervalo de verificación periódica de actualizaciones                                                                                                 |
@@ -215,6 +216,21 @@ graph TD
 2. **Solicitudes posteriores**: La entrada existente se encuentra y se promueve en la lista LRU
 3. **Timeout de inactividad**: Después de `--session-timeout` de inactividad, la sesión MCP se cierra (pero la entrada del pool permanece)
 4. **Desalojo del pool**: Cuando se alcanza la capacidad, la entrada más antigua se elimina completamente
+
+### Modelo de timeouts: capa HTTP vs sesión MCP
+
+Dos capas independientes gobiernan la vida de la conexión y de la sesión:
+
+- **Sesión MCP** (`--session-timeout`, por defecto `30m`): vida útil de inactividad de la sesión MCP a nivel del transporte del SDK.
+- **Conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado): cuánto tiempo mantiene el `http.Server` una conexión keep-alive inactiva antes de cerrarla.
+
+El servidor habla el transporte moderno **Streamable HTTP**, que usa Server-Sent Events (`text/event-stream`) para las respuestas en streaming y el stream independiente que transporta las notificaciones iniciadas por el servidor y los pings de keep-alive. Esas son respuestas HTTP de larga duración, así que el `IdleTimeout` y `WriteTimeout` HTTP — no `--session-timeout` — deciden si sobreviven.
+
+Como `--http-idle-timeout` vale `0` (desactivado) por defecto, la capa HTTP no cierra las conexiones inactivas de fábrica, y `--session-timeout` es la vida efectiva de inactividad. El timeout de escritura de respuesta se acopla automáticamente a al menos el timeout de inactividad, de modo que los streams SSE nunca se cortan antes de la fecha límite de inactividad. Pon un `--http-idle-timeout` bajo solo si quieres reciclar antes las conexiones inactivas.
+
+:::caution[Detrás de un proxy inverso]
+Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. Auméntalo (por ejemplo, a varios minutos) para streams MCP de larga duración.
+:::
 
 ## Rate limiting
 

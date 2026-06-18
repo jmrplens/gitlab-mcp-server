@@ -118,7 +118,36 @@ type httpConfig struct {
 	httpIdleTimeout    time.Duration
 }
 
-const defaultHTTPIdleTimeout = 120 * time.Second
+// HTTP server timeout defaults. These bound the standard library [http.Server]
+// in HTTP mode. ReadHeaderTimeout/ReadTimeout guard request reads (slowloris)
+// and do not affect already-established streaming responses.
+const (
+	// defaultHTTPIdleTimeout is the default for --http-idle-timeout. 0 means idle
+	// connection closure is disabled at the HTTP layer, so the MCP --session-timeout
+	// governs idle session lifetime. This prevents the HTTP server from severing
+	// long-lived Streamable HTTP (SSE) connections that carry server-initiated
+	// notifications and keep-alive pings. Operators can set a positive value to
+	// recycle idle connections sooner.
+	defaultHTTPIdleTimeout time.Duration = 0
+
+	// baseHTTPReadHeaderTimeout bounds reading request headers.
+	baseHTTPReadHeaderTimeout = 10 * time.Second
+
+	// baseHTTPReadTimeout bounds reading the full request. Streamable HTTP request
+	// bodies (JSON-RPC) are small, so this does not affect established SSE streams.
+	baseHTTPReadTimeout = 30 * time.Second
+
+	// baseHTTPWriteTimeout is the minimum response write timeout. It is raised to the
+	// effective idle timeout (see effectiveIdleTimeout) because the MCP go-sdk SSE
+	// writer never resets the write deadline, so WriteTimeout would otherwise bound
+	// the entire SSE stream lifetime and sever it prematurely.
+	baseHTTPWriteTimeout = 60 * time.Second
+
+	// idleTimeoutDisabled is the sentinel used when idle closure is disabled (input 0).
+	// Go falls back to ReadTimeout when IdleTimeout == 0; this large value instead
+	// keeps keep-alive/SSE connections effectively unrestricted.
+	idleTimeoutDisabled = 10 * 365 * 24 * time.Hour
+)
 
 // main parses CLI flags, handles one-shot commands such as --help and
 // --tool-search, and dispatches into stdio or HTTP server mode.
@@ -164,7 +193,7 @@ func main() {
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
-	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server IdleTimeout (default 120s); use 0 to disable idle connection closure entirely")
+	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -277,7 +306,7 @@ FLAGS
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
-  -http-idle-timeout dur    HTTP server idle connection timeout (default %s; 0 disables idle connection closure entirely)
+  -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
@@ -351,7 +380,6 @@ JSON CONFIGURATION EXAMPLES
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
-		defaultHTTPIdleTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
@@ -855,14 +883,34 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 const httpShutdownTimeout = 5 * time.Second
 
 // effectiveIdleTimeout maps a user-supplied value to the duration passed to
-// http.Server.IdleTimeout. When the caller passes 0 (meaning "no timeout"),
-// Go would normally fall back to ReadTimeout (30s) instead of disabling idle
-// connection closure. We use a 10-year sentinel to prevent that fallback.
+// [http.Server.IdleTimeout]. When the caller passes 0 (meaning "disable idle
+// closure"), Go would normally fall back to ReadTimeout (30s) instead of
+// disabling idle connection closure. We return idleTimeoutDisabled (a ~10-year
+// sentinel) to prevent that fallback. WriteTimeout is also coupled to this value
+// (see newHTTPServer) because the MCP go-sdk SSE writer never resets the write
+// deadline, so a short WriteTimeout would sever long-lived SSE streams early.
 func effectiveIdleTimeout(d time.Duration) time.Duration {
 	if d == 0 {
-		return 10 * 365 * 24 * time.Hour
+		return idleTimeoutDisabled
 	}
 	return d
+}
+
+// newHTTPServer builds the HTTP-mode [http.Server] with the timeout policy.
+// httpIdleTimeout is the raw --http-idle-timeout value (0 disables idle closure).
+// WriteTimeout is raised to at least the effective idle timeout so that
+// long-lived Streamable HTTP (SSE) responses are not severed before the idle
+// deadline; ReadHeaderTimeout/ReadTimeout are fixed request-read guards.
+func newHTTPServer(addr string, handler http.Handler, httpIdleTimeout time.Duration) *http.Server {
+	idleTimeout := effectiveIdleTimeout(httpIdleTimeout)
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: baseHTTPReadHeaderTimeout,
+		ReadTimeout:       baseHTTPReadTimeout,
+		WriteTimeout:      max(baseHTTPWriteTimeout, idleTimeout),
+		IdleTimeout:       idleTimeout,
+	}
 }
 
 // serveHTTP starts the MCP server in HTTP mode using a [serverpool.ServerPool].
@@ -918,21 +966,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
 	}
 
-	idleTimeout := effectiveIdleTimeout(httpIdleTimeout)
-	httpServer := &http.Server{
-		Addr:              httpAddr,
-		Handler:           rootHandler,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		// WriteTimeout must be at least as long as IdleTimeout: for SSE
-		// (long-lived streaming responses) a shorter WriteTimeout would
-		// forcibly close the connection before the idle deadline fires.
-		WriteTimeout: max(60*time.Second, idleTimeout),
-		// When IdleTimeout is 0, Go falls back to ReadTimeout (30s) instead of
-		// disabling idle timeouts. effectiveIdleTimeout maps 0 to a large
-		// sentinel so keep-alive connections are truly unrestricted.
-		IdleTimeout: idleTimeout,
-	}
+	httpServer := newHTTPServer(httpAddr, rootHandler, httpIdleTimeout)
 
 	serverErr := make(chan error, 1)
 	go func() {

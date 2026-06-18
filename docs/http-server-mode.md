@@ -42,31 +42,31 @@ gitlab-mcp-server --http \
 
 ### CLI Flags
 
-| Flag                     | Default      | Description                                                                                                                                                                         |
-| ------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--http`                 | _(off)_      | Enable HTTP transport mode                                                                                                                                                          |
-| `--gitlab-url`           | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                          |
-| `--http-addr`            | `:8080`      | HTTP listen address (host:port)                                                                                                                                                     |
-| `--skip-tls-verify`      | `false`      | Skip TLS certificate verification for self-signed certs                                                                                                                             |
-| `--tool-surface`         | `dynamic`    | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                    |
-| `--meta-tools`           | _(unset)_    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                      |
-| `--capability-surface`   | `full`       | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                       |
-| `--meta-param-schema`    | `opaque`     | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                                                                                         |
-| `--enterprise`           | `false`      | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
-| `--read-only`            | `false`      | Expose only read-only tools                                                                                                                                                         |
-| `--safe-mode`            | `false`      | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                        |
-| `--embedded-resources`   | `true`       | Embed canonical MCP resource URIs in get_* tool results                                                                                                                             |
-| `--exclude-tools`        | _(empty)_    | Comma-separated tool names to exclude from registration                                                                                                                             |
-| `--ignore-scopes`        | `false`      | Skip PAT scope detection and register all tools allowed by the configured catalog                                                                                                   |
-| `--max-http-clients`     | `100`        | Maximum unique token+URL entries in the server pool                                                                                                                                 |
-| `--session-timeout`      | `30m`        | Idle MCP session timeout                                                                                                                                                            |
-| `--auth-mode`            | `legacy`     | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API)                                                                                     |
-| `--oauth-cache-ttl`      | `15m`        | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                              |
-| `--revalidate-interval`  | `15m`        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                     |
-| `--http-idle-timeout`    | `120s`       | HTTP server idle connection timeout; `0` disables idle connection closure entirely, making `--session-timeout` the effective session lifetime                                         |
-| `--trusted-proxy-header` | _(empty)_    | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                              |
-| `--rate-limit-rps`       | `0`          | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                          |
-| `--rate-limit-burst`     | `40`         | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                 |
+| Flag                     | Default        | Description                                                                                                                                                                                                      |
+| ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--http`                 | _(off)_        | Enable HTTP transport mode                                                                                                                                                                                       |
+| `--gitlab-url`           | _(optional)_   | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                       |
+| `--http-addr`            | `:8080`        | HTTP listen address (host:port)                                                                                                                                                                                  |
+| `--skip-tls-verify`      | `false`        | Skip TLS certificate verification for self-signed certs                                                                                                                                                          |
+| `--tool-surface`         | `dynamic`      | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                 |
+| `--meta-tools`           | _(unset)_      | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                   |
+| `--capability-surface`   | `full`         | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                    |
+| `--meta-param-schema`    | `opaque`       | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                                                                                                                      |
+| `--enterprise`           | `false`        | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version`                              |
+| `--read-only`            | `false`        | Expose only read-only tools                                                                                                                                                                                      |
+| `--safe-mode`            | `false`        | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                                                     |
+| `--embedded-resources`   | `true`         | Embed canonical MCP resource URIs in get_* tool results                                                                                                                                                          |
+| `--exclude-tools`        | _(empty)_      | Comma-separated tool names to exclude from registration                                                                                                                                                          |
+| `--ignore-scopes`        | `false`        | Skip PAT scope detection and register all tools allowed by the configured catalog                                                                                                                                |
+| `--max-http-clients`     | `100`          | Maximum unique token+URL entries in the server pool                                                                                                                                                              |
+| `--session-timeout`      | `30m`          | Idle MCP session timeout                                                                                                                                                                                         |
+| `--auth-mode`            | `legacy`       | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API)                                                                                                                  |
+| `--oauth-cache-ttl`      | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                           |
+| `--revalidate-interval`  | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                  |
+| `--http-idle-timeout`    | `0` (disabled) | HTTP server idle connection timeout. Default `0` disables idle connection closure entirely, so `--session-timeout` is the effective session lifetime. Set a positive duration to recycle idle connections sooner |
+| `--trusted-proxy-header` | _(empty)_      | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                           |
+| `--rate-limit-rps`       | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                       |
+| `--rate-limit-burst`     | `40`           | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                              |
 
 > **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
 
@@ -91,7 +91,7 @@ HTTP mode has a narrow request-controlled surface. GitLab identity always comes 
 | GitLab token                        | `PRIVATE-TOKEN` or `Authorization: Bearer` request header                                                                                                                                              | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry                                                                                                                                                                           |
 | GitLab URL                          | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted                                                                                                                                    | Conditional                                 | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options`                                                                                                                                                    |
 | Tool catalog and behavior           | `--tool-surface`, deprecated `--meta-tools`, `--capability-surface`, `--meta-param-schema`, `--enterprise`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE`; `META-TOOLS` is also logged in `deprecated_options` |
-| Rate limits and HTTP pool policy    | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--http-idle-timeout`, `--trusted-proxy-header`                                                                 | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS`                                                                                                                                    |
+| Rate limits and HTTP pool policy    | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--http-idle-timeout`, `--trusted-proxy-header`                                          | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS`                                                                                                                                    |
 | Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl`                                                                                                                                                                     | No                                          | Ignored and logged in `ignored_options`                                                                                                                                                                                              |
 | Update policy and logging           | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL`                                                                                          | No                                          | Ignored and logged in `ignored_options`                                                                                                                                                                                              |
 
@@ -380,6 +380,34 @@ If a client is idle for longer than `--session-timeout` (default: 30 minutes):
 2. The pool entry (server + client) **remains** in the pool
 3. Next request from the same `(token, url)` pair creates a new MCP session on the existing server
 
+### Timeout model: HTTP layer vs MCP session
+
+Two independent layers govern how long a connection and a session live:
+
+| Layer                | Setting               | Default        | What it bounds                                                          |
+| -------------------- | --------------------- | -------------- | ----------------------------------------------------------------------- |
+| MCP session          | `--session-timeout`   | `30m`          | Idle lifetime of the MCP session (SDK transport level)                  |
+| HTTP idle connection | `--http-idle-timeout` | `0` (disabled) | TCP keep-alive idle time before the `http.Server` closes the connection |
+| HTTP response write  | derived               | ≥ idle timeout | Maximum write time for a response, raised to at least the idle timeout  |
+
+The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent
+Events (`text/event-stream`) for streamed POST responses and the standalone GET
+stream that carries server-initiated notifications and 30s keep-alive pings. These
+are long-lived HTTP responses, so the `http.Server` `IdleTimeout` and `WriteTimeout`
+— not `--session-timeout` — determine whether they survive.
+
+Because the default `--http-idle-timeout` is `0` (disabled), the HTTP layer does not
+close idle connections, and `--session-timeout` is the effective idle lifetime. The
+response write timeout is automatically coupled to at least the idle timeout, so SSE
+streams are never severed before the idle deadline. If you set a low
+`--http-idle-timeout`, expect long-lived MCP sessions to drop when the connection
+idles past that value.
+
+> **Behind a reverse proxy / edge**: when idle closure is disabled on the server, the
+> proxy's own read/idle timeout becomes the limiting factor. Raise it (e.g. to a few
+> minutes or more) for long-running MCP streams. See
+> [Troubleshooting](troubleshooting.md).
+
 ### 4. Pool Eviction
 
 When the pool is full (`--max-http-clients` reached) and a new `(token, url)` pair arrives:
@@ -483,14 +511,15 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ## Troubleshooting
 
-| Problem                         | Cause                                             | Solution                                                                                             |
-| ------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `400 Bad Request`               | Missing or empty token header                     | Ensure `PRIVATE-TOKEN` or `Authorization: Bearer` is set                                             |
-| `400 Bad Request`               | Invalid GitLab URL                                | Verify `--gitlab-url` is correct and reachable                                                       |
-| Tool errors after connecting    | Invalid or expired token                          | Verify the token has `api` scope and is not expired                                                  |
-| Pool eviction too frequent      | Too many unique tokens                            | Increase `--max-http-clients`                                                                        |
-| Sessions expiring               | Idle timeout                                      | Increase `--session-timeout`                                                                         |
-| Rate limiter blocks all clients | Behind reverse proxy, all requests share proxy IP | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`) |
+| Problem                                              | Cause                                                                                     | Solution                                                                                                                          |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `400 Bad Request`                                    | Missing or empty token header                                                             | Ensure `PRIVATE-TOKEN` or `Authorization: Bearer` is set                                                                          |
+| `400 Bad Request`                                    | Invalid GitLab URL                                                                        | Verify `--gitlab-url` is correct and reachable                                                                                    |
+| Tool errors after connecting                         | Invalid or expired token                                                                  | Verify the token has `api` scope and is not expired                                                                               |
+| Pool eviction too frequent                           | Too many unique tokens                                                                    | Increase `--max-http-clients`                                                                                                     |
+| Sessions expiring                                    | MCP idle timeout                                                                          | Increase `--session-timeout`                                                                                                      |
+| Sessions drop every ~2 min / `keepalive ping failed` | HTTP idle/write timeout closing SSE streams (only if a low `--http-idle-timeout` was set) | Default `--http-idle-timeout=0` disables this; if set low, raise it or set `0`. Behind a proxy, also raise the proxy read timeout |
+| Rate limiter blocks all clients                      | Behind reverse proxy, all requests share proxy IP                                         | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`)                              |
 
 ---
 
