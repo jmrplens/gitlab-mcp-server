@@ -898,15 +898,19 @@ func effectiveIdleTimeout(d time.Duration) time.Duration {
 	return d
 }
 
-// sseWriteDeadlineMiddleware disables the per-connection write deadline for the
-// long-lived Server-Sent Events stream — the standalone GET stream that carries
-// MCP server-initiated notifications and keep-alive pings. The MCP go-sdk SSE
-// writer never resets the write deadline, so without this the server's
-// WriteTimeout would sever that stream. All other requests keep WriteTimeout as a
+// sseWriteDeadlineMiddleware disables the per-connection write deadline for any
+// request that negotiates Server-Sent Events (`Accept: text/event-stream`). In
+// Streamable HTTP these are long-lived: the standalone GET stream that carries
+// server-initiated notifications and keep-alive pings, and the streamed POST
+// responses to client requests (which can stay open for the duration of a tool
+// call, e.g. while awaiting an elicitation/sampling round-trip). The MCP go-sdk
+// SSE writer never resets the write deadline, so without this the server's
+// WriteTimeout would sever those streams. Requests that do not negotiate SSE
+// (e.g. /health, the unauthenticated server-card endpoint) keep WriteTimeout as a
 // slow-write (Slowloris) guard, so disabling it globally is unnecessary and unsafe.
 func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			// Zero time clears the deadline. Best-effort: ignore on transports
 			// that do not support it (e.g. HTTP/2 manages deadlines itself).
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})

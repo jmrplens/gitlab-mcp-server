@@ -399,8 +399,10 @@ go-sdk SSE writer never resets the write deadline.
 
 To avoid severing those streams without weakening protection for everything else,
 the global `WriteTimeout` is kept at a safe `60s` (guarding standard endpoints such
-as `/health` from slow-write attacks), and the long-lived SSE GET stream disables
-its own write deadline dynamically. Because the default `--http-idle-timeout` is `0`
+as `/health` from slow-write attacks), and any request that negotiates SSE
+(`Accept: text/event-stream`) — both the standalone GET stream and streamed POST
+responses — disables its own write deadline dynamically. Because the default
+`--http-idle-timeout` is `0`
 (disabled), the HTTP layer also does not close idle connections, so `--session-timeout`
 is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
 long-lived MCP sessions to drop when the connection idles past that value.

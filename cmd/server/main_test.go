@@ -3639,8 +3639,10 @@ func TestNewHTTPServer_Timeouts(t *testing.T) {
 }
 
 // TestSSEWriteDeadlineMiddleware_PassesThrough verifies that the middleware
-// forwards every request to the wrapped handler — both the long-lived SSE GET
-// (whose write deadline it clears) and ordinary requests (which keep WriteTimeout).
+// forwards every request to the wrapped handler — the long-lived SSE streams
+// whose write deadline it clears (the standalone GET and streamed POST responses,
+// both of which negotiate text/event-stream) and ordinary requests that keep
+// WriteTimeout.
 func TestSSEWriteDeadlineMiddleware_PassesThrough(t *testing.T) {
 	tests := []struct {
 		name   string
