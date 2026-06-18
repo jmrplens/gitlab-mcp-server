@@ -520,7 +520,7 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, ":0")
+		errCh <- serveHTTP(ctx, cfg, ":0", defaultHTTPIdleTimeout)
 	}()
 	// Allow HTTP server to start listening
 	time.Sleep(100 * time.Millisecond)
@@ -574,7 +574,7 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	select {
@@ -1759,7 +1759,7 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -1818,7 +1818,7 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -1877,7 +1877,7 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -1935,7 +1935,7 @@ func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -1990,7 +1990,7 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2079,7 +2079,7 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2443,7 +2443,7 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 	waitForHTTPServerReady(t, addr, errCh) //nolint:contextcheck // test helper: uses its own probe deadline
 	return addr, errCh
@@ -3525,7 +3525,7 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr)
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
