@@ -51,6 +51,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--embedded-resources`   | `true`                       | Embed canonical MCP resource URIs in get\_\* tool results                                                        |
 | `--max-http-clients`     | `100`                        | Maximum unique token+URL entries in the server pool                                                              |
 | `--session-timeout`      | `30m`                        | Idle MCP session timeout                                                                                         |
+| `--http-idle-timeout`    | `0` (disabled)               | HTTP server idle connection timeout. `0` (default) disables idle closure, so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |
 | `--auto-update`          | `true`                       | Auto-update mode: `true`, `check`, or `false`                                                                    |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                             |
 | `--auto-update-interval` | `1h`                         | Periodic update check interval                                                                                   |
@@ -215,6 +216,22 @@ graph TD
 2. **Subsequent requests**: The existing entry is found and promoted in the LRU list
 3. **Idle timeout**: After `--session-timeout` of inactivity, the MCP session is closed (but the pool entry remains)
 4. **Pool eviction**: When capacity is reached, the oldest entry is removed entirely
+
+### Timeout model: HTTP layer vs MCP session
+
+Two independent layers govern connection and session lifetime:
+
+- **MCP session** (`--session-timeout`, default `30m`): idle lifetime of the MCP session at the SDK transport level.
+- **HTTP idle connection** (`--http-idle-timeout`, default `0` = disabled): the maximum time the underlying `http.Server` waits for the next request on a keep-alive connection before closing it.
+- **HTTP response write** (fixed `60s`, disabled for SSE): bounds how long a response may take to write.
+
+The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and the standalone stream that carries server-initiated notifications and keep-alive pings. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
+
+To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any request that negotiates SSE (`Accept: text/event-stream`) — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box, so `--session-timeout` is the effective idle lifetime. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+
+:::caution[Behind a reverse proxy]
+When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. Raise it (e.g. to several minutes) for long-running MCP streams.
+:::
 
 ## Rate limiting
 

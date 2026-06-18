@@ -122,7 +122,8 @@ Cuando se ejecuta el servidor MCP detrás de nginx, Caddy, o un balanceador clou
 | ------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
 | `400 Bad Request`                     | Cabecera de token faltante       | Envía la cabecera `PRIVATE-TOKEN` o `Authorization: Bearer <token>` con cada solicitud |
 | Desalojo del pool demasiado frecuente | Demasiados tokens únicos         | Aumenta `--max-http-clients` (por defecto: 100)                                        |
-| Sesiones expirando inesperadamente    | Timeout de inactividad muy corto | Aumenta `--session-timeout` (por defecto: 30m)                                         |
+| Sesiones expirando inesperadamente    | Timeout de inactividad MCP muy corto | Aumenta `--session-timeout` (por defecto: 30m)                                         |
+| Las sesiones MCP caen cada ~2 min / `keepalive ping failed; closing session` | Un `--http-idle-timeout` bajo (o un timeout del proxy) está cerrando streams SSE de larga duración | Por defecto `--http-idle-timeout=0` desactiva el cierre por inactividad de la capa HTTP; si has puesto un valor bajo, súbelo o usa `0`. Detrás de un proxy inverso, aumenta también su timeout de lectura/inactividad |
 
 ## Modo OAuth (`--auth-mode=oauth`)
 
