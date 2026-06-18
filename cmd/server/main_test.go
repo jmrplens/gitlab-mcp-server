@@ -3606,19 +3606,18 @@ func TestEffectiveIdleTimeout(t *testing.T) {
 }
 
 // TestNewHTTPServer_Timeouts verifies that newHTTPServer applies the timeout
-// policy: fixed request-read guards, IdleTimeout from effectiveIdleTimeout, and
-// WriteTimeout coupled to at least the effective idle timeout so SSE streams are
-// not severed before the idle deadline fires.
+// policy: fixed request-read guards, IdleTimeout from effectiveIdleTimeout, and a
+// fixed global WriteTimeout (slow-write guard) regardless of the idle timeout. The
+// long-lived SSE write deadline is disabled separately by sseWriteDeadlineMiddleware.
 func TestNewHTTPServer_Timeouts(t *testing.T) {
 	tests := []struct {
-		name      string
-		idle      time.Duration
-		wantIdle  time.Duration
-		wantWrite time.Duration
+		name     string
+		idle     time.Duration
+		wantIdle time.Duration
 	}{
-		{"disabled (0)", 0, idleTimeoutDisabled, idleTimeoutDisabled},
-		{"short idle keeps base write", 30 * time.Second, 30 * time.Second, baseHTTPWriteTimeout},
-		{"long idle raises write", 30 * time.Minute, 30 * time.Minute, 30 * time.Minute},
+		{"disabled (0)", 0, idleTimeoutDisabled},
+		{"short idle", 30 * time.Second, 30 * time.Second},
+		{"long idle", 30 * time.Minute, 30 * time.Minute},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3626,17 +3625,48 @@ func TestNewHTTPServer_Timeouts(t *testing.T) {
 			if srv.IdleTimeout != tt.wantIdle {
 				t.Errorf("IdleTimeout = %s, want %s", srv.IdleTimeout, tt.wantIdle)
 			}
-			if srv.WriteTimeout != tt.wantWrite {
-				t.Errorf("WriteTimeout = %s, want %s", srv.WriteTimeout, tt.wantWrite)
-			}
-			if srv.WriteTimeout < srv.IdleTimeout {
-				t.Errorf("WriteTimeout (%s) must be >= IdleTimeout (%s)", srv.WriteTimeout, srv.IdleTimeout)
+			if srv.WriteTimeout != baseHTTPWriteTimeout {
+				t.Errorf("WriteTimeout = %s, want fixed %s", srv.WriteTimeout, baseHTTPWriteTimeout)
 			}
 			if srv.ReadHeaderTimeout != baseHTTPReadHeaderTimeout {
 				t.Errorf("ReadHeaderTimeout = %s, want %s", srv.ReadHeaderTimeout, baseHTTPReadHeaderTimeout)
 			}
 			if srv.ReadTimeout != baseHTTPReadTimeout {
 				t.Errorf("ReadTimeout = %s, want %s", srv.ReadTimeout, baseHTTPReadTimeout)
+			}
+		})
+	}
+}
+
+// TestSSEWriteDeadlineMiddleware_PassesThrough verifies that the middleware
+// forwards every request to the wrapped handler — both the long-lived SSE GET
+// (whose write deadline it clears) and ordinary requests (which keep WriteTimeout).
+func TestSSEWriteDeadlineMiddleware_PassesThrough(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		accept string
+	}{
+		{"sse get stream", http.MethodGet, "text/event-stream"},
+		{"plain get", http.MethodGet, "application/json"},
+		{"mcp post", http.MethodPost, "application/json, text/event-stream"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			h := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequestWithContext(context.Background(), tt.method, "/mcp", nil)
+			req.Header.Set("Accept", tt.accept)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if !called {
+				t.Error("wrapped handler was not called")
+			}
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 			}
 		})
 	}

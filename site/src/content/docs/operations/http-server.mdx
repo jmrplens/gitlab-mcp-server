@@ -222,11 +222,12 @@ graph TD
 Two independent layers govern connection and session lifetime:
 
 - **MCP session** (`--session-timeout`, default `30m`): idle lifetime of the MCP session at the SDK transport level.
-- **HTTP idle connection** (`--http-idle-timeout`, default `0` = disabled): how long the underlying `http.Server` keeps an idle keep-alive connection before closing it.
+- **HTTP idle connection** (`--http-idle-timeout`, default `0` = disabled): the maximum time the underlying `http.Server` waits for the next request on a keep-alive connection before closing it.
+- **HTTP response write** (fixed `60s`, disabled for SSE): bounds how long a response may take to write.
 
-The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and the standalone stream that carries server-initiated notifications and keep-alive pings. Those are long-lived HTTP responses, so the HTTP `IdleTimeout` and `WriteTimeout` — not `--session-timeout` — decide whether they survive.
+The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and the standalone stream that carries server-initiated notifications and keep-alive pings. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
 
-Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer does not close idle connections out of the box, and `--session-timeout` is the effective idle lifetime. The response write timeout is automatically coupled to at least the idle timeout, so SSE streams are never cut before the idle deadline. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and the long-lived SSE GET stream disables its own write deadline dynamically. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box, so `--session-timeout` is the effective idle lifetime. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
 
 :::caution[Behind a reverse proxy]
 When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. Raise it (e.g. to several minutes) for long-running MCP streams.

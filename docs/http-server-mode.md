@@ -384,24 +384,26 @@ If a client is idle for longer than `--session-timeout` (default: 30 minutes):
 
 Two independent layers govern how long a connection and a session live:
 
-| Layer                | Setting               | Default        | What it bounds                                                          |
-| -------------------- | --------------------- | -------------- | ----------------------------------------------------------------------- |
-| MCP session          | `--session-timeout`   | `30m`          | Idle lifetime of the MCP session (SDK transport level)                  |
-| HTTP idle connection | `--http-idle-timeout` | `0` (disabled) | TCP keep-alive idle time before the `http.Server` closes the connection |
-| HTTP response write  | derived               | ≥ idle timeout | Maximum write time for a response, raised to at least the idle timeout  |
+| Layer                | Setting               | Default          | What it bounds                                                                                          |
+| -------------------- | --------------------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
+| MCP session          | `--session-timeout`   | `30m`            | Idle lifetime of the MCP session (SDK transport level)                                                  |
+| HTTP idle connection | `--http-idle-timeout` | `0` (disabled)   | Maximum time to wait for the next request on a keep-alive connection before the `http.Server` closes it |
+| HTTP response write  | fixed / disabled      | `60s` / disabled | Maximum write time for a response; kept at `60s` for standard endpoints and disabled for SSE streams    |
 
 The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent
 Events (`text/event-stream`) for streamed POST responses and the standalone GET
-stream that carries server-initiated notifications and 30s keep-alive pings. These
-are long-lived HTTP responses, so the `http.Server` `IdleTimeout` and `WriteTimeout`
-— not `--session-timeout` — determine whether they survive.
+stream that carries server-initiated notifications and 30s keep-alive pings. An
+active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only
+limits the wait between requests on an idle keep-alive connection) — and the
+go-sdk SSE writer never resets the write deadline.
 
-Because the default `--http-idle-timeout` is `0` (disabled), the HTTP layer does not
-close idle connections, and `--session-timeout` is the effective idle lifetime. The
-response write timeout is automatically coupled to at least the idle timeout, so SSE
-streams are never severed before the idle deadline. If you set a low
-`--http-idle-timeout`, expect long-lived MCP sessions to drop when the connection
-idles past that value.
+To avoid severing those streams without weakening protection for everything else,
+the global `WriteTimeout` is kept at a safe `60s` (guarding standard endpoints such
+as `/health` from slow-write attacks), and the long-lived SSE GET stream disables
+its own write deadline dynamically. Because the default `--http-idle-timeout` is `0`
+(disabled), the HTTP layer also does not close idle connections, so `--session-timeout`
+is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
+long-lived MCP sessions to drop when the connection idles past that value.
 
 > **Behind a reverse proxy / edge**: when idle closure is disabled on the server, the
 > proxy's own read/idle timeout becomes the limiting factor. Raise it (e.g. to a few

@@ -137,15 +137,17 @@ const (
 	// bodies (JSON-RPC) are small, so this does not affect established SSE streams.
 	baseHTTPReadTimeout = 30 * time.Second
 
-	// baseHTTPWriteTimeout is the minimum response write timeout. It is raised to the
-	// effective idle timeout (see effectiveIdleTimeout) because the MCP go-sdk SSE
-	// writer never resets the write deadline, so WriteTimeout would otherwise bound
-	// the entire SSE stream lifetime and sever it prematurely.
+	// baseHTTPWriteTimeout is the fixed global response write timeout. It is kept at a
+	// safe default to protect standard endpoints (e.g. /health,
+	// /.well-known/mcp/server-card.json) from slow-write resource exhaustion
+	// (Slowloris). Long-lived SSE streams instead disable their write deadline
+	// dynamically (see sseWriteDeadlineMiddleware), because the MCP go-sdk SSE writer
+	// never resets it and WriteTimeout would otherwise sever the stream prematurely.
 	baseHTTPWriteTimeout = 60 * time.Second
 
 	// idleTimeoutDisabled is the sentinel used when idle closure is disabled (input 0).
 	// Go falls back to ReadTimeout when IdleTimeout == 0; this large value instead
-	// keeps keep-alive/SSE connections effectively unrestricted.
+	// keeps idle keep-alive connections effectively unrestricted.
 	idleTimeoutDisabled = 10 * 365 * 24 * time.Hour
 )
 
@@ -886,9 +888,9 @@ const httpShutdownTimeout = 5 * time.Second
 // [http.Server.IdleTimeout]. When the caller passes 0 (meaning "disable idle
 // closure"), Go would normally fall back to ReadTimeout (30s) instead of
 // disabling idle connection closure. We return idleTimeoutDisabled (a ~10-year
-// sentinel) to prevent that fallback. WriteTimeout is also coupled to this value
-// (see newHTTPServer) because the MCP go-sdk SSE writer never resets the write
-// deadline, so a short WriteTimeout would sever long-lived SSE streams early.
+// sentinel) to prevent that fallback. The write deadline for long-lived SSE
+// streams is handled separately (see sseWriteDeadlineMiddleware) so the global
+// WriteTimeout can stay at a safe value.
 func effectiveIdleTimeout(d time.Duration) time.Duration {
 	if d == 0 {
 		return idleTimeoutDisabled
@@ -896,20 +898,36 @@ func effectiveIdleTimeout(d time.Duration) time.Duration {
 	return d
 }
 
+// sseWriteDeadlineMiddleware disables the per-connection write deadline for the
+// long-lived Server-Sent Events stream — the standalone GET stream that carries
+// MCP server-initiated notifications and keep-alive pings. The MCP go-sdk SSE
+// writer never resets the write deadline, so without this the server's
+// WriteTimeout would sever that stream. All other requests keep WriteTimeout as a
+// slow-write (Slowloris) guard, so disabling it globally is unnecessary and unsafe.
+func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			// Zero time clears the deadline. Best-effort: ignore on transports
+			// that do not support it (e.g. HTTP/2 manages deadlines itself).
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // newHTTPServer builds the HTTP-mode [http.Server] with the timeout policy.
 // httpIdleTimeout is the raw --http-idle-timeout value (0 disables idle closure).
-// WriteTimeout is raised to at least the effective idle timeout so that
-// long-lived Streamable HTTP (SSE) responses are not severed before the idle
-// deadline; ReadHeaderTimeout/ReadTimeout are fixed request-read guards.
+// WriteTimeout is a fixed slow-write guard for standard endpoints; the long-lived
+// SSE stream disables its own write deadline via sseWriteDeadlineMiddleware.
+// ReadHeaderTimeout/ReadTimeout are fixed request-read guards.
 func newHTTPServer(addr string, handler http.Handler, httpIdleTimeout time.Duration) *http.Server {
-	idleTimeout := effectiveIdleTimeout(httpIdleTimeout)
 	return &http.Server{
 		Addr:              addr,
-		Handler:           handler,
+		Handler:           sseWriteDeadlineMiddleware(handler),
 		ReadHeaderTimeout: baseHTTPReadHeaderTimeout,
 		ReadTimeout:       baseHTTPReadTimeout,
-		WriteTimeout:      max(baseHTTPWriteTimeout, idleTimeout),
-		IdleTimeout:       idleTimeout,
+		WriteTimeout:      baseHTTPWriteTimeout,
+		IdleTimeout:       effectiveIdleTimeout(httpIdleTimeout),
 	}
 }
 
