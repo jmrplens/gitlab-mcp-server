@@ -21,8 +21,8 @@ importers:
         specifier: ^6.4.8
         version: 6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0)
       astro-mermaid:
-        specifier: ^2.0.2
-        version: 2.0.2(astro@6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0))(mermaid@11.15.0)
+        specifier: ^2.0.4
+        version: 2.0.4(astro@6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0))(mermaid@11.15.0)
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0
@@ -1358,8 +1358,8 @@ packages:
     peerDependencies:
       astro: ^4.0.0-beta || ^5.0.0-beta || ^3.3.0 || ^6.0.0-beta
 
-  astro-mermaid@2.0.2:
-    resolution: {integrity: sha512-ihx63qwZ0hlu9mDjs6auQEXyo13s9h5HFHFIHovjTJH6ot97u0VqyGk3P1kkjPYZeOMrZ1Y7QAOevUfLs9cDfA==}
+  astro-mermaid@2.0.4:
+    resolution: {integrity: sha512-9oTGCdgnRs2PShPgyhkA45EvRVr3NcgZmFgQBaZywVijwwQm+RYvAL5XM4lgMQZc+pCrNM76hkZl85ioeKkEFQ==}
     peerDependencies:
       '@mermaid-js/layout-elk': ^0.2.0
       astro: '>=4'
@@ -5220,7 +5220,7 @@ snapshots:
       astro: 6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0)
       rehype-expressive-code: 0.43.1
 
-  astro-mermaid@2.0.2(astro@6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0))(mermaid@11.15.0):
+  astro-mermaid@2.0.4(astro@6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0))(mermaid@11.15.0):
     dependencies:
       astro: 6.4.8(@types/node@25.9.3)(rollup@4.62.0)(yaml@2.9.0)
       import-meta-resolve: 4.2.0
