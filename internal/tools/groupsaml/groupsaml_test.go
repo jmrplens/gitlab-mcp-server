@@ -94,12 +94,14 @@ func TestSAMLUsersList_AllFilters(t *testing.T) {
 		Username:        "jdoe",
 		Active:          &active,
 		Blocked:         &blocked,
+		CreatedAfter:    "2026-01-01T00:00:00Z",
+		CreatedBefore:   "2026-12-31T23:59:59Z",
 		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "page=2", "per_page=5"} {
+	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "created_after=", "created_before=", "page=2", "per_page=5"} {
 		if !strings.Contains(query, want) {
 			t.Errorf("query %q missing %q", query, want)
 		}

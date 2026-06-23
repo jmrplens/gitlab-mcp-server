@@ -113,18 +113,20 @@ func TestSharedWithList_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := SharedWithList(context.Background(), client, SharedWithListInput{
-		GroupID:         toolutil.StringOrInt("7"),
-		Search:          "team",
-		MinAccessLevel:  30,
-		Visibility:      "private",
-		OrderBy:         "name",
-		Sort:            "desc",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		GroupID:              toolutil.StringOrInt("7"),
+		Search:               "team",
+		MinAccessLevel:       30,
+		Visibility:           "private",
+		OrderBy:              "name",
+		Sort:                 "desc",
+		SkipGroups:           []int64{11, 12},
+		WithCustomAttributes: true,
+		PaginationInput:      toolutil.PaginationInput{Page: 2, PerPage: 10},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"search=team", "min_access_level=30", "visibility=private", "order_by=name", "sort=desc", "page=2", "per_page=10"} {
+	for _, want := range []string{"search=team", "min_access_level=30", "visibility=private", "order_by=name", "sort=desc", "skip_groups=", "with_custom_attributes=true", "page=2", "per_page=10"} {
 		if !strings.Contains(query, want) {
 			t.Errorf("query %q missing %q", query, want)
 		}
@@ -210,16 +212,17 @@ func TestInvitedList_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := InvitedList(context.Background(), client, InvitedListInput{
-		GroupID:         toolutil.StringOrInt("7"),
-		Search:          "guests",
-		MinAccessLevel:  20,
-		Relation:        []string{"direct", "inherited"},
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 5},
+		GroupID:              toolutil.StringOrInt("7"),
+		Search:               "guests",
+		MinAccessLevel:       20,
+		Relation:             []string{"direct", "inherited"},
+		WithCustomAttributes: true,
+		PaginationInput:      toolutil.PaginationInput{Page: 3, PerPage: 5},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"search=guests", "min_access_level=20", "relation=", "page=3", "per_page=5"} {
+	for _, want := range []string{"search=guests", "min_access_level=20", "relation=", "with_custom_attributes=true", "page=3", "per_page=5"} {
 		if !strings.Contains(query, want) {
 			t.Errorf("query %q missing %q", query, want)
 		}

@@ -736,12 +736,14 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 
 // SharedWithListInput defines parameters for listing groups shared with a group.
 type SharedWithListInput struct {
-	GroupID        toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
-	Search         string               `json:"search,omitempty"         jsonschema:"Filter shared groups by name or path"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
-	Visibility     string               `json:"visibility,omitempty"     jsonschema:"Filter by visibility (public, internal, private)"`
-	OrderBy        string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field (name, path, id)"`
-	Sort           string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
+	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"         jsonschema:"Filter shared groups by name or path"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	Visibility           string               `json:"visibility,omitempty"     jsonschema:"Filter by visibility (public, internal, private)"`
+	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field (name, path, id)"`
+	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
+	SkipGroups           []int64              `json:"skip_groups,omitempty"    jsonschema:"Group IDs to exclude from the results"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	toolutil.PaginationInput
 }
 
@@ -776,6 +778,12 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
+	if len(input.SkipGroups) > 0 {
+		opts.SkipGroups = new(input.SkipGroups)
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
+	}
 
 	groups, resp, err := client.GL().Groups.ListGroupsSharedWith(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -799,10 +807,11 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 
 // InvitedListInput defines parameters for listing groups invited to a group.
 type InvitedListInput struct {
-	GroupID        toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
-	Search         string               `json:"search,omitempty"         jsonschema:"Filter invited groups by name or path"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
-	Relation       []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
+	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"         jsonschema:"Filter invited groups by name or path"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	Relation             []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	toolutil.PaginationInput
 }
 
@@ -830,6 +839,9 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 	}
 	if len(input.Relation) > 0 {
 		opts.Relation = new(input.Relation)
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
 	}
 
 	groups, resp, err := client.GL().Groups.ListInvitedGroups(string(input.GroupID), opts, gl.WithContext(ctx))

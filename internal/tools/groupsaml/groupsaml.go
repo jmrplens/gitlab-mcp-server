@@ -78,11 +78,13 @@ type SAMLUsersListOutput struct {
 
 // SAMLUsersListInput holds parameters for listing the SAML users of a top-level group.
 type SAMLUsersListInput struct {
-	GroupID  string `json:"group_id" jsonschema:"Top-level group ID or URL-encoded path,required"`
-	Search   string `json:"search,omitempty" jsonschema:"Filter SAML users by name, username, or public email"`
-	Username string `json:"username,omitempty" jsonschema:"Filter by an exact username"`
-	Active   *bool  `json:"active,omitempty" jsonschema:"Limit to active users only"`
-	Blocked  *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
+	GroupID       string `json:"group_id" jsonschema:"Top-level group ID or URL-encoded path,required"`
+	Search        string `json:"search,omitempty" jsonschema:"Filter SAML users by name, username, or public email"`
+	Username      string `json:"username,omitempty" jsonschema:"Filter by an exact username"`
+	Active        *bool  `json:"active,omitempty" jsonschema:"Limit to active users only"`
+	Blocked       *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
+	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
+	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
 	toolutil.PaginationInput
 }
 
@@ -110,6 +112,8 @@ func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLU
 	if input.Blocked != nil {
 		opts.Blocked = input.Blocked
 	}
+	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
+	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
 	users, resp, err := client.GL().Groups.ListSAMLUsers(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SAMLUsersListOutput{}, toolutil.WrapErrWithHint("list group SAML users", err, groupSAMLLinkHint)

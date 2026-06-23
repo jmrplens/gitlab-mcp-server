@@ -33917,6 +33917,10 @@
         "search": {
           "description": "Filter invited groups by name or path",
           "type": "string"
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response",
+          "type": "boolean"
         }
       },
       "required": [
@@ -39602,6 +39606,14 @@
             "boolean"
           ]
         },
+        "created_after": {
+          "description": "Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "type": "string"
+        },
         "group_id": {
           "description": "Top-level group ID or URL-encoded path",
           "type": "string"
@@ -40657,6 +40669,16 @@
           "description": "Filter shared groups by name or path",
           "type": "string"
         },
+        "skip_groups": {
+          "description": "Group IDs to exclude from the results",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "sort": {
           "description": "Sort direction (asc, desc)",
           "type": "string"
@@ -40664,6 +40686,10 @@
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
           "type": "string"
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response",
+          "type": "boolean"
         }
       },
       "required": [

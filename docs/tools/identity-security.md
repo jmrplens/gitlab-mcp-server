@@ -395,15 +395,17 @@ Delete a SAML group link from a GitLab group.
 
 ### `gitlab_group_saml_users_list`
 
-List the users provisioned via SAML SSO for a top-level group. Supports filtering by search, exact username, and active/blocked state with pagination.
+List the users provisioned via SAML SSO for a top-level group. Supports filtering by search, exact username, active/blocked state, and creation-date window with pagination.
 
-| Parameter  | Type       | Required | Description                               |
-| ---------- | ---------- | :------: | ----------------------------------------- |
-| `group_id` | string/int |   Yes    | Top-level group ID or URL-encoded path    |
-| `search`   | string     |    No    | Filter by name, username, or public email |
-| `username` | string     |    No    | Filter by an exact username               |
-| `active`   | bool       |    No    | Limit to active users only                |
-| `blocked`  | bool       |    No    | Limit to blocked users only               |
+| Parameter        | Type       | Required | Description                                        |
+| ---------------- | ---------- | :------: | -------------------------------------------------- |
+| `group_id`       | string/int |   Yes    | Top-level group ID or URL-encoded path             |
+| `search`         | string     |    No    | Filter by name, username, or public email          |
+| `username`       | string     |    No    | Filter by an exact username                        |
+| `active`         | bool       |    No    | Limit to active users only                         |
+| `blocked`        | bool       |    No    | Limit to blocked users only                        |
+| `created_after`  | string     |    No    | Return users created after this RFC3339 timestamp  |
+| `created_before` | string     |    No    | Return users created before this RFC3339 timestamp |
 
 **Annotation**: Read
 
