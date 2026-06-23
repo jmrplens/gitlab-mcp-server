@@ -406,8 +406,10 @@ func TestCreate_NewOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	enabled := true
+	orgID := int64(42)
 	_, err := Create(context.Background(), client, CreateInput{
 		Name:                         "G",
+		OrganizationID:               &orgID,
 		MathRenderingLimitsEnabled:   &enabled,
 		WebBasedCommitSigningEnabled: &enabled,
 		AllowPersonalSnippets:        &enabled,
@@ -415,7 +417,7 @@ func TestCreate_NewOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, field := range []string{"math_rendering_limits_enabled", "web_based_commit_signing_enabled", "allow_personal_snippets"} {
+	for _, field := range []string{"organization_id", "math_rendering_limits_enabled", "web_based_commit_signing_enabled", "allow_personal_snippets"} {
 		if !strings.Contains(body, field) {
 			t.Errorf("expected %s in request body, got: %s", field, body)
 		}

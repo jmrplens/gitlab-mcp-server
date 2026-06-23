@@ -31932,6 +31932,13 @@
           "description": "Group name",
           "type": "string"
         },
+        "organization_id": {
+          "description": "Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "parent_id": {
           "description": "Parent group ID (creates a subgroup)",
           "type": "integer"

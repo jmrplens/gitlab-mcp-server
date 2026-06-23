@@ -352,6 +352,7 @@ type CreateInput struct {
 	Description                  string `json:"description,omitempty"         jsonschema:"Group description"`
 	Visibility                   string `json:"visibility,omitempty"          jsonschema:"Visibility level (private, internal, public)"`
 	ParentID                     int64  `json:"parent_id,omitempty"           jsonschema:"Parent group ID (creates a subgroup)"`
+	OrganizationID               *int64 `json:"organization_id,omitempty"     jsonschema:"Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)"`
 	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
 	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty"         jsonschema:"Enable Git LFS"`
 	DefaultBranch                string `json:"default_branch,omitempty"      jsonschema:"Default branch name"`
@@ -463,6 +464,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.ParentID != 0 {
 		opts.ParentID = new(input.ParentID)
+	}
+	if input.OrganizationID != nil {
+		opts.OrganizationID = input.OrganizationID
 	}
 	if input.RequestAccessEnabled != nil {
 		opts.RequestAccessEnabled = input.RequestAccessEnabled

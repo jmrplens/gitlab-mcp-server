@@ -32,7 +32,6 @@ func FormatListMarkdown(out ListOutput) string {
 		return "No SAML group links found.\n"
 	}
 	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
 	fmt.Fprintf(&b, "**%d SAML link(s)**\n\n", len(out.Links))
 	b.WriteString("| Name | Access Level | Provider |\n| --- | --- | --- |\n")
 	for _, l := range out.Links {
@@ -43,6 +42,10 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(l.Provider),
 		)
 	}
+	toolutil.WriteHints(
+		&b,
+		"These map SAML group names to access levels; use action 'saml_users_list' to list the users provisioned via SAML SSO",
+	)
 	return b.String()
 }
 

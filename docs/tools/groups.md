@@ -52,7 +52,7 @@ Retrieve detailed metadata for a GitLab group including name, path, full path, d
 
 ### `gitlab_group_create`
 
-Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), request_access_enabled, lfs_enabled, and default_branch.
+Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), organization_id (GitLab.com multi-organization), request_access_enabled, lfs_enabled, and default_branch.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
