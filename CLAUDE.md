@@ -11,7 +11,7 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.26.4                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.1 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.41.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 2.2.1                                               |
@@ -20,7 +20,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1030 self-managed Enterprise/Premium; 1036 on GitLab.com Enterprise/Premium with Orbit                     |
+| MCP Tools (individual)    | 1039 self-managed Enterprise/Premium; 1045 on GitLab.com Enterprise/Premium with Orbit                     |
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 46 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
@@ -28,8 +28,8 @@
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 738 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 352 test files under `internal/tools/`                                                                       |
+| Source files (tools)      | 741 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 357 test files under `internal/tools/`                                                                       |
 | Go packages               | 215 total; 176 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
@@ -483,7 +483,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages, 1030 self-managed tools / 1036 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages, 1039 self-managed tools / 1045 GitLab.com Enterprise tools) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

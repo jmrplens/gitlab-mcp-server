@@ -10,6 +10,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupLDAPReadSpec("ldap_link_list", toolutil.RouteAction(client, List), "gitlab_group_ldap_link_list"),
 		groupLDAPCreateSpec("ldap_link_add", toolutil.RouteAction(client, Add), "gitlab_group_ldap_link_add"),
+		groupLDAPCreateSpec("ldap_sync", toolutil.RouteAction(client, Sync), "gitlab_group_ldap_sync"),
 		groupLDAPDeleteSpec("ldap_link_delete", toolutil.DestructiveVoidAction(client, DeleteWithCNOrFilter), "gitlab_group_ldap_link_delete"),
 		groupLDAPDeleteSpec("ldap_link_delete_for_provider", toolutil.DestructiveVoidAction(client, DeleteForProvider), "gitlab_group_ldap_link_delete_for_provider"),
 	}

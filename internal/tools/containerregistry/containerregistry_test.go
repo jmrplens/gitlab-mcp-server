@@ -1150,8 +1150,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := registrySpecsByTool(t, specs)
 
-	if len(specs) != 12 {
-		t.Fatalf("len(ActionSpecs) = %d, want 12", len(specs))
+	if len(specs) != 16 {
+		t.Fatalf("len(ActionSpecs) = %d, want 16", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))

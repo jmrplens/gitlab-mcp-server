@@ -2,6 +2,7 @@ package groupsaml
 
 import (
 	"context"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -54,6 +55,85 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		out[i] = toOutput(l)
 	}
 	return ListOutput{Links: out}, nil
+}
+
+// SAMLUserOutput represents a SAML-provisioned user of a top-level group.
+type SAMLUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state,omitempty"`
+	Email     string `json:"email,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// SAMLUsersListOutput holds a paginated list of SAML-provisioned group users.
+type SAMLUsersListOutput struct {
+	toolutil.HintableOutput
+	Users      []SAMLUserOutput          `json:"users"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// SAMLUsersListInput holds parameters for listing the SAML users of a top-level group.
+type SAMLUsersListInput struct {
+	GroupID  string `json:"group_id" jsonschema:"Top-level group ID or URL-encoded path,required"`
+	Search   string `json:"search,omitempty" jsonschema:"Filter SAML users by name, username, or public email"`
+	Username string `json:"username,omitempty" jsonschema:"Filter by an exact username"`
+	Active   *bool  `json:"active,omitempty" jsonschema:"Limit to active users only"`
+	Blocked  *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
+	toolutil.PaginationInput
+}
+
+// SAMLUsersList retrieves the users provisioned via SAML SSO for a top-level group.
+func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLUsersListInput) (SAMLUsersListOutput, error) {
+	if input.GroupID == "" {
+		return SAMLUsersListOutput{}, toolutil.ErrFieldRequired("group_id")
+	}
+	opts := &gl.ListSAMLUsersOptions{}
+	if input.Page > 0 {
+		opts.Page = int64(input.Page)
+	}
+	if input.PerPage > 0 {
+		opts.PerPage = int64(input.PerPage)
+	}
+	if input.Search != "" {
+		opts.Search = new(input.Search)
+	}
+	if input.Username != "" {
+		opts.Username = new(input.Username)
+	}
+	if input.Active != nil {
+		opts.Active = input.Active
+	}
+	if input.Blocked != nil {
+		opts.Blocked = input.Blocked
+	}
+	users, resp, err := client.GL().Groups.ListSAMLUsers(input.GroupID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return SAMLUsersListOutput{}, toolutil.WrapErrWithHint("list group SAML users", err, groupSAMLLinkHint)
+	}
+	out := SAMLUsersListOutput{
+		Users:      make([]SAMLUserOutput, len(users)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, u := range users {
+		item := SAMLUserOutput{
+			ID:        u.ID,
+			Username:  u.Username,
+			Name:      u.Name,
+			State:     u.State,
+			Email:     u.Email,
+			AvatarURL: u.AvatarURL,
+			WebURL:    u.WebURL,
+		}
+		if u.CreatedAt != nil {
+			item.CreatedAt = u.CreatedAt.Format(time.RFC3339)
+		}
+		out.Users[i] = item
+	}
+	return out, nil
 }
 
 // GetInput holds parameters for getting a single group SAML link.

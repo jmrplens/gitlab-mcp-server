@@ -42,6 +42,57 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestSAMLUsersList_Success verifies that SAMLUsersList returns the SAML-provisioned users of a group.
+// The test exercises the GET groups/:id/saml_users path.
+// It asserts the returned output contains the mocked user and a clickable markdown link.
+func TestSAMLUsersList_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id":42,"username":"jdoe","name":"Jane Doe","state":"active","web_url":"https://gitlab.example.com/jdoe"}]`,
+				testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup", Search: "jane"})
+	if err != nil {
+		t.Fatalf("SAMLUsersList() unexpected error: %v", err)
+	}
+	if len(out.Users) != 1 || out.Users[0].Username != "jdoe" {
+		t.Fatalf("expected user jdoe, got %+v", out.Users)
+	}
+
+	md := FormatSAMLUsersListMarkdown(out)
+	if !strings.Contains(md, "[jdoe](https://gitlab.example.com/jdoe)") {
+		t.Errorf("expected clickable username link in markdown, got: %s", md)
+	}
+}
+
+// TestSAMLUsersList_MissingGroupID verifies that SAMLUsersList validates group_id.
+// The test exercises the input guard before any API call.
+// It asserts an error is returned for the empty group_id.
+func TestSAMLUsersList_MissingGroupID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{})
+	if err == nil {
+		t.Fatal("SAMLUsersList() expected error for missing group_id, got nil")
+	}
+}
+
+// TestFormatSAMLUsersListMarkdown_Empty verifies the empty-state rendering for SAML users.
+// The test exercises rendering of an empty user list.
+// It asserts the empty-state message is present.
+func TestFormatSAMLUsersListMarkdown_Empty(t *testing.T) {
+	md := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{})
+	if !strings.Contains(md, "No SAML users found") {
+		t.Errorf("expected empty-state message, got: %s", md)
+	}
+}
+
 // TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

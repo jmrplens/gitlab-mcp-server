@@ -31899,6 +31899,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "allow_personal_snippets": {
+          "description": "Allow members to create personal snippets",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -31909,6 +31916,13 @@
         },
         "lfs_enabled": {
           "description": "Enable Git LFS",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "math_rendering_limits_enabled": {
+          "description": "Enable math rendering limits",
           "type": [
             "null",
             "boolean"
@@ -31936,6 +31950,13 @@
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "description": "Enable web-based commit signing for projects in this group",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -31984,6 +32005,9 @@
             "null",
             "array"
           ]
+        },
+        "organization_id": {
+          "type": "integer"
         },
         "parent_id": {
           "type": "integer"
@@ -32388,6 +32412,9 @@
             "null",
             "array"
           ]
+        },
+        "organization_id": {
+          "type": "integer"
         },
         "parent_id": {
           "type": "integer"
@@ -33856,6 +33883,198 @@
     }
   },
   {
+    "name": "gitlab_group_invited_list",
+    "description": "Use to execute groups domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "min_access_level": {
+          "description": "Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "relation": {
+          "description": "Filter by relation (direct, inherited)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "search": {
+          "description": "Filter invited groups by name or path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "marked_for_deletion_on": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "organization_id": {
+                "type": "integer"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "project_creation_level": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "shared_runners_setting": {
+                "type": "string"
+              },
+              "subgroup_creation_level": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "full_path",
+              "visibility",
+              "web_url",
+              "request_access_enabled",
+              "lfs_enabled"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "groups",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_label_create",
     "description": "Create a new label in a GitLab group with a name, color (hex), optional description, and optional priority.\n\nReturns: JSON with the created label details. See also: gitlab_group_label_list.",
     "inputSchema": {
@@ -34842,6 +35061,52 @@
     }
   },
   {
+    "name": "gitlab_group_ldap_sync",
+    "description": "Use to execute groupldap domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_group_list",
     "description": "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create.",
     "inputSchema": {
@@ -34949,6 +35214,9 @@
                   "null",
                   "array"
                 ]
+              },
+              "organization_id": {
+                "type": "integer"
               },
               "parent_id": {
                 "type": "integer"
@@ -39001,6 +39269,9 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
@@ -39312,6 +39583,155 @@
     }
   },
   {
+    "name": "gitlab_group_saml_users_list",
+    "description": "Use to execute groupsaml domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "description": "Limit to active users only",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "blocked": {
+          "description": "Limit to blocked users only",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "group_id": {
+          "description": "Top-level group ID or URL-encoded path",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter SAML users by name, username, or public email",
+          "type": "string"
+        },
+        "username": {
+          "description": "Filter by an exact username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
+        "users": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "users",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_search",
     "description": "Search for GitLab groups by name. Returns matching groups with their details.\n\nReturns: paginated list of groups with id, name, path, full_path, visibility, and web_url. See also: gitlab_group_get, gitlab_group_list.",
     "inputSchema": {
@@ -39372,6 +39792,9 @@
                   "null",
                   "array"
                 ]
+              },
+              "organization_id": {
+                "type": "integer"
               },
               "parent_id": {
                 "type": "integer"
@@ -40205,6 +40628,324 @@
     }
   },
   {
+    "name": "gitlab_group_shared_with_list",
+    "description": "Use to execute groups domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "min_access_level": {
+          "description": "Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "type": "integer"
+        },
+        "order_by": {
+          "description": "Order shared groups by field (name, path, id)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter shared groups by name or path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
+        },
+        "visibility": {
+          "description": "Filter by visibility (public, internal, private)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "marked_for_deletion_on": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "organization_id": {
+                "type": "integer"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "project_creation_level": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "shared_runners_setting": {
+                "type": "string"
+              },
+              "subgroup_creation_level": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "full_path",
+              "visibility",
+              "web_url",
+              "request_access_enabled",
+              "lfs_enabled"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "groups",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_group_transfer_locations",
+    "description": "Use to execute groups domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter candidate parent groups by name or path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "locations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "locations",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_transfer_project",
     "description": "Transfer a project into a group namespace. Moves the project to become a member of the specified group.\n\nReturns: transferred project details with id, name, path, and namespace. See also: gitlab_group_get, gitlab_project_transfer.",
     "inputSchema": {
@@ -40266,6 +41007,9 @@
             "null",
             "array"
           ]
+        },
+        "organization_id": {
+          "type": "integer"
         },
         "parent_id": {
           "type": "integer"
@@ -40420,6 +41164,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "allow_personal_snippets": {
+          "description": "Allow members to create personal snippets",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -40434,6 +41185,13 @@
         },
         "lfs_enabled": {
           "description": "Enable Git LFS",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "math_rendering_limits_enabled": {
+          "description": "Enable math rendering limits",
           "type": [
             "null",
             "boolean"
@@ -40457,6 +41215,13 @@
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "description": "Enable web-based commit signing for projects in this group",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -40505,6 +41270,9 @@
             "null",
             "array"
           ]
+        },
+        "organization_id": {
+          "type": "integer"
         },
         "parent_id": {
           "type": "integer"
@@ -41445,8 +42213,16 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "bitbucket_api_token": {
+          "description": "Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email",
+          "type": "string"
+        },
         "bitbucket_app_password": {
-          "description": "Bitbucket Cloud app password. Treat as secret: do not log or store it, and redact it in telemetry/errors",
+          "description": "Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email",
+          "type": "string"
+        },
+        "bitbucket_email": {
+          "description": "Atlassian account email associated with the API token (required when using bitbucket_api_token)",
           "type": "string"
         },
         "bitbucket_username": {
@@ -41468,7 +42244,6 @@
       },
       "required": [
         "bitbucket_username",
-        "bitbucket_app_password",
         "repo_path",
         "target_namespace"
       ],
@@ -97694,6 +98469,331 @@
     }
   },
   {
+    "name": "gitlab_registry_tag_protection_create",
+    "description": "Create a container registry tag protection rule for a project.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "minimum_access_level_for_delete": {
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Omit together with push level to make matching tags immutable",
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Omit together with delete level to make matching tags immutable",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "tag_name_pattern": {
+          "description": "Tag name pattern as a RE2 regular expression (e.g. v.+)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "tag_name_pattern"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "minimum_access_level_for_delete": {
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "tag_name_pattern",
+        "minimum_access_level_for_push",
+        "minimum_access_level_for_delete"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_delete",
+    "description": "Delete a container registry tag protection rule from a project.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Tag protection rule ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "rule_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_list",
+    "description": "List container registry tag protection rules for a project.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
+        "rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "minimum_access_level_for_delete": {
+                "type": "string"
+              },
+              "minimum_access_level_for_push": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              },
+              "tag_name_pattern": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project_id",
+              "tag_name_pattern",
+              "minimum_access_level_for_push",
+              "minimum_access_level_for_delete"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "rules",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_update",
+    "description": "Update a container registry tag protection rule in a project.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "minimum_access_level_for_delete": {
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin)",
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin)",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Tag protection rule ID",
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "description": "Tag name pattern as a RE2 regular expression",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "rule_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "minimum_access_level_for_delete": {
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "tag_name_pattern",
+        "minimum_access_level_for_push",
+        "minimum_access_level_for_delete"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_reject_user",
     "description": "Reject a pending GitLab user registration (admin only). The user account will be deleted.\n\nSee also: gitlab_approve_user, gitlab_list_users\n\nReturns: JSON with action confirmation.",
     "inputSchema": {
@@ -111516,6 +112616,9 @@
                   "null",
                   "array"
                 ]
+              },
+              "organization_id": {
+                "type": "integer"
               },
               "parent_id": {
                 "type": "integer"

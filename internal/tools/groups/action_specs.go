@@ -40,6 +40,12 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupReadSpec("members", toolutil.RouteAction(client, MembersList), "gitlab_group_members_list"),
 		// gitlab_subgroups_list — list the subgroups of a group.
 		groupReadSpec("subgroups", toolutil.RouteAction(client, SubgroupsList), "gitlab_subgroups_list"),
+		// gitlab_group_shared_with_list — list groups shared with a group.
+		groupReadSpec("shared_with", toolutil.RouteAction(client, SharedWithList), "gitlab_group_shared_with_list"),
+		// gitlab_group_invited_list — list groups invited to a group.
+		groupReadSpec("invited_groups", toolutil.RouteAction(client, InvitedList), "gitlab_group_invited_list"),
+		// gitlab_group_transfer_locations — list candidate parent groups for a transfer.
+		groupReadSpec("transfer_locations", toolutil.RouteAction(client, TransferLocationsList), "gitlab_group_transfer_locations"),
 		// gitlab_group_hook_list — list group webhooks.
 		groupReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_group_hook_list"),
 		// gitlab_group_hook_get — fetch a single group webhook by ID.

@@ -18,8 +18,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupldap" {

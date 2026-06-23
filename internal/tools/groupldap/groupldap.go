@@ -140,6 +140,25 @@ func DeleteWithCNOrFilter(ctx context.Context, client *gitlabclient.Client, inpu
 	return nil
 }
 
+// SyncInput holds parameters for triggering a group LDAP sync.
+type SyncInput struct {
+	GroupID string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+}
+
+// Sync triggers a synchronization of the group's LDAP group links. The GitLab
+// API returns 202 Accepted; the actual sync runs asynchronously in the
+// background.
+func Sync(ctx context.Context, client *gitlabclient.Client, input SyncInput) (DeleteOutput, error) {
+	if input.GroupID == "" {
+		return DeleteOutput{}, toolutil.ErrFieldRequired("group_id")
+	}
+	_, err := client.GL().Groups.SyncGroupWithLDAP(input.GroupID, gl.WithContext(ctx))
+	if err != nil {
+		return DeleteOutput{}, toolutil.WrapErrWithHint("sync group with LDAP", err, groupLDAPLinkHint)
+	}
+	return DeleteOutput{Status: "success", Message: "LDAP synchronization started; it runs asynchronously in the background."}, nil
+}
+
 // DeleteForProviderInput holds parameters for deleting a group LDAP link for a specific provider.
 type DeleteForProviderInput struct {
 	GroupID  string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`

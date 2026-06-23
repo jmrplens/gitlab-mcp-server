@@ -10,6 +10,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		groupSAMLReadSpec("saml_link_list", toolutil.RouteAction(client, List), "gitlab_group_saml_link_list"),
 		groupSAMLReadSpec("saml_link_get", toolutil.RouteAction(client, Get), "gitlab_group_saml_link_get"),
+		groupSAMLReadSpec("saml_users_list", toolutil.RouteAction(client, SAMLUsersList), "gitlab_group_saml_users_list"),
 		groupSAMLCreateSpec("saml_link_add", toolutil.RouteAction(client, Add), "gitlab_group_saml_link_add"),
 		groupSAMLDeleteSpec("saml_link_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_saml_link_delete"),
 	}

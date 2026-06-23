@@ -190,6 +190,40 @@ func TestImportFromBitbucketCloud(t *testing.T) {
 	}
 }
 
+// TestImportFromBitbucketCloud_APIToken verifies the API-token authentication path added in client-go v2.41.0.
+// The mock GitLab API inspects the request body for the new bitbucket_api_token and bitbucket_email fields.
+// It asserts both fields are sent and the legacy app password is omitted.
+func TestImportFromBitbucketCloud_APIToken(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/import/bitbucket" {
+			http.NotFound(w, r)
+			return
+		}
+		buf, _ := io.ReadAll(r.Body)
+		body = string(buf)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"name":"bb-repo","full_path":"ns/bb-repo","import_status":"scheduled"}`)
+	}))
+	_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
+		BitbucketUsername: "user",
+		BitbucketAPIToken: "token-secret",
+		BitbucketEmail:    "user@example.com",
+		RepoPath:          "user/repo",
+		TargetNamespace:   testNamespace,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, field := range []string{"bitbucket_api_token", "bitbucket_email"} {
+		if !strings.Contains(body, field) {
+			t.Errorf("expected %s in request body, got: %s", field, body)
+		}
+	}
+	if strings.Contains(body, "bitbucket_app_password") {
+		t.Errorf("did not expect bitbucket_app_password when using API token, got: %s", body)
+	}
+}
+
 // TestImportFromBitbucketCloud_Error verifies that ImportFromBitbucketCloud returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

@@ -151,7 +151,9 @@ func ImportGists(ctx context.Context, client *gitlabclient.Client, input ImportG
 // ImportFromBitbucketCloudInput represents input for importing from Bitbucket Cloud.
 type ImportFromBitbucketCloudInput struct {
 	BitbucketUsername    string `json:"bitbucket_username" jsonschema:"Bitbucket Cloud username,required"`
-	BitbucketAppPassword string `json:"bitbucket_app_password" jsonschema:"Bitbucket Cloud app password. Treat as secret: do not log or store it, and redact it in telemetry/errors,required"`
+	BitbucketAppPassword string `json:"bitbucket_app_password,omitempty" jsonschema:"Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email"`
+	BitbucketAPIToken    string `json:"bitbucket_api_token,omitempty" jsonschema:"Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email"`
+	BitbucketEmail       string `json:"bitbucket_email,omitempty" jsonschema:"Atlassian account email associated with the API token (required when using bitbucket_api_token)"`
 	RepoPath             string `json:"repo_path" jsonschema:"Bitbucket repository path (e.g. owner/repo),required"`
 	TargetNamespace      string `json:"target_namespace" jsonschema:"Target namespace for the imported project,required"`
 	NewName              string `json:"new_name,omitempty" jsonschema:"New name for the imported project"`
@@ -172,10 +174,18 @@ type BitbucketCloudImportOutput struct {
 // ImportFromBitbucketCloud imports a repository from Bitbucket Cloud into GitLab.
 func ImportFromBitbucketCloud(ctx context.Context, client *gitlabclient.Client, input ImportFromBitbucketCloudInput) (*BitbucketCloudImportOutput, error) {
 	opts := &gl.ImportRepositoryFromBitbucketCloudOptions{
-		BitbucketUsername:    new(input.BitbucketUsername),
-		BitbucketAppPassword: new(input.BitbucketAppPassword),
-		RepoPath:             new(input.RepoPath),
-		TargetNamespace:      new(input.TargetNamespace),
+		BitbucketUsername: new(input.BitbucketUsername),
+		RepoPath:          new(input.RepoPath),
+		TargetNamespace:   new(input.TargetNamespace),
+	}
+	if input.BitbucketAppPassword != "" {
+		opts.BitbucketAppPassword = new(input.BitbucketAppPassword)
+	}
+	if input.BitbucketAPIToken != "" {
+		opts.BitbucketAPIToken = new(input.BitbucketAPIToken)
+	}
+	if input.BitbucketEmail != "" {
+		opts.BitbucketEmail = new(input.BitbucketEmail)
 	}
 	if input.NewName != "" {
 		opts.NewName = new(input.NewName)
@@ -183,7 +193,7 @@ func ImportFromBitbucketCloud(ctx context.Context, client *gitlabclient.Client, 
 	result, _, err := client.GL().Import.ImportRepositoryFromBitbucketCloud(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_bitbucket_cloud", err, http.StatusBadRequest,
-			"bitbucket_username + bitbucket_app_password (NOT account password); repo_path is workspace/repo; target_namespace must exist; import is async")
+			"authenticate with bitbucket_username + bitbucket_app_password (legacy) OR bitbucket_api_token + bitbucket_email (NOT the account password); repo_path is workspace/repo; target_namespace must exist; import is async")
 	}
 	return &BitbucketCloudImportOutput{
 		ID:                    result.ID,

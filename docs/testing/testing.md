@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,947 |
-| Unit test functions                                   | 10,666 |
+| Total test functions                                  | 10,978 |
+| Unit test functions                                   | 10,697 |
 | E2E test functions                                    |    281 |
 | cmd test functions                                    |    788 |
-| Test files (internal/)                                |    445 |
+| Test files (internal/)                                |    447 |
 | Test files (cmd/)                                     |     52 |
 | Test files (test/e2e/suite/)                          |    137 |
 | Tool sub-packages tested                              |    175 |
@@ -35,8 +35,8 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,794 | 89.5% |
-| `TestFunc` (no underscore)             |   846 |  7.7% |
+| `TestFunc_Scenario` (2-part)           | 9,821 | 89.5% |
+| `TestFunc` (no underscore)             |   850 |  7.7% |
 | `TestFunc_Scenario_Expected` (3+ part) |   307 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,917 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,676 |        343 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          7,707 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            281 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            788 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,947** |    **634** |                                                                                                 |
+| **Total**               |     **10,978** |    **636** |                                                                                                 |
 
 ### Core Packages
 
@@ -87,8 +87,8 @@
 | users             |   194 |   100.0% |    37 |
 | samplingtools     |   167 |   100.0% |    11 |
 | dynamic           |   162 |    99.9% |     2 |
+| groups            |   138 |    96.8% |    21 |
 | jobs              |   132 |    99.8% |    17 |
-| groups            |   128 |   100.0% |    18 |
 | search            |   116 |   100.0% |    10 |
 | packages          |   112 |    99.0% |     8 |
 | awardemoji        |   110 |   100.0% |    24 |
@@ -97,6 +97,7 @@
 | commits           |   104 |   100.0% |    13 |
 | resourceevents    |    98 |   100.0% |    15 |
 | accesstokens      |    91 |   100.0% |    18 |
+| containerregistry |    90 |    96.9% |    16 |
 | groupmilestones   |    87 |   100.0% |     8 |
 | pipelineschedules |    86 |   100.0% |    11 |
 | branches          |    84 |   100.0% |    10 |
@@ -104,7 +105,6 @@
 | tags              |    79 |   100.0% |     9 |
 | workitems         |    79 |   100.0% |     6 |
 | files             |    78 |   100.0% |     8 |
-| containerregistry |    74 |   100.0% |    12 |
 | milestones        |    69 |   100.0% |     7 |
 
 ### Complete Tool Sub-Package Test Counts
@@ -141,7 +141,7 @@
 | commitdiscussions       |        31 |          2 |   100.0% |         6 |
 | commits                 |       104 |          1 |   100.0% |        13 |
 | compliancepolicy        |         6 |          1 |   100.0% |         2 |
-| containerregistry       |        74 |          3 |   100.0% |        12 |
+| containerregistry       |        90 |          4 |    96.9% |        16 |
 | customattributes        |        32 |          1 |   100.0% |         4 |
 | customemoji             |        26 |          2 |   100.0% |         3 |
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
@@ -179,7 +179,7 @@
 | groupimportexport       |        27 |          1 |   100.0% |         3 |
 | groupiterations         |        20 |          1 |   100.0% |         1 |
 | grouplabels             |        50 |          2 |   100.0% |         7 |
-| groupldap               |        11 |          2 |   100.0% |         4 |
+| groupldap               |        12 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        31 |          2 |   100.0% |         3 |
 | groupmembers            |        61 |          2 |   100.0% |         7 |
 | groupmilestones         |        87 |          2 |   100.0% |         8 |
@@ -187,8 +187,8 @@
 | groupprotectedenvs      |        16 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
-| groups                  |       128 |          3 |   100.0% |        18 |
-| groupsaml               |        24 |          3 |   100.0% |         4 |
+| groups                  |       138 |          4 |    96.8% |        21 |
+| groupsaml               |        27 |          3 |    93.4% |         5 |
 | groupscim               |        27 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        19 |          2 |   100.0% |         7 |
 | groupsshcerts           |        24 |          3 |   100.0% |         3 |
@@ -197,7 +197,7 @@
 | groupwikis              |        32 |          3 |   100.0% |         5 |
 | health                  |        17 |          1 |   100.0% |         2 |
 | impersonationtokens     |        38 |          2 |   100.0% |         5 |
-| importservice           |        26 |          1 |   100.0% |         5 |
+| importservice           |        27 |          1 |   100.0% |         5 |
 | instancevariables       |        40 |          2 |   100.0% |         5 |
 | integrations            |        53 |          3 |   100.0% |         7 |
 | invites                 |        32 |          1 |   100.0% |         4 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,676** |    **343** |          | **1,132** |
+| **Total**               | **7,707** |    **345** |          | **1,141** |
 
 </details>
 
@@ -378,7 +378,7 @@
 | commitdiscussions       |   100.0% |
 | commits                 |   100.0% |
 | compliancepolicy        |   100.0% |
-| containerregistry       |   100.0% |
+| containerregistry       |    96.9% |
 | customattributes        |   100.0% |
 | customemoji             |   100.0% |
 | dbmigrations            |   100.0% |
@@ -424,8 +424,8 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |   100.0% |
-| groupsaml               |   100.0% |
+| groups                  |    96.8% |
+| groupsaml               |    93.4% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
 | groupsshcerts           |   100.0% |

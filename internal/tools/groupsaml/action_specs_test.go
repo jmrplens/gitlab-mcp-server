@@ -18,8 +18,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupsaml" {
@@ -31,7 +31,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 
 	byTool := groupSAMLSpecsByTool(t, specs)
-	for _, name := range []string{"gitlab_group_saml_link_list", "gitlab_group_saml_link_get"} {
+	for _, name := range []string{"gitlab_group_saml_link_list", "gitlab_group_saml_link_get", "gitlab_group_saml_users_list"} {
 		if !byTool[name].ReadOnly {
 			t.Errorf("%s should be read-only", name)
 		}

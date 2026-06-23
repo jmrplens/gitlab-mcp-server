@@ -22,6 +22,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		registryCreateSpec("registry_rule_create", toolutil.RouteAction(client, CreateProtectionRule), "gitlab_registry_protection_create"),
 		registryUpdateSpec("registry_rule_update", toolutil.RouteAction(client, UpdateProtectionRule), "gitlab_registry_protection_update"),
 		registryDeleteSpec("registry_rule_delete", toolutil.DestructiveAction(client, DeleteProtectionRuleOutput), "gitlab_registry_protection_delete"),
+		registryReadSpec("registry_tag_rule_list", toolutil.RouteAction(client, ListTagProtectionRules), "gitlab_registry_tag_protection_list"),
+		registryCreateSpec("registry_tag_rule_create", toolutil.RouteAction(client, CreateTagProtectionRule), "gitlab_registry_tag_protection_create"),
+		registryUpdateSpec("registry_tag_rule_update", toolutil.RouteAction(client, UpdateTagProtectionRule), "gitlab_registry_tag_protection_update"),
+		registryDeleteSpec("registry_tag_rule_delete", toolutil.DestructiveAction(client, DeleteTagProtectionRuleOutput), "gitlab_registry_tag_protection_delete"),
 	}
 }
 
@@ -68,6 +72,14 @@ func registryOptions(individualTool string) toolutil.ActionSpecOptions {
 		usage = "Update a container registry protection rule in a project."
 	case "gitlab_registry_protection_delete":
 		usage = "Delete a container registry protection rule from a project."
+	case "gitlab_registry_tag_protection_list":
+		usage = "List container registry tag protection rules for a project."
+	case "gitlab_registry_tag_protection_create":
+		usage = "Create a container registry tag protection rule for a project."
+	case "gitlab_registry_tag_protection_update":
+		usage = "Update a container registry tag protection rule in a project."
+	case "gitlab_registry_tag_protection_delete":
+		usage = "Delete a container registry tag protection rule from a project."
 	}
 
 	return toolutil.ActionSpecOptions{
@@ -111,4 +123,12 @@ func DeleteProtectionRuleOutput(ctx context.Context, client *gitlabclient.Client
 		return toolutil.DeleteOutput{}, err
 	}
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted registry protection rule."}, nil
+}
+
+// DeleteTagProtectionRuleOutput deletes a registry tag protection rule and returns the canonical success message shape.
+func DeleteTagProtectionRuleOutput(ctx context.Context, client *gitlabclient.Client, input DeleteTagProtectionRuleInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteTagProtectionRule(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted registry tag protection rule."}, nil
 }
