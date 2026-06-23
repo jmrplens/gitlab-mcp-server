@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,999 |
-| Unit test functions                                   | 10,718 |
+| Total test functions                                  | 11,000 |
+| Unit test functions                                   | 10,719 |
 | E2E test functions                                    |    281 |
 | cmd test functions                                    |    788 |
 | Test files (internal/)                                |    447 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,841 | 89.5% |
+| `TestFunc_Scenario` (2-part)           | 9,842 | 89.5% |
 | `TestFunc` (no underscore)             |   851 |  7.7% |
 | `TestFunc_Scenario_Expected` (3+ part) |   307 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,917 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,728 |        345 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          7,729 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            281 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            788 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,999** |    **636** |                                                                                                 |
+| **Total**               |     **11,000** |    **636** |                                                                                                 |
 
 ### Core Packages
 
@@ -188,7 +188,7 @@
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
 | groups                  |       148 |          4 |   100.0% |        21 |
-| groupsaml               |        30 |          3 |   100.0% |         5 |
+| groupsaml               |        31 |          3 |   100.0% |         5 |
 | groupscim               |        27 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        19 |          2 |   100.0% |         7 |
 | groupsshcerts           |        24 |          3 |   100.0% |         3 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,728** |    **345** |          | **1,141** |
+| **Total**               | **7,729** |    **345** |          | **1,141** |
 
 </details>
 

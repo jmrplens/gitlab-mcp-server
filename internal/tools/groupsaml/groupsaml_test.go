@@ -7,10 +7,44 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
+// standard user field, formats the three timestamp fields, and skips nil SCIM
+// identity pointers while mapping valid ones.
+func TestToSAMLUserOutput_AllFields(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	lastAct := gl.ISOTime(time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC))
+	signIn := time.Date(2026, 1, 4, 5, 6, 7, 0, time.UTC)
+	u := &gl.User{
+		ID: 7, Username: "jdoe", Email: "j@example.com", Name: "Jane Doe", State: "active",
+		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, Bot: false,
+		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
+		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
+		TwoFactorEnabled: true, External: false, Locked: false, PrivateProfile: true,
+		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true,
+		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
+		CreatedAt: &created, LastActivityOn: &lastAct, CurrentSignInAt: &signIn,
+		SCIMIdentities: []*gl.SCIMIdentity{nil, {ExternUID: "ext-1", GroupID: 9, Active: true}},
+	}
+	out := toSAMLUserOutput(u)
+
+	if out.ID != 7 || out.Username != "jdoe" || !out.IsAdmin || out.ProjectsLimit != 50 {
+		t.Errorf("scalar fields not mapped: %+v", out)
+	}
+	if out.CreatedAt == "" || out.LastActivityOn == "" || out.CurrentSignInAt == "" {
+		t.Errorf("timestamp fields not formatted: created=%q last=%q signin=%q", out.CreatedAt, out.LastActivityOn, out.CurrentSignInAt)
+	}
+	if len(out.SCIMIdentities) != 1 || out.SCIMIdentities[0].ExternUID != "ext-1" {
+		t.Errorf("expected one mapped SCIM identity (nil skipped), got %+v", out.SCIMIdentities)
+	}
+}
 
 const (
 	pathGroupSAML    = "/api/v4/groups/mygroup/saml_group_links"

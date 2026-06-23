@@ -31906,6 +31906,13 @@
             "boolean"
           ]
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "description": "Automatically ban users who exceed the unique project download limit (Ultimate)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -31954,6 +31961,40 @@
             "boolean"
           ]
         },
+        "unique_project_download_limit": {
+          "description": "Max number of unique projects a user can download before being banned (Ultimate)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "description": "User IDs notified when the unique project download limit is exceeded (Ultimate)",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "description": "Usernames excluded from the unique project download limit (Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "description": "Time window in seconds for the unique project download limit (Ultimate)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
@@ -31974,6 +32015,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -31985,6 +32029,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -31998,8 +32054,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -32021,6 +32086,9 @@
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -32049,7 +32117,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -32381,6 +32456,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -32392,6 +32470,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -32405,8 +32495,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -32428,6 +32527,9 @@
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -32456,7 +32558,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -33942,6 +34051,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -33953,6 +34065,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -33966,8 +34090,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -33989,6 +34122,9 @@
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -34017,7 +34153,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -35187,6 +35330,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -35198,6 +35344,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -35211,8 +35369,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -35234,6 +35401,9 @@
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -35262,7 +35432,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -39241,6 +39418,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -39252,6 +39432,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -39265,8 +39457,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -39288,6 +39489,9 @@
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -39316,7 +39520,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -39702,32 +39913,135 @@
               "avatar_url": {
                 "type": "string"
               },
+              "bio": {
+                "type": "string"
+              },
+              "bot": {
+                "type": "boolean"
+              },
+              "can_create_group": {
+                "type": "boolean"
+              },
+              "can_create_project": {
+                "type": "boolean"
+              },
+              "color_scheme_id": {
+                "type": "integer"
+              },
               "created_at": {
+                "type": "string"
+              },
+              "current_sign_in_at": {
                 "type": "string"
               },
               "email": {
                 "type": "string"
               },
+              "external": {
+                "type": "boolean"
+              },
               "id": {
                 "type": "integer"
+              },
+              "is_admin": {
+                "type": "boolean"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "last_activity_on": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "locked": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
               },
+              "note": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "private_profile": {
+                "type": "boolean"
+              },
+              "projects_limit": {
+                "type": "integer"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "scim_identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "extern_uid",
+                    "group_id",
+                    "active"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "state": {
                 "type": "string"
+              },
+              "theme_id": {
+                "type": "integer"
+              },
+              "two_factor_enabled": {
+                "type": "boolean"
               },
               "username": {
                 "type": "string"
               },
+              "using_license_seat": {
+                "type": "boolean"
+              },
               "web_url": {
+                "type": "string"
+              },
+              "website_url": {
                 "type": "string"
               }
             },
             "required": [
               "id",
               "username",
-              "name"
+              "email",
+              "name",
+              "state",
+              "web_url",
+              "avatar_url",
+              "is_admin",
+              "bot",
+              "two_factor_enabled",
+              "external",
+              "locked",
+              "private_profile",
+              "projects_limit",
+              "can_create_project",
+              "can_create_group",
+              "using_license_seat"
             ],
             "type": "object"
           },
@@ -39773,6 +40087,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -39784,6 +40101,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -39797,8 +40126,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -39820,6 +40158,9 @@
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -39848,7 +40189,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -40711,6 +41059,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -40722,6 +41073,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -40735,8 +41098,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -40758,6 +41130,9 @@
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -40786,7 +41161,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -41002,6 +41384,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -41013,6 +41398,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -41026,8 +41423,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -41049,6 +41455,9 @@
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -41077,7 +41486,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -41265,6 +41681,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -41276,6 +41695,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -41289,8 +41720,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -41312,6 +41752,9 @@
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -41340,7 +41783,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -112611,6 +113061,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -112622,6 +113075,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -112635,8 +113100,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -112658,6 +113132,9 @@
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -112686,7 +113163,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },

@@ -49,6 +49,16 @@ type Output struct {
 	SubGroupCreationLevel string `json:"subgroup_creation_level,omitempty"`
 	LFSEnabled            bool   `json:"lfs_enabled"`
 	SharedRunnersSetting  string `json:"shared_runners_setting,omitempty"`
+	// Fields added in client-go v2.41.0.
+	Archived                             bool   `json:"archived"`
+	PreventSharingGroupsOutsideHierarchy bool   `json:"prevent_sharing_groups_outside_hierarchy"`
+	EnabledGitAccessProtocol             string `json:"enabled_git_access_protocol,omitempty"`
+	MathRenderingLimitsEnabled           bool   `json:"math_rendering_limits_enabled"`
+	LockMathRenderingLimitsEnabled       bool   `json:"lock_math_rendering_limits_enabled"`
+	DuoAvailability                      string `json:"duo_availability,omitempty"`
+	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled"`
+	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled"`
+	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled"`
 }
 
 // ListOutput holds a paginated list of groups.
@@ -135,6 +145,15 @@ func ToOutput(g *gl.Group) Output {
 	}
 	out.LFSEnabled = g.LFSEnabled
 	out.SharedRunnersSetting = string(g.SharedRunnersSetting)
+	out.Archived = g.Archived
+	out.PreventSharingGroupsOutsideHierarchy = g.PreventSharingGroupsOutsideHierarchy
+	out.EnabledGitAccessProtocol = string(g.EnabledGitAccessProtocol)
+	out.MathRenderingLimitsEnabled = g.MathRenderingLimitsEnabled
+	out.LockMathRenderingLimitsEnabled = g.LockMathRenderingLimitsEnabled
+	out.DuoAvailability = string(g.DuoAvailability)
+	out.DuoFeaturesEnabled = g.DuoFeaturesEnabled
+	out.LockDuoFeaturesEnabled = g.LockDuoFeaturesEnabled
+	out.ExperimentFeaturesEnabled = g.ExperimentFeaturesEnabled
 	return out
 }
 
@@ -359,6 +378,12 @@ type CreateInput struct {
 	MathRenderingLimitsEnabled   *bool  `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
 	WebBasedCommitSigningEnabled *bool  `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool  `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
+
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // UpdateInput defines parameters for updating a group.
@@ -485,6 +510,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.AllowPersonalSnippets != nil {
 		opts.AllowPersonalSnippets = input.AllowPersonalSnippets
+	}
+	if input.UniqueProjectDownloadLimit != nil {
+		opts.UniqueProjectDownloadLimit = input.UniqueProjectDownloadLimit
+	}
+	if input.UniqueProjectDownloadLimitIntervalInSeconds != nil {
+		opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
+	}
+	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
+		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
+	}
+	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
+	}
+	if input.AutoBanUserOnExcessiveProjectsDownload != nil {
+		opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
 	}
 
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))

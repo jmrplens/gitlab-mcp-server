@@ -407,17 +407,29 @@ func TestCreate_NewOptions(t *testing.T) {
 
 	enabled := true
 	orgID := int64(42)
+	limit := int64(100)
+	interval := int64(300)
 	_, err := Create(context.Background(), client, CreateInput{
 		Name:                         "G",
 		OrganizationID:               &orgID,
 		MathRenderingLimitsEnabled:   &enabled,
 		WebBasedCommitSigningEnabled: &enabled,
 		AllowPersonalSnippets:        &enabled,
+		UniqueProjectDownloadLimit:   &limit,
+		UniqueProjectDownloadLimitIntervalInSeconds: &interval,
+		UniqueProjectDownloadLimitAllowlist:         []string{"trusted-user"},
+		UniqueProjectDownloadLimitAlertlist:         []int64{1, 2},
+		AutoBanUserOnExcessiveProjectsDownload:      &enabled,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, field := range []string{"organization_id", "math_rendering_limits_enabled", "web_based_commit_signing_enabled", "allow_personal_snippets"} {
+	for _, field := range []string{
+		"organization_id", "math_rendering_limits_enabled", "web_based_commit_signing_enabled", "allow_personal_snippets",
+		"unique_project_download_limit", "unique_project_download_limit_interval_in_seconds",
+		"unique_project_download_limit_allowlist", "unique_project_download_limit_alertlist",
+		"auto_ban_user_on_excessive_projects_download",
+	} {
 		if !strings.Contains(body, field) {
 			t.Errorf("expected %s in request body, got: %s", field, body)
 		}
