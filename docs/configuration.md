@@ -213,7 +213,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                      | Most users — lowest startup context while retaining full catalog reachability |
 | **Meta-tools**                | `TOOL_SURFACE=meta`       | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
-| **Individual tools**          | `TOOL_SURFACE=individual` | 867 CE / 1030 self-managed enterprise / 1036 GitLab.com Enterprise | Clients that need granular tool selection                                     |
+| **Individual tools**          | `TOOL_SURFACE=individual` | 877 CE / 1039 self-managed enterprise / 1045 GitLab.com Enterprise | Clients that need granular tool selection                                     |
 
 Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 

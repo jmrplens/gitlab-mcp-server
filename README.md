@@ -41,9 +41,9 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default)                          |             2 |               881 | n/a                 |              2,204 |        18,284 |       20,488 |
 | `dynamic` / `minimal`                                 |             2 |               881 | n/a                 |              2,204 |           740 |        2,944 |
-| `meta` / `full`                                       |            34 |               881 | `opaque`            |             87,648 |        18,284 |      105,932 |
-| `meta` / `minimal`                                    |            34 |               881 | `opaque`            |             87,648 |           740 |       88,388 |
-| `individual` / `full`                                 |           877 |               877 | n/a                 |            480,913 |        18,284 |      499,197 |
+| `meta` / `full`                                       |            34 |               881 | `opaque`            |             88,135 |        18,284 |      106,419 |
+| `meta` / `minimal`                                    |            34 |               881 | `opaque`            |             88,135 |           740 |       88,875 |
+| `individual` / `full`                                 |           877 |               877 | n/a                 |            483,123 |        18,284 |      501,407 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -368,7 +368,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.41.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source
@@ -447,20 +447,20 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       916 |     159,334 |
-| Unit tests (`_test.go`)  |       499 |     271,917 |
+| Source (`.go`, non-test) |       916 |     159,644 |
+| Unit tests (`_test.go`)  |       499 |     272,531 |
 | End-to-end tests         |       140 |      34,992 |
-| **Total**                | **1,555** | **466,243** |
+| **Total**                | **1,555** | **467,167** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,558 |
+| Source functions                |  6,560 |
 | — exported (public)             |  2,486 |
-| — unexported (private)          |  4,072 |
-| Unit test functions (`TestXxx`) | 10,709 |
-| Subtests (`t.Run(...)`)         |  2,592 |
+| — unexported (private)          |  4,074 |
+| Unit test functions (`TestXxx`) | 10,731 |
+| Subtests (`t.Run(...)`)         |  2,594 |
 | End-to-end test functions       |    285 |
 
 ### Ratios worth noting
@@ -468,19 +468,19 @@ Numbers nobody asked for, but here they are anyway.
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.71× more tests than code |
-| Average source file length         |                 ~173 lines |
-| Average test file length           |                 ~544 lines |
-| Comment lines in source            |   14,977 (~9.4% of source) |
+| Average source file length         |                 ~174 lines |
+| Average test file length           |                 ~546 lines |
+| Comment lines in source            |   14,991 (~9.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,214 |
+| `if err != nil` checks             | 6,220 |
 | `defer` statements                 |   794 |
-| `struct` types defined             | 2,360 |
-| `//nolint` suppressions            |    90 |
+| `struct` types defined             | 2,361 |
+| `//nolint` suppressions            |    92 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -490,7 +490,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   220 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   202 |
+| Git commits                    |   207 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -504,8 +504,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,896 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 10,060 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~2,902 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 10,100 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
