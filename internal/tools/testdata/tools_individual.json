@@ -33884,7 +33884,7 @@
   },
   {
     "name": "gitlab_group_invited_list",
-    "description": "Use to execute groups domain action.",
+    "description": "List groups invited to a GitLab group. Returns: the invited groups with path and access metadata. See also: gitlab_group_shared_with_list, gitlab_group_members_list, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34980,7 +34980,7 @@
   },
   {
     "name": "gitlab_group_ldap_link_list",
-    "description": "List all LDAP group links for a GitLab group.\n\nReturns: list of LDAP links with CN, filter, access level, and provider. See also: gitlab_group_ldap_link_add, gitlab_group_saml_link_list.",
+    "description": "List a GitLab group's LDAP group links. Returns: each link's CN/filter, provider, and access level. See also: gitlab_group_ldap_link_add, gitlab_group_ldap_sync, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -35062,7 +35062,7 @@
   },
   {
     "name": "gitlab_group_ldap_sync",
-    "description": "Use to execute groupldap domain action.",
+    "description": "Trigger an asynchronous LDAP sync for a GitLab group's LDAP links. Returns: a confirmation that the sync was queued. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39506,7 +39506,7 @@
   },
   {
     "name": "gitlab_group_saml_link_list",
-    "description": "List all SAML group links for a GitLab group.\n\nReturns: list of SAML links with name, access level, and provider. See also: gitlab_group_saml_link_get, gitlab_group_saml_link_add, gitlab_group_ldap_link_list.",
+    "description": "List a GitLab group's SAML group links. Returns: each link's SAML group name, access level, and provider. See also: gitlab_group_saml_users_list, gitlab_group_saml_link_add, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39584,7 +39584,7 @@
   },
   {
     "name": "gitlab_group_saml_users_list",
-    "description": "Use to execute groupsaml domain action.",
+    "description": "List SAML SSO-provisioned users of a top-level GitLab group. Returns: matching users with id, username, name, and state. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -40629,7 +40629,7 @@
   },
   {
     "name": "gitlab_group_shared_with_list",
-    "description": "Use to execute groups domain action.",
+    "description": "List groups shared with a GitLab group (group-to-group shares). Returns: the shared groups with path, visibility, and access metadata. See also: gitlab_group_invited_list, gitlab_group_members_list, gitlab_subgroups_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -40823,7 +40823,7 @@
   },
   {
     "name": "gitlab_group_transfer_locations",
-    "description": "Use to execute groups domain action.",
+    "description": "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -40947,7 +40947,7 @@
   },
   {
     "name": "gitlab_group_transfer_project",
-    "description": "Transfer a project into a group namespace. Moves the project to become a member of the specified group.\n\nReturns: transferred project details with id, name, path, and namespace. See also: gitlab_group_get, gitlab_project_transfer.",
+    "description": "Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98273,7 +98273,7 @@
   },
   {
     "name": "gitlab_registry_protection_list",
-    "description": "List container registry protection rules for a GitLab project.\n\nSee also: gitlab_registry_protection_create, gitlab_registry_list_project\n\nReturns: JSON array of protection rules.",
+    "description": "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use gitlab_registry_tag_protection_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98470,7 +98470,7 @@
   },
   {
     "name": "gitlab_registry_tag_protection_create",
-    "description": "Create a container registry tag protection rule for a project.",
+    "description": "Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98541,7 +98541,7 @@
   },
   {
     "name": "gitlab_registry_tag_protection_delete",
-    "description": "Delete a container registry tag protection rule from a project.",
+    "description": "Delete a container registry tag protection rule (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98598,7 +98598,7 @@
   },
   {
     "name": "gitlab_registry_tag_protection_list",
-    "description": "List container registry tag protection rules for a project.",
+    "description": "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use gitlab_registry_protection_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98719,7 +98719,7 @@
   },
   {
     "name": "gitlab_registry_tag_protection_update",
-    "description": "Update a container registry tag protection rule in a project.",
+    "description": "Update a container registry tag protection rule. Returns: the updated rule. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

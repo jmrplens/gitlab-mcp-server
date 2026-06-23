@@ -296,3 +296,137 @@ func TestFormatTagProtectionRuleListMarkdown_Empty(t *testing.T) {
 		t.Errorf("expected empty-state message, got: %s", md)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// API error paths + access-level branches + Output wrapper
+// ---------------------------------------------------------------------------.
+
+// TestListTagProtectionRules_APIError verifies the error path wraps the upstream failure.
+// The test makes the mock return 404.
+// It asserts a non-nil error is returned.
+func TestListTagProtectionRules_APIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := ListTagProtectionRules(context.Background(), client, ListTagProtectionRulesInput{ProjectID: toolutil.StringOrInt("10")})
+	if err == nil {
+		t.Fatal("expected error from 404 response")
+	}
+}
+
+// TestCreateTagProtectionRule_APIError verifies the error path wraps the upstream failure.
+// The test makes the mock return 400.
+// It asserts a non-nil error is returned.
+func TestCreateTagProtectionRule_APIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"tag_name_pattern is invalid"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := CreateTagProtectionRule(context.Background(), client, CreateTagProtectionRuleInput{
+		ProjectID: toolutil.StringOrInt("10"), TagNamePattern: "[",
+	})
+	if err == nil {
+		t.Fatal("expected error from 400 response")
+	}
+}
+
+// TestUpdateTagProtectionRule_AccessLevels verifies the push/delete access-level branches are applied.
+// The test sets both minimum access levels and inspects the request body.
+// It asserts both fields reach the API and the call succeeds.
+func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
+	var body string
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, r *http.Request) {
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		body = string(buf)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":5,"project_id":10,"tag_name_pattern":"v.+","minimum_access_level_for_push":"owner","minimum_access_level_for_delete":"admin"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := UpdateTagProtectionRule(context.Background(), client, UpdateTagProtectionRuleInput{
+		ProjectID:                   toolutil.StringOrInt("10"),
+		RuleID:                      5,
+		MinimumAccessLevelForPush:   "owner",
+		MinimumAccessLevelForDelete: "admin",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, field := range []string{"minimum_access_level_for_push", "minimum_access_level_for_delete"} {
+		if !strings.Contains(body, field) {
+			t.Errorf("expected %s in request body, got: %s", field, body)
+		}
+	}
+	if out.MinimumAccessLevelForPush != "owner" {
+		t.Errorf("expected push level owner, got %s", out.MinimumAccessLevelForPush)
+	}
+}
+
+// TestUpdateTagProtectionRule_APIError verifies the error path wraps the upstream failure.
+// The test makes the mock return 404.
+// It asserts a non-nil error is returned.
+func TestUpdateTagProtectionRule_APIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Rule Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := UpdateTagProtectionRule(context.Background(), client, UpdateTagProtectionRuleInput{
+		ProjectID: toolutil.StringOrInt("10"), RuleID: 5, TagNamePattern: "v.+",
+	})
+	if err == nil {
+		t.Fatal("expected error from 404 response")
+	}
+}
+
+// TestDeleteTagProtectionRule_APIError verifies the error path wraps the upstream failure.
+// The test makes the mock return 404.
+// It asserts a non-nil error is returned.
+func TestDeleteTagProtectionRule_APIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Rule Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	err := DeleteTagProtectionRule(context.Background(), client, DeleteTagProtectionRuleInput{
+		ProjectID: toolutil.StringOrInt("10"), RuleID: 5,
+	})
+	if err == nil {
+		t.Fatal("expected error from 404 response")
+	}
+}
+
+// TestDeleteTagProtectionRuleOutput verifies the catalog wrapper returns the canonical success shape.
+// The test deletes a rule via the *Output helper used by the destructive action route.
+// It asserts a success status on the happy path and a propagated error otherwise.
+func TestDeleteTagProtectionRuleOutput(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, testMethodNotAllowed, http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := DeleteTagProtectionRuleOutput(context.Background(), client, DeleteTagProtectionRuleInput{
+		ProjectID: toolutil.StringOrInt("10"), RuleID: 5,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Status != "success" {
+		t.Errorf("expected success status, got %q", out.Status)
+	}
+
+	// Error propagation: missing rule_id short-circuits before any request.
+	if _, errMissing := DeleteTagProtectionRuleOutput(context.Background(), client, DeleteTagProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")}); errMissing == nil {
+		t.Fatal("expected error when rule_id is missing")
+	}
+}

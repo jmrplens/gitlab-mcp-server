@@ -160,6 +160,62 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.IndividualTool.Description = "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete."
 	case "gitlab_group_members_list":
 		options.RelatedActions = []string{actionGroupGet, "group.projects", "group.member_add"}
+	case "gitlab_group_transfer_project":
+		options.Usage = "Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use gitlab_group_transfer_locations instead."
+		options.Aliases = []string{"transfer project to group", "move project into group", "relocate project namespace"}
+		options.RelatedActions = []string{actionGroupGet, "group.transfer_locations", "group.projects"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Numeric ID or full path of the project to move.",
+				ExampleBinding:   `params.project_id:"my-org/legacy-service"`,
+				CommonConfusions: []string{"project_id is the project being moved; group_id is the destination group."},
+			},
+		}
+		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
+	case "gitlab_group_shared_with_list":
+		options.Usage = "List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups."
+		options.Aliases = []string{"groups shared with this group", "list shared groups", "group share grants", "who shares this group"}
+		options.RelatedActions = []string{actionGroupGet, "group.members", "group.invited_groups", "group.subgroups"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path whose inbound shares are listed.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Lists groups shared *with* this group; it does not list this group's members or the projects it was shared into."},
+			},
+		}
+		options.IndividualTool.Description = "List groups shared with a GitLab group (group-to-group shares). Returns: the shared groups with path, visibility, and access metadata. See also: gitlab_group_invited_list, gitlab_group_members_list, gitlab_subgroups_list."
+	case "gitlab_group_invited_list":
+		options.Usage = "List the groups invited to this group. Use when the user asks which groups were invited (directly or by inheritance) to collaborate on a group."
+		options.Aliases = []string{"invited groups", "groups invited to group", "list group invitations", "group collaborators"}
+		options.RelatedActions = []string{actionGroupGet, "group.shared_with", "group.members"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path whose invited groups are listed.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+			"relation": {
+				ValueSource:      "Inheritance filter: direct, inherited, or both.",
+				ExampleBinding:   `params.relation:["direct"]`,
+				CommonConfusions: []string{"relation filters by how the invitation reaches the group; it is not an access level."},
+			},
+		}
+		options.IndividualTool.Description = "List groups invited to a GitLab group. Returns: the invited groups with path and access metadata. See also: gitlab_group_shared_with_list, gitlab_group_members_list, gitlab_group_get."
+	case "gitlab_group_transfer_locations":
+		options.Usage = "List the parent groups this group can be transferred (moved) into. Use this BEFORE attempting a group transfer to discover valid destinations; the caller needs the Owner role on a destination for it to appear."
+		options.Aliases = []string{"transfer locations", "where can I move this group", "candidate parent groups", "available group transfer targets", "valid destinations for group transfer"}
+		options.RelatedActions = []string{actionGroupGet, "group.transfer_project", "group.subgroups"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path that would be moved.",
+				ExampleBinding:   `params.group_id:"my-org/legacy-team"`,
+				CommonConfusions: []string{"This lists destinations for moving the *group itself*; to move a project into a group, use gitlab_group_transfer_project."},
+			},
+		}
+		options.IndividualTool.Description = "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list."
 	case "gitlab_group_hook_add", "gitlab_group_hook_edit":
 		// branch_filter_strategy is an enum on the GitLab side (wildcard,
 		// regex, all_branches). The jsonschema tag on HookInput already

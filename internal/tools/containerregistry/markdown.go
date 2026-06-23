@@ -178,6 +178,7 @@ func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string
 	toolutil.WriteHints(
 		&b,
 		"Use action 'registry_tag_rule_create' to add a new rule",
+		"These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules",
 	)
 	return b.String()
 }

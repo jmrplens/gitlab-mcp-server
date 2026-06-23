@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -67,6 +68,61 @@ func TestSAMLUsersList_Success(t *testing.T) {
 	md := FormatSAMLUsersListMarkdown(out)
 	if !strings.Contains(md, "[jdoe](https://gitlab.example.com/jdoe)") {
 		t.Errorf("expected clickable username link in markdown, got: %s", md)
+	}
+}
+
+// TestSAMLUsersList_AllFilters verifies that every optional filter and created_at parsing are wired through.
+// The test sets pagination, search, username, active, and blocked, and returns a user with created_at.
+// It asserts the query carries each filter and created_at is formatted on the output.
+func TestSAMLUsersList_AllFilters(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			query = r.URL.RawQuery
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id":42,"username":"jdoe","name":"Jane Doe","state":"active","created_at":"2026-01-02T03:04:05Z"}]`,
+				testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "2", PerPage: "5"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	active, blocked := true, false
+	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{
+		GroupID:         "mygroup",
+		Search:          "jane",
+		Username:        "jdoe",
+		Active:          &active,
+		Blocked:         &blocked,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "page=2", "per_page=5"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
+	}
+	if out.Users[0].CreatedAt == "" {
+		t.Error("expected created_at to be formatted on the output")
+	}
+}
+
+// TestSAMLUsersList_APIError verifies that an upstream error is wrapped with the SAML hint.
+// The test makes the mock return 403.
+// It asserts a non-nil error is returned.
+func TestSAMLUsersList_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup"})
+	if err == nil {
+		t.Fatal("expected error from 403 response")
 	}
 }
 

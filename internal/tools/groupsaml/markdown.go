@@ -66,7 +66,11 @@ func FormatSAMLUsersListMarkdown(out SAMLUsersListOutput) string {
 			u.ID, username, toolutil.EscapeMdTableCell(u.Name), u.State)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"These are users provisioned through SAML SSO; use action 'saml_link_list' to see the SAML group-to-access-level link mappings",
+	)
 	return b.String()
 }
 
