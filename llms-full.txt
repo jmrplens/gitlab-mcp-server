@@ -23296,8 +23296,8 @@ Create a container registry tag protection rule. Returns: the created rule. Omit
 
 **Parameters:**
 
-- `minimum_access_level_for_delete` (string): Minimum access level to delete matching tags (maintainer, owner, admin). Omit together with push level to make matching tags immutable
-- `minimum_access_level_for_push` (string): Minimum access level to push matching tags (maintainer, owner, admin). Omit together with delete level to make matching tags immutable
+- `minimum_access_level_for_delete` (string): Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable
+- `minimum_access_level_for_push` (string): Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable
 - `project_id` (string) (required): Project ID or path
 - `tag_name_pattern` (string) (required): Tag name pattern as a RE2 regular expression (e.g. v.+)
 

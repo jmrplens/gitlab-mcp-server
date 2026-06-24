@@ -43,7 +43,7 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | `dynamic` / `minimal`                                 |             2 |               881 | n/a                 |              2,204 |           740 |        2,944 |
 | `meta` / `full`                                       |            34 |               881 | `opaque`            |             88,135 |        18,284 |      106,419 |
 | `meta` / `minimal`                                    |            34 |               881 | `opaque`            |             88,135 |           740 |       88,875 |
-| `individual` / `full`                                 |           877 |               877 | n/a                 |            483,123 |        18,284 |      501,407 |
+| `individual` / `full`                                 |           877 |               877 | n/a                 |            483,124 |        18,284 |      501,408 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -447,10 +447,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       916 |     159,644 |
-| Unit tests (`_test.go`)  |       499 |     272,531 |
-| End-to-end tests         |       140 |      34,992 |
-| **Total**                | **1,555** | **467,167** |
+| Source (`.go`, non-test) |       916 |     159,658 |
+| Unit tests (`_test.go`)  |       499 |     272,577 |
+| End-to-end tests         |       142 |      35,428 |
+| **Total**                | **1,557** | **467,663** |
 
 ### Functions
 
@@ -459,9 +459,9 @@ Numbers nobody asked for, but here they are anyway.
 | Source functions                |  6,560 |
 | — exported (public)             |  2,486 |
 | — unexported (private)          |  4,074 |
-| Unit test functions (`TestXxx`) | 10,731 |
-| Subtests (`t.Run(...)`)         |  2,594 |
-| End-to-end test functions       |    285 |
+| Unit test functions (`TestXxx`) | 10,732 |
+| Subtests (`t.Run(...)`)         |  2,602 |
+| End-to-end test functions       |    290 |
 
 ### Ratios worth noting
 
@@ -470,15 +470,15 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines         | 1.71× more tests than code |
 | Average source file length         |                 ~174 lines |
 | Average test file length           |                 ~546 lines |
-| Comment lines in source            |   14,991 (~9.4% of source) |
+| Comment lines in source            |   14,992 (~9.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,220 |
-| `defer` statements                 |   794 |
+| `if err != nil` checks             | 6,222 |
+| `defer` statements                 |   800 |
 | `struct` types defined             | 2,361 |
 | `//nolint` suppressions            |    92 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
@@ -490,7 +490,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   220 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   207 |
+| Git commits                    |   215 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
