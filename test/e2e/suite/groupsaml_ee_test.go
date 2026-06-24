@@ -112,23 +112,36 @@ func TestMeta_GroupSAML(t *testing.T) {
 		}
 		t.Logf("saml_link_delete error path validated: %v", err)
 	})
+}
 
-	t.Run("Meta/GroupSAML/Users_Graceful", func(t *testing.T) {
-		out, err := callToolOn[groupsaml.SAMLUsersListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "saml_users_list",
-			"params": map[string]any{"group_id": grp.gidStr()},
-		})
-		if err == nil {
-			// With SAML SSO configured the call succeeds (a fresh group has
-			// no SAML-provisioned users yet); both are valid routing outcomes.
-			t.Logf("saml_users_list returned %d users (SSO is configured)", len(out.Users))
-			return
-		}
-		// Without SAML SSO the endpoint returns 401/403/404; all indicate the
-		// tool routed the call correctly.
-		if !isHTTPStatus(err, 401) && !isHTTPStatus(err, 403) && !isHTTPStatus(err, 404) {
-			t.Fatalf("saml_users_list error was not 401/403/404: %v", err)
-		}
-		t.Logf("saml_users_list error path validated: %v", err)
+// TestMeta_GroupSAMLUsers exercises the gitlab_group saml_users_list action
+// (added in client-go v2.41.0) on a fresh group. With SAML SSO configured the
+// call succeeds (a fresh group has no SAML-provisioned users yet); without SSO
+// the endpoint returns 401/403/404. Both indicate correct tool routing.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
+func TestMeta_GroupSAMLUsers(t *testing.T) {
+	if !sess.enterprise {
+		t.Skip("group SAML users require GitLab Premium/Ultimate")
+	}
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+
+	ctx := context.Background()
+	e2e := NewE2EContext(t)
+	grp := CreateGroupMeta(ctx, e2e, sess.meta, "e2e-saml-users")
+
+	out, err := callToolOn[groupsaml.SAMLUsersListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "saml_users_list",
+		"params": map[string]any{"group_id": grp.gidStr()},
 	})
+	if err == nil {
+		t.Logf("saml_users_list returned %d users (SSO is configured)", len(out.Users))
+		return
+	}
+	if !isHTTPStatus(err, 401) && !isHTTPStatus(err, 403) && !isHTTPStatus(err, 404) {
+		t.Fatalf("saml_users_list error was not 401/403/404: %v", err)
+	}
+	t.Logf("saml_users_list error path validated: %v", err)
 }

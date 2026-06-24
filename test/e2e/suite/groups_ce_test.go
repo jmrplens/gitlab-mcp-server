@@ -143,6 +143,60 @@ func TestIndividual_Groups(t *testing.T) {
 	})
 }
 
+// TestIndividual_GroupNewV241Fields verifies the client-go v2.41.0 group
+// create options and the enriched group Output fields round-trip end-to-end:
+// it creates a group setting the new boolean options that are available in all
+// tiers (math rendering limits, personal snippets), then reads the group back
+// and asserts the new Output fields (archived, math_rendering_limits_enabled,
+// duo_availability, enabled_git_access_protocol, organization_id) are accessible.
+//
+// The create flags that are Premium/Ultimate-only (web-based commit signing,
+// the unique-project-download-limit cluster) are intentionally not set here so
+// the test stays green on a CE instance.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+func TestIndividual_GroupNewV241Fields(t *testing.T) {
+	t.Parallel()
+	if sess.individual == nil {
+		t.Skip("individual session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	path := fmt.Sprintf("e2e-grp-v241-%d", time.Now().UnixMilli())
+	enabled := true
+	var groupID int64
+	t.Cleanup(func() {
+		if groupID > 0 {
+			cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cleanCancel()
+			_ = callToolVoidOn(cleanCtx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
+				GroupID: toolutil.StringOrInt(strconv.FormatInt(groupID, 10)),
+			})
+		}
+	})
+
+	created, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+		Name:                       path,
+		Path:                       path,
+		Visibility:                 "public",
+		MathRenderingLimitsEnabled: &enabled,
+		AllowPersonalSnippets:      &enabled,
+	})
+	requireNoError(t, err, "group create with v2.41.0 fields")
+	requireTruef(t, created.ID > 0, "created group ID should be positive")
+	groupID = created.ID
+
+	got, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_get", groups.GetInput{
+		GroupID: toolutil.StringOrInt(strconv.FormatInt(groupID, 10)),
+	})
+	requireNoError(t, err, "group get after create")
+	requireTruef(t, !got.Archived, "freshly created group should not be archived")
+	t.Logf("Enriched group fields: archived=%v math_rendering=%v duo_availability=%q git_access_protocol=%q organization_id=%d",
+		got.Archived, got.MathRenderingLimitsEnabled, got.DuoAvailability, got.EnabledGitAccessProtocol, got.OrganizationID)
+}
+
 // TestMeta_Groups exercises group operations using the gitlab_group
 // meta-tool.
 //
