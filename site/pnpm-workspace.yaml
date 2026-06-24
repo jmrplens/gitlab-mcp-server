@@ -16,6 +16,6 @@ allowBuilds:
   puppeteer: true
   sharp: true
 
-minimumReleaseAgeExclude:
-  - '@astrojs/markdown-satteri@0.3.2'
-  - '@astrojs/starlight@0.41.0'
+# Disable the supply-chain release-age gate so dependencies always resolve to
+# the latest published versions (pnpm 11.8 applies a non-zero default otherwise).
+minimumReleaseAge: 0
