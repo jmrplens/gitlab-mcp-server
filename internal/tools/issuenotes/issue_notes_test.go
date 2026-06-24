@@ -2,6 +2,7 @@ package issuenotes
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -814,6 +815,234 @@ func TestList_MissingProjectID(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.
+
+// TestCreate_CreatedAtBackdated verifies the created_at input is parsed and
+// forwarded to the GitLab API as the backdated note timestamp.
+func TestCreate_CreatedAtBackdated(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if !strings.Contains(string(body), `"created_at":"2026-01-15T10:00:00Z"`) {
+				t.Errorf("body = %s, want created_at 2026-01-15T10:00:00Z", body)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, noteJSONSimple)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		IssueIID:  10,
+		Body:      testNoteLGTM,
+		CreatedAt: "2026-01-15T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueNoteCreateErr, err)
+	}
+}
+
+// TestCreate_CreatedAtUnparseableIgnored verifies an unparseable created_at is
+// silently dropped (ParseOptionalTime returns nil) and no created_at is sent.
+func TestCreate_CreatedAtUnparseableIgnored(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if strings.Contains(string(body), "created_at") {
+				t.Errorf("body = %s, want no created_at", body)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, noteJSONSimple)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		IssueIID:  10,
+		Body:      testNoteLGTM,
+		CreatedAt: "not-a-timestamp",
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueNoteCreateErr, err)
+	}
+}
+
+// TestList_KeysetPagination verifies the keyset pagination inputs (pagination
+// and page_token) are forwarded to the GitLab API.
+func TestList_KeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssueNotes {
+			q := r.URL.Query()
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "cursor99" {
+				t.Errorf("page_token = %q, want cursor99", q.Get("page_token"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSONSimple+"]",
+				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		IssueIID:              10,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor99"},
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueNoteListErr, err)
+	}
+	if len(out.Notes) != 1 {
+		t.Errorf("len(Notes) = %d, want 1", len(out.Notes))
+	}
+}
+
+// TestToOutput_NestedObjects verifies the additive author/resolved_by/position
+// sub-objects mirror the full gl.Note nested structs.
+func TestToOutput_NestedObjects(t *testing.T) {
+	resolvedAt := mustParseTime(t, "2026-03-02T08:00:00Z")
+	expiresAt := mustParseTime(t, "2026-04-01T00:00:00Z")
+	n := &gl.Note{
+		ID:   400,
+		Body: "Diff comment",
+		Author: gl.NoteAuthor{
+			ID: 7, Username: "alice", Email: "alice@example.com", Name: "Alice",
+			State: "active", AvatarURL: "https://a/av.png", WebURL: "https://a/alice",
+		},
+		Attachment: "attach.png",
+		Title:      "note title",
+		FileName:   "note.txt",
+		ExpiresAt:  expiresAt,
+		Resolvable: true,
+		Resolved:   true,
+		ResolvedAt: resolvedAt,
+		ResolvedBy: gl.NoteResolvedBy{ID: 9, Username: "bob", Name: "Bob"},
+		Position: &gl.NotePosition{
+			BaseSHA: "base", StartSHA: "start", HeadSHA: "head", PositionType: "text",
+			NewPath: "main.go", NewLine: 12, OldPath: "main.go", OldLine: 10,
+			LineRange: &gl.LineRange{
+				StartRange: &gl.LinePosition{LineCode: "abc_1_2", Type: "new", OldLine: 0, NewLine: 12},
+				EndRange:   &gl.LinePosition{LineCode: "abc_3_4", Type: "new", OldLine: 0, NewLine: 14},
+			},
+		},
+	}
+
+	out := ToOutput(n)
+
+	if out.Author != "alice" {
+		t.Errorf("Author scalar = %q, want alice", out.Author)
+	}
+	if out.AuthorObject == nil || out.AuthorObject.ID != 7 || out.AuthorObject.Email != "alice@example.com" {
+		t.Fatalf("AuthorObject = %+v", out.AuthorObject)
+	}
+	if out.Attachment != "attach.png" || out.Title != "note title" || out.FileName != "note.txt" {
+		t.Errorf("string fields = %q/%q/%q", out.Attachment, out.Title, out.FileName)
+	}
+	if out.ExpiresAt != "2026-04-01T00:00:00Z" {
+		t.Errorf("ExpiresAt = %q", out.ExpiresAt)
+	}
+	if out.ResolvedAt != "2026-03-02T08:00:00Z" {
+		t.Errorf("ResolvedAt = %q", out.ResolvedAt)
+	}
+	if out.ResolvedBy == nil || out.ResolvedBy.Username != "bob" {
+		t.Fatalf("ResolvedBy = %+v", out.ResolvedBy)
+	}
+	if out.Position == nil {
+		t.Fatal("Position = nil, want populated")
+	}
+	if out.Position.NewPath != "main.go" || out.Position.NewLine != 12 {
+		t.Errorf("Position = %+v", out.Position)
+	}
+	if out.Position.LineRange == nil || out.Position.LineRange.StartRange == nil || out.Position.LineRange.EndRange == nil {
+		t.Fatalf("LineRange = %+v", out.Position.LineRange)
+	}
+	if out.Position.LineRange.StartRange.LineCode != "abc_1_2" {
+		t.Errorf("StartRange.LineCode = %q", out.Position.LineRange.StartRange.LineCode)
+	}
+	if out.Position.LineRange.EndRange.NewLine != 14 {
+		t.Errorf("EndRange.NewLine = %d", out.Position.LineRange.EndRange.NewLine)
+	}
+}
+
+// TestToOutput_EmptyNestedObjects verifies nil/empty nested sources produce nil
+// sub-objects (resolved_by absent, position absent) while the always-present
+// author object is still populated.
+func TestToOutput_EmptyNestedObjects(t *testing.T) {
+	out := ToOutput(&gl.Note{ID: 1, Author: gl.NoteAuthor{Username: "u"}})
+	if out.AuthorObject == nil {
+		t.Error("AuthorObject = nil, want non-nil")
+	}
+	if out.ResolvedBy != nil {
+		t.Errorf("ResolvedBy = %+v, want nil", out.ResolvedBy)
+	}
+	if out.Position != nil {
+		t.Errorf("Position = %+v, want nil", out.Position)
+	}
+}
+
+// TestNotePositionOutput_LineRangeNilSubRanges verifies a LineRange with both
+// sub-ranges nil collapses to a nil line_range object.
+func TestNotePositionOutput_LineRangeNilSubRanges(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		PositionType: "text",
+		LineRange:    &gl.LineRange{},
+	})
+	if out == nil {
+		t.Fatal("position = nil, want populated")
+	}
+	if out.LineRange != nil {
+		t.Errorf("LineRange = %+v, want nil (both sub-ranges empty)", out.LineRange)
+	}
+}
+
+// TestNotePositionOutput_LineRangeStartOnly verifies a LineRange carrying only a
+// start sub-range is preserved with a nil end.
+func TestNotePositionOutput_LineRangeStartOnly(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		LineRange: &gl.LineRange{StartRange: &gl.LinePosition{LineCode: "x", NewLine: 3}},
+	})
+	if out == nil || out.LineRange == nil || out.LineRange.StartRange == nil {
+		t.Fatalf("position/line range = %+v", out)
+	}
+	if out.LineRange.EndRange != nil {
+		t.Errorf("EndRange = %+v, want nil", out.LineRange.EndRange)
+	}
+}
+
+// TestNotePositionOutput_NoLineRange verifies a position with no line range
+// produces a populated position object whose line_range is nil.
+func TestNotePositionOutput_NoLineRange(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{PositionType: "text", NewPath: "f.go"})
+	if out == nil {
+		t.Fatal("position = nil, want populated")
+	}
+	if out.LineRange != nil {
+		t.Errorf("LineRange = %+v, want nil", out.LineRange)
+	}
+}
+
+// TestNotePositionOutput_LineRangeEndOnly verifies a LineRange carrying only an
+// end sub-range is preserved with a nil start.
+func TestNotePositionOutput_LineRangeEndOnly(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		LineRange: &gl.LineRange{EndRange: &gl.LinePosition{LineCode: "y", NewLine: 5}},
+	})
+	if out == nil || out.LineRange == nil || out.LineRange.EndRange == nil {
+		t.Fatalf("position/line range = %+v", out)
+	}
+	if out.LineRange.StartRange != nil {
+		t.Errorf("StartRange = %+v, want nil", out.LineRange.StartRange)
+	}
+}
 
 // mustParseTime prepares parse time test fixtures and fails the test on error.
 func mustParseTime(t *testing.T, s string) *time.Time {

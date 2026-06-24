@@ -4,6 +4,8 @@ package issuenotes
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,6 +13,53 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestActionSpecs_DiscoveryMetadata guards the 1:1 audit R-META metadata: every
+// issue note action must have a non-generic Usage, natural-language aliases,
+// canonical RelatedActions, parameter guidance, and a "Returns: … See also: …"
+// individual-tool description.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
+
+	const genericUsage = "Use to execute issuenotes domain action."
+
+	tests := []struct {
+		tool         string
+		wantAlias    string
+		wantRelated  string
+		guidedParams []string
+	}{
+		{"gitlab_issue_note_create", "comment on issue", actionIssueNoteList, []string{"project_id", "issue_iid", "body"}},
+		{"gitlab_issue_note_list", "list issue comments", actionIssueNoteGet, []string{"project_id", "issue_iid", "order_by"}},
+		{"gitlab_issue_note_get", "get issue comment", actionIssueNoteList, []string{"project_id", "issue_iid", "note_id"}},
+		{"gitlab_issue_note_update", "edit issue comment", actionIssueNoteGet, []string{"project_id", "issue_iid", "note_id", "body"}},
+		{"gitlab_issue_note_delete", "delete issue comment", actionIssueNoteGet, []string{"project_id", "issue_iid", "note_id"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.Usage == "" || spec.Usage == genericUsage {
+				t.Errorf("Usage = %q, want action-specific", spec.Usage)
+			}
+			if !slices.Contains(spec.Aliases, tt.wantAlias) {
+				t.Errorf("Aliases = %v, want to contain %q", spec.Aliases, tt.wantAlias)
+			}
+			if !slices.Contains(spec.RelatedActions, tt.wantRelated) {
+				t.Errorf("RelatedActions = %v, want to contain %q", spec.RelatedActions, tt.wantRelated)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("IndividualTool.Description = %q, want Returns:/See also:", desc)
+			}
+			for _, p := range tt.guidedParams {
+				if _, ok := spec.ParameterGuidance[p]; !ok {
+					t.Errorf("ParameterGuidance missing %q", p)
+				}
+			}
+		})
+	}
+}
 
 // TestActionSpecs_CallAllRoutes exercises every issue note tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
