@@ -90,6 +90,7 @@ func mergeStruct(byPackage map[string]*backlogPackage, rep structReport) {
 		entry.Struct = &structGaps{
 			MissingInput:  pkg.MissingInputCount,
 			MissingOutput: pkg.MissingOutputCount,
+			ExtraOutput:   pkg.ExtraOutputCount,
 			Gaps:          pkg.Gaps,
 		}
 	}
@@ -151,6 +152,7 @@ func summarizeBacklog(packages []backlogPackage) backlogSummary {
 		if pkg.Struct != nil {
 			s.StructMissingInput += pkg.Struct.MissingInput
 			s.StructMissingOutput += pkg.Struct.MissingOutput
+			s.StructExtraOutput += pkg.Struct.ExtraOutput
 		}
 		for _, action := range pkg.Actions {
 			s.ActionMissingMethods += len(action.MissingMethods)

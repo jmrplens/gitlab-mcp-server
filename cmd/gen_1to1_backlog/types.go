@@ -10,6 +10,7 @@ type structReport struct {
 		Package            string          `json:"package"`
 		MissingInputCount  int             `json:"missing_input_count"`
 		MissingOutputCount int             `json:"missing_output_count"`
+		ExtraOutputCount   int             `json:"extra_output_count"`
 		Gaps               json.RawMessage `json:"gaps"`
 	} `json:"packages"`
 }
@@ -55,6 +56,7 @@ type backlogSummary struct {
 	Packages                      int `json:"packages"`
 	StructMissingInput            int `json:"struct_missing_input"`
 	StructMissingOutput           int `json:"struct_missing_output"`
+	StructExtraOutput             int `json:"struct_extra_output"`
 	ActionMissingMethods          int `json:"action_missing_methods"`
 	MetaGenericUsage              int `json:"meta_generic_usage"`
 	MetaAliasesOnlyToolname       int `json:"meta_aliases_only_toolname"`
@@ -73,6 +75,7 @@ type backlogPackage struct {
 type structGaps struct {
 	MissingInput  int             `json:"missing_input"`
 	MissingOutput int             `json:"missing_output"`
+	ExtraOutput   int             `json:"extra_output"`
 	Gaps          json.RawMessage `json:"gaps,omitempty"`
 }
 

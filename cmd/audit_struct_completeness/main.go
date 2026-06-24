@@ -57,6 +57,10 @@ type gap struct {
 	SDKType        string         `json:"sdk_type"`
 	MissingFields  []missingField `json:"missing_fields,omitempty"`
 	TypeMismatches []typeMismatch `json:"type_mismatches,omitempty"`
+	// ExtraFields lists MCP output json tags with no SDK counterpart — invented
+	// output scalars the 1:1 rule forbids (R-OUTPUT-EXTRA). Populated only for
+	// output pairs; input pairs legitimately carry non-Options params (path ids).
+	ExtraFields []extraField `json:"extra_fields,omitempty"`
 }
 
 type missingField struct {
@@ -70,6 +74,27 @@ type typeMismatch struct {
 	SDKType string `json:"sdk_type"`
 }
 
+// extraField is one MCP output json tag with no SDK result counterpart.
+type extraField struct {
+	Tag     string `json:"tag"`
+	MCPType string `json:"mcp_type"`
+}
+
+// envelopeKeys is the MCP-envelope carve-out per the 1:1 policy: resource output
+// must mirror the SDK result, but MCP-protocol / structural keys (pagination
+// envelope and LLM next-step hints) are legitimately additive and are therefore
+// exempt from R-OUTPUT-EXTRA. A json tag of "-" is also exempt (not serialized).
+var envelopeKeys = map[string]struct{}{
+	"pagination":  {},
+	"page":        {},
+	"per_page":    {},
+	"total":       {},
+	"total_pages": {},
+	"next_page":   {},
+	"prev_page":   {},
+	"next_steps":  {},
+}
+
 // packageReport aggregates the gap pairs for one internal/tools package.
 type packageReport struct {
 	Package            string `json:"package"`
@@ -77,6 +102,7 @@ type packageReport struct {
 	OutputPairs        int    `json:"output_pairs"`
 	MissingInputCount  int    `json:"missing_input_count"`
 	MissingOutputCount int    `json:"missing_output_count"`
+	ExtraOutputCount   int    `json:"extra_output_count"`
 	Gaps               []gap  `json:"gaps"`
 }
 
@@ -95,6 +121,7 @@ type reportSummary struct {
 	OutputPairs         int `json:"output_pairs"`
 	MissingInputFields  int `json:"missing_input_fields"`
 	MissingOutputFields int `json:"missing_output_fields"`
+	ExtraOutputFields   int `json:"extra_output_fields"`
 	TypeMismatches      int `json:"type_mismatches"`
 }
 
@@ -132,7 +159,7 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		if !ok {
 			continue
 		}
-		if gapsOnly && pr.MissingInputCount == 0 && pr.MissingOutputCount == 0 {
+		if gapsOnly && pr.MissingInputCount == 0 && pr.MissingOutputCount == 0 && pr.ExtraOutputCount == 0 {
 			continue
 		}
 		reports = append(reports, pr)
@@ -203,13 +230,14 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 		pr.OutputPairs++
 		g := diffPair("output", pair)
 		pr.MissingOutputCount += len(g.MissingFields)
+		pr.ExtraOutputCount += len(g.ExtraFields)
 		appendGapIfAny(&pr, g)
 	}
 	return pr, true
 }
 
 func appendGapIfAny(pr *packageReport, g gap) {
-	if len(g.MissingFields) > 0 || len(g.TypeMismatches) > 0 {
+	if len(g.MissingFields) > 0 || len(g.TypeMismatches) > 0 || len(g.ExtraFields) > 0 {
 		pr.Gaps = append(pr.Gaps, g)
 	}
 }
@@ -346,7 +374,43 @@ func diffPair(kind string, pair structPair) gap {
 			g.TypeMismatches = append(g.TypeMismatches, typeMismatch{Tag: tag, MCPType: mcpType, SDKType: sdkType})
 		}
 	}
+	if kind == "output" {
+		g.ExtraFields = extraOutputFields(mcpFields, sdkFields)
+	}
 	return g
+}
+
+// extraOutputFields reports MCP output json tags with no SDK result counterpart:
+// invented output scalars the 1:1 rule forbids (R-OUTPUT-EXTRA). An MCP tag is
+// extra when it is neither a key of sdkFields nor the normalizeSDKTag image of
+// any SDK key, is not the MCP-envelope carve-out, and is not the "-" sentinel.
+func extraOutputFields(mcpFields, sdkFields map[string]string) []extraField {
+	sdkNorm := make(map[string]struct{}, len(sdkFields))
+	for sdkTag := range sdkFields {
+		sdkNorm[normalizeSDKTag(sdkTag)] = struct{}{}
+	}
+	tags := make([]string, 0, len(mcpFields))
+	for tag := range mcpFields {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	var extras []extraField
+	for _, tag := range tags {
+		if tag == "-" {
+			continue
+		}
+		if _, exempt := envelopeKeys[tag]; exempt {
+			continue
+		}
+		if _, ok := sdkFields[tag]; ok {
+			continue
+		}
+		if _, ok := sdkNorm[tag]; ok {
+			continue
+		}
+		extras = append(extras, extraField{Tag: tag, MCPType: mcpFields[tag]})
+	}
+	return extras
 }
 
 // flattenFields walks a struct (recursing into embedded structs) and returns a
@@ -536,13 +600,14 @@ func shortPackage(pkgPath string) string {
 func summarize(reports []packageReport) reportSummary {
 	s := reportSummary{Packages: len(reports)}
 	for _, pr := range reports {
-		if pr.MissingInputCount > 0 || pr.MissingOutputCount > 0 {
+		if pr.MissingInputCount > 0 || pr.MissingOutputCount > 0 || pr.ExtraOutputCount > 0 {
 			s.PackagesWithGaps++
 		}
 		s.InputPairs += pr.InputPairs
 		s.OutputPairs += pr.OutputPairs
 		s.MissingInputFields += pr.MissingInputCount
 		s.MissingOutputFields += pr.MissingOutputCount
+		s.ExtraOutputFields += pr.ExtraOutputCount
 		for _, g := range pr.Gaps {
 			s.TypeMismatches += len(g.TypeMismatches)
 		}

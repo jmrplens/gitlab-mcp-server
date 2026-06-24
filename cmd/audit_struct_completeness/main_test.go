@@ -154,6 +154,73 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	}
 }
 
+// TestExtraOutputFields_FlagsInventedScalars verifies R-OUTPUT-EXTRA detection:
+// an MCP output json tag with no SDK result counterpart is flagged as extra,
+// while SDK-backed tags, the MCP-envelope carve-out, and the "-" sentinel are
+// not. This is the mechanical guard for the 1:1 "no invented output" rule.
+func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
+	sdkFields := map[string]string{
+		"id":        "int",
+		"author_id": "int",
+		"iids[]":    "[]int", // url-style SDK tag; normalizes to "iids"
+		"milestone": "*v2.Milestone",
+		"web_url":   "string",
+	}
+	mcpFields := map[string]string{
+		"id":              "int",      // SDK-backed → not extra
+		"iids":            "[]int",    // matches normalizeSDKTag("iids[]") → not extra
+		"author_username": "string",   // invented scalar → extra
+		"milestone_title": "string",   // invented scalar → extra
+		"pagination":      "v2.Page",  // envelope carve-out → not extra
+		"next_steps":      "[]string", // envelope carve-out → not extra
+		"-":               "string",   // sentinel → not extra
+	}
+
+	extras := extraOutputFields(mcpFields, sdkFields)
+
+	gotTags := map[string]bool{}
+	for _, e := range extras {
+		gotTags[e.Tag] = true
+	}
+	wantExtra := []string{"author_username", "milestone_title"}
+	for _, tag := range wantExtra {
+		if !gotTags[tag] {
+			t.Errorf("expected %q reported as extra output field, got %v", tag, extras)
+		}
+	}
+	wantNotExtra := []string{"id", "iids", "pagination", "next_steps", "-"}
+	for _, tag := range wantNotExtra {
+		if gotTags[tag] {
+			t.Errorf("did not expect %q reported as extra output field, got %v", tag, extras)
+		}
+	}
+	if len(extras) != len(wantExtra) {
+		t.Errorf("extra count = %d (%v), want %d", len(extras), extras, len(wantExtra))
+	}
+}
+
+// TestExtraOutputFields_OnlyOutputKind verifies diffPair attaches ExtraFields for
+// output pairs but never for input pairs (MCP inputs carry path ids legitimately).
+func TestExtraOutputFields_DiffPairKindGating(t *testing.T) {
+	// Synthesize via the real diffPair against the repository to confirm input
+	// gaps never carry extras. Output extras are exercised in the unit test above.
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, true)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	for _, pr := range rep.Packages {
+		for _, g := range pr.Gaps {
+			if g.Kind == "input" && len(g.ExtraFields) > 0 {
+				t.Errorf("input gap %s/%s carries extra fields %v, want none", pr.Package, g.MCPType, g.ExtraFields)
+			}
+		}
+	}
+}
+
 func findPackage(t *testing.T, rep report, name string) packageReport {
 	t.Helper()
 	for _, pr := range rep.Packages {

@@ -108,6 +108,41 @@ func TestBuildBacklog_PackagesSortedAndStructGapsPreserved(t *testing.T) {
 	}
 }
 
+// TestBuildBacklog_SurfacesExtraOutput verifies the R-OUTPUT-EXTRA count flows
+// from the struct auditor into the per-package struct section and the summary.
+func TestBuildBacklog_SurfacesExtraOutput(t *testing.T) {
+	dir := t.TempDir()
+	structPath := writeTemp(t, dir, "struct.json", `{"packages":[
+	  {"package":"issues","missing_input_count":0,"missing_output_count":0,"extra_output_count":2,"gaps":[{"kind":"output","mcp_type":"Output","sdk_type":"v2.Issue","extra_fields":[{"tag":"author_username","mcp_type":"string"},{"tag":"milestone_title","mcp_type":"string"}]}]}
+	]}`)
+	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
+	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
+
+	bl, err := buildBacklog(structPath, actionPath, metadataPath)
+	if err != nil {
+		t.Fatalf("buildBacklog: %v", err)
+	}
+	pkgs := indexPackages(bl)
+	issues, ok := pkgs["issues"]
+	if !ok || issues.Struct == nil {
+		t.Fatalf("issues struct section missing: %+v", issues)
+	}
+	if issues.Struct.ExtraOutput != 2 {
+		t.Errorf("issues extra_output = %d, want 2", issues.Struct.ExtraOutput)
+	}
+	if bl.Summary.StructExtraOutput != 2 {
+		t.Errorf("summary struct_extra_output = %d, want 2", bl.Summary.StructExtraOutput)
+	}
+	// Extra-field tags must survive the json.RawMessage passthrough.
+	var gaps []map[string]any
+	if unmarshalErr := json.Unmarshal(issues.Struct.Gaps, &gaps); unmarshalErr != nil {
+		t.Fatalf("gaps passthrough invalid: %v", unmarshalErr)
+	}
+	if len(gaps) != 1 || gaps[0]["extra_fields"] == nil {
+		t.Errorf("extra_fields not preserved in gaps passthrough: %+v", gaps)
+	}
+}
+
 // TestReadJSON_MissingFile verifies a clear error when an input report is absent.
 func TestReadJSON_MissingFile(t *testing.T) {
 	var target structReport
