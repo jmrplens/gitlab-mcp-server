@@ -1744,7 +1744,7 @@
   },
   {
     "name": "gitlab_add_project_mirror",
-    "description": "Create a new remote push mirror for a GitLab project. This push-mirror endpoint may use URL-embedded credentials when GitLab requires inline authentication; treat embedded credentials as secrets and redact them from logs, telemetry, and errors. Pull mirroring uses separate auth_user/auth_password fields and must not put credentials in the URL.\n\nReturns: JSON with created mirror details. See also: gitlab_edit_project_mirror.",
+    "description": "Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13065,7 +13065,7 @@
   },
   {
     "name": "gitlab_delete_project_mirror",
-    "description": "Delete a remote push mirror from a GitLab project.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_project_mirrors.",
+    "description": "Delete a push mirror from a project permanently. Returns: a success confirmation naming the mirror and project. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17279,7 +17279,7 @@
   },
   {
     "name": "gitlab_edit_project_mirror",
-    "description": "Update an existing remote push mirror configuration for a GitLab project.\n\nReturns: JSON with updated mirror details. See also: gitlab_get_project_mirror.",
+    "description": "Update a push mirror's attributes (enabled, branch filtering, divergent refs, auth method). Returns: the updated mirror. See also: gitlab_get_project_mirror, gitlab_force_push_mirror_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -21950,7 +21950,7 @@
   },
   {
     "name": "gitlab_force_push_mirror_update",
-    "description": "Trigger an immediate update for a remote push mirror, bypassing the normal schedule.\n\nReturns: JSON confirming the update was triggered. See also: gitlab_get_project_mirror.",
+    "description": "Trigger an immediate update of a push mirror. Returns: a confirmation that the update was triggered. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26543,7 +26543,7 @@
   },
   {
     "name": "gitlab_get_project_mirror",
-    "description": "Get a single remote push mirror for a GitLab project by its mirror ID, including URL, status, timestamps, and configuration.\n\nReturns: JSON with mirror details. See also: gitlab_list_project_mirrors.",
+    "description": "Get a single push mirror of a project by mirror id. Returns: the mirror with enabled state, redacted URL, auth method, branch filtering, and last-update status/error. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_force_push_mirror_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26648,7 +26648,7 @@
   },
   {
     "name": "gitlab_get_project_mirror_public_key",
-    "description": "Get the SSH public key for a remote push mirror, used for SSH-based mirror authentication.\n\nReturns: JSON with public_key field. See also: gitlab_get_project_mirror.",
+    "description": "Get the SSH public key for an SSH-authenticated push mirror. Returns: the public key to register on the remote. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27022,7 +27022,7 @@
   },
   {
     "name": "gitlab_get_project_storage_move",
-    "description": "Get a single project repository storage move by ID (admin only).\n\nReturns: JSON with storage move details.\n\nSee also: gitlab_get_project_storage_move_for_project",
+    "description": "Get a single project repository storage move by its global move id. Returns the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27060,10 +27060,25 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "name": {
+              "type": "string"
+            },
+            "name_with_namespace": {
+              "type": "string"
+            },
+            "path": {
               "type": "string"
             },
             "path_with_namespace": {
@@ -27105,7 +27120,7 @@
   },
   {
     "name": "gitlab_get_project_storage_move_for_project",
-    "description": "Get a single repository storage move for a specific project (admin only).\n\nReturns: JSON with storage move details.\n\nSee also: gitlab_get_project_storage_move",
+    "description": "Get a single repository storage move for a specific project by project_id and move id. Returns the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27148,10 +27163,25 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "name": {
+              "type": "string"
+            },
+            "name_with_namespace": {
+              "type": "string"
+            },
+            "path": {
               "type": "string"
             },
             "path_with_namespace": {
@@ -72203,13 +72233,25 @@
   },
   {
     "name": "gitlab_list_project_mirrors",
-    "description": "List all remote push mirrors configured for a GitLab project. Returns mirror URL, status, enabled state, and configuration.\n\nReturns: JSON with mirrors array and pagination. See also: gitlab_get_project_mirror.",
+    "description": "List a project's push (remote) mirrors. Returns: each mirror with id, enabled state, redacted URL, last-update status, and pagination metadata. See also: gitlab_get_project_mirror, gitlab_add_project_mirror, gitlab_project_pull_mirror_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -72217,6 +72259,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
           "type": "string"
         }
       },
@@ -110410,6 +110456,29 @@
             "boolean"
           ]
         },
+        "analytics_access_level": {
+          "description": "Analytics access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "approvals_before_merge": {
+          "description": "Number of approvals required before merge (deprecated: use Merge Request Approvals API)",
+          "type": "integer"
+        },
+        "auto_cancel_pending_pipelines": {
+          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "type": "string"
+        },
+        "auto_devops_deploy_strategy": {
+          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "type": "string"
+        },
+        "auto_devops_enabled": {
+          "description": "Enable Auto DevOps for the project",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "autoclose_referenced_issues": {
           "description": "Auto-close referenced issues on merge",
           "type": [
@@ -110417,24 +110486,83 @@
             "boolean"
           ]
         },
+        "build_coverage_regex": {
+          "description": "Regex used to extract test coverage from job logs",
+          "type": "string"
+        },
+        "build_git_strategy": {
+          "description": "Git strategy for builds (fetch, clone)",
+          "type": "string"
+        },
         "build_timeout": {
           "description": "Build timeout in seconds",
           "type": "integer"
+        },
+        "builds_access_level": {
+          "description": "CI/CD builds access level (disabled, private, enabled)",
+          "type": "string"
         },
         "ci_config_path": {
           "description": "Custom CI/CD configuration file path",
           "type": "string"
         },
         "ci_forward_deployment_enabled": {
-          "description": "Enable CI/CD forward deployment",
+          "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
           "type": [
             "null",
             "boolean"
           ]
         },
+        "container_expiration_policy_attributes": {
+          "additionalProperties": false,
+          "description": "Container registry cleanup policy attributes",
+          "properties": {
+            "cadence": {
+              "description": "Cleanup cadence (1d, 7d, 14d, 1month, 3month)",
+              "type": "string"
+            },
+            "enabled": {
+              "description": "Enable the container expiration policy",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "keep_n": {
+              "description": "Number of most recent tags to always keep per image name",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "name_regex_delete": {
+              "description": "Regex matching tag names to delete",
+              "type": "string"
+            },
+            "name_regex_keep": {
+              "description": "Regex matching tag names to always keep",
+              "type": "string"
+            },
+            "older_than": {
+              "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "container_registry_access_level": {
           "description": "Container registry access level (disabled, private, enabled)",
           "type": "string"
+        },
+        "container_registry_enabled": {
+          "description": "Enable container registry (deprecated: use container_registry_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "default_branch": {
           "description": "Default branch name",
@@ -110444,23 +110572,87 @@
           "description": "Project description",
           "type": "string"
         },
+        "emails_disabled": {
+          "description": "Disable email notifications (deprecated: use emails_enabled)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "emails_enabled": {
+          "description": "Enable email notifications",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "enforce_auth_checks_on_uploads": {
+          "description": "Enforce authorization checks on uploads",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "environments_access_level": {
+          "description": "Environments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "external_authorization_classification_label": {
+          "description": "External authorization classification label",
+          "type": "string"
+        },
+        "feature_flags_access_level": {
+          "description": "Feature flags access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "forking_access_level": {
+          "description": "Forking access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "group_runners_enabled": {
+          "description": "Enable group runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "group_with_project_templates_id": {
+          "description": "Group ID that provides the custom project templates",
+          "type": "integer"
+        },
         "import_url": {
           "description": "URL to import repository from",
+          "type": "string"
+        },
+        "infrastructure_access_level": {
+          "description": "Infrastructure access level (disabled, private, enabled)",
           "type": "string"
         },
         "initialize_with_readme": {
           "description": "Initialize with a README",
           "type": "boolean"
         },
+        "issue_branch_template": {
+          "description": "Template for branch names created from issues",
+          "type": "string"
+        },
+        "issues_access_level": {
+          "description": "Issues access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "issues_enabled": {
-          "description": "Enable issues feature",
+          "description": "Enable issues feature (deprecated: use issues_access_level)",
           "type": [
             "null",
             "boolean"
           ]
         },
+        "issues_template": {
+          "description": "Default issue description template (deprecated: no longer supported in recent versions)",
+          "type": "string"
+        },
         "jobs_enabled": {
-          "description": "Enable CI/CD jobs",
+          "description": "Enable CI/CD jobs (deprecated: use builds_access_level)",
           "type": [
             "null",
             "boolean"
@@ -110473,16 +110665,83 @@
             "boolean"
           ]
         },
+        "merge_commit_template": {
+          "description": "Template for merge commit messages",
+          "type": "string"
+        },
         "merge_method": {
           "description": "Merge method (merge, rebase_merge, ff)",
           "type": "string"
         },
-        "merge_requests_enabled": {
-          "description": "Enable merge requests feature",
+        "merge_pipelines_enabled": {
+          "description": "Enable merged results pipelines",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "merge_request_title_regex": {
+          "description": "Regex that MR titles must match",
+          "type": "string"
+        },
+        "merge_request_title_regex_description": {
+          "description": "Human-readable description for the MR title regex",
+          "type": "string"
+        },
+        "merge_requests_access_level": {
+          "description": "Merge requests access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "merge_requests_enabled": {
+          "description": "Enable merge requests feature (deprecated: use merge_requests_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_requests_template": {
+          "description": "Default merge request description template (deprecated: no longer supported in recent versions)",
+          "type": "string"
+        },
+        "merge_trains_enabled": {
+          "description": "Enable merge trains",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_trains_skip_train_allowed": {
+          "description": "Allow skipping the merge train",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror": {
+          "description": "Enable pull mirroring from import_url",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror_trigger_builds": {
+          "description": "Trigger pipelines for mirror updates",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "model_experiments_access_level": {
+          "description": "Model experiments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "model_registry_access_level": {
+          "description": "Model registry access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "monitor_access_level": {
+          "description": "Monitor access level (disabled, private, enabled)",
+          "type": "string"
         },
         "name": {
           "description": "Project name",
@@ -110496,9 +110755,20 @@
           "description": "Only allow merge when all discussions are resolved",
           "type": "boolean"
         },
+        "only_allow_merge_if_all_status_checks_passed": {
+          "description": "Only allow merge when all external status checks pass",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "only_allow_merge_if_pipeline_succeeds": {
           "description": "Only allow merge when pipeline succeeds",
           "type": "boolean"
+        },
+        "operations_access_level": {
+          "description": "Operations access level (disabled, private, enabled)",
+          "type": "string"
         },
         "package_registry_access_level": {
           "description": "Package registry access level (disabled, private, enabled)",
@@ -110519,6 +110789,13 @@
           "description": "Project path slug (defaults from name)",
           "type": "string"
         },
+        "printing_merge_request_link_enabled": {
+          "description": "Show the create-merge-request link after pushing",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "protect_merge_request_pipelines": {
           "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
           "type": [
@@ -110527,11 +110804,22 @@
           ]
         },
         "public_builds": {
+          "description": "Enable public access to pipelines (deprecated: use public_jobs)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_jobs": {
           "description": "Enable public access to pipelines",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "releases_access_level": {
+          "description": "Releases access level (disabled, private, enabled)",
+          "type": "string"
         },
         "remove_source_branch_after_merge": {
           "description": "Remove source branch after merge by default",
@@ -110540,8 +110828,42 @@
             "boolean"
           ]
         },
+        "repository_access_level": {
+          "description": "Repository access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "repository_storage": {
+          "description": "Repository storage shard name (admin only)",
+          "type": "string"
+        },
         "request_access_enabled": {
           "description": "Allow users to request access",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "requirements_access_level": {
+          "description": "Requirements access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "resolve_outdated_diff_discussions": {
+          "description": "Auto-resolve outdated diff discussions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "resource_group_default_process_mode": {
+          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "type": "string"
+        },
+        "security_and_compliance_access_level": {
+          "description": "Security and compliance access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "service_desk_enabled": {
+          "description": "Enable Service Desk",
           "type": [
             "null",
             "boolean"
@@ -110554,8 +110876,26 @@
             "boolean"
           ]
         },
+        "show_default_award_emojis": {
+          "description": "Show default award emojis on issues/MRs",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "snippets_access_level": {
           "description": "Snippets access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "snippets_enabled": {
+          "description": "Enable snippets feature (deprecated: use snippets_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "squash_commit_template": {
+          "description": "Template for squash commit messages",
           "type": "string"
         },
         "squash_option": {
@@ -110565,6 +110905,24 @@
         "suggestion_commit_message": {
           "description": "Default commit message for suggestions",
           "type": "string"
+        },
+        "tag_list": {
+          "description": "Project tags (deprecated: use topics)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "template_name": {
+          "description": "Built-in project template name to use",
+          "type": "string"
+        },
+        "template_project_id": {
+          "description": "Custom project template ID to use",
+          "type": "integer"
         },
         "topics": {
           "description": "Topic tags for the project",
@@ -110576,12 +110934,23 @@
             "array"
           ]
         },
+        "use_custom_template": {
+          "description": "Use a custom group/instance project template",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
         },
+        "wiki_access_level": {
+          "description": "Wiki access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "wiki_enabled": {
-          "description": "Enable wiki feature",
+          "description": "Enable wiki feature (deprecated: use wiki_access_level)",
           "type": [
             "null",
             "boolean"
@@ -110838,6 +111207,121 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "allow_merge_on_skipped_pipeline": {
+          "description": "Allow merge when pipeline is skipped",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "analytics_access_level": {
+          "description": "Analytics access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "approvals_before_merge": {
+          "description": "Number of approvals required before merge (deprecated: use Merge Request Approvals API)",
+          "type": "integer"
+        },
+        "auto_cancel_pending_pipelines": {
+          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "type": "string"
+        },
+        "auto_devops_deploy_strategy": {
+          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "type": "string"
+        },
+        "auto_devops_enabled": {
+          "description": "Enable Auto DevOps for the project",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "autoclose_referenced_issues": {
+          "description": "Auto-close referenced issues on merge",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "build_coverage_regex": {
+          "description": "Regex used to extract test coverage from job logs",
+          "type": "string"
+        },
+        "build_git_strategy": {
+          "description": "Git strategy for builds (fetch, clone)",
+          "type": "string"
+        },
+        "build_timeout": {
+          "description": "Build timeout in seconds",
+          "type": "integer"
+        },
+        "builds_access_level": {
+          "description": "CI/CD builds access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "ci_config_path": {
+          "description": "Custom CI/CD configuration file path",
+          "type": "string"
+        },
+        "ci_forward_deployment_enabled": {
+          "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "container_expiration_policy_attributes": {
+          "additionalProperties": false,
+          "description": "Container registry cleanup policy attributes",
+          "properties": {
+            "cadence": {
+              "description": "Cleanup cadence (1d, 7d, 14d, 1month, 3month)",
+              "type": "string"
+            },
+            "enabled": {
+              "description": "Enable the container expiration policy",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "keep_n": {
+              "description": "Number of most recent tags to always keep per image name",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "name_regex_delete": {
+              "description": "Regex matching tag names to delete",
+              "type": "string"
+            },
+            "name_regex_keep": {
+              "description": "Regex matching tag names to always keep",
+              "type": "string"
+            },
+            "older_than": {
+              "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "container_registry_access_level": {
+          "description": "Container registry access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "container_registry_enabled": {
+          "description": "Enable container registry (deprecated: use container_registry_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -110846,42 +111330,357 @@
           "description": "Project description",
           "type": "string"
         },
+        "emails_disabled": {
+          "description": "Disable email notifications (deprecated: use emails_enabled)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "emails_enabled": {
+          "description": "Enable email notifications",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "enforce_auth_checks_on_uploads": {
+          "description": "Enforce authorization checks on uploads",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "environments_access_level": {
+          "description": "Environments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "external_authorization_classification_label": {
+          "description": "External authorization classification label",
+          "type": "string"
+        },
+        "feature_flags_access_level": {
+          "description": "Feature flags access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "forking_access_level": {
+          "description": "Forking access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "group_runners_enabled": {
+          "description": "Enable group runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "group_with_project_templates_id": {
+          "description": "Group ID that provides the custom project templates",
+          "type": "integer"
+        },
+        "import_url": {
+          "description": "URL to import repository from",
+          "type": "string"
+        },
+        "infrastructure_access_level": {
+          "description": "Infrastructure access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "initialize_with_readme": {
           "description": "Initialize with a README",
           "type": "boolean"
         },
+        "issue_branch_template": {
+          "description": "Template for branch names created from issues",
+          "type": "string"
+        },
+        "issues_access_level": {
+          "description": "Issues access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "issues_enabled": {
-          "description": "Enable issues feature",
+          "description": "Enable issues feature (deprecated: use issues_access_level)",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "issues_template": {
+          "description": "Default issue description template (deprecated: no longer supported in recent versions)",
+          "type": "string"
         },
         "jobs_enabled": {
-          "description": "Enable CI/CD jobs",
+          "description": "Enable CI/CD jobs (deprecated: use builds_access_level)",
           "type": [
             "null",
             "boolean"
           ]
         },
-        "merge_requests_enabled": {
-          "description": "Enable merge requests feature",
+        "lfs_enabled": {
+          "description": "Enable Git LFS",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "merge_commit_template": {
+          "description": "Template for merge commit messages",
+          "type": "string"
+        },
+        "merge_method": {
+          "description": "Merge method (merge, rebase_merge, ff)",
+          "type": "string"
+        },
+        "merge_pipelines_enabled": {
+          "description": "Enable merged results pipelines",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_request_title_regex": {
+          "description": "Regex that MR titles must match",
+          "type": "string"
+        },
+        "merge_request_title_regex_description": {
+          "description": "Human-readable description for the MR title regex",
+          "type": "string"
+        },
+        "merge_requests_access_level": {
+          "description": "Merge requests access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "merge_requests_enabled": {
+          "description": "Enable merge requests feature (deprecated: use merge_requests_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_requests_template": {
+          "description": "Default merge request description template (deprecated: no longer supported in recent versions)",
+          "type": "string"
+        },
+        "merge_trains_enabled": {
+          "description": "Enable merge trains",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_trains_skip_train_allowed": {
+          "description": "Allow skipping the merge train",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror": {
+          "description": "Enable pull mirroring from import_url",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror_trigger_builds": {
+          "description": "Trigger pipelines for mirror updates",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "model_experiments_access_level": {
+          "description": "Model experiments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "model_registry_access_level": {
+          "description": "Model registry access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "monitor_access_level": {
+          "description": "Monitor access level (disabled, private, enabled)",
+          "type": "string"
         },
         "name": {
           "description": "Project name",
           "type": "string"
         },
         "namespace_id": {
-          "description": "Namespace ID (defaults to user personal namespace)",
+          "description": "Namespace ID (defaults to personal namespace)",
           "type": "integer"
+        },
+        "only_allow_merge_if_all_discussions_are_resolved": {
+          "description": "Only allow merge when all discussions are resolved",
+          "type": "boolean"
+        },
+        "only_allow_merge_if_all_status_checks_passed": {
+          "description": "Only allow merge when all external status checks pass",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "only_allow_merge_if_pipeline_succeeds": {
+          "description": "Only allow merge when pipeline succeeds",
+          "type": "boolean"
+        },
+        "operations_access_level": {
+          "description": "Operations access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "package_registry_access_level": {
+          "description": "Package registry access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "packages_enabled": {
+          "description": "Enable packages feature (deprecated: use package_registry_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "pages_access_level": {
+          "description": "Pages access level (disabled, private, enabled, public)",
+          "type": "string"
         },
         "path": {
           "description": "Project path slug (defaults from name)",
           "type": "string"
+        },
+        "printing_merge_request_link_enabled": {
+          "description": "Show the create-merge-request link after pushing",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "protect_merge_request_pipelines": {
+          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_builds": {
+          "description": "Enable public access to pipelines (deprecated: use public_jobs)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_jobs": {
+          "description": "Enable public access to pipelines",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "releases_access_level": {
+          "description": "Releases access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "remove_source_branch_after_merge": {
+          "description": "Remove source branch after merge by default",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_access_level": {
+          "description": "Repository access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "repository_storage": {
+          "description": "Repository storage shard name (admin only)",
+          "type": "string"
+        },
+        "request_access_enabled": {
+          "description": "Allow users to request access",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "requirements_access_level": {
+          "description": "Requirements access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "resolve_outdated_diff_discussions": {
+          "description": "Auto-resolve outdated diff discussions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "resource_group_default_process_mode": {
+          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "type": "string"
+        },
+        "security_and_compliance_access_level": {
+          "description": "Security and compliance access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "service_desk_enabled": {
+          "description": "Enable Service Desk",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "shared_runners_enabled": {
+          "description": "Enable shared runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "show_default_award_emojis": {
+          "description": "Show default award emojis on issues/MRs",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "snippets_access_level": {
+          "description": "Snippets access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "snippets_enabled": {
+          "description": "Enable snippets feature (deprecated: use snippets_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "squash_commit_template": {
+          "description": "Template for squash commit messages",
+          "type": "string"
+        },
+        "squash_option": {
+          "description": "Squash option (never, always, default_on, default_off)",
+          "type": "string"
+        },
+        "suggestion_commit_message": {
+          "description": "Default commit message for suggestions",
+          "type": "string"
+        },
+        "tag_list": {
+          "description": "Project tags (deprecated: use topics)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "template_name": {
+          "description": "Built-in project template name to use",
+          "type": "string"
+        },
+        "template_project_id": {
+          "description": "Custom project template ID to use",
+          "type": "integer"
         },
         "topics": {
           "description": "Topic tags for the project",
@@ -110893,6 +111692,13 @@
             "array"
           ]
         },
+        "use_custom_template": {
+          "description": "Use a custom group/instance project template",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "user_id": {
           "description": "Target user ID who will own the project",
           "type": "integer"
@@ -110901,8 +111707,12 @@
           "description": "Visibility level (private, internal, public)",
           "type": "string"
         },
+        "wiki_access_level": {
+          "description": "Wiki access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "wiki_enabled": {
-          "description": "Enable wiki feature",
+          "description": "Enable wiki feature (deprecated: use wiki_access_level)",
           "type": [
             "null",
             "boolean"
@@ -118003,6 +118813,14 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
@@ -118267,9 +119085,21 @@
           "description": "Filter tokens last used before RFC3339 datetime or YYYY-MM-DD date",
           "type": "string"
         },
+        "order_by": {
+          "description": "Order tokens by column (keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -120717,9 +121547,42 @@
             "boolean"
           ]
         },
+        "allow_pipeline_trigger_approve_deployment": {
+          "description": "Allow pipeline triggerer to approve deployment",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "analytics_access_level": {
+          "description": "Analytics access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "approvals_before_merge": {
           "description": "Number of approvals required before merge",
           "type": "integer"
+        },
+        "auto_cancel_pending_pipelines": {
+          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "type": "string"
+        },
+        "auto_devops_deploy_strategy": {
+          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "type": "string"
+        },
+        "auto_devops_enabled": {
+          "description": "Enable Auto DevOps for the project",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "auto_duo_code_review_enabled": {
+          "description": "Enable automatic GitLab Duo code review",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "autoclose_referenced_issues": {
           "description": "Auto-close referenced issues on merge",
@@ -120728,13 +121591,137 @@
             "boolean"
           ]
         },
+        "build_coverage_regex": {
+          "description": "Regex used to extract test coverage from job logs",
+          "type": "string"
+        },
+        "build_git_strategy": {
+          "description": "Git strategy for builds (fetch, clone)",
+          "type": "string"
+        },
+        "build_timeout": {
+          "description": "Build timeout in seconds",
+          "type": "integer"
+        },
+        "builds_access_level": {
+          "description": "CI/CD builds access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "ci_config_path": {
           "description": "Custom CI/CD configuration file path",
           "type": "string"
         },
+        "ci_default_git_depth": {
+          "description": "Default Git clone depth for CI/CD",
+          "type": "integer"
+        },
+        "ci_delete_pipelines_in_seconds": {
+          "description": "Auto-delete pipelines older than this many seconds",
+          "type": "integer"
+        },
+        "ci_display_pipeline_variables": {
+          "description": "Display pipeline variables in the UI",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "ci_forward_deployment_enabled": {
+          "description": "Enable CI/CD forward deployment (skip outdated jobs)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "ci_forward_deployment_rollback_allowed": {
+          "description": "Allow job retries even for outdated deployment jobs",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "ci_id_token_sub_claim_components": {
+          "description": "Components used to build the CI ID token sub claim",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "ci_pipeline_variables_minimum_override_role": {
+          "description": "Minimum role allowed to override pipeline variables (developer, maintainer, owner, no_one_allowed)",
+          "type": "string"
+        },
+        "ci_push_repository_for_job_token_allowed": {
+          "description": "Allow CI job tokens to push to the repository",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "ci_restrict_pipeline_cancellation_role": {
+          "description": "Role required to cancel pipelines/jobs (developer, maintainer, no_one)",
+          "type": "string"
+        },
+        "ci_separated_caches": {
+          "description": "Use separate caches for protected branches",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "container_expiration_policy_attributes": {
+          "additionalProperties": false,
+          "description": "Container registry cleanup policy attributes",
+          "properties": {
+            "cadence": {
+              "description": "Cleanup cadence (1d, 7d, 14d, 1month, 3month)",
+              "type": "string"
+            },
+            "enabled": {
+              "description": "Enable the container expiration policy",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "keep_n": {
+              "description": "Number of most recent tags to always keep per image name",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "name_regex_delete": {
+              "description": "Regex matching tag names to delete",
+              "type": "string"
+            },
+            "name_regex_keep": {
+              "description": "Regex matching tag names to always keep",
+              "type": "string"
+            },
+            "older_than": {
+              "description": "Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "container_registry_access_level": {
           "description": "Container registry access level (disabled, private, enabled)",
           "type": "string"
+        },
+        "container_registry_enabled": {
+          "description": "Enable container registry (deprecated: use container_registry_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "default_branch": {
           "description": "New default branch",
@@ -120744,6 +121731,66 @@
           "description": "New description",
           "type": "string"
         },
+        "emails_disabled": {
+          "description": "Disable email notifications (deprecated: use emails_enabled)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "emails_enabled": {
+          "description": "Enable email notifications",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "enforce_auth_checks_on_uploads": {
+          "description": "Enforce authorization checks on uploads",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "environments_access_level": {
+          "description": "Environments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "external_authorization_classification_label": {
+          "description": "External authorization classification label",
+          "type": "string"
+        },
+        "feature_flags_access_level": {
+          "description": "Feature flags access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "forking_access_level": {
+          "description": "Forking access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "group_runners_enabled": {
+          "description": "Enable group runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "import_url": {
+          "description": "URL to import/mirror repository from",
+          "type": "string"
+        },
+        "infrastructure_access_level": {
+          "description": "Infrastructure access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "issue_branch_template": {
+          "description": "Template for branch names created from issues",
+          "type": "string"
+        },
+        "issues_access_level": {
+          "description": "Issues access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "issues_enabled": {
           "description": "Enable/disable issues feature (use 'issues_enabled' not 'issues_access_level')",
           "type": [
@@ -120751,8 +121798,19 @@
             "boolean"
           ]
         },
+        "issues_template": {
+          "description": "Default issue description template",
+          "type": "string"
+        },
         "jobs_enabled": {
           "description": "Enable CI/CD jobs",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "keep_latest_artifact": {
+          "description": "Keep the latest artifact for each pipeline",
           "type": [
             "null",
             "boolean"
@@ -120764,6 +121822,10 @@
             "null",
             "boolean"
           ]
+        },
+        "max_artifacts_size": {
+          "description": "Maximum artifacts size in MB",
+          "type": "integer"
         },
         "merge_commit_template": {
           "description": "Template for merge commit messages",
@@ -120788,6 +121850,10 @@
           "description": "Human-readable description for the MR title regex",
           "type": "string"
         },
+        "merge_requests_access_level": {
+          "description": "Merge requests access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "merge_requests_enabled": {
           "description": "Enable merge requests feature",
           "type": [
@@ -120795,8 +121861,67 @@
             "boolean"
           ]
         },
+        "merge_requests_template": {
+          "description": "Default merge request description template",
+          "type": "string"
+        },
         "merge_trains_enabled": {
           "description": "Enable merge trains",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_trains_skip_train_allowed": {
+          "description": "Allow skipping the merge train",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror": {
+          "description": "Enable pull mirroring from import_url",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror_branch_regex": {
+          "description": "Only mirror branches matching this regex",
+          "type": "string"
+        },
+        "mirror_overwrites_diverged_branches": {
+          "description": "Overwrite diverged branches when mirroring",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror_trigger_builds": {
+          "description": "Trigger pipelines for mirror updates",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "mirror_user_id": {
+          "description": "User ID used to run mirror updates (admin only)",
+          "type": "integer"
+        },
+        "model_experiments_access_level": {
+          "description": "Model experiments access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "model_registry_access_level": {
+          "description": "Model registry access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "monitor_access_level": {
+          "description": "Monitor access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "mr_default_target_self": {
+          "description": "Default merge request target to the project itself (for forks)",
           "type": [
             "null",
             "boolean"
@@ -120813,12 +121938,30 @@
             "boolean"
           ]
         },
+        "only_allow_merge_if_all_status_checks_passed": {
+          "description": "Only allow merge when all external status checks pass",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "only_allow_merge_if_pipeline_succeeds": {
           "description": "Only allow merge when pipeline succeeds",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "only_mirror_protected_branches": {
+          "description": "Only mirror protected branches",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "operations_access_level": {
+          "description": "Operations access level (disabled, private, enabled)",
+          "type": "string"
         },
         "package_registry_access_level": {
           "description": "Package registry access level (disabled, private, enabled)",
@@ -120834,6 +121977,24 @@
         "pages_access_level": {
           "description": "Pages access level (disabled, private, enabled, public)",
           "type": "string"
+        },
+        "path": {
+          "description": "New project path slug",
+          "type": "string"
+        },
+        "prevent_merge_without_jira_issue": {
+          "description": "Require an associated Jira issue before merge",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "printing_merge_request_link_enabled": {
+          "description": "Show the create-merge-request link after pushing",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -120853,12 +122014,31 @@
             "boolean"
           ]
         },
+        "public_jobs": {
+          "description": "Enable public access to pipelines",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "releases_access_level": {
+          "description": "Releases access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "remove_source_branch_after_merge": {
           "description": "Remove source branch after merge by default",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "repository_access_level": {
+          "description": "Repository access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "repository_storage": {
+          "description": "Repository storage shard name (admin only)",
+          "type": "string"
         },
         "request_access_enabled": {
           "description": "Allow users to request access",
@@ -120867,8 +122047,34 @@
             "boolean"
           ]
         },
+        "requirements_access_level": {
+          "description": "Requirements access level (disabled, private, enabled)",
+          "type": "string"
+        },
         "resolve_outdated_diff_discussions": {
           "description": "Auto-resolve outdated diff discussions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "resource_group_default_process_mode": {
+          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "type": "string"
+        },
+        "restrict_user_defined_variables": {
+          "description": "Restrict user-defined pipeline variables (deprecated: use ci_pipeline_variables_minimum_override_role)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "security_and_compliance_access_level": {
+          "description": "Security and compliance access level (disabled, private, enabled)",
+          "type": "string"
+        },
+        "service_desk_enabled": {
+          "description": "Enable Service Desk",
           "type": [
             "null",
             "boolean"
@@ -120881,9 +122087,23 @@
             "boolean"
           ]
         },
+        "show_default_award_emojis": {
+          "description": "Show default award emojis on issues/MRs",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "snippets_access_level": {
           "description": "Snippets access level (disabled, private, enabled)",
           "type": "string"
+        },
+        "snippets_enabled": {
+          "description": "Enable snippets feature (deprecated: use snippets_access_level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "squash_commit_template": {
           "description": "Template for squash commit messages",
@@ -120892,6 +122112,20 @@
         "squash_option": {
           "description": "Squash option (never, always, default_on, default_off)",
           "type": "string"
+        },
+        "suggestion_commit_message": {
+          "description": "Default commit message for suggestions",
+          "type": "string"
+        },
+        "tag_list": {
+          "description": "Project tags (deprecated: use topics)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "topics": {
           "description": "Topic tags for the project",
@@ -120905,6 +122139,10 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "type": "string"
+        },
+        "wiki_access_level": {
+          "description": "Wiki access level (disabled, private, enabled)",
           "type": "string"
         },
         "wiki_enabled": {
@@ -127978,17 +129216,33 @@
   },
   {
     "name": "gitlab_retrieve_all_project_storage_moves",
-    "description": "Retrieve all project repository storage moves (admin only).\n\nReturns: JSON with array of storage moves and pagination.\n\nSee also: gitlab_retrieve_project_storage_moves, gitlab_get_project_storage_move",
+    "description": "List all project repository storage moves on the instance. Returns each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move, gitlab_schedule_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "type": "string"
         }
       },
       "type": "object"
@@ -128021,10 +129275,25 @@
               "project": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "description": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "name_with_namespace": {
+                    "type": "string"
+                  },
+                  "path": {
                     "type": "string"
                   },
                   "path_with_namespace": {
@@ -128418,13 +129687,25 @@
   },
   {
     "name": "gitlab_retrieve_project_storage_moves",
-    "description": "Retrieve all repository storage moves for a specific project (admin only).\n\nReturns: JSON with array of storage moves and pagination.\n\nSee also: gitlab_retrieve_all_project_storage_moves",
+    "description": "List repository storage moves for a single project. Returns each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move_for_project, gitlab_schedule_project_storage_move.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -128433,6 +129714,10 @@
         "project_id": {
           "description": "Numeric ID of the project",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "type": "string"
         }
       },
       "required": [
@@ -128468,10 +129753,25 @@
               "project": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "description": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "name_with_namespace": {
+                    "type": "string"
+                  },
+                  "path": {
                     "type": "string"
                   },
                   "path_with_namespace": {
@@ -132070,7 +133370,7 @@
   },
   {
     "name": "gitlab_schedule_all_project_storage_moves",
-    "description": "Schedule repository storage moves for all projects on a storage shard (admin only).\n\nReturns: JSON with confirmation message.\n\nSee also: gitlab_schedule_project_storage_move",
+    "description": "Schedule repository storage moves for all projects on a Gitaly storage shard. Drains source_storage_name onto destination_storage_name. Returns a confirmation message. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves, gitlab_schedule_project_storage_move.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -132404,7 +133704,7 @@
   },
   {
     "name": "gitlab_schedule_project_storage_move",
-    "description": "Schedule a repository storage move for a project (admin only).\n\nReturns: JSON with the scheduled storage move.\n\nSee also: gitlab_schedule_all_project_storage_moves",
+    "description": "Schedule a repository storage move for a single project to another Gitaly storage shard. Returns the created move's id, state, source and destination shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves, gitlab_schedule_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -132449,10 +133749,25 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "name": {
+              "type": "string"
+            },
+            "name_with_namespace": {
+              "type": "string"
+            },
+            "path": {
               "type": "string"
             },
             "path_with_namespace": {
