@@ -34,7 +34,7 @@ const (
 	fmtIssueGetErr         = "Get() unexpected error: %v"
 	fmtIssueUpdateErr      = "Update() unexpected error: %v"
 	msgConfidentialWant    = "out.Confidential = false, want true"
-	fmtTaskTotalWant       = "out.TaskCompletionTotal = %d, want 5"
+	fmtTaskTotalWant       = "out.TaskCompletionStatus.Count = %d, want 5"
 	testIssueTitle         = "Test issue"
 	fmtCreateErr           = "Create() unexpected error: %v"
 	fmtIIDWant10           = "out.IID = %d, want 10"
@@ -93,6 +93,24 @@ const (
 		"task_completion_status":{"count":3,"completed_count":3}
 	}`
 )
+
+// taskTotal returns the issue's task completion total (Count) from the
+// task_completion_status object, or 0 when the object is absent.
+func taskTotal(o Output) int64 {
+	if o.TaskCompletionStatus == nil {
+		return 0
+	}
+	return o.TaskCompletionStatus.Count
+}
+
+// taskCompleted returns the issue's completed task count from the
+// task_completion_status object, or 0 when the object is absent.
+func taskCompleted(o Output) int64 {
+	if o.TaskCompletionStatus == nil {
+		return 0
+	}
+	return o.TaskCompletionStatus.CompletedCount
+}
 
 // TestCreate_Success verifies that Create correctly creates an issue
 // with all optional fields (labels, assignees, due date, milestone). The mock
@@ -570,11 +588,11 @@ func TestGet_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
-	if out.TaskCompletionCount != 3 {
-		t.Errorf("out.TaskCompletionCount = %d, want 3", out.TaskCompletionCount)
+	if taskCompleted(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 3", taskCompleted(out))
 	}
 	if out.UserNotesCount != 8 {
 		t.Errorf("out.UserNotesCount = %d, want 8", out.UserNotesCount)
@@ -611,11 +629,11 @@ func TestGet_NoTaskCompletion(t *testing.T) {
 	if out.Confidential {
 		t.Error("out.Confidential = true, want false")
 	}
-	if out.TaskCompletionTotal != 0 {
-		t.Errorf("out.TaskCompletionTotal = %d, want 0", out.TaskCompletionTotal)
+	if taskTotal(out) != 0 {
+		t.Errorf("out.TaskCompletionStatus.Count = %d, want 0", taskTotal(out))
 	}
-	if out.TaskCompletionCount != 0 {
-		t.Errorf("out.TaskCompletionCount = %d, want 0", out.TaskCompletionCount)
+	if taskCompleted(out) != 0 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 0", taskCompleted(out))
 	}
 	if out.UserNotesCount != 0 {
 		t.Errorf("out.UserNotesCount = %d, want 0", out.UserNotesCount)
@@ -643,11 +661,11 @@ func TestGet_ClosedWithTasks(t *testing.T) {
 	if out.ClosedAt == "" {
 		t.Error("out.ClosedAt should not be empty for closed issue")
 	}
-	if out.TaskCompletionTotal != 3 {
-		t.Errorf("out.TaskCompletionTotal = %d, want 3", out.TaskCompletionTotal)
+	if taskTotal(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.Count = %d, want 3", taskTotal(out))
 	}
-	if out.TaskCompletionCount != 3 {
-		t.Errorf("out.TaskCompletionCount = %d, want 3 (all completed)", out.TaskCompletionCount)
+	if taskCompleted(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 3 (all completed)", taskCompleted(out))
 	}
 	if out.UserNotesCount != 15 {
 		t.Errorf("out.UserNotesCount = %d, want 15", out.UserNotesCount)
@@ -680,8 +698,8 @@ func TestCreate_EnrichedFields(t *testing.T) {
 	if out.Author == nil || out.Author.Username != "charlie" {
 		t.Errorf("out.Author.Username = %v, want %q", out.Author, "charlie")
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
 	if out.UserNotesCount != 8 {
 		t.Errorf("out.UserNotesCount = %d, want 8", out.UserNotesCount)
@@ -710,22 +728,22 @@ func TestList_EnrichedFields(t *testing.T) {
 	if !out.Issues[0].Confidential {
 		t.Error("Issues[0].Confidential = false, want true")
 	}
-	if out.Issues[0].TaskCompletionTotal != 5 {
-		t.Errorf("Issues[0].TaskCompletionTotal = %d, want 5", out.Issues[0].TaskCompletionTotal)
+	if taskTotal(out.Issues[0]) != 5 {
+		t.Errorf("Issues[0].TaskCompletionStatus.Count = %d, want 5", taskTotal(out.Issues[0]))
 	}
 
 	if out.Issues[1].Confidential {
 		t.Error("Issues[1].Confidential = true, want false")
 	}
-	if out.Issues[1].TaskCompletionTotal != 0 {
-		t.Errorf("Issues[1].TaskCompletionTotal = %d, want 0", out.Issues[1].TaskCompletionTotal)
+	if taskTotal(out.Issues[1]) != 0 {
+		t.Errorf("Issues[1].TaskCompletionStatus.Count = %d, want 0", taskTotal(out.Issues[1]))
 	}
 
 	if out.Issues[2].State != "closed" {
 		t.Errorf("Issues[2].State = %q, want %q", out.Issues[2].State, "closed")
 	}
-	if out.Issues[2].TaskCompletionCount != 3 {
-		t.Errorf("Issues[2].TaskCompletionCount = %d, want 3", out.Issues[2].TaskCompletionCount)
+	if taskCompleted(out.Issues[2]) != 3 {
+		t.Errorf("Issues[2].TaskCompletionStatus.CompletedCount = %d, want 3", taskCompleted(out.Issues[2]))
 	}
 	if out.Issues[2].UserNotesCount != 15 {
 		t.Errorf("Issues[2].UserNotesCount = %d, want 15", out.Issues[2].UserNotesCount)
@@ -754,8 +772,8 @@ func TestUpdate_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
 }
 
@@ -1524,9 +1542,9 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		Labels:    []string{"bug", "critical"}, Milestone: &MilestoneOutput{Title: "v1.0"},
 		DueDate: testDueDateCov, Confidential: true,
 		CreatedAt: testCreatedAtCov, Description: "Details here",
-		WebURL:              "https://gitlab.example.com/issue/10",
-		TaskCompletionCount: 3, TaskCompletionTotal: 5,
-		UserNotesCount: 7,
+		WebURL:               "https://gitlab.example.com/issue/10",
+		TaskCompletionStatus: &TaskCompletionStatusOutput{CompletedCount: 3, Count: 5},
+		UserNotesCount:       7,
 	})
 	for _, want := range []string{
 		"Big Bug", "opened", "@alice", "@bob", "@carol",
@@ -2031,14 +2049,14 @@ func TestToOutput_Populated(t *testing.T) {
 	}
 	out := ToOutput(issue)
 	assertPopulatedObjects(t, out)
-	if out.TaskCompletionCount != 2 || out.TaskCompletionTotal != 5 {
-		t.Errorf("TaskCompletion = %d/%d, want 2/5", out.TaskCompletionCount, out.TaskCompletionTotal)
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.CompletedCount != 2 || out.TaskCompletionStatus.Count != 5 {
+		t.Errorf("TaskCompletionStatus = %+v, want 2/5", out.TaskCompletionStatus)
 	}
 	if !out.Subscribed {
 		t.Error("Subscribed = false, want true")
 	}
-	if out.TimeEstimate != 3600 || out.TotalTimeSpent != 1800 {
-		t.Errorf("TimeStats = %d/%d, want 3600/1800", out.TimeEstimate, out.TotalTimeSpent)
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 || out.TimeStats.TotalTimeSpent != 1800 {
+		t.Errorf("TimeStats = %+v, want 3600/1800", out.TimeStats)
 	}
 	if out.EpicIssueID != 7 {
 		t.Errorf("EpicIssueID = %d, want 7", out.EpicIssueID)

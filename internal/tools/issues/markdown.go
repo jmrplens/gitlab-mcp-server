@@ -198,8 +198,8 @@ func FormatMarkdown(i Output) string {
 	if i.MergeRequestCount > 0 {
 		fmt.Fprintf(&b, "- **Linked MRs**: %d\n", i.MergeRequestCount)
 	}
-	if i.TaskCompletionTotal > 0 {
-		fmt.Fprintf(&b, "- **Tasks**: %d/%d completed\n", i.TaskCompletionCount, i.TaskCompletionTotal)
+	if i.TaskCompletionStatus != nil && i.TaskCompletionStatus.Count > 0 {
+		fmt.Fprintf(&b, "- **Tasks**: %d/%d completed\n", i.TaskCompletionStatus.CompletedCount, i.TaskCompletionStatus.Count)
 	}
 	if i.UserNotesCount > 0 {
 		fmt.Fprintf(&b, "- **Comments**: %d\n", i.UserNotesCount)

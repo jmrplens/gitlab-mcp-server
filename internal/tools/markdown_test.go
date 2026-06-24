@@ -574,9 +574,9 @@ func TestFormatIssue_MarkdownConfidentialTasks(t *testing.T) {
 	i := issues.Output{
 		IID: 42, Title: "Secret task", State: "opened",
 		Author: &issues.IssueAuthorOutput{Username: "admin"}, Confidential: true,
-		TaskCompletionCount: 2, TaskCompletionTotal: 5,
-		UserNotesCount: 3,
-		WebURL:         "https://gitlab.example.com/issues/42",
+		TaskCompletionStatus: &issues.TaskCompletionStatusOutput{CompletedCount: 2, Count: 5},
+		UserNotesCount:       3,
+		WebURL:               "https://gitlab.example.com/issues/42",
 	}
 	md := issues.FormatMarkdown(i)
 	if !strings.Contains(md, "Confidential") {

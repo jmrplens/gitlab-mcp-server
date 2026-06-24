@@ -55,8 +55,10 @@ type CreateInput struct {
 // Output represents a GitLab issue.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64    `json:"id"`
-	IID         int64    `json:"issue_iid"`
+	ID int64 `json:"id"`
+	// IID is the issue's own project-scoped internal ID, mirroring the SDK
+	// json key `iid`. Distinct from the global `id`.
+	IID         int64    `json:"iid" jsonschema:"Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id."`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	State       string   `json:"state"`
@@ -70,29 +72,25 @@ type Output struct {
 	// Milestone is the full milestone object mirrored from the SDK.
 	Milestone *MilestoneOutput `json:"milestone,omitempty"`
 	// ClosedBy is the full closer object mirrored from the SDK.
-	ClosedBy            *IssueCloserOutput `json:"closed_by,omitempty"`
-	WebURL              string             `json:"web_url"`
-	CreatedAt           string             `json:"created_at"`
-	UpdatedAt           string             `json:"updated_at"`
-	ClosedAt            string             `json:"closed_at"`
-	DueDate             string             `json:"due_date"`
-	Confidential        bool               `json:"confidential"`
-	DiscussionLocked    bool               `json:"discussion_locked"`
-	ProjectID           int64              `json:"project_id"`
-	Weight              int64              `json:"weight,omitempty"`
-	IssueType           string             `json:"issue_type,omitempty"`
-	HealthStatus        string             `json:"health_status,omitempty"`
-	MergeRequestCount   int64              `json:"merge_request_count,omitempty"`
-	TaskCompletionCount int64              `json:"task_completion_count,omitempty"`
-	TaskCompletionTotal int64              `json:"task_completion_total,omitempty"`
-	UserNotesCount      int64              `json:"user_notes_count,omitempty"`
-	Upvotes             int64              `json:"upvotes,omitempty"`
-	Downvotes           int64              `json:"downvotes,omitempty"`
-	Subscribed          bool               `json:"subscribed"`
-	TimeEstimate        int64              `json:"time_estimate,omitempty"`
-	TotalTimeSpent      int64              `json:"total_time_spent,omitempty"`
-	MovedToID           int64              `json:"moved_to_id,omitempty"`
-	EpicIssueID         int64              `json:"epic_issue_id,omitempty"`
+	ClosedBy          *IssueCloserOutput `json:"closed_by,omitempty"`
+	WebURL            string             `json:"web_url"`
+	CreatedAt         string             `json:"created_at"`
+	UpdatedAt         string             `json:"updated_at"`
+	ClosedAt          string             `json:"closed_at"`
+	DueDate           string             `json:"due_date"`
+	Confidential      bool               `json:"confidential"`
+	DiscussionLocked  bool               `json:"discussion_locked"`
+	ProjectID         int64              `json:"project_id"`
+	Weight            int64              `json:"weight,omitempty"`
+	IssueType         string             `json:"issue_type,omitempty"`
+	HealthStatus      string             `json:"health_status,omitempty"`
+	MergeRequestCount int64              `json:"merge_requests_count,omitempty"`
+	UserNotesCount    int64              `json:"user_notes_count,omitempty"`
+	Upvotes           int64              `json:"upvotes,omitempty"`
+	Downvotes         int64              `json:"downvotes,omitempty"`
+	Subscribed        bool               `json:"subscribed"`
+	MovedToID         int64              `json:"moved_to_id,omitempty"`
+	EpicIssueID       int64              `json:"epic_issue_id,omitempty"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
 	ExternalID           string                      `json:"external_id,omitempty"`
@@ -282,18 +280,10 @@ func ToOutput(issue *gl.Issue) Output {
 	out.ClosedBy = issueCloserOutput(issue.ClosedBy)
 	out.References = referencesOutput(issue.References)
 	out.UserNotesCount = issue.UserNotesCount
-	if issue.TaskCompletionStatus != nil {
-		out.TaskCompletionCount = issue.TaskCompletionStatus.CompletedCount
-		out.TaskCompletionTotal = issue.TaskCompletionStatus.Count
-	}
 	out.Upvotes = issue.Upvotes
 	out.Downvotes = issue.Downvotes
 	out.Subscribed = issue.Subscribed
 	out.MovedToID = issue.MovedToID
-	if issue.TimeStats != nil {
-		out.TimeEstimate = issue.TimeStats.TimeEstimate
-		out.TotalTimeSpent = issue.TimeStats.TotalTimeSpent
-	}
 	out.EpicIssueID = issue.EpicIssueID
 	out.ExternalID = issue.ExternalID
 	out.IssueLinkID = issue.IssueLinkID
