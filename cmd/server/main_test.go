@@ -582,7 +582,7 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 		if err == nil {
 			t.Fatal("serveHTTP() expected error for port conflict, got nil")
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP() did not return within timeout for port conflict")
 	}
 }
@@ -1791,7 +1791,7 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -1850,7 +1850,7 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -1909,7 +1909,7 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -1964,7 +1964,7 @@ func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -2020,7 +2020,7 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -2111,7 +2111,7 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
@@ -2456,6 +2456,15 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 // but the HTTP handler is not yet fully wired.
 const readinessConsecutiveSuccesses = 2
 
+// testHTTPLivenessTimeout bounds how long the HTTP-server tests wait for a
+// liveness transition — readiness probing and graceful shutdown. It is
+// deliberately generous: a healthy server reaches these states in
+// milliseconds, so a larger budget never slows a passing test and only
+// tolerates scheduling stalls under the race detector or on a loaded CI
+// runner. Using a single shared value keeps these waits deterministic instead
+// of flaking against a tight fixed 5s budget.
+const testHTTPLivenessTimeout = 30 * time.Second
+
 // waitForHTTPServerReady polls /health until the HTTP server is reachable,
 // or fails fast if serveHTTP exits early with an error.
 //
@@ -2469,7 +2478,7 @@ const readinessConsecutiveSuccesses = 2
 func waitForHTTPServerReady(t *testing.T, addr string, errCh <-chan error) {
 	t.Helper()
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(testHTTPLivenessTimeout)
 	consecutiveOK := 0
 	for time.Now().Before(deadline) {
 		select {
@@ -2555,7 +2564,7 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -2600,7 +2609,7 @@ func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -2661,7 +2670,7 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -2709,7 +2718,7 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -2755,7 +2764,7 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -2802,7 +2811,7 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		if srvErr != nil {
 			t.Fatalf("serveHTTP error: %v", srvErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -3576,7 +3585,7 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("serveHTTP error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
 	}
 }
