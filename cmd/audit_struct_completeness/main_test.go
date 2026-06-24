@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
@@ -176,7 +177,7 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 		"-":               "string",   // sentinel → not extra
 	}
 
-	extras := extraOutputFields(mcpFields, sdkFields)
+	extras := extraOutputFields("SomeOutput", mcpFields, sdkFields)
 
 	gotTags := map[string]bool{}
 	for _, e := range extras {
@@ -219,6 +220,153 @@ func TestExtraOutputFields_DiffPairKindGating(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestNonResultStructName_ExcludesWrapperOptionsAndTime verifies the name-based
+// non-result classifier that prevents the three R-OUTPUT-EXTRA false-positive
+// classes: the pagination Response wrapper, *Options request structs, and the
+// ISOTime/Time value types.
+func TestNonResultStructName_ExcludesWrapperOptionsAndTime(t *testing.T) {
+	nonResult := []string{
+		"Response",                       // list pagination wrapper
+		"ListIssuesOptions",              // request options struct
+		"UpdateSecurityAttributeOptions", // request options struct
+		"ISOTime",                        // client-go date value type
+		"Time",                           // time.Time value type
+	}
+	for _, name := range nonResult {
+		if !nonResultStructName(name) {
+			t.Errorf("nonResultStructName(%q) = false, want true", name)
+		}
+	}
+	result := []string{"Issue", "MergeRequest", "Branch", "PersonalAccessToken", "Response2", "OptionsList"}
+	for _, name := range result {
+		if nonResultStructName(name) {
+			t.Errorf("nonResultStructName(%q) = true, want false", name)
+		}
+	}
+}
+
+// TestIsAcceptedRename_AllowsScopedAndGlobalTags verifies the accepted-rename
+// allowlist: a type-scoped entry suppresses only that MCP type's tag, while a
+// genuinely invented scalar (not in the allowlist) is still reported.
+func TestIsAcceptedRename_AllowsScopedAndGlobalTags(t *testing.T) {
+	// Seeded scoped entry: branches Output renames SDK `name` → `branch_name`.
+	if !isAcceptedRename("Output", "branch_name") {
+		t.Errorf("isAcceptedRename(Output, branch_name) = false, want true (seeded allowlist)")
+	}
+	// Same tag on a different MCP type is NOT suppressed by the scoped entry.
+	if isAcceptedRename("OtherOutput", "branch_name") {
+		t.Errorf("isAcceptedRename(OtherOutput, branch_name) = true, want false (scoped to Output)")
+	}
+	// A genuine invented scalar is never accepted.
+	if isAcceptedRename("Output", "invented_field") {
+		t.Errorf("isAcceptedRename(Output, invented_field) = true, want false")
+	}
+}
+
+// TestExtraOutputFields_SuppressesAllowlistedRename verifies extraOutputFields
+// honors the accepted-rename allowlist: an allowlisted rename is not reported as
+// extra, while a genuinely invented scalar in the same struct still is.
+func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
+	sdkFields := map[string]string{
+		"name": "string", // SDK scalar that the MCP renames to branch_name
+		"id":   "int",
+	}
+	mcpFields := map[string]string{
+		"branch_name":    "string", // allowlisted rename of SDK `name` → not extra
+		"id":             "int",    // SDK-backed → not extra
+		"invented_field": "string", // genuine invented scalar → extra
+	}
+
+	// Scoped to "Output": branch_name is suppressed.
+	extras := extraOutputFields("Output", mcpFields, sdkFields)
+	gotTags := map[string]bool{}
+	for _, e := range extras {
+		gotTags[e.Tag] = true
+	}
+	if gotTags["branch_name"] {
+		t.Errorf("allowlisted rename branch_name reported as extra: %v", extras)
+	}
+	if !gotTags["invented_field"] {
+		t.Errorf("genuine invented scalar invented_field not reported as extra: %v", extras)
+	}
+	if len(extras) != 1 {
+		t.Errorf("extra count = %d (%v), want 1 (only invented_field)", len(extras), extras)
+	}
+
+	// On a non-allowlisted MCP type, branch_name IS reported (proves it is the
+	// allowlist, not a generic suppression, that hides it above).
+	other := extraOutputFields("UnlistedOutput", mcpFields, sdkFields)
+	otherTags := map[string]bool{}
+	for _, e := range other {
+		otherTags[e.Tag] = true
+	}
+	if !otherTags["branch_name"] {
+		t.Errorf("branch_name should be extra on UnlistedOutput (not allowlisted): %v", other)
+	}
+}
+
+// TestBuildReport_NoFalsePositiveExtras is the real-repo regression guard for the
+// three R-OUTPUT-EXTRA false-positive classes. It asserts that:
+//
+//   - list converters taking the v2.Response pagination wrapper no longer report
+//     their element slice (merge_requests, discussions, events, award_emoji,
+//     runners) as extra;
+//   - converters whose only client-go arg is an *Options struct or a time value
+//     type no longer mis-pair (securityattributes/securitycategories show no
+//     Options-sourced extras; accesstokens no longer pairs against ISOTime);
+//   - the issue family (issues, issuenotes, issuediscussions) reports ZERO
+//     extras after the cleanup.
+func TestBuildReport_NoFalsePositiveExtras(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, false)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+
+	// No output pair may be formed against a non-result SDK struct.
+	for _, pr := range rep.Packages {
+		for _, g := range pr.Gaps {
+			if g.Kind != "output" {
+				continue
+			}
+			sdk := g.SDKType
+			if sdkLeaf(sdk) == "Response" ||
+				strings.HasSuffix(sdk, "Options") ||
+				strings.HasSuffix(sdk, "ISOTime") ||
+				sdkLeaf(sdk) == "Time" {
+				t.Errorf("%s: output pair %s mis-paired against non-result SDK struct %q (extras: %v)",
+					pr.Package, g.MCPType, sdk, g.ExtraFields)
+			}
+		}
+	}
+
+	// The issue family must report zero extras after the family cleanup.
+	for _, name := range []string{"issues", "issuenotes", "issuediscussions"} {
+		pr := findPackage(t, rep, name)
+		if pr.ExtraOutputCount != 0 {
+			var tags []string
+			for _, g := range pr.Gaps {
+				for _, e := range g.ExtraFields {
+					tags = append(tags, e.Tag)
+				}
+			}
+			t.Errorf("package %q has %d extra output fields, want 0 (tags: %v)", name, pr.ExtraOutputCount, tags)
+		}
+	}
+}
+
+// sdkLeaf returns the type name after the last "." in an SDK type string
+// (e.g. "v2.Response" → "Response").
+func sdkLeaf(sdk string) string {
+	if i := strings.LastIndex(sdk, "."); i >= 0 {
+		return sdk[i+1:]
+	}
+	return sdk
 }
 
 func findPackage(t *testing.T, rep report, name string) packageReport {

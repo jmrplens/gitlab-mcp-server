@@ -48,7 +48,39 @@ const (
 	clientGoPkgPath = "gitlab.com/gitlab-org/api/client-go"
 	toolsPkgInfix   = "/internal/tools/"
 	optionsSuffix   = "Options"
+	// responseStructName is the client-go pagination wrapper type. Converters that
+	// take it as their SDK arg are list wrappers (the MCP list-output holds a
+	// slice-of-element field plus pagination); they are validated through the
+	// element converter, never paired against the wrapper. See nonResultSDKStruct.
+	responseStructName = "Response"
 )
+
+// acceptedOutputRenames suppresses specific MCP output json tags from
+// R-OUTPUT-EXTRA: deliberate 1:1 renames of a genuine scalar (1:1 means data
+// fidelity, not byte-identical keys). It is intentionally conservative — only
+// true scalar renames belong here, never flattened-duplication tags (those are
+// genuine findings, e.g. branches `commit_id` flattening `commit.id`).
+//
+// Two forms are supported:
+//   - "MCPType.tag": the rename is suppressed only for that MCP output type.
+//   - "tag":         the rename is suppressed for any MCP output type (global).
+//
+// Add accepted renames here (with a one-line rationale) as the per-package
+// audit adjudicates them.
+var acceptedOutputRenames = map[string]bool{
+	// branches Output renames the SDK `name` scalar to `branch_name` to match the
+	// `branch_name` input parameter naming used across the branches tools.
+	"Output.branch_name": true,
+}
+
+// isAcceptedRename reports whether (mcpType, tag) is an allowlisted deliberate
+// rename, checking the type-scoped key first then the global tag key.
+func isAcceptedRename(mcpType, tag string) bool {
+	if acceptedOutputRenames[mcpType+"."+tag] {
+		return true
+	}
+	return acceptedOutputRenames[tag]
+}
 
 // gap is one diffed MCP↔SDK struct pair under a package.
 type gap struct {
@@ -283,12 +315,25 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	if fn.Type.Params != nil {
 		for _, field := range fn.Type.Params.List {
 			named, st, isSDK := clientGoNamedStruct(pkg.TypesInfo.TypeOf(field.Type))
-			if isSDK {
-				sdkNamed, sdkStruct = named, st
-				sdkCount++
+			if !isSDK {
+				continue
 			}
+			// Exclude non-result SDK arguments so the output pair is not formed
+			// against the wrong struct (R-OUTPUT-EXTRA false positives):
+			//   - the pagination Response wrapper of list converters (the data
+			//     slice would look "extra");
+			//   - *Options request structs and time value types (ISOTime/time.Time)
+			//     a converter may also accept alongside no genuine result struct.
+			if nonResultSDKStruct(named) {
+				continue
+			}
+			sdkNamed, sdkStruct = named, st
+			sdkCount++
 		}
 	}
+	// When no genuine result struct remains after exclusion (e.g. a converter that
+	// only took a Response wrapper or an *Options/time arg), skip the pair rather
+	// than mis-pairing the MCP output against a non-result SDK struct.
 	if sdkCount != 1 {
 		return
 	}
@@ -375,7 +420,7 @@ func diffPair(kind string, pair structPair) gap {
 		}
 	}
 	if kind == "output" {
-		g.ExtraFields = extraOutputFields(mcpFields, sdkFields)
+		g.ExtraFields = extraOutputFields(pair.mcpName, mcpFields, sdkFields)
 	}
 	return g
 }
@@ -383,8 +428,9 @@ func diffPair(kind string, pair structPair) gap {
 // extraOutputFields reports MCP output json tags with no SDK result counterpart:
 // invented output scalars the 1:1 rule forbids (R-OUTPUT-EXTRA). An MCP tag is
 // extra when it is neither a key of sdkFields nor the normalizeSDKTag image of
-// any SDK key, is not the MCP-envelope carve-out, and is not the "-" sentinel.
-func extraOutputFields(mcpFields, sdkFields map[string]string) []extraField {
+// any SDK key, is not the MCP-envelope carve-out, is not the "-" sentinel, and
+// is not an allowlisted deliberate rename (per the 1:1 data-fidelity policy).
+func extraOutputFields(mcpType string, mcpFields, sdkFields map[string]string) []extraField {
 	sdkNorm := make(map[string]struct{}, len(sdkFields))
 	for sdkTag := range sdkFields {
 		sdkNorm[normalizeSDKTag(sdkTag)] = struct{}{}
@@ -406,6 +452,9 @@ func extraOutputFields(mcpFields, sdkFields map[string]string) []extraField {
 			continue
 		}
 		if _, ok := sdkNorm[tag]; ok {
+			continue
+		}
+		if isAcceptedRename(mcpType, tag) {
 			continue
 		}
 		extras = append(extras, extraField{Tag: tag, MCPType: mcpFields[tag]})
@@ -539,6 +588,45 @@ func clientGoNamedStruct(t types.Type) (*types.Named, *types.Struct, bool) {
 		return nil, nil, false
 	}
 	return named, st, true
+}
+
+// nonResultSDKStruct reports whether a client-go named struct is NOT a result
+// type and must therefore be excluded when forming an OUTPUT pair. This covers
+// three false-positive classes the converter param scan would otherwise pair
+// against:
+//
+//   - the pagination Response wrapper (named "Response"): list converters take
+//     it so the MCP list-output's element slice looks "extra";
+//   - *Options request structs (name ends in "Options"): request inputs, not
+//     results, sometimes accepted by GraphQL converters;
+//   - time value types (ISOTime, time.Time, anything in the `time` package):
+//     scalar value args, not result structs.
+func nonResultSDKStruct(named *types.Named) bool {
+	obj := named.Obj()
+	if nonResultStructName(obj.Name()) {
+		return true
+	}
+	if pkg := obj.Pkg(); pkg != nil && pkg.Path() == "time" {
+		return true
+	}
+	return false
+}
+
+// nonResultStructName reports whether a bare struct name identifies a non-result
+// SDK type (pagination wrapper, *Options request struct, or a time value type).
+// Split out from nonResultSDKStruct so the name-based rule is unit-testable
+// without synthesizing go/types objects.
+func nonResultStructName(name string) bool {
+	switch {
+	case name == responseStructName:
+		return true
+	case strings.HasSuffix(name, optionsSuffix):
+		return true
+	case name == "ISOTime" || name == "Time":
+		return true
+	default:
+		return false
+	}
 }
 
 func derefNamedStruct(t types.Type) (*types.Named, *types.Struct, bool) {
