@@ -104,8 +104,13 @@ func TestIndividual_Groups(t *testing.T) {
 	t.Run("SharedWithList", func(t *testing.T) {
 		requireTruef(t, groupID > 0, "groupID not set")
 		gid := strconv.FormatInt(groupID, 10)
+		// Exercise the v2.41.0 filter parameters against a live instance.
 		out, err := callToolOn[groups.ListOutput](ctx, sess.individual, "gitlab_group_shared_with_list", groups.SharedWithListInput{
-			GroupID: toolutil.StringOrInt(gid),
+			GroupID:              toolutil.StringOrInt(gid),
+			Search:               "nonexistent",
+			MinAccessLevel:       10,
+			SkipGroups:           []int64{groupID},
+			WithCustomAttributes: true,
 		})
 		requireNoError(t, err, "group shared_with list")
 		t.Logf("Group %d has %d groups shared with it", groupID, len(out.Groups))
@@ -114,8 +119,13 @@ func TestIndividual_Groups(t *testing.T) {
 	t.Run("InvitedList", func(t *testing.T) {
 		requireTruef(t, groupID > 0, "groupID not set")
 		gid := strconv.FormatInt(groupID, 10)
+		// Exercise the v2.41.0 filter parameters against a live instance.
 		out, err := callToolOn[groups.ListOutput](ctx, sess.individual, "gitlab_group_invited_list", groups.InvitedListInput{
-			GroupID: toolutil.StringOrInt(gid),
+			GroupID:              toolutil.StringOrInt(gid),
+			Search:               "nonexistent",
+			MinAccessLevel:       10,
+			Relation:             []string{"direct"},
+			WithCustomAttributes: true,
 		})
 		requireNoError(t, err, "group invited list")
 		t.Logf("Group %d has %d invited groups", groupID, len(out.Groups))
@@ -126,6 +136,7 @@ func TestIndividual_Groups(t *testing.T) {
 		gid := strconv.FormatInt(groupID, 10)
 		out, err := callToolOn[groups.TransferLocationsListOutput](ctx, sess.individual, "gitlab_group_transfer_locations", groups.TransferLocationsListInput{
 			GroupID: toolutil.StringOrInt(gid),
+			Search:  "nonexistent",
 		})
 		requireNoError(t, err, "group transfer_locations")
 		t.Logf("Group %d has %d candidate transfer locations", groupID, len(out.Locations))

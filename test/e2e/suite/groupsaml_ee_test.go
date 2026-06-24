@@ -134,7 +134,14 @@ func TestMeta_GroupSAMLUsers(t *testing.T) {
 
 	out, err := callToolOn[groupsaml.SAMLUsersListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "saml_users_list",
-		"params": map[string]any{"group_id": grp.gidStr()},
+		// Exercise the v2.41.0 filter parameters (incl. RFC3339 date parsing).
+		"params": map[string]any{
+			"group_id":       grp.gidStr(),
+			"search":         "nonexistent",
+			"active":         true,
+			"created_after":  "2026-01-01T00:00:00Z",
+			"created_before": "2026-12-31T23:59:59Z",
+		},
 	})
 	if err == nil {
 		t.Logf("saml_users_list returned %d users (SSO is configured)", len(out.Users))
