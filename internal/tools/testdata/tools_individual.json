@@ -43155,15 +43155,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -43240,9 +43231,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -43280,9 +43268,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -43628,9 +43613,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -44653,15 +44635,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -44738,9 +44711,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -44778,9 +44748,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -45126,9 +45093,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -45868,15 +45832,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -45953,9 +45908,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -45993,9 +45945,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -46341,9 +46290,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -46586,15 +46532,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -46671,9 +46608,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -46711,9 +46645,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -47059,9 +46990,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -48502,12 +48430,6 @@
             "object"
           ]
         },
-        "source_issue_iid": {
-          "type": "integer"
-        },
-        "source_project_id": {
-          "type": "integer"
-        },
         "target_issue": {
           "additionalProperties": false,
           "properties": {
@@ -49150,20 +49072,10 @@
             "null",
             "object"
           ]
-        },
-        "target_issue_iid": {
-          "type": "integer"
-        },
-        "target_project_id": {
-          "type": "integer"
         }
       },
       "required": [
         "id",
-        "source_issue_iid",
-        "source_project_id",
-        "target_issue_iid",
-        "target_project_id",
         "link_type"
       ],
       "type": "object"
@@ -49922,12 +49834,6 @@
             "object"
           ]
         },
-        "source_issue_iid": {
-          "type": "integer"
-        },
-        "source_project_id": {
-          "type": "integer"
-        },
         "target_issue": {
           "additionalProperties": false,
           "properties": {
@@ -50570,20 +50476,10 @@
             "null",
             "object"
           ]
-        },
-        "target_issue_iid": {
-          "type": "integer"
-        },
-        "target_project_id": {
-          "type": "integer"
         }
       },
       "required": [
         "id",
-        "source_issue_iid",
-        "source_project_id",
-        "target_issue_iid",
-        "target_project_id",
         "link_type"
       ],
       "type": "object"
@@ -51183,15 +51079,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -51268,9 +51155,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -51308,9 +51192,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -51656,9 +51537,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"
@@ -52150,15 +52028,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -52235,9 +52104,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -52275,9 +52141,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -52623,9 +52486,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"
@@ -53112,15 +52972,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -53197,9 +53048,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -53237,9 +53085,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -53585,9 +53430,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"
@@ -54133,15 +53975,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -54218,9 +54051,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -54258,9 +54088,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -54607,9 +54434,6 @@
             "object"
           ]
         },
-        "milestone_title": {
-          "type": "string"
-        },
         "moved_to_id": {
           "type": "integer"
         },
@@ -54947,9 +54771,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "blocking_discussions_resolved": {
                 "type": "boolean"
               },
@@ -55085,9 +54906,6 @@
               },
               "merge_commit_sha": {
                 "type": "string"
-              },
-              "merge_request_iid": {
-                "type": "integer"
               },
               "merge_user": {
                 "additionalProperties": false,
@@ -55409,7 +55227,6 @@
             "required": [
               "id",
               "iid",
-              "merge_request_iid",
               "project_id",
               "title",
               "state",
@@ -55697,9 +55514,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "blocking_discussions_resolved": {
                 "type": "boolean"
               },
@@ -55835,9 +55649,6 @@
               },
               "merge_commit_sha": {
                 "type": "string"
-              },
-              "merge_request_iid": {
-                "type": "integer"
               },
               "merge_user": {
                 "additionalProperties": false,
@@ -56159,7 +55970,6 @@
             "required": [
               "id",
               "iid",
-              "merge_request_iid",
               "project_id",
               "title",
               "state",
@@ -56347,9 +56157,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "body": {
           "type": "string"
         },
@@ -56425,49 +56232,7 @@
                     "object"
                   ]
                 },
-                "end_range": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
                 "start": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "start_range": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -57107,9 +56872,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "body": {
           "type": "string"
         },
@@ -57185,49 +56947,7 @@
                     "object"
                   ]
                 },
-                "end_range": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
                 "start": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "start_range": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -57455,9 +57175,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "body": {
                 "type": "string"
               },
@@ -57533,49 +57250,7 @@
                           "object"
                         ]
                       },
-                      "end_range": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "line_code": {
-                            "type": "string"
-                          },
-                          "new_line": {
-                            "type": "integer"
-                          },
-                          "old_line": {
-                            "type": "integer"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "type": [
-                          "null",
-                          "object"
-                        ]
-                      },
                       "start": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "line_code": {
-                            "type": "string"
-                          },
-                          "new_line": {
-                            "type": "integer"
-                          },
-                          "old_line": {
-                            "type": "integer"
-                          },
-                          "type": {
-                            "type": "string"
-                          }
-                        },
-                        "type": [
-                          "null",
-                          "object"
-                        ]
-                      },
-                      "start_range": {
                         "additionalProperties": false,
                         "properties": {
                           "line_code": {
@@ -57824,9 +57499,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "body": {
           "type": "string"
         },
@@ -57902,49 +57574,7 @@
                     "object"
                   ]
                 },
-                "end_range": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
                 "start": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "line_code": {
-                      "type": "string"
-                    },
-                    "new_line": {
-                      "type": "integer"
-                    },
-                    "old_line": {
-                      "type": "integer"
-                    },
-                    "type": {
-                      "type": "string"
-                    }
-                  },
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "start_range": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -58248,15 +57878,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -58333,9 +57954,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -58373,9 +57991,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -58721,9 +58336,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -59319,15 +58931,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -59404,9 +59007,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -59444,9 +59044,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -59792,9 +59389,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -60227,15 +59821,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -60312,9 +59897,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -60352,9 +59934,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -60700,9 +60279,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -61050,15 +60626,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -61135,9 +60702,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -61175,9 +60739,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -61523,9 +61084,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
@@ -81723,15 +81281,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -81808,9 +81357,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -81848,9 +81394,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -82196,9 +81739,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"
@@ -85898,15 +85438,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -85983,9 +85514,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -86023,9 +85551,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -86371,9 +85896,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"
@@ -120372,15 +119894,6 @@
                   "object"
                 ]
               },
-              "assignee_usernames": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -120457,9 +119970,6 @@
                   "object"
                 ]
               },
-              "author_username": {
-                "type": "string"
-              },
               "closed_at": {
                 "type": "string"
               },
@@ -120497,9 +120007,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "closed_by_username": {
-                "type": "string"
               },
               "confidential": {
                 "type": "boolean"
@@ -120845,9 +120352,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "milestone_title": {
-                "type": "string"
               },
               "moved_to_id": {
                 "type": "integer"

@@ -1970,15 +1970,6 @@
             "object"
           ]
         },
-        "assignee_usernames": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -2055,9 +2046,6 @@
             "object"
           ]
         },
-        "author_username": {
-          "type": "string"
-        },
         "closed_at": {
           "type": "string"
         },
@@ -2095,9 +2083,6 @@
             "null",
             "object"
           ]
-        },
-        "closed_by_username": {
-          "type": "string"
         },
         "confidential": {
           "type": "boolean"
@@ -2443,9 +2428,6 @@
             "null",
             "object"
           ]
-        },
-        "milestone_title": {
-          "type": "string"
         },
         "moved_to_id": {
           "type": "integer"
