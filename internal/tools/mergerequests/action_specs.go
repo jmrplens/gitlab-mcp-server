@@ -25,7 +25,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewCreateActionSpec("create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
-				Aliases: []string{"gitlab_mr_create"}, Tags: []string{"merge-request", "branch"},
+				Aliases: []string{"create merge request", "open mr", "new merge request", "raise pull request"}, Tags: []string{"merge-request", "branch"},
 				Usage:          "Use to open a merge request from a source branch into the target branch in a project.",
 				RelatedActions: []string{"merge_request.get", "merge_request.list", "branch.create", "project.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
@@ -42,9 +42,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 						ExampleBinding:   "from feature/eval into main => target_branch=main.",
 					},
 				},
-				OpenWorld:      true,
-				OwnerPackage:   "mergerequests",
-				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_mr_create", Title: toolutil.TitleFromName("gitlab_mr_create")},
+				OpenWorld:    true,
+				OwnerPackage: "mergerequests",
+				IndividualTool: toolutil.IndividualToolSpec{
+					Name:        "gitlab_mr_create",
+					Title:       toolutil.TitleFromName("gitlab_mr_create"),
+					Description: "Open a new merge request from a source branch into a target branch. Returns: the created MR with IID, state, source/target branches, merge status, assignees, reviewers, labels, and web URL. See also: gitlab_mr_get, gitlab_mr_list, gitlab_mr_merge.",
+				},
 			}),
 		// gitlab_mr_get — fetch a single MR (returns a structured not-found result on 404).
 		mergeRequestReadSpec("get", mergeRequestGetRoute(client), "gitlab_mr_get"),
@@ -194,10 +198,182 @@ func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.Act
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
+// mergeRequestActionMetadata holds the per-action discovery metadata that
+// replaces the generic placeholders for every merge request action: an
+// action-specific Usage sentence, natural-language Aliases, canonical
+// RelatedActions cross-links, and the "Returns: … See also: …" individual-tool
+// description required by the 1:1 metadata norm (R-META).
+type mergeRequestActionMetadata struct {
+	usage       string
+	aliases     []string
+	related     []string
+	description string
+}
+
+// mergeRequestActionMetadataTable maps each merge request action name to its
+// curated discovery metadata. Keys correspond to the action names passed to
+// mergeRequestOptions from ActionSpecs.
+func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
+	return map[string]mergeRequestActionMetadata{
+		"get": {
+			usage:       "Fetch a single merge request by its project-scoped IID, optionally including diverged-commit count, rebase-in-progress state, or HTML-rendered title/description.",
+			aliases:     []string{"get merge request", "show mr", "view merge request"},
+			related:     []string{"merge_request.list", "merge_request.commits", "merge_request.update", "merge_request.merge"},
+			description: "Get a single merge request from a project by its IID. Returns: MR metadata, state, source/target branches, merge status, assignees, reviewers, labels, milestone, and web URL. See also: gitlab_mr_list, gitlab_mr_update, gitlab_mr_merge, gitlab_mr_commits.",
+		},
+		"list": {
+			usage:       "List merge requests in one project with rich filtering (state, labels, author/assignee/reviewer, approvals, environment, dates) and offset or keyset pagination.",
+			aliases:     []string{"list merge requests", "list mrs", "list project merge requests"},
+			related:     []string{"merge_request.get", "merge_request.create", "merge_request.list_group", "search.merge_requests"},
+			description: "List merge requests in one project with filtering and pagination. Returns: matching MRs with state, branches, merge status, assignees, reviewers, labels, and pagination metadata. See also: gitlab_mr_get, gitlab_mr_create, gitlab_mr_list_group.",
+		},
+		"list_global": {
+			usage:       "List merge requests across all projects visible to the caller; narrow with scope=created_by_me or scope=assigned_to_me, author/reviewer, approvals, or label filters.",
+			aliases:     []string{"list all merge requests", "list my merge requests", "list merge requests across projects"},
+			related:     []string{"merge_request.list", "merge_request.list_group", "search.merge_requests"},
+			description: "List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
+		},
+		"list_group": {
+			usage:       "List merge requests across a group and its subgroups/projects with state, author, reviewer, approval, and label filters plus offset or keyset pagination.",
+			aliases:     []string{"list group merge requests", "list mrs in group", "list merge requests for group"},
+			related:     []string{"merge_request.list", "merge_request.list_global", "group.get"},
+			description: "List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_global, gitlab_group_get.",
+		},
+		"update": {
+			usage:       "Update merge request fields (title, description, target branch, assignees, reviewers, labels, milestone) or transition state with state_event=close/reopen.",
+			aliases:     []string{"update merge request", "edit mr", "change merge request", "close merge request", "reopen merge request"},
+			related:     []string{"merge_request.get", "merge_request.merge", "merge_request.approve", "merge_request.delete"},
+			description: "Update an existing merge request's fields or state. Returns: the updated MR with its new field values, state, labels, assignees, and reviewers. See also: gitlab_mr_get, gitlab_mr_merge, gitlab_mr_approve.",
+		},
+		"approve": {
+			usage:       "Add the caller's approval to a merge request; pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).",
+			aliases:     []string{"approve merge request", "approve mr"},
+			related:     []string{"merge_request.unapprove", "merge_request.merge", "merge_request.get"},
+			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
+		},
+		"unapprove": {
+			usage:       "Remove the caller's previously granted approval from a merge request (idempotent; requires the caller to have approved first).",
+			aliases:     []string{"unapprove merge request", "remove approval", "revoke mr approval"},
+			related:     []string{"merge_request.approve", "merge_request.get"},
+			description: "Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_approve, gitlab_mr_get.",
+		},
+		"commits": {
+			usage:       "List the commits contained in a merge request, ordered and paginated (offset or keyset).",
+			aliases:     []string{"list merge request commits", "list mr commits", "show commits in mr"},
+			related:     []string{"merge_request.get", "merge_request.changes_get", "commit.get"},
+			description: "List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: gitlab_mr_get, gitlab_commit_get.",
+		},
+		"delete": {
+			usage:       "Permanently delete a merge request (owner-only). To merely stop work, use merge_request.update with state_event=close instead.",
+			aliases:     []string{"delete merge request", "remove mr", "destroy merge request"},
+			related:     []string{"merge_request.update", "merge_request.get"},
+			description: "Delete a merge request permanently. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_update, gitlab_mr_get.",
+		},
+		"rebase": {
+			usage:       "Rebase a merge request's source branch onto the latest target branch; set skip_ci to avoid triggering a pipeline after the rebase.",
+			aliases:     []string{"rebase merge request", "rebase mr", "rebase source branch"},
+			related:     []string{"merge_request.get", "merge_request.merge", "merge_request.commits"},
+			description: "Rebase a merge request's source branch onto its target. Returns: whether a rebase is now in progress (poll merge_request.get to track completion). See also: gitlab_mr_get, gitlab_mr_merge.",
+		},
+		"participants": {
+			usage:       "List every user participating in a merge request (author, assignees, reviewers, commenters).",
+			aliases:     []string{"list merge request participants", "list mr participants", "who is involved in mr"},
+			related:     []string{"merge_request.reviewers", "merge_request.get"},
+			description: "List the participants of a merge request. Returns: participating users with username, name, and state. See also: gitlab_mr_reviewers, gitlab_mr_get.",
+		},
+		"reviewers": {
+			usage:       "List the assigned reviewers of a merge request along with each reviewer's review state.",
+			aliases:     []string{"list merge request reviewers", "list mr reviewers", "show reviewers"},
+			related:     []string{"merge_request.participants", "merge_request.update", "merge_request.approve"},
+			description: "List the reviewers of a merge request. Returns: reviewer users with username, name, and review state. See also: gitlab_mr_participants, gitlab_mr_update.",
+		},
+		"issues_closed": {
+			usage:       "List issues that will be closed when this merge request is merged (issues referenced via 'Closes #N' in the MR description or commits).",
+			aliases:     []string{"list issues closed by mr", "issues closed on merge", "what issues does this mr close"},
+			related:     []string{"merge_request.related_issues", "merge_request.get", "issue.get"},
+			description: "List issues that will be closed when the merge request is merged. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: gitlab_mr_related_issues, gitlab_issue_get.",
+		},
+		"subscribe": {
+			usage:       "Subscribe the caller to a merge request to receive notifications about its activity.",
+			aliases:     []string{"subscribe to merge request", "watch mr", "follow merge request"},
+			related:     []string{"merge_request.unsubscribe", "merge_request.get"},
+			description: "Subscribe the caller to a merge request's notifications. Returns: the MR with the updated subscription state. See also: gitlab_mr_unsubscribe, gitlab_mr_get.",
+		},
+		"unsubscribe": {
+			usage:       "Unsubscribe the caller from a merge request to stop receiving its notifications.",
+			aliases:     []string{"unsubscribe from merge request", "unwatch mr", "stop following merge request"},
+			related:     []string{"merge_request.subscribe", "merge_request.get"},
+			description: "Unsubscribe the caller from a merge request's notifications. Returns: the MR with the updated subscription state. See also: gitlab_mr_subscribe, gitlab_mr_get.",
+		},
+		"time_estimate_set": {
+			usage:       "Set the time estimate for a merge request using a GitLab duration string such as '3h30m', '1d', or '2w'.",
+			aliases:     []string{"set merge request time estimate", "estimate mr time", "set mr estimate"},
+			related:     []string{"merge_request.time_estimate_reset", "merge_request.spent_time_add", "merge_request.time_stats"},
+			description: "Set a merge request's time estimate. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: gitlab_mr_reset_time_estimate, gitlab_mr_add_spent_time, gitlab_mr_time_stats.",
+		},
+		"time_estimate_reset": {
+			usage:       "Clear the time estimate previously set on a merge request.",
+			aliases:     []string{"reset merge request time estimate", "clear mr estimate", "remove mr time estimate"},
+			related:     []string{"merge_request.time_estimate_set", "merge_request.time_stats"},
+			description: "Clear a merge request's time estimate. Returns: the updated time tracking stats. See also: gitlab_mr_set_time_estimate, gitlab_mr_time_stats.",
+		},
+		"spent_time_add": {
+			usage:       "Log spent time on a merge request with a GitLab duration string; use a leading '-' (e.g. '-1h') to subtract previously logged time.",
+			aliases:     []string{"add merge request spent time", "log time on mr", "record mr time"},
+			related:     []string{"merge_request.spent_time_reset", "merge_request.time_estimate_set", "merge_request.time_stats"},
+			description: "Add spent time to a merge request. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: gitlab_mr_reset_spent_time, gitlab_mr_set_time_estimate, gitlab_mr_time_stats.",
+		},
+		"spent_time_reset": {
+			usage:       "Reset the total spent time logged on a merge request back to zero.",
+			aliases:     []string{"reset merge request spent time", "clear mr spent time", "zero mr time spent"},
+			related:     []string{"merge_request.spent_time_add", "merge_request.time_stats"},
+			description: "Reset a merge request's spent time. Returns: the updated time tracking stats. See also: gitlab_mr_add_spent_time, gitlab_mr_time_stats.",
+		},
+		"time_stats": {
+			usage:       "Read the time tracking totals (estimate and total spent time) for a merge request.",
+			aliases:     []string{"get merge request time stats", "show mr time tracking", "mr time totals"},
+			related:     []string{"merge_request.time_estimate_set", "merge_request.spent_time_add"},
+			description: "Read a merge request's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_mr_set_time_estimate, gitlab_mr_add_spent_time.",
+		},
+		"related_issues": {
+			usage:       "List issues referenced by a merge request in its description, commits, or notes (a superset of issues_closed).",
+			aliases:     []string{"list merge request related issues", "issues related to mr", "show related issues"},
+			related:     []string{"merge_request.issues_closed", "merge_request.get", "issue.get"},
+			description: "List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: gitlab_mr_issues_closed, gitlab_issue_get.",
+		},
+		"create_todo": {
+			usage:       "Create a to-do item on a merge request for the caller so it appears in their GitLab to-do list.",
+			aliases:     []string{"create merge request todo", "add mr todo", "mark mr as todo"},
+			related:     []string{"merge_request.get", "merge_request.subscribe"},
+			description: "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target, and state. See also: gitlab_mr_get, gitlab_mr_subscribe.",
+		},
+		"dependency_create": {
+			usage:       "Add a blocking dependency so this merge request cannot merge until the specified blocking MR is merged.",
+			aliases:     []string{"create merge request dependency", "add mr dependency", "block mr on another mr"},
+			related:     []string{"merge_request.dependency_delete", "merge_request.dependencies_list", "merge_request.merge"},
+			description: "Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR. See also: gitlab_mr_dependency_delete, gitlab_mr_dependencies_list.",
+		},
+		"dependency_delete": {
+			usage:       "Remove a previously added blocking dependency from a merge request.",
+			aliases:     []string{"delete merge request dependency", "remove mr dependency", "unblock mr"},
+			related:     []string{"merge_request.dependency_create", "merge_request.dependencies_list"},
+			description: "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
+		},
+		"dependencies_list": {
+			usage:       "List the blocking dependencies of a merge request (the MRs that must merge first).",
+			aliases:     []string{"list merge request dependencies", "list mr dependencies", "show mr blockers"},
+			related:     []string{"merge_request.dependency_create", "merge_request.dependency_delete"},
+			description: "List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.",
+		},
+	}
+}
+
 // mergeRequestOptions returns the base [toolutil.ActionSpecOptions]
-// for a merge request action and customizes the Usage/Aliases for
-// the merge, pipelines, create_pipeline, and cancel_auto_merge
-// individual tools.
+// for a merge request action with action-specific Usage, natural-language
+// Aliases, canonical RelatedActions, and the "Returns: … See also: …"
+// individual-tool description (R-META). The merge, pipelines,
+// create_pipeline, and cancel_auto_merge actions additionally receive
+// workflow-specific guidance separating auto-merge from pipeline waiting.
 func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute mergerequests domain action.", Tags: []string{"merge_request"},
@@ -205,11 +381,18 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		OwnerPackage:   "mergerequests",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if meta, ok := mergeRequestActionMetadataTable()[actionName]; ok {
+		options.Usage = meta.usage
+		options.Aliases = meta.aliases
+		options.RelatedActions = meta.related
+		options.IndividualTool.Description = meta.description
+	}
 	switch actionName {
 	case "merge":
 		options.Usage = "Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use " + pipelineWaitAction + " unless the task only asks to wait for an existing pipeline."
 		options.Aliases = []string{"merge merge request", "merge mr", "merge when pipeline succeeds"}
 		options.RelatedActions = []string{"merge_request.pipelines", pipelineWaitAction, pipelineGetAction, "merge_request.cancel_auto_merge"}
+		options.IndividualTool.Description = "Merge a merge request now, or schedule auto-merge when its pipeline succeeds. Returns: the merged MR with merge_commit_sha and updated state. See also: gitlab_mr_get, gitlab_mr_pipelines, gitlab_mr_cancel_auto_merge."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"auto_merge": {
 				SemanticRole:     "merge_scheduling",
@@ -228,13 +411,19 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		}
 	case "pipelines":
 		options.Usage = "Lists pipelines attached to a merge request; use " + pipelineWaitAction + " with the returned pipeline_id only when the task asks to wait for CI completion."
+		options.Aliases = []string{"list merge request pipelines", "list mr pipelines", "show mr pipelines"}
 		options.RelatedActions = []string{pipelineWaitAction, pipelineGetAction, "merge_request.merge", "merge_request.create_pipeline"}
+		options.IndividualTool.Description = "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get."
 	case "create_pipeline":
 		options.Usage = "Creates a new pipeline for a merge request; use " + pipelineWaitAction + " after receiving pipeline_id if the task asks to wait for completion."
+		options.Aliases = []string{"create merge request pipeline", "trigger mr pipeline", "run pipeline for mr"}
 		options.RelatedActions = []string{"merge_request.pipelines", pipelineWaitAction, pipelineGetAction}
+		options.IndividualTool.Description = "Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: gitlab_mr_pipelines, gitlab_pipeline_get."
 	case "cancel_auto_merge":
 		options.Usage = "Cancels auto-merge on a merge request; it does not cancel a running pipeline."
+		options.Aliases = []string{"cancel auto merge", "cancel merge when pipeline succeeds", "stop auto merge"}
 		options.RelatedActions = []string{"merge_request.merge", "merge_request.get"}
+		options.IndividualTool.Description = "Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled. See also: gitlab_mr_merge, gitlab_mr_get."
 	}
 	return options
 }
