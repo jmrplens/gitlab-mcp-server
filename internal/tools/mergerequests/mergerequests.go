@@ -31,11 +31,11 @@ type CreateInput struct {
 	Description  string               `json:"description,omitempty" jsonschema:"Merge request description (Markdown supported)"`
 
 	// Assignment and tracking
-	AssigneeID  int64   `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs []int64 `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
-	ReviewerIDs []int64 `json:"reviewer_ids,omitempty" jsonschema:"User IDs to add as reviewers"`
-	Labels      string  `json:"labels,omitempty" jsonschema:"Comma-separated labels to apply"`
-	MilestoneID int64   `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request"`
+	AssigneeID  int64    `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
+	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
+	ReviewerIDs []int64  `json:"reviewer_ids,omitempty" jsonschema:"User IDs to add as reviewers"`
+	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
+	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request"`
 
 	// Merge behavior
 	RemoveSourceBranch *bool `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
@@ -141,8 +141,8 @@ type GetInput struct {
 type ListInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	State                  string               `json:"state,omitempty"         jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels                 string               `json:"labels,omitempty"        jsonschema:"Comma-separated label names to filter by"`
-	NotLabels              string               `json:"not_labels,omitempty"    jsonschema:"Comma-separated label names to exclude"`
+	Labels                 []string             `json:"labels,omitempty"        jsonschema:"Label names to filter by"`
+	NotLabels              []string             `json:"not_labels,omitempty"    jsonschema:"Label names to exclude"`
 	Milestone              string               `json:"milestone,omitempty"     jsonschema:"Milestone title to filter by"`
 	Scope                  string               `json:"scope,omitempty"         jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
 	Search                 string               `json:"search,omitempty"        jsonschema:"Search in title and description"`
@@ -185,8 +185,8 @@ type ListOutput struct {
 
 type mergeRequestListFilters struct {
 	State             string
-	Labels            string
-	NotLabels         string
+	Labels            []string
+	NotLabels         []string
 	Milestone         string
 	Scope             string
 	Search            string
@@ -267,11 +267,13 @@ func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) List
 	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
-func labelOptions(csv string) *gl.LabelOptions {
-	if csv == "" {
+// labelOptions converts a label-name slice into a *gl.LabelOptions, or nil when
+// empty.
+func labelOptions(values []string) *gl.LabelOptions {
+	if len(values) == 0 {
 		return nil
 	}
-	labels := gl.LabelOptions(strings.Split(csv, ","))
+	labels := gl.LabelOptions(values)
 	return &labels
 }
 
@@ -358,9 +360,9 @@ type UpdateInput struct {
 	AssigneeID         int64                `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
 	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs to assign as merge request assignees"`
 	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs to add as reviewers"`
-	Labels             string               `json:"labels,omitempty"               jsonschema:"Comma-separated label names to replace all labels on the merge request"`
-	AddLabels          string               `json:"add_labels,omitempty"          jsonschema:"Comma-separated label names to add without removing existing"`
-	RemoveLabels       string               `json:"remove_labels,omitempty"       jsonschema:"Comma-separated label names to remove"`
+	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names to replace all labels on the merge request"`
+	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
+	RemoveLabels       []string             `json:"remove_labels,omitempty"       jsonschema:"Label names to remove"`
 	MilestoneID        int64                `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
 	RemoveSourceBranch *bool                `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested"`
 	Squash             *bool                `json:"squash,omitempty"              jsonschema:"Squash commits on merge. Only set if explicitly requested"`
@@ -533,9 +535,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if len(input.ReviewerIDs) > 0 {
 		opts.ReviewerIDs = &input.ReviewerIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
+	if labels := labelOptions(input.Labels); labels != nil {
+		opts.Labels = labels
 	}
 	if input.RemoveSourceBranch != nil {
 		opts.RemoveSourceBranch = input.RemoveSourceBranch
@@ -688,17 +689,14 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if len(input.ReviewerIDs) > 0 {
 		opts.ReviewerIDs = &input.ReviewerIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
+	if labels := labelOptions(input.Labels); labels != nil {
+		opts.Labels = labels
 	}
-	if input.AddLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.AddLabels, ","))
-		opts.AddLabels = &labels
+	if labels := labelOptions(input.AddLabels); labels != nil {
+		opts.AddLabels = labels
 	}
-	if input.RemoveLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.RemoveLabels, ","))
-		opts.RemoveLabels = &labels
+	if labels := labelOptions(input.RemoveLabels); labels != nil {
+		opts.RemoveLabels = labels
 	}
 	if input.MilestoneID > 0 {
 		opts.MilestoneID = new(input.MilestoneID)
@@ -1071,36 +1069,36 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 
 // ListGlobalInput defines filters for listing merge requests across all projects.
 type ListGlobalInput struct {
-	State                  string  `json:"state,omitempty"           jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels                 string  `json:"labels,omitempty"          jsonschema:"Comma-separated label names to filter by"`
-	NotLabels              string  `json:"not_labels,omitempty"      jsonschema:"Comma-separated label names to exclude"`
-	Milestone              string  `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope                  string  `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search                 string  `json:"search,omitempty"          jsonschema:"Search in title and description"`
-	SourceBranch           string  `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
-	TargetBranch           string  `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
-	AuthorUsername         string  `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
-	NotAuthorUsername      string  `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
-	ReviewerUsername       string  `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
-	Approved               string  `json:"approved,omitempty"            jsonschema:"Filter by approval status: 'yes' or 'no' (Premium)"`
-	In                     string  `json:"in,omitempty"                  jsonschema:"Scope of the search filter (e.g. title, description, or title,description)"`
-	MyReactionEmoji        string  `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
-	View                   string  `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
-	WIP                    string  `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
-	AuthorID               int64   `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
-	AssigneeID             int64   `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
-	ReviewerID             int64   `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
-	ApproverIDs            []int64 `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
-	ApprovedByIDs          []int64 `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
-	WithLabelsDetails      *bool   `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
-	WithMergeStatusRecheck *bool   `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
-	Draft                  *bool   `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	CreatedAfter           string  `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601)"`
-	CreatedBefore          string  `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
-	UpdatedAfter           string  `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
-	UpdatedBefore          string  `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601)"`
-	OrderBy                string  `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
-	Sort                   string  `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
+	State                  string   `json:"state,omitempty"           jsonschema:"Filter by state (opened, closed, merged, all)"`
+	Labels                 []string `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
+	NotLabels              []string `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
+	Milestone              string   `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
+	Scope                  string   `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search                 string   `json:"search,omitempty"          jsonschema:"Search in title and description"`
+	SourceBranch           string   `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
+	TargetBranch           string   `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
+	AuthorUsername         string   `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
+	NotAuthorUsername      string   `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerUsername       string   `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	Approved               string   `json:"approved,omitempty"            jsonschema:"Filter by approval status: 'yes' or 'no' (Premium)"`
+	In                     string   `json:"in,omitempty"                  jsonschema:"Scope of the search filter (e.g. title, description, or title,description)"`
+	MyReactionEmoji        string   `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	View                   string   `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
+	WIP                    string   `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	AuthorID               int64    `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
+	AssigneeID             int64    `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
+	ReviewerID             int64    `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ApproverIDs            []int64  `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
+	ApprovedByIDs          []int64  `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	WithLabelsDetails      *bool    `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
+	WithMergeStatusRecheck *bool    `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
+	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	CreatedAfter           string   `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601)"`
+	CreatedBefore          string   `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
+	UpdatedAfter           string   `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
+	UpdatedBefore          string   `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601)"`
+	OrderBy                string   `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
+	Sort                   string   `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -1260,8 +1258,8 @@ func setTimePtr(target **time.Time) func(*time.Time) {
 type ListGroupInput struct {
 	GroupID                toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
 	State                  string               `json:"state,omitempty"             jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels                 string               `json:"labels,omitempty"            jsonschema:"Comma-separated label names to filter by"`
-	NotLabels              string               `json:"not_labels,omitempty"        jsonschema:"Comma-separated label names to exclude"`
+	Labels                 []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	NotLabels              []string             `json:"not_labels,omitempty"        jsonschema:"Label names to exclude"`
 	Milestone              string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
 	Scope                  string               `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
 	Search                 string               `json:"search,omitempty"            jsonschema:"Search in title and description"`

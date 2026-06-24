@@ -1486,7 +1486,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 
 // TestBuildUpdateOpts_LabelBranches verifies label update options are populated.
 func TestBuildUpdateOpts_LabelBranches(t *testing.T) {
-	opts := buildUpdateOpts(UpdateInput{Labels: "bug,critical", AddLabels: "security"})
+	opts := buildUpdateOpts(UpdateInput{Labels: []string{testLabelBug, "critical"}, AddLabels: []string{"security"}})
 	if opts.Labels == nil || len(*opts.Labels) != 2 {
 		t.Fatalf("Labels = %#v, want two labels", opts.Labels)
 	}
@@ -1733,8 +1733,6 @@ const (
 	testMRTitle = "feat: login"
 	// testBlockerTitle identifies the test blocker title constant used by this package.
 	testBlockerTitle = "Blocker MR"
-	// testLabels identifies the test labels constant used by this package.
-	testLabels = "bug,critical"
 	// testCreatedBefore identifies the test created before constant used by this package.
 	testCreatedBefore = "2026-12-31T23:59:59Z"
 	// testStateOpened identifies the test state opened constant used by this package.
@@ -1780,6 +1778,9 @@ const (
 	// testDate20260101 identifies the test date 20260101 constant used by this package.
 	testDate20260101 = "2026-01-01"
 )
+
+// testLabels is the label-name slice used by this package for label input fields.
+var testLabels = []string{testLabelBug, "critical"}
 
 // ---------------------------------------------------------------------------
 // Format*Markdown tests
@@ -3547,8 +3548,8 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		StateEvent:         "close",
 		AssigneeIDs:        []int64{1},
 		ReviewerIDs:        []int64{2},
-		AddLabels:          "new-label",
-		RemoveLabels:       "old-label",
+		AddLabels:          []string{"new-label"},
+		RemoveLabels:       []string{"old-label"},
 		MilestoneID:        5,
 		RemoveSourceBranch: &boolTrue,
 		Squash:             &boolTrue,
@@ -3583,7 +3584,7 @@ func TestList_AllFilterFields(t *testing.T) {
 		ProjectID:       testProjectID,
 		State:           testStateOpened,
 		Labels:          testLabels,
-		NotLabels:       testLabelWontfix,
+		NotLabels:       []string{testLabelWontfix},
 		Milestone:       testMilestoneV1,
 		Scope:           "all",
 		Search:          "login",
@@ -3624,7 +3625,7 @@ func TestListGlobal_AllFilterFields(t *testing.T) {
 	_, err := ListGlobal(context.Background(), client, ListGlobalInput{
 		State:            testStateOpened,
 		Labels:           testLabels,
-		NotLabels:        testLabelWontfix,
+		NotLabels:        []string{testLabelWontfix},
 		Milestone:        testMilestoneV1,
 		Scope:            "all",
 		Search:           "login",
@@ -3666,7 +3667,7 @@ func TestListGroup_AllFilterFields(t *testing.T) {
 		GroupID:          "99",
 		State:            testStateOpened,
 		Labels:           testLabels,
-		NotLabels:        testLabelWontfix,
+		NotLabels:        []string{testLabelWontfix},
 		Milestone:        testMilestoneV1,
 		Scope:            "all",
 		Search:           "login",
@@ -4732,6 +4733,23 @@ func TestShapeConverters_EdgeBranches(t *testing.T) {
 	}
 	if got := pipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Text != "running" {
 		t.Errorf("pipelineDetailedStatusOutput = %v, want text running", got)
+	}
+}
+
+// TestPipelineDetailedStatusOutput_Illustration verifies the detailed-status
+// converter maps the SDK illustration object onto the canonical illustration
+// key when an image is present and leaves it nil when the image is empty.
+func TestPipelineDetailedStatusOutput_Illustration(t *testing.T) {
+	if got := pipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Illustration != nil {
+		t.Errorf("pipelineDetailedStatusOutput (no illustration) = %v, want nil illustration", got)
+	}
+	withIllustration := pipelineDetailedStatusOutput(&gl.DetailedStatus{
+		Text:         "failed",
+		Illustration: gl.DetailedStatusIllustration{Image: "https://example.com/img.svg"},
+	})
+	if withIllustration == nil || withIllustration.Illustration == nil ||
+		withIllustration.Illustration.Image != "https://example.com/img.svg" {
+		t.Errorf("pipelineDetailedStatusOutput illustration = %v, want image set", withIllustration)
 	}
 }
 

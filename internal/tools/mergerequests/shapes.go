@@ -216,24 +216,35 @@ func pipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
 // PipelineDetailedStatusOutput mirrors gl.DetailedStatus (the head_pipeline
 // detailed_status object).
 type PipelineDetailedStatusOutput struct {
-	Icon        string `json:"icon"`
-	Text        string `json:"text"`
-	Label       string `json:"label"`
-	Group       string `json:"group"`
-	Tooltip     string `json:"tooltip"`
-	HasDetails  bool   `json:"has_details"`
-	DetailsPath string `json:"details_path"`
-	Favicon     string `json:"favicon"`
+	Icon         string                                    `json:"icon"`
+	Text         string                                    `json:"text"`
+	Label        string                                    `json:"label"`
+	Group        string                                    `json:"group"`
+	Tooltip      string                                    `json:"tooltip"`
+	HasDetails   bool                                      `json:"has_details"`
+	DetailsPath  string                                    `json:"details_path"`
+	Illustration *PipelineDetailedStatusIllustrationOutput `json:"illustration,omitempty"`
+	Favicon      string                                    `json:"favicon"`
+}
+
+// PipelineDetailedStatusIllustrationOutput mirrors gl.DetailedStatusIllustration
+// (the detailed_status.illustration object).
+type PipelineDetailedStatusIllustrationOutput struct {
+	Image string `json:"image"`
 }
 
 func pipelineDetailedStatusOutput(s *gl.DetailedStatus) *PipelineDetailedStatusOutput {
 	if s == nil {
 		return nil
 	}
-	return &PipelineDetailedStatusOutput{
+	out := &PipelineDetailedStatusOutput{
 		Icon: s.Icon, Text: s.Text, Label: s.Label, Group: s.Group,
 		Tooltip: s.Tooltip, HasDetails: s.HasDetails, DetailsPath: s.DetailsPath, Favicon: s.Favicon,
 	}
+	if s.Illustration.Image != "" {
+		out.Illustration = &PipelineDetailedStatusIllustrationOutput{Image: s.Illustration.Image}
+	}
+	return out
 }
 
 // PipelineOutput mirrors gl.Pipeline (the full head_pipeline object).

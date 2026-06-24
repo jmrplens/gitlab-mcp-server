@@ -116,7 +116,7 @@ type RulesOutput struct {
 type ConfigOutput struct {
 	toolutil.HintableOutput
 	ID                             int64                              `json:"id"`
-	IID                            int64                              `json:"merge_request_iid"`
+	IID                            int64                              `json:"iid"`
 	ProjectID                      int64                              `json:"project_id"`
 	Title                          string                             `json:"title"`
 	Description                    string                             `json:"description,omitempty"`

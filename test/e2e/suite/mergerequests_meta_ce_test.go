@@ -462,7 +462,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
 				"merge_request_iid": mrIID,
-				"add_labels":        "e2e-mr-event-label",
+				"add_labels":        []string{"e2e-mr-event-label"},
 			},
 		})
 		requireNoError(t, err, "add label to MR")
