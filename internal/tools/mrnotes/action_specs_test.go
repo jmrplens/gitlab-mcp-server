@@ -4,6 +4,7 @@ package mrnotes
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,53 @@ import (
 )
 
 const mrNoteJSON = `{"id":200,"body":"comment","author":{"id":1,"username":"jmrplens"},"created_at":"2026-03-02T12:00:00Z","updated_at":"2026-03-02T12:00:00Z","system":false}`
+
+// TestActionSpecs_DiscoveryMetadata guards the 1:1 audit R-META metadata: every
+// merge request note action must have a non-generic Usage, natural-language
+// aliases, canonical RelatedActions, parameter guidance, and a "Returns: …
+// See also: …" individual-tool description.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := mrNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, mrNotesActionHandler())))
+
+	const genericUsage = "Use to execute mrnotes domain action."
+
+	tests := []struct {
+		tool         string
+		wantAlias    string
+		wantRelated  string
+		guidedParams []string
+	}{
+		{"gitlab_mr_note_create", "comment on merge request", actionMRNoteList, []string{"project_id", "merge_request_iid", "body"}},
+		{"gitlab_mr_notes_list", "list mr comments", actionMRNoteGet, []string{"project_id", "merge_request_iid", "order_by"}},
+		{"gitlab_mr_note_get", "get mr comment", actionMRNoteList, []string{"project_id", "merge_request_iid", "note_id"}},
+		{"gitlab_mr_note_update", "edit mr comment", actionMRNoteGet, []string{"project_id", "merge_request_iid", "note_id", "body"}},
+		{"gitlab_mr_note_delete", "delete mr comment", actionMRNoteGet, []string{"project_id", "merge_request_iid", "note_id"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.Usage == "" || spec.Usage == genericUsage {
+				t.Errorf("Usage = %q, want action-specific", spec.Usage)
+			}
+			if !slices.Contains(spec.Aliases, tt.wantAlias) {
+				t.Errorf("Aliases = %v, want to contain %q", spec.Aliases, tt.wantAlias)
+			}
+			if !slices.Contains(spec.RelatedActions, tt.wantRelated) {
+				t.Errorf("RelatedActions = %v, want to contain %q", spec.RelatedActions, tt.wantRelated)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("IndividualTool.Description = %q, want Returns:/See also:", desc)
+			}
+			for _, p := range tt.guidedParams {
+				if _, ok := spec.ParameterGuidance[p]; !ok {
+					t.Errorf("ParameterGuidance missing %q", p)
+				}
+			}
+		})
+	}
+}
 
 // TestActionSpecs_CallAllRoutes exercises every merge request note tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
@@ -162,8 +210,8 @@ func TestToOutput_ResolvedByAndTimestamps(t *testing.T) {
 		UpdatedAt:  &now,
 	}
 	out := ToOutput(note)
-	if out.ResolvedBy != "resolver" {
-		t.Errorf("ResolvedBy = %q, want %q", out.ResolvedBy, "resolver")
+	if out.ResolvedBy == nil || out.ResolvedBy.Username != "resolver" {
+		t.Errorf("ResolvedBy = %+v, want username %q", out.ResolvedBy, "resolver")
 	}
 	if out.ResolvedAt == "" {
 		t.Error("expected non-empty ResolvedAt")

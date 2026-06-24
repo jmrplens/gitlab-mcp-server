@@ -5,9 +5,13 @@ package mrnotes
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -172,8 +176,8 @@ func TestMRNoteCreate_SuccessEnrichedFields(t *testing.T) {
 	if !out.Resolved {
 		t.Error("out.Resolved = false, want true")
 	}
-	if out.ResolvedBy != "author" {
-		t.Errorf("out.ResolvedBy = %q, want %q", out.ResolvedBy, "author")
+	if out.ResolvedBy == nil || out.ResolvedBy.Username != "author" {
+		t.Errorf("out.ResolvedBy = %+v, want username %q", out.ResolvedBy, "author")
 	}
 	if !out.Internal {
 		t.Error("out.Internal = false, want true")
@@ -247,8 +251,8 @@ func TestGetNote_Success(t *testing.T) {
 	if out.Body != "This needs review" {
 		t.Errorf(fmtBodyWant, out.Body, "This needs review")
 	}
-	if out.Author != "reviewer" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "reviewer")
+	if out.Author == nil || out.Author.Username != "reviewer" {
+		t.Errorf("out.Author = %+v, want username %q", out.Author, "reviewer")
 	}
 }
 
@@ -605,13 +609,13 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 	out := Output{
 		ID:         500,
 		Body:       "Looks good!",
-		Author:     "reviewer",
+		Author:     &NoteUserOutput{Username: "reviewer"},
 		CreatedAt:  "2026-03-02T12:00:00Z",
 		System:     true,
 		Internal:   true,
 		Resolvable: true,
 		Resolved:   true,
-		ResolvedBy: "author",
+		ResolvedBy: &NoteUserOutput{Username: "author"},
 	}
 	md := FormatOutputMarkdown(out)
 
@@ -636,7 +640,7 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	out := Output{
 		ID:        1,
 		Body:      "hi",
-		Author:    "u",
+		Author:    &NoteUserOutput{Username: "u"},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	md := FormatOutputMarkdown(out)
@@ -659,7 +663,7 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	out := Output{
 		ID:         2,
 		Body:       "thread",
-		Author:     "u",
+		Author:     &NoteUserOutput{Username: "u"},
 		CreatedAt:  "2026-01-01T00:00:00Z",
 		Resolvable: true,
 		Resolved:   false,
@@ -681,8 +685,8 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	out := ListOutput{
 		Notes: []Output{
-			{ID: 1, Author: "a", CreatedAt: "2026-01-01T00:00:00Z", System: false},
-			{ID: 2, Author: "b", CreatedAt: "2026-01-02T00:00:00Z", System: true},
+			{ID: 1, Author: &NoteUserOutput{Username: "a"}, CreatedAt: "2026-01-01T00:00:00Z", System: false},
+			{ID: 2, Author: &NoteUserOutput{Username: "b"}, CreatedAt: "2026-01-02T00:00:00Z", System: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -707,6 +711,306 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	if strings.Contains(md, "| ID |") {
 		t.Error("should not contain table header when empty")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Create — backdating, internal flag, diff head SHA
+// ---------------------------------------------------------------------------.
+
+// TestCreate_CreatedAtBackdated verifies the created_at input is parsed and
+// forwarded to the GitLab API as the backdated note timestamp.
+func TestCreate_CreatedAtBackdated(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if !strings.Contains(string(body), `"created_at":"2026-01-15T10:00:00Z"`) {
+				t.Errorf("body = %s, want created_at 2026-01-15T10:00:00Z", body)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, mrNoteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		MRIID:     1,
+		Body:      testNoteBody,
+		CreatedAt: "2026-01-15T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+}
+
+// TestCreate_CreatedAtUnparseableIgnored verifies an unparseable created_at is
+// silently dropped (ParseOptionalTime returns nil) and no created_at is sent.
+func TestCreate_CreatedAtUnparseableIgnored(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if strings.Contains(string(body), "created_at") {
+				t.Errorf("body = %s, want no created_at", body)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, mrNoteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		MRIID:     1,
+		Body:      testNoteBody,
+		CreatedAt: "not-a-timestamp",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+}
+
+// TestCreate_InternalAndDiffHeadSHA verifies the internal flag and
+// merge_request_diff_head_sha input are forwarded to the GitLab API.
+func TestCreate_InternalAndDiffHeadSHA(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			s := string(body)
+			if !strings.Contains(s, `"internal":true`) {
+				t.Errorf("body = %s, want internal true", s)
+			}
+			if !strings.Contains(s, `"merge_request_diff_head_sha":"deadbeef"`) {
+				t.Errorf("body = %s, want diff head sha deadbeef", s)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, mrNoteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID:               testProjectID,
+		MRIID:                   1,
+		Body:                    testNoteBody,
+		Internal:                new(true),
+		MergeRequestDiffHeadSHA: "deadbeef",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+}
+
+// TestList_KeysetPagination verifies the keyset pagination inputs (pagination
+// and page_token) are forwarded to the GitLab API.
+func TestList_KeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathMR1Notes {
+			q := r.URL.Query()
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "cursor99" {
+				t.Errorf("page_token = %q, want cursor99", q.Get("page_token"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, "["+mrNoteJSON+"]",
+				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		MRIID:                 1,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor99"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Notes) != 1 {
+		t.Errorf("len(Notes) = %d, want 1", len(out.Notes))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ToOutput — full nested objects (author/resolved_by/position/line_range)
+// ---------------------------------------------------------------------------.
+
+// TestToOutput_NestedObjects verifies the additive author/resolved_by/position
+// sub-objects mirror the full gl.Note nested structs.
+func TestToOutput_NestedObjects(t *testing.T) {
+	resolvedAt := mustParseTime(t, "2026-03-02T08:00:00Z")
+	expiresAt := mustParseTime(t, "2026-04-01T00:00:00Z")
+	n := &gl.Note{
+		ID:   400,
+		Body: "Diff comment",
+		Author: gl.NoteAuthor{
+			ID: 7, Username: "alice", Email: "alice@example.com", Name: "Alice",
+			State: "active", AvatarURL: "https://a/av.png", WebURL: "https://a/alice",
+		},
+		Attachment: "attach.png",
+		Title:      "note title",
+		FileName:   "note.txt",
+		ExpiresAt:  expiresAt,
+		Resolvable: true,
+		Resolved:   true,
+		ResolvedAt: resolvedAt,
+		ResolvedBy: gl.NoteResolvedBy{ID: 9, Username: "bob", Name: "Bob"},
+		Position: &gl.NotePosition{
+			BaseSHA: "base", StartSHA: "start", HeadSHA: "head", PositionType: "text",
+			NewPath: "main.go", NewLine: 12, OldPath: "main.go", OldLine: 10,
+			LineRange: &gl.LineRange{
+				StartRange: &gl.LinePosition{LineCode: "abc_1_2", Type: "new", OldLine: 0, NewLine: 12},
+				EndRange:   &gl.LinePosition{LineCode: "abc_3_4", Type: "new", OldLine: 0, NewLine: 14},
+			},
+		},
+	}
+
+	out := ToOutput(n)
+
+	if out.Author == nil || out.Author.ID != 7 || out.Author.Email != "alice@example.com" {
+		t.Fatalf("Author = %+v", out.Author)
+	}
+	if out.Attachment != "attach.png" || out.Title != "note title" || out.FileName != "note.txt" {
+		t.Errorf("string fields = %q/%q/%q", out.Attachment, out.Title, out.FileName)
+	}
+	if out.ExpiresAt != "2026-04-01T00:00:00Z" {
+		t.Errorf("ExpiresAt = %q", out.ExpiresAt)
+	}
+	if out.ResolvedAt != "2026-03-02T08:00:00Z" {
+		t.Errorf("ResolvedAt = %q", out.ResolvedAt)
+	}
+	if out.ResolvedBy == nil || out.ResolvedBy.Username != "bob" {
+		t.Fatalf("ResolvedBy = %+v", out.ResolvedBy)
+	}
+	if out.Position == nil {
+		t.Fatal("Position = nil, want populated")
+	}
+	if out.Position.NewPath != "main.go" || out.Position.NewLine != 12 {
+		t.Errorf("Position = %+v", out.Position)
+	}
+	assertFullLineRange(t, out.Position.LineRange)
+}
+
+// assertFullLineRange checks the canonical start/end sub-objects of a fully
+// populated line range.
+func assertFullLineRange(t *testing.T, lr *LineRangeOutput) {
+	t.Helper()
+	if lr == nil || lr.Start == nil || lr.End == nil {
+		t.Fatalf("canonical start/end = %+v", lr)
+	}
+	if lr.Start.LineCode != "abc_1_2" || lr.Start.NewLine != 12 {
+		t.Errorf("Start = %+v", lr.Start)
+	}
+	if lr.End.LineCode != "abc_3_4" || lr.End.NewLine != 14 {
+		t.Errorf("End = %+v", lr.End)
+	}
+}
+
+// TestToOutput_EmptyNestedObjects verifies nil/empty nested sources produce nil
+// sub-objects (resolved_by absent, position absent) while the always-present
+// author object is still populated.
+func TestToOutput_EmptyNestedObjects(t *testing.T) {
+	out := ToOutput(&gl.Note{ID: 1, Author: gl.NoteAuthor{Username: "u"}})
+	if out.Author == nil || out.Author.Username != "u" {
+		t.Errorf("Author = %+v, want non-nil with username u", out.Author)
+	}
+	if out.ResolvedBy != nil {
+		t.Errorf("ResolvedBy = %+v, want nil", out.ResolvedBy)
+	}
+	if out.Position != nil {
+		t.Errorf("Position = %+v, want nil", out.Position)
+	}
+}
+
+// TestNotePositionOutput_LineRangeNilSubRanges verifies a LineRange with both
+// sub-ranges nil collapses to a nil line_range object.
+func TestNotePositionOutput_LineRangeNilSubRanges(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		PositionType: "text",
+		LineRange:    &gl.LineRange{},
+	})
+	if out == nil {
+		t.Fatal("position = nil, want populated")
+	}
+	if out.LineRange != nil {
+		t.Errorf("LineRange = %+v, want nil (both sub-ranges empty)", out.LineRange)
+	}
+}
+
+// TestNotePositionOutput_LineRangeStartOnly verifies a LineRange carrying only a
+// start sub-range is preserved with a nil end.
+func TestNotePositionOutput_LineRangeStartOnly(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		LineRange: &gl.LineRange{StartRange: &gl.LinePosition{LineCode: "x", NewLine: 3}},
+	})
+	if out == nil || out.LineRange == nil || out.LineRange.Start == nil {
+		t.Fatalf("position/line range = %+v", out)
+	}
+	if out.LineRange.Start.LineCode != "x" || out.LineRange.Start.NewLine != 3 {
+		t.Errorf("Start = %+v", out.LineRange.Start)
+	}
+	if out.LineRange.End != nil {
+		t.Errorf("End = %+v, want nil", out.LineRange.End)
+	}
+}
+
+// TestNotePositionOutput_NoLineRange verifies a position with no line range
+// (nil LineRange) yields a populated position whose line_range is nil.
+func TestNotePositionOutput_NoLineRange(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{PositionType: "text", NewPath: "f.go", NewLine: 1})
+	if out == nil {
+		t.Fatal("position = nil, want populated")
+	}
+	if out.LineRange != nil {
+		t.Errorf("LineRange = %+v, want nil", out.LineRange)
+	}
+}
+
+// TestNotePositionOutput_LineRangeEndOnly verifies a LineRange carrying only an
+// end sub-range is preserved with a nil start.
+func TestNotePositionOutput_LineRangeEndOnly(t *testing.T) {
+	out := notePositionOutput(&gl.NotePosition{
+		LineRange: &gl.LineRange{EndRange: &gl.LinePosition{LineCode: "y", NewLine: 5}},
+	})
+	if out == nil || out.LineRange == nil || out.LineRange.End == nil {
+		t.Fatalf("position/line range = %+v", out)
+	}
+	if out.LineRange.Start != nil {
+		t.Errorf("Start = %+v, want nil", out.LineRange.Start)
+	}
+	if out.LineRange.End.LineCode != "y" || out.LineRange.End.NewLine != 5 {
+		t.Errorf("End = %+v", out.LineRange.End)
+	}
+}
+
+// TestFormatOutputMarkdown_NilAuthor verifies the nil-author guard renders an
+// empty author without panicking.
+func TestFormatOutputMarkdown_NilAuthor(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 9, Body: "anon", CreatedAt: "2026-01-01T00:00:00Z"})
+	if !strings.Contains(md, "## MR Note #9") {
+		t.Errorf("missing header:\n%s", md)
+	}
+}
+
+// mustParseTime parses an RFC 3339 timestamp for test fixtures, failing the
+// test on a parse error.
+func mustParseTime(t *testing.T, s string) *time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("parse time %q: %v", s, err)
+	}
+	return &parsed
 }
 
 // ---------------------------------------------------------------------------
