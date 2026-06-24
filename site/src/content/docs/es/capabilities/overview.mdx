@@ -9,10 +9,7 @@ GitLab MCP Server implementa **6 capacidades del protocolo MCP** que mejoran la 
 
 | Capacidad                                                        | Dirección          | Qué Habilita                                                                                   |
 | ---------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------- |
-| [Logging](/gitlab-mcp-server/es/capabilities/logging/)           | Servidor → Cliente | Mensajes de log estructurados enviados al cliente MCP para visibilidad                         |
 | [Progress](/gitlab-mcp-server/es/capabilities/progress/)         | Servidor → Cliente | Actualizaciones de progreso en tiempo real para operaciones de larga duración                  |
-| [Roots](/gitlab-mcp-server/es/capabilities/roots/)               | Cliente → Servidor | Contexto del workspace — auto-detectar proyecto de GitLab desde el repositorio git local       |
-| [Sampling](/gitlab-mcp-server/es/capabilities/sampling/)         | Servidor → Cliente | Análisis impulsado por IA — el servidor envía datos de GitLab al LLM del cliente para análisis |
 | [Elicitation](/gitlab-mcp-server/es/capabilities/elicitation/)   | Servidor → Cliente | Asistentes interactivos — formularios paso a paso para crear recursos complejos                |
 | [Completions](/gitlab-mcp-server/es/capabilities/completions/)   | Cliente → Servidor | Autocompletado de argumentos para nombres de proyectos, ramas, usuarios y más                  |
 | [Icons](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_ | Servidor → Cliente | Iconos SVG para cada herramienta, recurso y prompt                                             |
@@ -32,11 +29,10 @@ sequenceDiagram
 
     C->>S: Llamada a herramienta
     S-->>C: Notificación de progreso
-    S-->>C: Mensaje de log
     S-->>C: Resultado de herramienta
 ```
 
-**Capacidades declaradas por el servidor** (Logging, Completions) están siempre disponibles. **Capacidades dependientes del cliente** (Roots, Sampling, Elicitation) requieren que el cliente MCP declare soporte — el servidor verifica su presencia antes de usarlas y degrada gracefully cuando no están disponibles.
+**Capacidades declaradas por el servidor** (Completions) están siempre disponibles. **Capacidades dependientes del cliente** (Elicitation) requieren que el cliente MCP declare soporte — el servidor verifica su presencia antes de usarlas y degrada gracefully cuando no están disponibles.
 
 ## Soporte de clientes
 
@@ -44,11 +40,8 @@ No todos los clientes MCP soportan todas las capacidades. El servidor se adapta 
 
 | Capacidad   | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
 | ----------- | -------------- | --------------- | ------ | ----------- |
-| Logging     | ✅             | ✅              | ✅     | ✅          |
 | Progress    | ✅             | ✅              | ✅     | ✅          |
 | Completions | ✅             | ✅              | ❓     | ✅          |
-| Roots       | ✅             | ✅              | ❓     | ✅          |
-| Sampling    | ✅             | ❌              | ❌     | ✅          |
 | Elicitation | ✅             | ❌              | ❌     | ✅          |
 | Icons       | ✅             | ✅              | ✅     | ✅          |
 

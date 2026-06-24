@@ -162,12 +162,12 @@ The server searches GitLab for projects matching "pe-mc" and returns:
 
 The client shows a dropdown and the user selects the right project without needing to remember the ID.
 
-### Completing Branch Names for Release Notes
+### Completing Branch Names for Ref Comparison
 
-When generating release notes, the `from` and `to` arguments need Git refs:
+When comparing refs, the `from` and `to` arguments need Git refs:
 
 ```text
-Tool: gitlab_generate_release_notes
+Tool: gitlab_repository_compare
 Argument: from = "v1.1" (user types partial)
 ```
 
@@ -187,7 +187,7 @@ The server returns both branches and tags matching the prefix:
 When reviewing a merge request, the `merge_request_iid` argument shows open MRs:
 
 ```text
-Tool: gitlab_analyze_mr_changes
+Tool: gitlab_mr_get
 Argument: merge_request_iid = "1" (user types partial)
 ```
 

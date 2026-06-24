@@ -3,8 +3,8 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
 gitlab-mcp-server v2.2.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides up to 1045 individual MCP tools across 98 GitLab API domains, 33 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
-a default 2-tool dynamic find/execute surface, 46 resources, 37 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+It provides up to 1034 individual MCP tools across 93 GitLab API domains, 32 base meta-tools, 48 self-managed enterprise meta-tools, 49 GitLab.com Enterprise meta-tools,
+a default 2-tool dynamic find/execute surface, 46 resources, 37 prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
 
@@ -31,7 +31,7 @@ Configuration (environment variables, stdio mode):
 
 Tool domains:
 
-Access, Admin, Analyze, Branch, CI Catalog, CI Variable, Custom Emoji, Discover Project, Environment, Feature Flags, Group, Interactive Issue Create, Interactive MR Create, Interactive Project Create, Interactive Release Create, Issue, Job, MR Review, Merge Request, Model Registry, Package, Pipeline, Project, Release, Repository, Runner, Search, Snippet, Storage Move, Tag, Template, User, Wiki.
+Access, Admin, Branch, CI Catalog, CI Variable, Custom Emoji, Discover Project, Environment, Feature Flags, Group, Interactive Issue Create, Interactive MR Create, Interactive Project Create, Interactive Release Create, Issue, Job, MR Review, Merge Request, Model Registry, Package, Pipeline, Project, Release, Repository, Runner, Search, Snippet, Storage Move, Tag, Template, User, Wiki.
 
 Dynamic toolset (default mode):
 
@@ -42,14 +42,13 @@ When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_fin
 
 Meta-tool overview:
 
-When TOOL_SURFACE=meta, 33 domain meta-tools are registered instead of
-up to 1045 individual tools. Enterprise/Premium entries register 49 meta-tools on self-managed GitLab,
-or 50 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
+When TOOL_SURFACE=meta, 32 domain meta-tools are registered instead of
+up to 1034 individual tools. Enterprise/Premium entries register 48 meta-tools on self-managed GitLab,
+or 49 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
 
 - gitlab_access: Manage GitLab access credentials: access tokens (project/group/personal), deploy...
 - gitlab_admin: GitLab self-managed instance administration: settings, license, broadcast messag...
-- gitlab_analyze: LLM-assisted analysis of GitLab data via MCP sampling.
 - gitlab_branch: Manage Git branches and branch protections in a project, plus aggregated branch ...
 - gitlab_ci_catalog: Discover and inspect CI/CD Catalog resources (reusable pipeline components and t...
 - gitlab_ci_variable: Manage GitLab CI/CD variables at instance, group, and project scope.
@@ -130,7 +129,6 @@ Resources:
 - gitlab://project/{project_id}/wiki/{slug}: wiki_page
 - gitlab://snippet/{snippet_id}: snippet
 - gitlab://tools/{id}: tool_detail
-- gitlab://workspace/roots: Workspace Roots
 
 Prompts:
 

@@ -120,16 +120,12 @@ tracker.Step(ctx, 4, 4, "Analysis complete")
 
 ## Tools Using Progress
 
-| Tool                                | Steps | What Each Step Reports                                                      |
-| ----------------------------------- | ----: | --------------------------------------------------------------------------- |
-| `gitlab_analyze_mr_changes`         |     4 | Check capability → Fetch MR → Fetch diffs → LLM analysis                    |
-| `gitlab_summarize_issue`            |     4 | Check capability → Fetch issue → Fetch notes → LLM summary                  |
-| `gitlab_generate_release_notes`     |     5 | Check capability → Compare refs → Fetch MRs → LLM notes → Done              |
-| `gitlab_analyze_pipeline_failure`   |     5 | Check capability → Fetch pipeline → Fetch jobs/traces → LLM analysis → Done |
-| `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create                        |
-| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create                                |
-| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                                          |
-| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create                                |
+| Tool                                | Steps | What Each Step Reports                               |
+| ----------------------------------- | ----: | ---------------------------------------------------- |
+| `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create |
+| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create         |
+| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                   |
+| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create         |
 
 Progress is most valuable for **sampling tools** (which make multiple GitLab API calls and then wait for LLM analysis) and **elicitation tools** (which require multiple rounds of user interaction).
 

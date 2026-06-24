@@ -394,11 +394,6 @@ export default defineConfig({
 							translations: { es: "Orbit" },
 						},
 						{
-							slug: "tools/analysis",
-							label: "Analysis Tools",
-							translations: { es: "Herramientas de análisis" },
-						},
-						{
 							slug: "tools/resources-prompts",
 							label: "Resources & Prompts",
 							translations: { es: "Recursos y Prompts" },
@@ -415,14 +410,6 @@ export default defineConfig({
 							translations: { es: "Descripción general" },
 						},
 						{
-							slug: "capabilities/sampling",
-							label: "Sampling",
-						},
-						{
-							slug: "capabilities/roots",
-							label: "Roots",
-						},
-						{
 							slug: "capabilities/elicitation",
 							label: "Elicitation",
 							translations: { es: "Elicitación" },
@@ -430,10 +417,6 @@ export default defineConfig({
 						{
 							slug: "capabilities/completions",
 							label: "Completions",
-						},
-						{
-							slug: "capabilities/logging",
-							label: "Logging",
 						},
 						{
 							slug: "capabilities/progress",

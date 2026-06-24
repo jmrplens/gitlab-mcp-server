@@ -16,12 +16,11 @@ MCP separates fixed resources from URI templates. In default dynamic full mode, 
 
 Static resources have a fixed URI and require no parameters.
 
-| #   | Name              | URI                        | Description                                                                                                                                                                              |
-| --- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `current_user`    | `gitlab://user/current`    | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                           |
-| 2   | `groups`          | `gitlab://groups`          | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                       |
-| 3   | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
-| 4   | `tool_manifest`   | `gitlab://tools`           | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema.       |
+| #   | Name            | URI                     | Description                                                                                                                                                                        |
+| --- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `current_user`  | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                     |
+| 2   | `groups`        | `gitlab://groups`       | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                 |
+| 4   | `tool_manifest` | `gitlab://tools`        | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema. |
 
 ## Resource Templates (37 core)
 

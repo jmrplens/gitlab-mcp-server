@@ -118,9 +118,8 @@ Meta-tools remain available because they are the most broadly compatible consoli
 
 ### Sampling Tools (1)
 
-| #   | Tool Name        | Actions | Source                                                                                                                                             |
-| --- | ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 27  | `gitlab_analyze` | 11      | LLM-powered analysis via MCP sampling (MR changes, issues, pipelines, security, deployments, CI config, milestones, release notes, technical debt) |
+| #   | Tool Name | Actions | Source |
+| --- | --------- | ------- | ------ |
 
 ### Standalone Tools (1)
 

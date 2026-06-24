@@ -15,7 +15,6 @@ Declared by the server and consumed by connected MCP clients.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 1 | [Logging](logging.md) | `internal/logging/` | Structured log messages to the client |
 | 2 | [Progress](progress.md) | `internal/progress/` | Step-by-step progress notifications |
 | 3 | [Completions](completions.md) | `internal/completions/` | Autocomplete for prompt arguments and resource URIs |
 
@@ -25,8 +24,6 @@ Provided by the MCP client and consumed by the server at tool execution time.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 4 | [Roots](roots.md) | `internal/roots/` | Workspace directory discovery |
-| 5 | [Sampling](sampling.md) | `internal/sampling/` | LLM analysis delegation (11 tools) |
 | 6 | [Elicitation](elicitation.md) | `internal/elicitation/` | Interactive user input forms (4 tools) |
 
 ## Capability Declaration
@@ -36,13 +33,11 @@ Capabilities are declared in `cmd/server/main.go` when constructing the MCP serv
 ```go
 server := mcp.NewServer(
     &mcp.ServerCapabilities{
-        Logging:     &mcp.LoggingCapabilities{},
         Tools:       &mcp.ToolCapabilities{ListChanged: true},
         Resources:   &mcp.ResourceCapabilities{ListChanged: true},
     },
     &mcp.ServerOptions{
         CompletionHandler:           completionHandler.Complete,
-        RootsListChangedHandler:     rootsManager.Refresh,
         ProgressNotificationHandler: progressHandler,
     },
 )
@@ -55,7 +50,7 @@ tool execution, completions, roots handling, logging, and progress handling
 available. Minimal also registers `gitlab://tools` and `gitlab://tools/{id}`
 for exact action call shapes across every tool surface.
 
-Client capabilities (Roots, Sampling, Elicitation) are not declared by the server — they are advertised by the client during the `initialize` handshake. The server checks for their presence at tool execution time via `FromRequest()` helpers.
+Client capabilities (Elicitation) are not declared by the server — they are advertised by the client during the `initialize` handshake. The server checks for their presence at tool execution time via `FromRequest()` helpers.
 
 ## Features
 
@@ -69,7 +64,7 @@ Additional cross-cutting features implemented alongside capabilities.
 
 All capability implementations in this project follow consistent patterns:
 
-- **Zero-value safety** — `progress.Tracker`, `sampling.Client`, and `elicitation.Client` are value types whose zero values are safe no-ops. Tool handlers never need nil-checks.
+- **Zero-value safety** — `progress.Tracker` and `elicitation.Client` are value types whose zero values are safe no-ops. Tool handlers never need nil-checks.
 - **Graceful degradation** — If a client doesn't support a capability, tools return informational messages instead of errors. The server never crashes due to missing capabilities.
 - **Security boundaries** — Logging never includes secrets. Sampling uses a hardened, non-configurable system prompt. Elicitation validates all responses against schemas.
 - **Nil-safe receivers** — `SessionLogger` methods are safe to call on nil receivers.

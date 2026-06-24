@@ -176,7 +176,7 @@ func run(checkOnly bool) error {
 		return nil
 	}
 	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d dynamic tools, %d resources, %d prompts)\n",
-		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
+		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), len(catalog.Resources)+len(catalog.ResourceTemplates), len(catalog.Prompts))
 	fmt.Printf("Generated llms-full.txt\n")
 	return nil
 }
@@ -399,7 +399,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
 		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("Quick start:\n\n")
@@ -455,7 +455,6 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	for _, r := range catalog.ResourceTemplates {
 		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URITemplate, r.Name)
 	}
-	b.WriteString("- gitlab://workspace/roots: Workspace Roots\n")
 	b.WriteString("\n")
 
 	b.WriteString("Prompts:\n\n")
@@ -752,9 +751,6 @@ func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCou
 	for _, template := range catalog.ResourceTemplates {
 		writeLLMSResource(b, template.Name, template.URITemplate, "URI Template", template.MIMEType, template.Description)
 	}
-	b.WriteString("### Workspace Roots\n\n")
-	b.WriteString("- **URI**: `gitlab://workspace/roots`\n")
-	b.WriteString("- **Description**: Lists workspace root directories reported by the MCP client\n\n")
 }
 
 func writeLLMSResource(b *strings.Builder, name, uri, uriLabel, mimeType, description string) {
