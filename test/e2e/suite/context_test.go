@@ -87,11 +87,6 @@ func (e2e *E2EContext) Meta() *mcp.ClientSession {
 	return e2e.requiredSession("meta", e2e.Sessions.meta)
 }
 
-// Sampling returns the sampling-enabled MCP session or skips the test.
-func (e2e *E2EContext) Sampling() *mcp.ClientSession {
-	return e2e.requiredSession("sampling", e2e.Sessions.sampling)
-}
-
 // Elicitation returns the elicitation-enabled MCP session or skips the test.
 func (e2e *E2EContext) Elicitation() *mcp.ClientSession {
 	return e2e.requiredSession("elicitation", e2e.Sessions.elicitation)

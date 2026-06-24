@@ -1,17 +1,16 @@
 //go:build e2e && !enterprise
 
-// capabilities_ce_test.go contains end-to-end tests for the four MCP server
-// capabilities not already covered by sampling_test.go and elicitation_test.go:
-// logging, progress, roots, and completions.
+// capabilities_ce_test.go contains end-to-end tests for the MCP server
+// capabilities not already covered by elicitation_test.go: progress and
+// completions.
 //
 // Each test spins up its own dedicated in-memory MCP server-client pair
 // configured exactly like the production server (see cmd/server/main.go
-// createServer): tools, resources, prompts, completion handler, roots
-// manager, logging capability, and progress notification handler. This is
-// the only way to exercise these capabilities end-to-end because the shared
-// sessions in setup_test.go do not register the per-test handlers
-// (LoggingMessageHandler, ProgressNotificationHandler, advertised roots)
-// these capabilities require on the client side.
+// createServer): tools, resources, prompts, completion handler, and the
+// progress notification handler. This is the only way to exercise these
+// capabilities end-to-end because the shared sessions in setup_test.go do
+// not register the per-test handlers (ProgressNotificationHandler) these
+// capabilities require on the client side.
 package suite
 
 import (
@@ -28,7 +27,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
@@ -36,62 +34,36 @@ import (
 // like the production server, plus the channels and counters that capture
 // the protocol notifications under test.
 type capabilitiesSession struct {
-	client      *mcp.ClientSession
-	mcpClient   *mcp.Client
-	logs        chan logEntry
-	progress    chan mcp.ProgressNotificationParams
-	rootsServed []*mcp.Root
-}
-
-// logEntry captures a single MCP log notification for assertions.
-type logEntry struct {
-	Level  mcp.LoggingLevel
-	Logger string
-	Data   any
+	client    *mcp.ClientSession
+	mcpClient *mcp.Client
+	progress  chan mcp.ProgressNotificationParams
 }
 
 // newCapabilitiesSession builds an in-memory MCP server matching the
 // production configuration in cmd/server/main.go createServer (tools,
-// resources, prompts, completions, roots, logging, progress) and pairs
-// it with a client wired with the supplied client-side capability handlers.
+// resources, prompts, completions, progress) and pairs it with a client
+// wired with the supplied client-side capability handlers.
 //
-// Caller-supplied options control which client features are exercised:
-//   - withLogging: install a LoggingMessageHandler that pushes notifications
-//     onto the returned logs channel.
-//   - withProgress: install a ProgressNotificationHandler that pushes
-//     notifications onto the returned progress channel.
-//   - withRoots: advertise the given roots from the client BEFORE Connect,
-//     so the server's InitializedHandler can fetch them via ListRoots.
+// When withProgress is set, a ProgressNotificationHandler pushes
+// notifications onto the returned progress channel.
 //
 // The session is closed in t.Cleanup.
-func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterprise, withLogging, withProgress bool, withRoots []*mcp.Root) *capabilitiesSession {
+func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterprise, withProgress bool) *capabilitiesSession {
 	t.Helper()
 
 	completionHandler := completions.NewHandler(client)
-	rootsManager := roots.NewManager()
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-capabilities",
 		Version: "test",
 	}, &mcp.ServerOptions{
-		Capabilities: &mcp.ServerCapabilities{
-			Logging: &mcp.LoggingCapabilities{},
-		},
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
-		},
-		InitializedHandler: func(ctx context.Context, req *mcp.InitializedRequest) {
-			// Fire-and-forget; failures simply leave the cache empty.
-			_ = rootsManager.Refresh(ctx, req.Session)
-		},
-		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
-			_ = rootsManager.Refresh(ctx, req.Session)
 		},
 	})
 
 	tools.RegisterAll(server, client, enterprise)
 	resources.Register(server, client)
-	resources.RegisterWorkspaceRoots(server, rootsManager)
 	resources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)
 
@@ -105,15 +77,6 @@ func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterpris
 
 	cs := &capabilitiesSession{}
 	clientOpts := &mcp.ClientOptions{}
-	if withLogging {
-		cs.logs = make(chan logEntry, 64)
-		clientOpts.LoggingMessageHandler = func(_ context.Context, req *mcp.LoggingMessageRequest) {
-			select {
-			case cs.logs <- logEntry{Level: req.Params.Level, Logger: req.Params.Logger, Data: req.Params.Data}:
-			default:
-			}
-		}
-	}
 	if withProgress {
 		cs.progress = make(chan mcp.ProgressNotificationParams, 64)
 		clientOpts.ProgressNotificationHandler = func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
@@ -129,11 +92,6 @@ func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterpris
 		Version: "test",
 	}, clientOpts)
 
-	if len(withRoots) > 0 {
-		mcpClient.AddRoots(withRoots...)
-		cs.rootsServed = withRoots
-	}
-
 	session, err := mcpClient.Connect(context.Background(), ct, nil)
 	if err != nil {
 		serverCancel()
@@ -148,26 +106,6 @@ func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterpris
 	})
 
 	return cs
-}
-
-// drainLogs collects log entries arriving on the channel until at least
-// minEntries have been seen or timeout elapses. Returns the entries
-// observed (which may be fewer than minEntries on timeout).
-func drainLogs(ch <-chan logEntry, minEntries int, timeout time.Duration) []logEntry {
-	var entries []logEntry
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	for {
-		select {
-		case e := <-ch:
-			entries = append(entries, e)
-			if len(entries) >= minEntries {
-				return entries
-			}
-		case <-deadline.C:
-			return entries
-		}
-	}
 }
 
 // drainProgress collects progress notifications until at least minNotifs
@@ -190,57 +128,6 @@ func drainProgress(ch <-chan mcp.ProgressNotificationParams, minNotifs int, time
 }
 
 // ---------------------------------------------------------------------------
-// TestCapability_Logging
-// ---------------------------------------------------------------------------.
-
-// TestCapability_Logging verifies the MCP logging capability end-to-end:
-// (1) the server announces logging support during initialization,
-// (2) the client can request a minimum log level via SetLoggingLevel,
-// (3) the server forwards tool-call log records to the client through the
-// MCP logging notification channel.
-//
-// We invoke a cheap read-only tool (gitlab_user_current) to trigger
-// LogToolCallAll and assert at least one log notification with the
-// "gitlab-mcp-server" logger name arrives on the client.
-func TestCapability_Logging(t *testing.T) {
-	t.Parallel()
-	if sess.glClient == nil {
-		t.Skip("gitlab client not configured")
-	}
-
-	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, true, false, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := cs.client.SetLoggingLevel(ctx, &mcp.SetLoggingLevelParams{Level: "debug"}); err != nil {
-		t.Fatalf("SetLoggingLevel: %v", err)
-	}
-
-	if _, err := cs.client.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_user_current",
-		Arguments: map[string]any{},
-	}); err != nil {
-		t.Fatalf("call gitlab_user_current: %v", err)
-	}
-
-	entries := drainLogs(cs.logs, 1, 5*time.Second)
-	if len(entries) == 0 {
-		t.Fatal("expected at least one logging notification, got none")
-	}
-	var sawServerLogger bool
-	for _, e := range entries {
-		if e.Logger == "gitlab-mcp-server" {
-			sawServerLogger = true
-			break
-		}
-	}
-	if !sawServerLogger {
-		t.Errorf("expected at least one entry with logger=%q; got %+v", "gitlab-mcp-server", entries)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // TestCapability_Progress
 // ---------------------------------------------------------------------------.
 
@@ -259,7 +146,7 @@ func TestCapability_Progress(t *testing.T) {
 		t.Skip("gitlab client or individual session not configured")
 	}
 
-	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, true, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -309,95 +196,6 @@ func TestCapability_Progress(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestCapability_Roots
-// ---------------------------------------------------------------------------.
-
-// TestCapability_Roots verifies the MCP roots capability end-to-end:
-// the client advertises a workspace root, the server queries it during
-// initialization via ListRoots, the roots.Manager caches it, and the
-// gitlab://workspace/roots resource exposes it back to clients.
-//
-// This is a full round-trip test: client→server (advertise roots),
-// server→client (ListRoots), server-internal (cache), client→server
-// (read resource), server→client (resource contents).
-func TestCapability_Roots(t *testing.T) {
-	t.Parallel()
-	if sess.glClient == nil {
-		t.Skip("gitlab client not configured")
-	}
-
-	advertised := []*mcp.Root{
-		{URI: "file:///tmp/e2e-capabilities-root", Name: "e2e-capabilities-root"},
-	}
-	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, advertised)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// The server's InitializedHandler refresh runs asynchronously after
-	// Connect returns. Poll the resource until the root appears or timeout.
-	deadline := time.Now().Add(5 * time.Second)
-	var lastText string
-	for time.Now().Before(deadline) {
-		result, err := cs.client.ReadResource(ctx, &mcp.ReadResourceParams{
-			URI: "gitlab://workspace/roots",
-		})
-		if err != nil {
-			t.Fatalf("read workspace roots resource: %v", err)
-		}
-		if len(result.Contents) == 0 {
-			t.Fatal("expected workspace roots resource to return content")
-		}
-		lastText = result.Contents[0].Text
-		if strings.Contains(lastText, "e2e-capabilities-root") {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("workspace roots resource never reflected advertised root within timeout; last content=%s", lastText)
-}
-
-// TestCapability_RootsListChanged verifies that the server picks up roots
-// added AFTER initialization via the roots/list_changed notification path.
-// The client first connects with no roots, then calls AddRoots, which
-// triggers RootsListChangedHandler on the server, which in turn refreshes
-// the roots.Manager. The new root must then appear in the resource.
-func TestCapability_RootsListChanged(t *testing.T) {
-	t.Parallel()
-	if sess.glClient == nil {
-		t.Skip("gitlab client not configured")
-	}
-
-	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, nil)
-	cs.mcpClient.AddRoots(&mcp.Root{
-		URI:  "file:///tmp/e2e-capabilities-late-root",
-		Name: "e2e-capabilities-late-root",
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	deadline := time.Now().Add(5 * time.Second)
-	var lastText string
-	for time.Now().Before(deadline) {
-		result, err := cs.client.ReadResource(ctx, &mcp.ReadResourceParams{
-			URI: "gitlab://workspace/roots",
-		})
-		if err != nil {
-			t.Fatalf("read workspace roots resource: %v", err)
-		}
-		if len(result.Contents) > 0 {
-			lastText = result.Contents[0].Text
-			if strings.Contains(lastText, "e2e-capabilities-late-root") {
-				return
-			}
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("workspace roots resource never reflected late-added root; last content=%s", lastText)
-}
-
-// ---------------------------------------------------------------------------
 // TestCapability_Completions
 // ---------------------------------------------------------------------------.
 
@@ -421,7 +219,7 @@ func TestCapability_Completions(t *testing.T) {
 		t.Skip("gitlab client not configured")
 	}
 
-	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false, false, nil)
+	cs := newCapabilitiesSession(t, sess.glClient, sess.enterprise, false)
 
 	// Ensure at least one project exists so completions have something to
 	// return. Use the shared session to avoid duplicating cleanup logic.

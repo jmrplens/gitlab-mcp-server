@@ -254,10 +254,6 @@ func TestResources_ReadAll(t *testing.T) {
 	// -----------------------------------------------------------------
 	t.Run("Static/UserCurrent", func(t *testing.T) { readResourceJSON(ctx, t, "gitlab://user/current") })
 	t.Run("Static/Groups", func(t *testing.T) { readResourceJSON(ctx, t, "gitlab://groups") })
-	// gitlab://workspace/roots is exercised by TestCapability_RootsAdvertised
-	// (capabilities_test.go) which uses a dedicated server with the roots
-	// manager wired up. It is intentionally not registered on the shared
-	// individual server.
 
 	// -----------------------------------------------------------------
 	// Project-scoped resources

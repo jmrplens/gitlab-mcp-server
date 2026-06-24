@@ -27,7 +27,7 @@
 //     as its own MCP tool.
 //   - safe mode — the read-only surface that returns previews for mutating
 //     tools instead of applying them.
-//   - sampling / elicitation — alternate client capability variants.
+//   - elicitation — an alternate client capability variant.
 //
 // # Execution Model
 //
@@ -48,7 +48,7 @@
 // Tests named TestIndividual_* exercise individual tools. Tests named
 // TestMeta_* exercise the meta-tool catalog against the same style of GitLab
 // fixtures. Tests prefixed TestCapability_*, TestSchema_*, TestSafeMode,
-// TestOAuthE2E, TestSampling, TestElicitation, and TestIdentityE2E exercise
+// TestOAuthE2E, TestElicitation, and TestIdentityE2E exercise
 // MCP-layer behavior rather than a specific GitLab API.
 //
 // # Resource Naming and Cleanup
