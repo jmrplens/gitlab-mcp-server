@@ -85,11 +85,11 @@ func TestMRApprovalState_Success(t *testing.T) {
 	if r.Approved {
 		t.Error("expected rule Approved to be false")
 	}
-	if len(r.ApprovedByNames) != 1 || r.ApprovedByNames[0] != "Alice" {
-		t.Errorf("ApprovedByNames = %v, want [Alice]", r.ApprovedByNames)
+	if len(r.ApprovedBy) != 1 || r.ApprovedBy[0] == nil || r.ApprovedBy[0].Name != "Alice" {
+		t.Errorf("ApprovedBy = %v, want one entry [Alice]", r.ApprovedBy)
 	}
-	if len(r.EligibleNames) != 2 {
-		t.Errorf("EligibleNames count = %d, want 2", len(r.EligibleNames))
+	if len(r.EligibleApprovers) != 2 {
+		t.Errorf("EligibleApprovers count = %d, want 2", len(r.EligibleApprovers))
 	}
 }
 
@@ -198,11 +198,11 @@ func assertApprovalRule(t *testing.T, r RuleOutput, exp approvalRuleExpected) {
 	if r.Approved != exp.approved {
 		t.Errorf("Approved = %v, want %v", r.Approved, exp.approved)
 	}
-	if len(r.ApprovedByNames) != exp.approvedByCount {
-		t.Errorf("ApprovedByNames count = %d, want %d", len(r.ApprovedByNames), exp.approvedByCount)
+	if len(r.ApprovedBy) != exp.approvedByCount {
+		t.Errorf("ApprovedBy count = %d, want %d", len(r.ApprovedBy), exp.approvedByCount)
 	}
-	if len(r.EligibleNames) != exp.eligibleCount {
-		t.Errorf("EligibleNames count = %d, want %d", len(r.EligibleNames), exp.eligibleCount)
+	if len(r.EligibleApprovers) != exp.eligibleCount {
+		t.Errorf("EligibleApprovers count = %d, want %d", len(r.EligibleApprovers), exp.eligibleCount)
 	}
 }
 
@@ -345,11 +345,11 @@ func TestApprovalRuleToOutput_NilUsers(t *testing.T) {
 		ApprovedBy:        nil,
 		EligibleApprovers: nil,
 	})
-	if rule.ApprovedByNames != nil {
-		t.Errorf("expected nil ApprovedByNames, got %v", rule.ApprovedByNames)
+	if rule.ApprovedBy != nil {
+		t.Errorf("expected nil ApprovedBy, got %v", rule.ApprovedBy)
 	}
-	if rule.EligibleNames != nil {
-		t.Errorf("expected nil EligibleNames, got %v", rule.EligibleNames)
+	if rule.EligibleApprovers != nil {
+		t.Errorf("expected nil EligibleApprovers, got %v", rule.EligibleApprovers)
 	}
 }
 
@@ -371,11 +371,11 @@ func TestApprovalRuleToOutput_MultipleUsers(t *testing.T) {
 			{Name: "Charlie"},
 		},
 	})
-	if len(rule.ApprovedByNames) != 2 {
-		t.Errorf("ApprovedByNames count = %d, want 2", len(rule.ApprovedByNames))
+	if len(rule.ApprovedBy) != 2 {
+		t.Errorf("ApprovedBy count = %d, want 2", len(rule.ApprovedBy))
 	}
-	if len(rule.EligibleNames) != 3 {
-		t.Errorf("EligibleNames count = %d, want 3", len(rule.EligibleNames))
+	if len(rule.EligibleApprovers) != 3 {
+		t.Errorf("EligibleApprovers count = %d, want 3", len(rule.EligibleApprovers))
 	}
 	if rule.ID != 5 || rule.Name != "Team Lead" || rule.ApprovalsRequired != 3 || !rule.Approved {
 		t.Errorf("unexpected output: %+v", rule)
@@ -388,11 +388,11 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 		ApprovedBy:        []*gl.BasicUser{nil, {Name: "Valid"}},
 		EligibleApprovers: []*gl.BasicUser{{Name: "E1"}, nil},
 	})
-	if len(rule.ApprovedByNames) != 1 || rule.ApprovedByNames[0] != "Valid" {
-		t.Errorf("ApprovedByNames = %v, want [Valid]", rule.ApprovedByNames)
+	if len(rule.ApprovedBy) != 1 || rule.ApprovedBy[0] == nil || rule.ApprovedBy[0].Name != "Valid" {
+		t.Errorf("ApprovedBy = %v, want [Valid]", rule.ApprovedBy)
 	}
-	if len(rule.EligibleNames) != 1 || rule.EligibleNames[0] != "E1" {
-		t.Errorf("EligibleNames = %v, want [E1]", rule.EligibleNames)
+	if len(rule.EligibleApprovers) != 1 || rule.EligibleApprovers[0] == nil || rule.EligibleApprovers[0].Name != "E1" {
+		t.Errorf("EligibleApprovers = %v, want [E1]", rule.EligibleApprovers)
 	}
 }
 
@@ -436,14 +436,14 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	if !out.UserHasApproved {
 		t.Error("UserHasApproved = false, want true")
 	}
-	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Alice" {
-		t.Errorf("ApprovedBy = %v, want [{Alice 2026-01-15T10:30:00Z}]", out.ApprovedBy)
+	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0] == nil || out.ApprovedBy[0].User == nil || out.ApprovedBy[0].User.Name != "Alice" {
+		t.Errorf("ApprovedBy = %v, want one entry with user Alice", out.ApprovedBy)
 	}
 	if out.ApprovedBy[0].ApprovedAt != "2026-01-15T10:30:00Z" {
 		t.Errorf("ApprovedAt = %q, want %q", out.ApprovedBy[0].ApprovedAt, "2026-01-15T10:30:00Z")
 	}
-	if len(out.SuggestedNames) != 1 || out.SuggestedNames[0] != "Bob" {
-		t.Errorf("SuggestedNames = %v, want [Bob]", out.SuggestedNames)
+	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
+		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
 	}
 }
 
@@ -533,11 +533,11 @@ func TestMRApprovalRuleCreate_Success(t *testing.T) {
 	if out.ApprovalsRequired != 2 {
 		t.Errorf("ApprovalsRequired = %d, want 2", out.ApprovalsRequired)
 	}
-	if len(out.UserNames) != 1 || out.UserNames[0] != "Alice" {
-		t.Errorf("UserNames = %v, want [Alice]", out.UserNames)
+	if len(out.Users) != 1 || out.Users[0] == nil || out.Users[0].Name != "Alice" {
+		t.Errorf("Users = %v, want [Alice]", out.Users)
 	}
-	if len(out.GroupNames) != 1 || out.GroupNames[0] != "Security" {
-		t.Errorf("GroupNames = %v, want [Security]", out.GroupNames)
+	if len(out.Groups) != 1 || out.Groups[0] == nil || out.Groups[0].Name != "Security" {
+		t.Errorf("Groups = %v, want [Security]", out.Groups)
 	}
 }
 
@@ -1019,11 +1019,11 @@ func TestUpdateRule_AllOptionalFields(t *testing.T) {
 	if out.ApprovalsRequired != 4 {
 		t.Errorf("ApprovalsRequired = %d, want 4", out.ApprovalsRequired)
 	}
-	if len(out.UserNames) != 1 {
-		t.Errorf("UserNames count = %d, want 1", len(out.UserNames))
+	if len(out.Users) != 1 {
+		t.Errorf("Users count = %d, want 1", len(out.Users))
 	}
-	if len(out.GroupNames) != 1 {
-		t.Errorf("GroupNames count = %d, want 1", len(out.GroupNames))
+	if len(out.Groups) != 1 {
+		t.Errorf("Groups count = %d, want 1", len(out.Groups))
 	}
 }
 
@@ -1066,11 +1066,11 @@ func TestDeleteRule_ServerError(t *testing.T) {
 func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 	r := fakeApprovalRule(t)
 	out := RuleToOutput(&r)
-	if len(out.UserNames) != 2 {
-		t.Errorf("UserNames count = %d, want 2", len(out.UserNames))
+	if len(out.Users) != 2 {
+		t.Errorf("Users count = %d, want 2", len(out.Users))
 	}
-	if len(out.GroupNames) != 1 {
-		t.Errorf("GroupNames count = %d, want 1", len(out.GroupNames))
+	if len(out.Groups) != 1 {
+		t.Errorf("Groups count = %d, want 1", len(out.Groups))
 	}
 	if out.ReportType != "test_report" {
 		t.Errorf("ReportType = %q, want %q", out.ReportType, "test_report")
@@ -1087,8 +1087,8 @@ func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 	r := fakeApprovalRuleNilGroup(t)
 	out := RuleToOutput(&r)
-	if len(out.GroupNames) != 1 || out.GroupNames[0] != "Good" {
-		t.Errorf("GroupNames = %v, want [Good]", out.GroupNames)
+	if len(out.Groups) != 1 || out.Groups[0] == nil || out.Groups[0].Name != "Good" {
+		t.Errorf("Groups = %v, want [Good]", out.Groups)
 	}
 }
 
@@ -1100,11 +1100,20 @@ func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 func TestConfig_ToOutputNilEntries(t *testing.T) {
 	c := fakeConfigNilEntries(t)
 	out := configToOutput(&c)
-	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Alice" {
-		t.Errorf("ApprovedBy = %v, want [{Alice}]", out.ApprovedBy)
+	// The nil *MergeRequestApproverUser element is skipped; the {User: nil}
+	// element is preserved (1:1 SDK fidelity) with a nil user object, leaving
+	// two output entries.
+	if len(out.ApprovedBy) != 2 {
+		t.Fatalf("ApprovedBy count = %d, want 2", len(out.ApprovedBy))
 	}
-	if len(out.SuggestedNames) != 1 || out.SuggestedNames[0] != "Bob" {
-		t.Errorf("SuggestedNames = %v, want [Bob]", out.SuggestedNames)
+	if out.ApprovedBy[0] == nil || out.ApprovedBy[0].User != nil {
+		t.Errorf("ApprovedBy[0] = %v, want preserved entry with nil user", out.ApprovedBy[0])
+	}
+	if out.ApprovedBy[1] == nil || out.ApprovedBy[1].User == nil || out.ApprovedBy[1].User.Name != "Alice" {
+		t.Errorf("ApprovedBy[1] = %v, want user Alice", out.ApprovedBy[1])
+	}
+	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
+		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
 	}
 }
 
@@ -1117,8 +1126,8 @@ func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
 		Rules: []RuleOutput{
-			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedByNames: []string{"Alice"}},
-			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedByNames: nil},
+			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
+			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedBy: nil},
 		},
 	}
 	md := FormatStateMarkdown(s)
@@ -1146,7 +1155,7 @@ func TestFormatStateMarkdown_Empty(t *testing.T) {
 func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	out := RulesOutput{
 		Rules: []RuleOutput{
-			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, Approved: true, EligibleNames: []string{"Eve", "Frank"}},
+			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, Approved: true, EligibleApprovers: []*BasicUserOutput{{Name: "Eve"}, {Name: "Frank"}}},
 		},
 	}
 	md := FormatRulesMarkdown(out)
@@ -1170,16 +1179,16 @@ func TestFormatRulesMarkdown_Empty(t *testing.T) {
 // TestFormatConfigMarkdown_Full verifies FormatConfigMarkdown when full.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
-		IID:               10,
-		State:             "opened",
-		Approved:          true,
-		ApprovalsRequired: 2,
-		ApprovalsLeft:     0,
-		HasApprovalRules:  true,
-		UserHasApproved:   true,
-		UserCanApprove:    false,
-		ApprovedBy:        []Approver{{Name: "Alice"}},
-		SuggestedNames:    []string{"Bob"},
+		IID:                10,
+		State:              "opened",
+		Approved:           true,
+		ApprovalsRequired:  2,
+		ApprovalsLeft:      0,
+		HasApprovalRules:   true,
+		UserHasApproved:    true,
+		UserCanApprove:     false,
+		ApprovedBy:         []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice"}}},
+		SuggestedApprovers: []*BasicUserOutput{{Name: "Bob"}},
 	}
 	md := FormatConfigMarkdown(c)
 	assertContains(t, md, "## MR Approval Configuration")
@@ -1208,9 +1217,9 @@ func TestFormatConfigMarkdown_Minimal(t *testing.T) {
 func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	c := ConfigOutput{
 		State: "opened",
-		ApprovedBy: []Approver{
-			{Name: "Alice", ApprovedAt: "2026-03-15T14:00:00Z"},
-			{Name: "Bob", ApprovedAt: ""},
+		ApprovedBy: []*MergeRequestApproverUserOutput{
+			{User: &BasicUserOutput{Name: "Alice"}, ApprovedAt: "2026-03-15T14:00:00Z"},
+			{User: &BasicUserOutput{Name: "Bob"}, ApprovedAt: ""},
 		},
 	}
 	md := FormatConfigMarkdown(c)
@@ -1219,6 +1228,22 @@ func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	if strings.Contains(md, "Bob (") {
 		t.Error("Bob should not have date parentheses")
 	}
+}
+
+// TestFormatConfigMarkdown_SkipsNilApprovers verifies the config Markdown
+// formatter skips approver entries with a nil user object while rendering the
+// remaining named approvers.
+func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
+	c := ConfigOutput{
+		State: "opened",
+		ApprovedBy: []*MergeRequestApproverUserOutput{
+			nil,
+			{User: nil},
+			{User: &BasicUserOutput{Name: "Carol"}},
+		},
+	}
+	md := FormatConfigMarkdown(c)
+	assertContains(t, md, "**Approved by**: Carol")
 }
 
 // ---------------------------------------------------------------------------
@@ -1233,9 +1258,9 @@ func TestFormatRuleMarkdown_Full(t *testing.T) {
 		RuleType:          "regular",
 		ApprovalsRequired: 2,
 		Approved:          true,
-		EligibleNames:     []string{"Alice", "Bob"},
-		UserNames:         []string{"Alice"},
-		GroupNames:        []string{"Leads"},
+		EligibleApprovers: []*BasicUserOutput{{Name: "Alice"}, {Name: "Bob"}},
+		Users:             []*BasicUserOutput{{Name: "Alice"}},
+		Groups:            []*GroupOutput{{Name: "Leads"}},
 	}
 	md := FormatRuleMarkdown(r)
 	assertContains(t, md, "## Approval Rule: Team Leads")

@@ -75,21 +75,24 @@ type DeleteRuleInput struct {
 // Output types
 // ---------------------------------------------------------------------------.
 
-// RuleOutput represents a single approval rule for a merge request.
+// RuleOutput represents a single approval rule for a merge request. It mirrors
+// gl.MergeRequestApprovalRule, surfacing the full approver/eligible/user/group
+// objects and the project-level source rule on their canonical keys.
 type RuleOutput struct {
 	toolutil.HintableOutput
-	ID                   int64    `json:"id"`
-	Name                 string   `json:"name"`
-	RuleType             string   `json:"rule_type"`
-	ReportType           string   `json:"report_type,omitempty"`
-	Section              string   `json:"section,omitempty"`
-	ApprovalsRequired    int      `json:"approvals_required"`
-	Approved             bool     `json:"approved"`
-	ContainsHiddenGroups bool     `json:"contains_hidden_groups,omitempty"`
-	ApprovedByNames      []string `json:"approved_by_names,omitempty"`
-	EligibleNames        []string `json:"eligible_names,omitempty"`
-	UserNames            []string `json:"user_names,omitempty"`
-	GroupNames           []string `json:"group_names,omitempty"`
+	ID                   int64                      `json:"id"`
+	Name                 string                     `json:"name"`
+	RuleType             string                     `json:"rule_type"`
+	ReportType           string                     `json:"report_type,omitempty"`
+	Section              string                     `json:"section,omitempty"`
+	ApprovalsRequired    int                        `json:"approvals_required"`
+	Approved             bool                       `json:"approved"`
+	ContainsHiddenGroups bool                       `json:"contains_hidden_groups,omitempty"`
+	ApprovedBy           []*BasicUserOutput         `json:"approved_by,omitempty"`
+	EligibleApprovers    []*BasicUserOutput         `json:"eligible_approvers,omitempty"`
+	Users                []*BasicUserOutput         `json:"users,omitempty"`
+	Groups               []*GroupOutput             `json:"groups,omitempty"`
+	SourceRule           *ProjectApprovalRuleOutput `json:"source_rule,omitempty"`
 }
 
 // StateOutput holds the overall approval state for a merge request,
@@ -106,29 +109,36 @@ type RulesOutput struct {
 	Rules []RuleOutput `json:"rules"`
 }
 
-// Approver holds approver identity and the timestamp of approval.
-type Approver struct {
-	Name       string `json:"name"`
-	ApprovedAt string `json:"approved_at,omitempty"`
-}
-
-// ConfigOutput holds the approval configuration for a merge request.
+// ConfigOutput holds the approval configuration for a merge request. It mirrors
+// gl.MergeRequestApprovals, surfacing every SDK field including the full
+// approver/suggested-approver/approver-group objects and the per-rule
+// approval_rules_left list on their canonical keys.
 type ConfigOutput struct {
 	toolutil.HintableOutput
-	ID                   int64      `json:"id"`
-	IID                  int64      `json:"merge_request_iid"`
-	ProjectID            int64      `json:"project_id"`
-	Title                string     `json:"title"`
-	State                string     `json:"state"`
-	Approved             bool       `json:"approved"`
-	ApprovalsRequired    int64      `json:"approvals_required"`
-	ApprovalsLeft        int64      `json:"approvals_left"`
-	ApprovalsBeforeMerge int64      `json:"approvals_before_merge"`
-	HasApprovalRules     bool       `json:"has_approval_rules"`
-	UserHasApproved      bool       `json:"user_has_approved"`
-	UserCanApprove       bool       `json:"user_can_approve"`
-	ApprovedBy           []Approver `json:"approved_by,omitempty"`
-	SuggestedNames       []string   `json:"suggested_approvers,omitempty"`
+	ID                             int64                              `json:"id"`
+	IID                            int64                              `json:"merge_request_iid"`
+	ProjectID                      int64                              `json:"project_id"`
+	Title                          string                             `json:"title"`
+	Description                    string                             `json:"description,omitempty"`
+	State                          string                             `json:"state"`
+	CreatedAt                      string                             `json:"created_at,omitempty"`
+	UpdatedAt                      string                             `json:"updated_at,omitempty"`
+	MergeStatus                    string                             `json:"merge_status,omitempty"`
+	Approved                       bool                               `json:"approved"`
+	ApprovalsRequired              int64                              `json:"approvals_required"`
+	ApprovalsLeft                  int64                              `json:"approvals_left"`
+	ApprovalsBeforeMerge           int64                              `json:"approvals_before_merge"`
+	RequirePasswordToApprove       bool                               `json:"require_password_to_approve"`
+	HasApprovalRules               bool                               `json:"has_approval_rules"`
+	UserHasApproved                bool                               `json:"user_has_approved"`
+	UserCanApprove                 bool                               `json:"user_can_approve"`
+	MergeRequestApproversAvailable bool                               `json:"merge_request_approvers_available"`
+	MultipleApprovalRulesAvailable bool                               `json:"multiple_approval_rules_available"`
+	ApprovedBy                     []*MergeRequestApproverUserOutput  `json:"approved_by,omitempty"`
+	SuggestedApprovers             []*BasicUserOutput                 `json:"suggested_approvers,omitempty"`
+	Approvers                      []*MergeRequestApproverUserOutput  `json:"approvers,omitempty"`
+	ApproverGroups                 []*MergeRequestApproverGroupOutput `json:"approver_groups,omitempty"`
+	ApprovalRulesLeft              []RuleOutput                       `json:"approval_rules_left,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -136,9 +146,10 @@ type ConfigOutput struct {
 // ---------------------------------------------------------------------------.
 
 // RuleToOutput converts a client-go MergeRequestApprovalRule to the
-// MCP output representation.
+// MCP output representation, surfacing the full approver/eligible/user/group
+// objects and the project-level source rule on their canonical keys.
 func RuleToOutput(r *gl.MergeRequestApprovalRule) RuleOutput {
-	out := RuleOutput{
+	return RuleOutput{
 		ID:                   r.ID,
 		Name:                 r.Name,
 		RuleType:             r.RuleType,
@@ -147,58 +158,46 @@ func RuleToOutput(r *gl.MergeRequestApprovalRule) RuleOutput {
 		ApprovalsRequired:    int(r.ApprovalsRequired),
 		Approved:             r.Approved,
 		ContainsHiddenGroups: r.ContainsHiddenGroups,
+		ApprovedBy:           basicUserOutputs(r.ApprovedBy),
+		EligibleApprovers:    basicUserOutputs(r.EligibleApprovers),
+		Users:                basicUserOutputs(r.Users),
+		Groups:               groupOutputs(r.Groups),
+		SourceRule:           projectApprovalRuleOutput(r.SourceRule),
 	}
-	for _, u := range r.ApprovedBy {
-		if u != nil {
-			out.ApprovedByNames = append(out.ApprovedByNames, u.Name)
-		}
-	}
-	for _, u := range r.EligibleApprovers {
-		if u != nil {
-			out.EligibleNames = append(out.EligibleNames, u.Name)
-		}
-	}
-	for _, u := range r.Users {
-		if u != nil {
-			out.UserNames = append(out.UserNames, u.Name)
-		}
-	}
-	for _, g := range r.Groups {
-		if g != nil {
-			out.GroupNames = append(out.GroupNames, g.Name)
-		}
-	}
-	return out
 }
 
-// configToOutput converts a client-go MergeRequestApprovals to ConfigOutput.
+// configToOutput converts a client-go MergeRequestApprovals to ConfigOutput,
+// surfacing every SDK field including the full approver, suggested-approver,
+// approver-group, and per-rule approval_rules_left objects.
 func configToOutput(c *gl.MergeRequestApprovals) ConfigOutput {
 	out := ConfigOutput{
-		ID:                   c.ID,
-		IID:                  c.IID,
-		ProjectID:            c.ProjectID,
-		Title:                c.Title,
-		State:                c.State,
-		Approved:             c.Approved,
-		ApprovalsRequired:    c.ApprovalsRequired,
-		ApprovalsLeft:        c.ApprovalsLeft,
-		ApprovalsBeforeMerge: c.ApprovalsBeforeMerge,
-		HasApprovalRules:     c.HasApprovalRules,
-		UserHasApproved:      c.UserHasApproved,
-		UserCanApprove:       c.UserCanApprove,
+		ID:                             c.ID,
+		IID:                            c.IID,
+		ProjectID:                      c.ProjectID,
+		Title:                          c.Title,
+		Description:                    c.Description,
+		State:                          c.State,
+		CreatedAt:                      formatTimePtr(c.CreatedAt),
+		UpdatedAt:                      formatTimePtr(c.UpdatedAt),
+		MergeStatus:                    c.MergeStatus,
+		Approved:                       c.Approved,
+		ApprovalsRequired:              c.ApprovalsRequired,
+		ApprovalsLeft:                  c.ApprovalsLeft,
+		ApprovalsBeforeMerge:           c.ApprovalsBeforeMerge,
+		RequirePasswordToApprove:       c.RequirePasswordToApprove,
+		HasApprovalRules:               c.HasApprovalRules,
+		UserHasApproved:                c.UserHasApproved,
+		UserCanApprove:                 c.UserCanApprove,
+		MergeRequestApproversAvailable: c.MergeRequestApproversAvailable,
+		MultipleApprovalRulesAvailable: c.MultipleApprovalRulesAvailable,
+		ApprovedBy:                     approverUserOutputs(c.ApprovedBy),
+		SuggestedApprovers:             basicUserOutputs(c.SuggestedApprovers),
+		Approvers:                      approverUserOutputs(c.Approvers),
+		ApproverGroups:                 approverGroupOutputs(c.ApproverGroups),
 	}
-	for _, u := range c.ApprovedBy {
-		if u != nil && u.User != nil {
-			a := Approver{Name: u.User.Name}
-			if u.ApprovedAt != nil {
-				a.ApprovedAt = u.ApprovedAt.Format("2006-01-02T15:04:05Z")
-			}
-			out.ApprovedBy = append(out.ApprovedBy, a)
-		}
-	}
-	for _, u := range c.SuggestedApprovers {
-		if u != nil {
-			out.SuggestedNames = append(out.SuggestedNames, u.Name)
+	for _, r := range c.ApprovalRulesLeft {
+		if r != nil {
+			out.ApprovalRulesLeft = append(out.ApprovalRulesLeft, RuleToOutput(r))
 		}
 	}
 	return out
