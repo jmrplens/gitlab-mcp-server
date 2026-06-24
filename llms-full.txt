@@ -24586,19 +24586,28 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 - `api_url` (string): Jira API URL (overrides base URL)
 - `comment_on_event_enabled` (boolean): Add comments on Jira issues for events
 - `commit_events` (boolean): Trigger on commit events
+- `customize_jira_issue_enabled` (boolean): Customize the Jira issue created for vulnerabilities
 - `issues_enabled` (boolean): Enable Jira issues integration
+- `jira_allowed_statuses_as_string` (string): Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled)
+- `jira_assignee_check_enabled` (boolean): Require the referenced Jira issue to have an assignee
 - `jira_auth_type` (integer): Jira auth type (0=basic, 1=token)
+- `jira_check_enabled` (boolean): Require commits/MRs to reference a Jira issue
+- `jira_exists_check_enabled` (boolean): Require that the referenced Jira issue exists
 - `jira_issue_prefix` (string): Jira issue key prefix
 - `jira_issue_regex` (string): Custom regex for Jira issue keys
 - `jira_issue_transition_automatic` (boolean): Auto-transition Jira issues
 - `jira_issue_transition_id` (string): Jira transition ID
+- `jira_status_check_enabled` (boolean): Require the referenced Jira issue to be in an allowed status
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `password` (string): Jira password or API token
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `project_keys` (array of strings): Jira project keys to restrict
+- `project_key` (string): Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)
+- `project_keys` (array of strings): Jira project keys to restrict (used when issues_enabled is true)
 - `url` (string) (required): Jira instance base URL
 - `use_inherited_settings` (boolean): Use inherited settings from group
 - `username` (string): Jira username
+- `vulnerabilities_enabled` (boolean): Create Jira issues for vulnerabilities
+- `vulnerabilities_issuetype` (integer): Jira issue type ID used for vulnerability tickets (when vulnerabilities_enabled is true)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
