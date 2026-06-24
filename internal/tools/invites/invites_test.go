@@ -5,6 +5,7 @@ package invites
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func TestListPendingProjectInvitations_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42", Page: 1, PerPage: 20})
+	out, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -747,4 +748,181 @@ func invitesRouteHandler() http.Handler {
 	})
 
 	return handler
+}
+
+// ---------------------------------------------------------------------------
+// List — keyset pagination, order_by, sort propagation (1:1 audit)
+// ---------------------------------------------------------------------------.
+
+// TestListPendingProjectInvitations_KeysetAndSort verifies that order_by, sort,
+// pagination=keyset, and page_token reach the GitLab API as query parameters.
+func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{
+		ProjectID:             "42",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-7"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=cursor-7", "per_page=50"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestListPendingGroupInvitations_KeysetAndSort verifies that order_by, sort,
+// and keyset pagination reach the group invitations endpoint.
+func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/groups/10/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{
+		GroupID:               "10",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-3"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=cursor-3"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Invite — id body parameter propagation (1:1 audit)
+// ---------------------------------------------------------------------------.
+
+// TestProjectInvites_WithID verifies that the id body parameter is sent on the
+// project invitation request.
+func TestProjectInvites_WithID(t *testing.T) {
+	var gotID string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotID = body.ID
+		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+	}))
+	out, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+		ProjectID:   "42",
+		ID:          "42",
+		Email:       "dev@example.com",
+		AccessLevel: 30,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Status != "success" {
+		t.Errorf("got status %q, want %q", out.Status, "success")
+	}
+	if gotID != "42" {
+		t.Errorf("id body param = %q, want %q", gotID, "42")
+	}
+}
+
+// TestGroupInvites_WithID verifies that the id body parameter is sent on the
+// group invitation request.
+func TestGroupInvites_WithID(t *testing.T) {
+	var gotID string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			ID string `json:"id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotID = body.ID
+		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+	}))
+	out, err := GroupInvites(context.Background(), client, GroupInvitesInput{
+		GroupID:     "10",
+		ID:          "10",
+		UserID:      77,
+		AccessLevel: 40,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Status != "success" {
+		t.Errorf("got status %q, want %q", out.Status, "success")
+	}
+	if gotID != "10" {
+		t.Errorf("id body param = %q, want %q", gotID, "10")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Metadata — decorateInviteMeta guards and discovery completeness (R-META)
+// ---------------------------------------------------------------------------.
+
+// TestDecorateInviteMeta_UnknownTool verifies that decorateInviteMeta leaves
+// options untouched for an individual tool that has no metadata entry.
+func TestDecorateInviteMeta_UnknownTool(t *testing.T) {
+	options := inviteOptions("gitlab_unknown_invite")
+	before := options.Usage
+	decorateInviteMeta(&options, "gitlab_unknown_invite")
+	if options.Usage != before {
+		t.Errorf("Usage mutated for unknown tool: got %q, want %q", options.Usage, before)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions populated for unknown tool: %v", options.RelatedActions)
+	}
+}
+
+// TestInviteActionSpecs_DiscoveryMetadata verifies that every invite ActionSpec
+// carries non-generic Usage, natural-language aliases, canonical related
+// actions, and a "Returns: … See also: …" individual-tool description.
+func TestInviteActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		tool := spec.IndividualTool.Name
+		if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute invites domain action") {
+			t.Errorf("%s: generic or empty Usage %q", tool, spec.Usage)
+		}
+		if len(spec.Aliases) < 2 {
+			t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: missing RelatedActions", tool)
+		}
+		if !strings.Contains(spec.IndividualTool.Description, "Returns:") ||
+			!strings.Contains(spec.IndividualTool.Description, "See also:") {
+			t.Errorf("%s: description missing Returns/See also: %q", tool, spec.IndividualTool.Description)
+		}
+		if len(spec.ParameterGuidance) == 0 {
+			t.Errorf("%s: missing ParameterGuidance", tool)
+		}
+	}
 }
