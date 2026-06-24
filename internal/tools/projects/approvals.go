@@ -16,27 +16,35 @@ type GetApprovalConfigInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 }
 
-// ApprovalConfigOutput holds project-level approval configuration.
+// ApprovalConfigOutput holds project-level approval configuration. It mirrors
+// gl.ProjectApprovals 1:1, including the approvers / approver_groups object
+// arrays and the deprecated require_password_to_approve scalar.
 type ApprovalConfigOutput struct {
 	toolutil.HintableOutput
-	ApprovalsBeforeMerge                      int64 `json:"approvals_before_merge"`
-	ResetApprovalsOnPush                      bool  `json:"reset_approvals_on_push"`
-	DisableOverridingApproversPerMergeRequest bool  `json:"disable_overriding_approvers_per_merge_request"`
-	MergeRequestsAuthorApproval               bool  `json:"merge_requests_author_approval"`
-	MergeRequestsDisableCommittersApproval    bool  `json:"merge_requests_disable_committers_approval"`
-	RequireReauthenticationToApprove          bool  `json:"require_reauthentication_to_approve"`
-	SelectiveCodeOwnerRemovals                bool  `json:"selective_code_owner_removals"`
+	Approvers                                 []*ApproverUserOutput  `json:"approvers,omitempty"`
+	ApproverGroups                            []*ApproverGroupOutput `json:"approver_groups,omitempty"`
+	ApprovalsBeforeMerge                      int64                  `json:"approvals_before_merge"`
+	ResetApprovalsOnPush                      bool                   `json:"reset_approvals_on_push"`
+	DisableOverridingApproversPerMergeRequest bool                   `json:"disable_overriding_approvers_per_merge_request"`
+	MergeRequestsAuthorApproval               bool                   `json:"merge_requests_author_approval"`
+	MergeRequestsDisableCommittersApproval    bool                   `json:"merge_requests_disable_committers_approval"`
+	RequireReauthenticationToApprove          bool                   `json:"require_reauthentication_to_approve"`
+	SelectiveCodeOwnerRemovals                bool                   `json:"selective_code_owner_removals"`
+	RequirePasswordToApprove                  bool                   `json:"require_password_to_approve"`
 }
 
 func approvalConfigToOutput(a *gl.ProjectApprovals) ApprovalConfigOutput {
 	return ApprovalConfigOutput{
-		ApprovalsBeforeMerge:                      a.ApprovalsBeforeMerge, //nolint:staticcheck // Deprecated field still present in API response.
-		ResetApprovalsOnPush:                      a.ResetApprovalsOnPush,
+		Approvers:            approverUsersOutput(a.Approvers),
+		ApproverGroups:       approverGroupsOutput(a.ApproverGroups),
+		ApprovalsBeforeMerge: a.ApprovalsBeforeMerge, //nolint:staticcheck // Deprecated field still present in API response.
+		ResetApprovalsOnPush: a.ResetApprovalsOnPush,
 		DisableOverridingApproversPerMergeRequest: a.DisableOverridingApproversPerMergeRequest,
 		MergeRequestsAuthorApproval:               a.MergeRequestsAuthorApproval,
 		MergeRequestsDisableCommittersApproval:    a.MergeRequestsDisableCommittersApproval,
 		RequireReauthenticationToApprove:          a.RequireReauthenticationToApprove,
 		SelectiveCodeOwnerRemovals:                a.SelectiveCodeOwnerRemovals,
+		RequirePasswordToApprove:                  a.RequirePasswordToApprove, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 	}
 }
 
@@ -104,19 +112,23 @@ type ListApprovalRulesInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// ApprovalRuleOutput holds a single project approval rule.
+// ApprovalRuleOutput holds a single project approval rule. It mirrors
+// gl.ProjectApprovalRule 1:1: eligible_approvers and users are full user
+// objects, groups are group objects, and protected_branches surfaces the
+// branch identity objects.
 type ApprovalRuleOutput struct {
 	toolutil.HintableOutput
-	ID                            int64    `json:"id"`
-	Name                          string   `json:"name"`
-	RuleType                      string   `json:"rule_type,omitempty"`
-	ReportType                    string   `json:"report_type,omitempty"`
-	ApprovalsRequired             int64    `json:"approvals_required"`
-	EligibleApprovers             []string `json:"eligible_approvers,omitempty"`
-	Users                         []string `json:"users,omitempty"`
-	Groups                        []string `json:"groups,omitempty"`
-	ContainsHiddenGroups          bool     `json:"contains_hidden_groups"`
-	AppliesToAllProtectedBranches bool     `json:"applies_to_all_protected_branches"`
+	ID                            int64                       `json:"id"`
+	Name                          string                      `json:"name"`
+	RuleType                      string                      `json:"rule_type,omitempty"`
+	ReportType                    string                      `json:"report_type,omitempty"`
+	ApprovalsRequired             int64                       `json:"approvals_required"`
+	EligibleApprovers             []*BasicUserOutput          `json:"eligible_approvers,omitempty"`
+	Users                         []*BasicUserOutput          `json:"users,omitempty"`
+	Groups                        []*ApprovalGroupOutput      `json:"groups,omitempty"`
+	ProtectedBranches             []*ProtectedBranchRefOutput `json:"protected_branches,omitempty"`
+	ContainsHiddenGroups          bool                        `json:"contains_hidden_groups"`
+	AppliesToAllProtectedBranches bool                        `json:"applies_to_all_protected_branches"`
 }
 
 // ListApprovalRulesOutput holds a paginated list of project approval rules.
@@ -127,25 +139,19 @@ type ListApprovalRulesOutput struct {
 }
 
 func approvalRuleToOutput(r *gl.ProjectApprovalRule) ApprovalRuleOutput {
-	out := ApprovalRuleOutput{
+	return ApprovalRuleOutput{
 		ID:                            r.ID,
 		Name:                          r.Name,
 		RuleType:                      r.RuleType,
 		ReportType:                    r.ReportType,
 		ApprovalsRequired:             r.ApprovalsRequired,
+		EligibleApprovers:             basicUserOutputs(r.EligibleApprovers),
+		Users:                         basicUserOutputs(r.Users),
+		Groups:                        approvalGroupsOutput(r.Groups),
+		ProtectedBranches:             protectedBranchRefsOutput(r.ProtectedBranches),
 		ContainsHiddenGroups:          r.ContainsHiddenGroups,
 		AppliesToAllProtectedBranches: r.AppliesToAllProtectedBranches,
 	}
-	for _, u := range r.EligibleApprovers {
-		out.EligibleApprovers = append(out.EligibleApprovers, u.Username)
-	}
-	for _, u := range r.Users {
-		out.Users = append(out.Users, u.Username)
-	}
-	for _, g := range r.Groups {
-		out.Groups = append(out.Groups, g.Name)
-	}
-	return out
 }
 
 // ListApprovalRules retrieves all project-level approval rules.

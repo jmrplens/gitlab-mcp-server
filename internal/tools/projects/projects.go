@@ -203,7 +203,11 @@ type CreateInput struct {
 	TagList               []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
 }
 
-// Output is the common output for project operations.
+// Output is the common output for project operations. It mirrors gl.Project
+// field-for-field (1:1 audit policy), surfacing every scalar plus full nested
+// objects on their canonical keys (namespace, owner, permissions,
+// forked_from_project, _links, statistics, shared_with_groups, license,
+// container_expiration_policy, custom_attributes).
 type Output struct {
 	toolutil.HintableOutput
 	ID                                        int64    `json:"id"`
@@ -222,14 +226,12 @@ type Output struct {
 	OpenIssuesCount                           int64    `json:"open_issues_count,omitempty"`
 	HTTPURLToRepo                             string   `json:"http_url_to_repo,omitempty"`
 	SSHURLToRepo                              string   `json:"ssh_url_to_repo,omitempty"`
-	Namespace                                 string   `json:"namespace,omitempty"`
 	Topics                                    []string `json:"topics"`
 	MergeMethod                               string   `json:"merge_method,omitempty"`
 	SquashOption                              string   `json:"squash_option,omitempty"`
 	OnlyAllowMergeIfPipelineSucceeds          bool     `json:"only_allow_merge_if_pipeline_succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool     `json:"only_allow_merge_if_all_discussions_are_resolved"`
 	RemoveSourceBranchAfterMerge              bool     `json:"remove_source_branch_after_merge"`
-	ForkedFromProject                         string   `json:"forked_from_project,omitempty"`
 	MarkedForDeletionOn                       string   `json:"marked_for_deletion_on,omitempty"`
 	CreatedAt                                 string   `json:"created_at"`
 	UpdatedAt                                 string   `json:"updated_at,omitempty"`
@@ -238,10 +240,6 @@ type Output struct {
 	AvatarURL                                 string   `json:"avatar_url,omitempty"`
 	CreatorID                                 int64    `json:"creator_id,omitempty"`
 	RequestAccessEnabled                      bool     `json:"request_access_enabled"`
-	IssuesEnabled                             bool     `json:"issues_enabled"`
-	MergeRequestsEnabled                      bool     `json:"merge_requests_enabled"`
-	WikiEnabled                               bool     `json:"wiki_enabled"`
-	JobsEnabled                               bool     `json:"jobs_enabled"`
 	LFSEnabled                                bool     `json:"lfs_enabled"`
 	CIConfigPath                              string   `json:"ci_config_path,omitempty"`
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
@@ -251,13 +249,8 @@ type Output struct {
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
-	ApprovalsBeforeMerge                      int64    `json:"approvals_before_merge,omitempty"`
 	ResolveOutdatedDiffDiscussions            bool     `json:"resolve_outdated_diff_discussions"`
-	ContainerRegistryEnabled                  bool     `json:"container_registry_enabled,omitempty"`
 	SharedRunnersEnabled                      bool     `json:"shared_runners_enabled,omitempty"`
-	PublicBuilds                              bool     `json:"public_builds,omitempty"`
-	SnippetsEnabled                           bool     `json:"snippets_enabled,omitempty"`
-	PackagesEnabled                           bool     `json:"packages_enabled,omitempty"`
 	PackageRegistryAccessLevel                string   `json:"package_registry_access_level,omitempty"`
 	BuildTimeout                              int64    `json:"build_timeout,omitempty"`
 	SuggestionCommitMessage                   string   `json:"suggestion_commit_message,omitempty"`
@@ -265,6 +258,123 @@ type Output struct {
 	ImportURL                                 string   `json:"import_url,omitempty"`
 	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty"`
 	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty"`
+
+	// Access-level enums (1:1 SDK parity).
+	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty"`
+	IssuesAccessLevel                string `json:"issues_access_level,omitempty"`
+	ReleasesAccessLevel              string `json:"releases_access_level,omitempty"`
+	RepositoryAccessLevel            string `json:"repository_access_level,omitempty"`
+	MergeRequestsAccessLevel         string `json:"merge_requests_access_level,omitempty"`
+	ForkingAccessLevel               string `json:"forking_access_level,omitempty"`
+	WikiAccessLevel                  string `json:"wiki_access_level,omitempty"`
+	BuildsAccessLevel                string `json:"builds_access_level,omitempty"`
+	SnippetsAccessLevel              string `json:"snippets_access_level,omitempty"`
+	PagesAccessLevel                 string `json:"pages_access_level,omitempty"`
+	OperationsAccessLevel            string `json:"operations_access_level,omitempty"`
+	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty"`
+	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty"`
+	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty"`
+	InfrastructureAccessLevel        string `json:"infrastructure_access_level,omitempty"`
+	MonitorAccessLevel               string `json:"monitor_access_level,omitempty"`
+	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty"`
+	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty"`
+	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty"`
+	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty"`
+
+	// CI/CD settings (1:1 SDK parity).
+	CIDisplayPipelineVariables               bool     `json:"ci_display_pipeline_variables"`
+	AllowPipelineTriggerApproveDeployment    bool     `json:"allow_pipeline_trigger_approve_deployment"`
+	PreventMergeWithoutJiraIssue             bool     `json:"prevent_merge_without_jira_issue"`
+	PrintingMergeRequestLinkEnabled          bool     `json:"printing_merge_request_link_enabled"`
+	CIDefaultGitDepth                        int64    `json:"ci_default_git_depth,omitempty"`
+	CIDeletePipelinesInSeconds               int64    `json:"ci_delete_pipelines_in_seconds,omitempty"`
+	CIForwardDeploymentEnabled               bool     `json:"ci_forward_deployment_enabled"`
+	CIForwardDeploymentRollbackAllowed       bool     `json:"ci_forward_deployment_rollback_allowed"`
+	CIPushRepositoryForJobTokenAllowed       bool     `json:"ci_push_repository_for_job_token_allowed"`
+	CIIDTokenSubClaimComponents              []string `json:"ci_id_token_sub_claim_components,omitempty"`
+	CISeparatedCaches                        bool     `json:"ci_separated_caches"`
+	CIJobTokenScopeEnabled                   bool     `json:"ci_job_token_scope_enabled"`
+	CIOptInJWT                               bool     `json:"ci_opt_in_jwt"`
+	CIAllowForkPipelinesToRunInParentProject bool     `json:"ci_allow_fork_pipelines_to_run_in_parent_project"`
+	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty"`
+	CIPipelineVariablesMinimumOverrideRole   string   `json:"ci_pipeline_variables_minimum_override_role,omitempty"`
+	BuildCoverageRegex                       string   `json:"build_coverage_regex,omitempty"`
+	BuildGitStrategy                         string   `json:"build_git_strategy,omitempty"`
+	AutoCancelPendingPipelines               string   `json:"auto_cancel_pending_pipelines,omitempty"`
+	AutoDevopsDeployStrategy                 string   `json:"auto_devops_deploy_strategy,omitempty"`
+	AutoDevopsEnabled                        bool     `json:"auto_devops_enabled"`
+	KeepLatestArtifact                       bool     `json:"keep_latest_artifact"`
+	MergeTrainsSkipTrainAllowed              bool     `json:"merge_trains_skip_train_allowed"`
+	PublicJobs                               bool     `json:"public_jobs"`
+	MaxArtifactsSize                         int64    `json:"max_artifacts_size,omitempty"`
+
+	// Mirror settings (1:1 SDK parity).
+	Mirror                           bool  `json:"mirror"`
+	MirrorUserID                     int64 `json:"mirror_user_id,omitempty"`
+	MirrorTriggerBuilds              bool  `json:"mirror_trigger_builds"`
+	OnlyMirrorProtectedBranches      bool  `json:"only_mirror_protected_branches"`
+	MirrorOverwritesDivergedBranches bool  `json:"mirror_overwrites_diverged_branches"`
+
+	// Import status (1:1 SDK parity).
+	ImportType   string `json:"import_type,omitempty"`
+	ImportStatus string `json:"import_status,omitempty"`
+	ImportError  string `json:"import_error,omitempty"`
+
+	// Container registry (1:1 SDK parity).
+	ContainerRegistryImagePrefix string `json:"container_registry_image_prefix,omitempty"`
+
+	// Security and compliance (1:1 SDK parity).
+	SecurityAndComplianceEnabled     bool `json:"security_and_compliance_enabled"`
+	EnforceAuthChecksOnUploads       bool `json:"enforce_auth_checks_on_uploads,omitempty"`
+	PreReceiveSecretDetectionEnabled bool `json:"pre_receive_secret_detection_enabled"`
+	AutoDuoCodeReviewEnabled         bool `json:"auto_duo_code_review_enabled"`
+
+	// Service desk (1:1 SDK parity).
+	ServiceDeskEnabled bool   `json:"service_desk_enabled"`
+	ServiceDeskAddress string `json:"service_desk_address,omitempty"`
+
+	// Templates and misc (1:1 SDK parity).
+	IssuesTemplate                           string `json:"issues_template,omitempty"`
+	MergeRequestsTemplate                    string `json:"merge_requests_template,omitempty"`
+	IssueBranchTemplate                      string `json:"issue_branch_template,omitempty"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty"`
+	RequirementsEnabled                      bool   `json:"requirements_enabled"`
+	EmailsEnabled                            bool   `json:"emails_enabled"`
+	GroupRunnersEnabled                      bool   `json:"group_runners_enabled"`
+	ResourceGroupDefaultProcessMode          string `json:"resource_group_default_process_mode,omitempty"`
+	RunnerTokenExpirationInterval            int64  `json:"runner_token_expiration_interval,omitempty"`
+	RunnersToken                             string `json:"runners_token,omitempty"`
+	RepositoryStorage                        string `json:"repository_storage,omitempty"`
+	CanCreateMergeRequestIn                  bool   `json:"can_create_merge_request_in"`
+	LicenseURL                               string `json:"license_url,omitempty"`
+	MergeRequestDefaultTargetSelf            bool   `json:"mr_default_target_self"`
+
+	// Nested objects (1:1 SDK parity, full mirrors).
+	Namespace                 *NamespaceOutput                 `json:"namespace,omitempty"`
+	Owner                     *OwnerOutput                     `json:"owner,omitempty"`
+	Permissions               *PermissionsOutput               `json:"permissions,omitempty"`
+	ForkedFromProject         *ForkParentOutput                `json:"forked_from_project,omitempty"`
+	Links                     *LinksOutput                     `json:"_links,omitempty"`
+	Statistics                *StatisticsOutput                `json:"statistics,omitempty"`
+	SharedWithGroups          []SharedWithGroupOutput          `json:"shared_with_groups,omitempty"`
+	License                   *LicenseOutput                   `json:"license,omitempty"`
+	ContainerExpirationPolicy *ContainerExpirationPolicyOutput `json:"container_expiration_policy,omitempty"`
+	CustomAttributes          []CustomAttributeOutput          `json:"custom_attributes,omitempty"`
+
+	// Deprecated SDK fields, surfaced additively for 1:1 parity.
+	IssuesEnabled                bool     `json:"issues_enabled"`
+	MergeRequestsEnabled         bool     `json:"merge_requests_enabled"`
+	WikiEnabled                  bool     `json:"wiki_enabled"`
+	JobsEnabled                  bool     `json:"jobs_enabled"`
+	SnippetsEnabled              bool     `json:"snippets_enabled,omitempty"`
+	ContainerRegistryEnabled     bool     `json:"container_registry_enabled,omitempty"`
+	PackagesEnabled              bool     `json:"packages_enabled,omitempty"`
+	PublicBuilds                 bool     `json:"public_builds,omitempty"`
+	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty"`
+	TagList                      []string `json:"tag_list,omitempty"`
+	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty"`
+	RestrictUserDefinedVariables bool     `json:"restrict_user_defined_variables"`
+	EmailsDisabled               bool     `json:"emails_disabled"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -467,8 +577,10 @@ type UpdateInput struct {
 	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
 }
 
-// ToOutput converts a GitLab API [gl.Project] to the MCP tool output
-// format, mapping visibility to its string representation.
+// ToOutput converts a GitLab API [gl.Project] to the MCP tool output format,
+// mapping every SDK field 1:1 including full nested objects on their canonical
+// keys (namespace, owner, permissions, forked_from_project, _links, statistics,
+// shared_with_groups, license, container_expiration_policy, custom_attributes).
 func ToOutput(p *gl.Project) Output {
 	out := Output{
 		ID:                               p.ID,
@@ -497,10 +609,6 @@ func ToOutput(p *gl.Project) Output {
 		AvatarURL:                                 p.AvatarURL,
 		CreatorID:                                 p.CreatorID,
 		RequestAccessEnabled:                      p.RequestAccessEnabled,
-		IssuesEnabled:                             accessLevelEnabled(p.IssuesAccessLevel),
-		MergeRequestsEnabled:                      accessLevelEnabled(p.MergeRequestsAccessLevel),
-		WikiEnabled:                               accessLevelEnabled(p.WikiAccessLevel),
-		JobsEnabled:                               accessLevelEnabled(p.BuildsAccessLevel),
 		LFSEnabled:                                p.LFSEnabled,
 		CIConfigPath:                              p.CIConfigPath,
 		AllowMergeOnSkippedPipeline:               p.AllowMergeOnSkippedPipeline,
@@ -510,13 +618,8 @@ func ToOutput(p *gl.Project) Output {
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
-		ApprovalsBeforeMerge:                      p.ApprovalsBeforeMerge, //nolint:staticcheck // No replacement field on Project struct.
 		ResolveOutdatedDiffDiscussions:            p.ResolveOutdatedDiffDiscussions,
-		ContainerRegistryEnabled:                  accessLevelEnabled(p.ContainerRegistryAccessLevel),
 		SharedRunnersEnabled:                      p.SharedRunnersEnabled,
-		PublicBuilds:                              p.PublicJobs,
-		SnippetsEnabled:                           accessLevelEnabled(p.SnippetsAccessLevel),
-		PackagesEnabled:                           p.PackagesEnabled, //nolint:staticcheck // Preserve backward-compatible field in output.
 		PackageRegistryAccessLevel:                string(p.PackageRegistryAccessLevel),
 		BuildTimeout:                              p.BuildTimeout,
 		SuggestionCommitMessage:                   p.SuggestionCommitMessage,
@@ -524,18 +627,121 @@ func ToOutput(p *gl.Project) Output {
 		ImportURL:                                 p.ImportURL,
 		MergeRequestTitleRegex:                    p.MergeRequestTitleRegex,
 		MergeRequestTitleRegexDescription:         p.MergeRequestTitleRegexDescription,
+
+		ContainerRegistryAccessLevel:     string(p.ContainerRegistryAccessLevel),
+		IssuesAccessLevel:                string(p.IssuesAccessLevel),
+		ReleasesAccessLevel:              string(p.ReleasesAccessLevel),
+		RepositoryAccessLevel:            string(p.RepositoryAccessLevel),
+		MergeRequestsAccessLevel:         string(p.MergeRequestsAccessLevel),
+		ForkingAccessLevel:               string(p.ForkingAccessLevel),
+		WikiAccessLevel:                  string(p.WikiAccessLevel),
+		BuildsAccessLevel:                string(p.BuildsAccessLevel),
+		SnippetsAccessLevel:              string(p.SnippetsAccessLevel),
+		PagesAccessLevel:                 string(p.PagesAccessLevel),
+		OperationsAccessLevel:            string(p.OperationsAccessLevel),
+		AnalyticsAccessLevel:             string(p.AnalyticsAccessLevel),
+		EnvironmentsAccessLevel:          string(p.EnvironmentsAccessLevel),
+		FeatureFlagsAccessLevel:          string(p.FeatureFlagsAccessLevel),
+		InfrastructureAccessLevel:        string(p.InfrastructureAccessLevel),
+		MonitorAccessLevel:               string(p.MonitorAccessLevel),
+		RequirementsAccessLevel:          string(p.RequirementsAccessLevel),
+		SecurityAndComplianceAccessLevel: string(p.SecurityAndComplianceAccessLevel),
+		ModelExperimentsAccessLevel:      string(p.ModelExperimentsAccessLevel),
+		ModelRegistryAccessLevel:         string(p.ModelRegistryAccessLevel),
+
+		CIDisplayPipelineVariables:               p.CIDisplayPipelineVariables,
+		AllowPipelineTriggerApproveDeployment:    p.AllowPipelineTriggerApproveDeployment,
+		PreventMergeWithoutJiraIssue:             p.PreventMergeWithoutJiraIssue,
+		PrintingMergeRequestLinkEnabled:          p.PrintingMergeRequestLinkEnabled,
+		CIDefaultGitDepth:                        p.CIDefaultGitDepth,
+		CIDeletePipelinesInSeconds:               p.CIDeletePipelinesInSeconds,
+		CIForwardDeploymentEnabled:               p.CIForwardDeploymentEnabled,
+		CIForwardDeploymentRollbackAllowed:       p.CIForwardDeploymentRollbackAllowed,
+		CIPushRepositoryForJobTokenAllowed:       p.CIPushRepositoryForJobTokenAllowed,
+		CIIDTokenSubClaimComponents:              p.CIIdTokenSubClaimComponents,
+		CISeparatedCaches:                        p.CISeparatedCaches,
+		CIJobTokenScopeEnabled:                   p.CIJobTokenScopeEnabled,
+		CIOptInJWT:                               p.CIOptInJWT,
+		CIAllowForkPipelinesToRunInParentProject: p.CIAllowForkPipelinesToRunInParentProject,
+		CIRestrictPipelineCancellationRole:       string(p.CIRestrictPipelineCancellationRole),
+		CIPipelineVariablesMinimumOverrideRole:   p.CIPipelineVariablesMinimumOverrideRole,
+		BuildCoverageRegex:                       p.BuildCoverageRegex,
+		BuildGitStrategy:                         p.BuildGitStrategy,
+		AutoCancelPendingPipelines:               p.AutoCancelPendingPipelines,
+		AutoDevopsDeployStrategy:                 p.AutoDevopsDeployStrategy,
+		AutoDevopsEnabled:                        p.AutoDevopsEnabled,
+		KeepLatestArtifact:                       p.KeepLatestArtifact,
+		MergeTrainsSkipTrainAllowed:              p.MergeTrainsSkipTrainAllowed,
+		PublicJobs:                               p.PublicJobs,
+		MaxArtifactsSize:                         p.MaxArtifactsSize,
+
+		Mirror:                           p.Mirror,
+		MirrorUserID:                     p.MirrorUserID,
+		MirrorTriggerBuilds:              p.MirrorTriggerBuilds,
+		OnlyMirrorProtectedBranches:      p.OnlyMirrorProtectedBranches,
+		MirrorOverwritesDivergedBranches: p.MirrorOverwritesDivergedBranches,
+
+		ImportType:   p.ImportType,
+		ImportStatus: p.ImportStatus,
+		ImportError:  p.ImportError,
+
+		ContainerRegistryImagePrefix: p.ContainerRegistryImagePrefix,
+
+		SecurityAndComplianceEnabled:     p.SecurityAndComplianceEnabled,
+		EnforceAuthChecksOnUploads:       p.EnforceAuthChecksOnUploads,
+		PreReceiveSecretDetectionEnabled: p.PreReceiveSecretDetectionEnabled,
+		AutoDuoCodeReviewEnabled:         p.AutoDuoCodeReviewEnabled,
+
+		ServiceDeskEnabled: p.ServiceDeskEnabled,
+		ServiceDeskAddress: p.ServiceDeskAddress,
+
+		IssuesTemplate:                           p.IssuesTemplate,
+		MergeRequestsTemplate:                    p.MergeRequestsTemplate,
+		IssueBranchTemplate:                      p.IssueBranchTemplate,
+		ExternalAuthorizationClassificationLabel: p.ExternalAuthorizationClassificationLabel,
+		RequirementsEnabled:                      p.RequirementsEnabled,
+		EmailsEnabled:                            p.EmailsEnabled,
+		GroupRunnersEnabled:                      p.GroupRunnersEnabled,
+		ResourceGroupDefaultProcessMode:          string(p.ResourceGroupDefaultProcessMode),
+		RunnerTokenExpirationInterval:            p.RunnerTokenExpirationInterval,
+		RunnersToken:                             p.RunnersToken,
+		RepositoryStorage:                        p.RepositoryStorage,
+		CanCreateMergeRequestIn:                  p.CanCreateMergeRequestIn,
+		LicenseURL:                               p.LicenseURL,
+		MergeRequestDefaultTargetSelf:            p.MergeRequestDefaultTargetSelf,
+
+		Namespace:                 namespaceOutput(p.Namespace),
+		Owner:                     ownerOutput(p.Owner),
+		Permissions:               permissionsOutput(p.Permissions),
+		ForkedFromProject:         forkParentOutput(p.ForkedFromProject),
+		Links:                     linksOutput(p.Links),
+		Statistics:                statisticsOutput(p.Statistics),
+		SharedWithGroups:          sharedWithGroupsOutput(p.SharedWithGroups),
+		License:                   licenseOutput(p.License),
+		ContainerExpirationPolicy: containerExpirationPolicyOutput(p.ContainerExpirationPolicy),
+		CustomAttributes:          customAttributesOutput(p.CustomAttributes),
+
+		IssuesEnabled:                accessLevelEnabled(p.IssuesAccessLevel),
+		MergeRequestsEnabled:         accessLevelEnabled(p.MergeRequestsAccessLevel),
+		WikiEnabled:                  accessLevelEnabled(p.WikiAccessLevel),
+		JobsEnabled:                  accessLevelEnabled(p.BuildsAccessLevel),
+		ContainerRegistryEnabled:     accessLevelEnabled(p.ContainerRegistryAccessLevel),
+		PublicBuilds:                 p.PublicJobs,
+		SnippetsEnabled:              accessLevelEnabled(p.SnippetsAccessLevel),
+		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // Preserve backward-compatible field in output.
+		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // No replacement field on Project struct.
+		TagList:                      p.TagList,                      //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		RestrictUserDefinedVariables: p.RestrictUserDefinedVariables, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		EmailsDisabled:               p.EmailsDisabled,               //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 	}
 	if out.Topics == nil {
 		out.Topics = []string{}
 	}
-	if p.Namespace != nil {
-		out.Namespace = p.Namespace.FullPath
-	}
-	if p.ForkedFromProject != nil {
-		out.ForkedFromProject = p.ForkedFromProject.PathWithNamespace
-	}
 	if p.MarkedForDeletionOn != nil {
 		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format("2006-01-02")
+	}
+	if p.MarkedForDeletionAt != nil { //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		out.MarkedForDeletionAt = time.Time(*p.MarkedForDeletionAt).Format("2006-01-02") //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
 	}
 	if p.CreatedAt != nil {
 		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
@@ -1842,14 +2048,19 @@ type HookOutput struct {
 	CreatedAt                 time.Time          `json:"created_at"`
 }
 
-// HookURLVariable represents a masked webhook URL variable.
+// HookURLVariable mirrors gl.HookURLVariable, a webhook URL variable. The value
+// is masked by the API on read (returned empty) and surfaced for 1:1 parity.
 type HookURLVariable struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
-// HookCustomHeader represents a webhook custom header.
+// HookCustomHeader mirrors gl.HookCustomHeader, a webhook custom header. The
+// value is masked by the API on read (returned empty) and surfaced for 1:1
+// parity.
 type HookCustomHeader struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
 // hookOutputFromGL maps hook output from gl between API and evaluator models.
@@ -1903,6 +2114,9 @@ func projectHookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVa
 	}
 	out := make([]HookURLVariable, len(variables))
 	for i, variable := range variables {
+		// Value is intentionally masked: webhook URL-variable values are
+		// secret-bearing and never surfaced. The field exists for 1:1 SDK
+		// shape parity but is left empty.
 		out[i] = HookURLVariable{Key: variable.Key}
 	}
 	return out
@@ -1917,6 +2131,9 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 		if header == nil {
 			continue
 		}
+		// Value is intentionally masked: custom-header values are
+		// secret-bearing and never surfaced. The field exists for 1:1 SDK
+		// shape parity but is left empty.
 		out = append(out, HookCustomHeader{Key: header.Key})
 	}
 	if len(out) == 0 {
@@ -2298,6 +2515,38 @@ func TriggerTestHook(ctx context.Context, client *gitlabclient.Client, input Tri
 // boolIcon formats project boolean settings consistently in Markdown output.
 func boolIcon(v bool) string {
 	return toolutil.BoolEmoji(v)
+}
+
+// userNames extracts usernames from approval-rule user objects for compact
+// Markdown rendering, skipping nil entries.
+func userNames(users []*BasicUserOutput) []string {
+	if len(users) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		names = append(names, u.Username)
+	}
+	return names
+}
+
+// groupNames extracts group names from approval-rule group objects for compact
+// Markdown rendering, skipping nil entries.
+func groupNames(groups []*ApprovalGroupOutput) []string {
+	if len(groups) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g == nil {
+			continue
+		}
+		names = append(names, g.Name)
+	}
+	return names
 }
 
 // ---------------------------------------------------------------------------

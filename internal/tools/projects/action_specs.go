@@ -403,7 +403,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_list_users": {
 		usage:       "List the users who are members of a project. Send project_id and optionally search by name or username.",
-		aliases:     []string{"list project users", "project members", "who has access to project"},
+		aliases:     []string{"list project users", "project user accounts", "enumerate project users"},
 		related:     []string{"project.get", "member.list", "project.list_groups"},
 		description: "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_member_list.",
 	},

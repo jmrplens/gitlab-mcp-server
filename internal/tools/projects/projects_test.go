@@ -1020,8 +1020,8 @@ func TestProjectGet_SuccessEnrichedFields(t *testing.T) {
 	if out.SSHURLToRepo != "git@gitlab.example.com:jmrplens/my-repo.git" {
 		t.Errorf("out.SSHURLToRepo = %q, want SSH clone URL", out.SSHURLToRepo)
 	}
-	if out.Namespace != "jmrplens" {
-		t.Errorf("out.Namespace = %q, want %q", out.Namespace, "jmrplens")
+	if out.Namespace == nil || out.Namespace.FullPath != "jmrplens" {
+		t.Errorf("out.Namespace = %+v, want FullPath %q", out.Namespace, "jmrplens")
 	}
 	if len(out.Topics) != 3 {
 		t.Errorf("len(out.Topics) = %d, want 3", len(out.Topics))
@@ -2748,7 +2748,8 @@ func TestFormatMarkdown(t *testing.T) {
 		Visibility:                        testPrivate,
 		DefaultBranch:                     "main",
 		Description:                       testDescProject,
-		Namespace:                         "group",
+		Namespace:                         &NamespaceOutput{FullPath: "group"},
+		ForkedFromProject:                 &ForkParentOutput{PathWithNamespace: "upstream/proj"},
 		Archived:                          true,
 		ForksCount:                        5,
 		StarCount:                         10,
@@ -2763,7 +2764,7 @@ func TestFormatMarkdown(t *testing.T) {
 		ProtectMergeRequestPipelines:      &protectMRPipelines,
 	}
 	md := FormatMarkdown(out)
-	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
+	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Forked From", "upstream/proj", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatMarkdown missing %q", want)
 		}
@@ -3234,7 +3235,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		Visibility:        testPublic,
 		DefaultBranch:     "main",
 		Description:       testDescProject,
-		Namespace:         "ns",
+		Namespace:         &NamespaceOutput{FullPath: "ns"},
 		Archived:          true,
 		ForksCount:        5,
 		StarCount:         10,
@@ -4753,8 +4754,8 @@ func TestToOutput_WithNamespace(t *testing.T) {
 		Namespace:  &gl.ProjectNamespace{FullPath: testMyGroup},
 	}
 	out := ToOutput(p)
-	if out.Namespace != testMyGroup {
-		t.Errorf("Namespace = %q, want %q", out.Namespace, testMyGroup)
+	if out.Namespace == nil || out.Namespace.FullPath != testMyGroup {
+		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, testMyGroup)
 	}
 }
 
@@ -6890,9 +6891,9 @@ func TestFormatApprovalRuleMarkdown_AllFields(t *testing.T) {
 		ReportType:                    "code_coverage",
 		AppliesToAllProtectedBranches: true,
 		ContainsHiddenGroups:          false,
-		Users:                         []string{"alice", "bob"},
-		Groups:                        []string{"security-team"},
-		EligibleApprovers:             []string{"alice", "bob", "charlie"},
+		Users:                         []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}},
+		Groups:                        []*ApprovalGroupOutput{{Name: "security-team"}},
+		EligibleApprovers:             []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}, {Username: "charlie"}},
 	})
 	for _, want := range []string{"regular", "code_coverage", "alice, bob", "security-team", "alice, bob, charlie"} {
 		if !strings.Contains(md, want) {
@@ -6907,8 +6908,8 @@ func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
 		Rules: []ApprovalRuleOutput{
 			{
-				ID: 1, Name: "Review", RuleType: "regular", Users: []string{"alice"},
-				Groups: []string{"devs"}, ApprovalsRequired: 1,
+				ID: 1, Name: "Review", RuleType: "regular", Users: []*BasicUserOutput{{Username: "alice"}},
+				Groups: []*ApprovalGroupOutput{{Name: "devs"}}, ApprovalsRequired: 1,
 			},
 			{
 				ID: 2, Name: "Empty", ApprovalsRequired: 0,
@@ -6971,11 +6972,11 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 		DefaultBranch:     "main",
 	}
 	out := ToOutput(p)
-	if out.Namespace != "" {
-		t.Errorf("Namespace = %q, want empty", out.Namespace)
+	if out.Namespace != nil {
+		t.Errorf("Namespace = %+v, want nil", out.Namespace)
 	}
-	if out.ForkedFromProject != "" {
-		t.Error("expected empty ForkedFromProject")
+	if out.ForkedFromProject != nil {
+		t.Error("expected nil ForkedFromProject")
 	}
 	if out.ProtectMergeRequestPipelines == nil || *out.ProtectMergeRequestPipelines {
 		t.Error("expected ProtectMergeRequestPipelines to be explicit false")
@@ -7082,11 +7083,11 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 		LastActivityAt:               &now,
 	}
 	out := ToOutput(p)
-	if out.Namespace != "ns" {
-		t.Errorf("Namespace = %q, want %q", out.Namespace, "ns")
+	if out.Namespace == nil || out.Namespace.FullPath != "ns" {
+		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, "ns")
 	}
-	if out.ForkedFromProject != "upstream/test" {
-		t.Errorf("ForkedFromProject = %q, want %q", out.ForkedFromProject, "upstream/test")
+	if out.ForkedFromProject == nil || out.ForkedFromProject.PathWithNamespace != "upstream/test" {
+		t.Errorf("ForkedFromProject = %+v, want PathWithNamespace %q", out.ForkedFromProject, "upstream/test")
 	}
 	if out.MarkedForDeletionOn == "" {
 		t.Error("expected non-empty MarkedForDeletionOn")
