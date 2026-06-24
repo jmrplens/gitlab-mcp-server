@@ -2857,6 +2857,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },

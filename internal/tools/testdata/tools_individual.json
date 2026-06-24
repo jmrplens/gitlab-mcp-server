@@ -44042,6 +44042,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },
@@ -77351,11 +77366,11 @@
         "id": {
           "type": "integer"
         },
+        "iid": {
+          "type": "integer"
+        },
         "merge_request_approvers_available": {
           "type": "boolean"
-        },
-        "merge_request_iid": {
-          "type": "integer"
         },
         "merge_status": {
           "type": "string"
@@ -77437,7 +77452,7 @@
       },
       "required": [
         "id",
-        "merge_request_iid",
+        "iid",
         "project_id",
         "title",
         "state",
@@ -79957,6 +79972,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },
@@ -80991,8 +81021,14 @@
           "type": "string"
         },
         "labels": {
-          "description": "Comma-separated labels to apply",
-          "type": "string"
+          "description": "Label names to apply",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone_id": {
           "description": "Milestone ID to associate with the merge request",
@@ -81315,6 +81351,21 @@
                 },
                 "icon": {
                   "type": "string"
+                },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "label": {
                   "type": "string"
@@ -87946,6 +87997,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },
@@ -89722,8 +89788,14 @@
           ]
         },
         "labels": {
-          "description": "Comma-separated label names to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -89738,8 +89810,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, title)",
@@ -90101,6 +90179,21 @@
                       },
                       "icon": {
                         "type": "string"
+                      },
+                      "illustration": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "image": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
                       },
                       "label": {
                         "type": "string"
@@ -90864,8 +90957,14 @@
           "type": "string"
         },
         "labels": {
-          "description": "Comma-separated label names to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -90880,8 +90979,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
@@ -91236,6 +91341,21 @@
                       },
                       "icon": {
                         "type": "string"
+                      },
+                      "illustration": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "image": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
                       },
                       "label": {
                         "type": "string"
@@ -91999,8 +92119,14 @@
           "type": "string"
         },
         "labels": {
-          "description": "Comma-separated label names to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -92015,8 +92141,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
@@ -92374,6 +92506,21 @@
                       },
                       "icon": {
                         "type": "string"
+                      },
+                      "illustration": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "image": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
                       },
                       "label": {
                         "type": "string"
@@ -93405,6 +93552,21 @@
                 },
                 "icon": {
                   "type": "string"
+                },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "label": {
                   "type": "string"
@@ -97832,6 +97994,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },
@@ -98924,6 +99101,21 @@
                 "icon": {
                   "type": "string"
                 },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "label": {
                   "type": "string"
                 },
@@ -99573,8 +99765,14 @@
       "additionalProperties": false,
       "properties": {
         "add_labels": {
-          "description": "Comma-separated label names to add without removing existing",
-          "type": "string"
+          "description": "Label names to add without removing existing",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "allow_collaboration": {
           "description": "Allow commits from upstream members who can merge to target branch",
@@ -99609,8 +99807,14 @@
           ]
         },
         "labels": {
-          "description": "Comma-separated label names to replace all labels on the merge request",
-          "type": "string"
+          "description": "Label names to replace all labels on the merge request",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
@@ -99625,8 +99829,14 @@
           "type": "string"
         },
         "remove_labels": {
-          "description": "Comma-separated label names to remove",
-          "type": "string"
+          "description": "Label names to remove",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "remove_source_branch": {
           "description": "Delete source branch after merge. Only set if explicitly requested",
@@ -99935,6 +100145,21 @@
                 },
                 "icon": {
                   "type": "string"
+                },
+                "illustration": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "label": {
                   "type": "string"
@@ -133794,6 +134019,21 @@
                       },
                       "icon": {
                         "type": "string"
+                      },
+                      "illustration": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "image": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
                       },
                       "label": {
                         "type": "string"
