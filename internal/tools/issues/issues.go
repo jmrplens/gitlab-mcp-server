@@ -117,6 +117,7 @@ type ListInput struct {
 	OrderBy          string               `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at, priority, due_date)"`
 	Sort             string               `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of issues.
@@ -167,6 +168,7 @@ type ListGroupInput struct {
 	UpdatedAfter   string               `json:"updated_after,omitempty"  jsonschema:"Return issues updated after date (ISO 8601)"`
 	UpdatedBefore  string               `json:"updated_before,omitempty" jsonschema:"Return issues updated before date (ISO 8601)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupOutput holds a paginated list of group issues.
@@ -407,12 +409,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
@@ -579,12 +576,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
 	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
 	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -616,6 +608,7 @@ type ListAllInput struct {
 	UpdatedBefore    string `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
 	Confidential     *bool  `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListAll retrieves a paginated list of issues visible to the authenticated user
@@ -661,12 +654,7 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
 	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
 	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
 	if err != nil {
