@@ -1749,7 +1749,7 @@ func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
 		MergeRequests: []RelatedMROutput{
-			{IID: 3, Title: "Fix MR", State: "merged", Author: "carol", SourceBranch: "fix", TargetBranch: "main"},
+			{IID: 3, Title: "Fix MR", State: "merged", Author: &BasicUserOutput{Username: "carol"}, SourceBranch: "fix", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}, "Related MRs")
@@ -2207,29 +2207,181 @@ func TestTimeStatsToOutput_Populated(t *testing.T) {
 // basicMRToOutput
 // ---------------------------------------------------------------------------.
 
-// TestBasicMRToOutput verifies BasicMRToOutput.
+// TestBasicMRToOutput verifies basicMRToOutput surfaces the full
+// BasicMergeRequest fidelity: nested user objects, milestone, references,
+// time-stats, task-completion, label details, labels, scalar flags,
+// timestamps, and the additive author_username scalar.
 func TestBasicMRToOutput(t *testing.T) {
+	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	merged := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
 	mr := &gl.BasicMergeRequest{
-		ID: 1, IID: 2, Title: "MR1", State: "merged",
+		ID: 1, IID: 2, ProjectID: 7, Title: "MR1", State: "merged",
+		Description:  "body",
 		SourceBranch: "feat", TargetBranch: "main",
-		Author: &gl.BasicUser{Username: "alice"},
+		SourceProjectID: 7, TargetProjectID: 8,
+		Author:    &gl.BasicUser{ID: 11, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "u", CreatedAt: &created},
+		Assignee:  &gl.BasicUser{Username: "bob"},
+		Assignees: []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
+		Reviewers: []*gl.BasicUser{{Username: "dave"}},
+		MergeUser: &gl.BasicUser{Username: "merger"},
+		MergedBy:  &gl.BasicUser{Username: "mergedby"},
+		ClosedBy:  &gl.BasicUser{Username: "closer"},
+		Milestone: &gl.Milestone{ID: 5, Title: "v1"},
+		Labels:    gl.Labels{"l1", "l2"},
+		LabelDetails: []*gl.LabelDetails{
+			{ID: 3, Name: "bug", Color: "#fff"}, nil,
+		},
+		References:                  &gl.IssueReferences{Short: "!2", Relative: "p!2", Full: "g/p!2"},
+		TimeStats:                   &gl.TimeStats{TimeEstimate: 3600},
+		TaskCompletionStatus:        &gl.TasksCompletionStatus{Count: 4, CompletedCount: 1},
+		Draft:                       true,
+		Imported:                    true,
+		ImportedFrom:                "github",
+		DetailedMergeStatus:         "mergeable",
+		MergeWhenPipelineSucceeds:   true,
+		SHA:                         "abc",
+		MergeCommitSHA:              "def",
+		SquashCommitSHA:             "ghi",
+		Squash:                      true,
+		SquashOnMerge:               true,
+		ShouldRemoveSourceBranch:    true,
+		ForceRemoveSourceBranch:     true,
+		AllowCollaboration:          true,
+		AllowMaintainerToPush:       true,
+		DiscussionLocked:            true,
+		HasConflicts:                true,
+		BlockingDiscussionsResolved: true,
+		Upvotes:                     9, Downvotes: 2, UserNotesCount: 3,
+		CreatedAt: &created, UpdatedAt: &created, MergedAt: &merged,
+		MergeAfter: &merged, PreparedAt: &created, ClosedAt: &merged,
 		WebURL: "https://gitlab.example.com/mr/1",
 	}
 	out := basicMRToOutput(mr)
-	if out.Author != "alice" {
-		t.Errorf("Author = %q, want alice", out.Author)
+
+	if out.Author == nil || out.Author.Username != "alice" || out.Author.ID != 11 || out.Author.CreatedAt == "" {
+		t.Errorf("Author = %+v, want full alice user with created_at", out.Author)
 	}
+	if out.AuthorUsername != "alice" {
+		t.Errorf("AuthorUsername = %q, want alice", out.AuthorUsername)
+	}
+	if out.IID != 2 || out.MergeRequestIID != 2 {
+		t.Errorf("IID/MergeRequestIID = %d/%d, want 2/2", out.IID, out.MergeRequestIID)
+	}
+	if out.ProjectID != 7 || out.SourceProjectID != 7 || out.TargetProjectID != 8 {
+		t.Errorf("project ids = %d/%d/%d", out.ProjectID, out.SourceProjectID, out.TargetProjectID)
+	}
+	assertRelatedMRNested(t, out)
+	assertRelatedMRFlags(t, out)
+	if out.ImportedFrom != "github" || out.DetailedMergeStatus != "mergeable" {
+		t.Errorf("ImportedFrom/DetailedMergeStatus = %q/%q", out.ImportedFrom, out.DetailedMergeStatus)
+	}
+	if out.SHA != "abc" || out.MergeCommitSHA != "def" || out.SquashCommitSHA != "ghi" {
+		t.Errorf("shas = %q/%q/%q", out.SHA, out.MergeCommitSHA, out.SquashCommitSHA)
+	}
+	if out.Upvotes != 9 || out.Downvotes != 2 || out.UserNotesCount != 3 {
+		t.Errorf("counts = %d/%d/%d", out.Upvotes, out.Downvotes, out.UserNotesCount)
+	}
+	assertRelatedMRTimestamps(t, out)
 	if out.WebURL != "https://gitlab.example.com/mr/1" {
 		t.Errorf("WebURL = %q, want correct URL", out.WebURL)
 	}
 }
 
-// TestBasicMRToOutput_NilAuthor verifies BasicMRToOutput when nil author.
+// assertRelatedMRNested asserts the nested user, milestone, label, reference,
+// time-stats, and task-completion objects produced from the populated fixture,
+// including the nil-element-skipping behavior of the slice converters.
+func assertRelatedMRNested(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	if out.Assignee == nil || out.Assignee.Username != "bob" {
+		t.Errorf("Assignee = %+v, want bob", out.Assignee)
+	}
+	if len(out.Assignees) != 2 { // nil element skipped
+		t.Errorf("len(Assignees) = %d, want 2 (nil skipped)", len(out.Assignees))
+	}
+	if len(out.Reviewers) != 1 || out.Reviewers[0].Username != "dave" {
+		t.Errorf("Reviewers = %+v", out.Reviewers)
+	}
+	if out.MergeUser == nil || out.MergedBy == nil || out.ClosedBy == nil {
+		t.Errorf("merge/merged/closed user objects must be present")
+	}
+	if out.Milestone == nil || out.Milestone.Title != "v1" {
+		t.Errorf("Milestone = %+v, want v1", out.Milestone)
+	}
+	if len(out.Labels) != 2 {
+		t.Errorf("Labels = %v, want 2", out.Labels)
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" { // nil skipped
+		t.Errorf("LabelDetails = %+v, want [bug]", out.LabelDetails)
+	}
+	if out.References == nil || out.References.Full != "g/p!2" {
+		t.Errorf("References = %+v", out.References)
+	}
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 {
+		t.Errorf("TimeStats = %+v", out.TimeStats)
+	}
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.Count != 4 {
+		t.Errorf("TaskCompletionStatus = %+v", out.TaskCompletionStatus)
+	}
+}
+
+// assertRelatedMRFlags asserts that every boolean flag on the converted MR is
+// true, mirroring the all-true fixture used by TestBasicMRToOutput.
+func assertRelatedMRFlags(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	for name, got := range map[string]bool{
+		"Draft": out.Draft, "Imported": out.Imported, "Squash": out.Squash,
+		"SquashOnMerge": out.SquashOnMerge, "DiscussionLocked": out.DiscussionLocked,
+		"HasConflicts": out.HasConflicts, "BlockingDiscussionsResolved": out.BlockingDiscussionsResolved,
+		"AllowCollaboration": out.AllowCollaboration, "AllowMaintainerToPush": out.AllowMaintainerToPush,
+		"ShouldRemoveSourceBranch": out.ShouldRemoveSourceBranch, "ForceRemoveSourceBranch": out.ForceRemoveSourceBranch,
+		"MergeWhenPipelineSucceeds": out.MergeWhenPipelineSucceeds,
+	} {
+		if !got {
+			t.Errorf("flag %s = false, want true", name)
+		}
+	}
+}
+
+// assertRelatedMRTimestamps asserts that every timestamp field rendered into a
+// non-empty RFC 3339 string from the all-populated fixture.
+func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	for name, ts := range map[string]string{
+		"CreatedAt": out.CreatedAt, "UpdatedAt": out.UpdatedAt, "MergedAt": out.MergedAt,
+		"MergeAfter": out.MergeAfter, "PreparedAt": out.PreparedAt, "ClosedAt": out.ClosedAt,
+	} {
+		if ts == "" {
+			t.Errorf("timestamp %s empty, want RFC3339", name)
+		}
+	}
+}
+
+// TestBasicMRToOutput_NilAuthor verifies basicMRToOutput leaves every optional
+// nested object nil and the additive author_username empty when the SDK MR has
+// no author, users, milestone, references, time-stats, or task status.
 func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ID: 1, IID: 2}
 	out := basicMRToOutput(mr)
-	if out.Author != "" {
-		t.Errorf("Author = %q, want empty for nil author", out.Author)
+	if out.Author != nil {
+		t.Errorf("Author = %+v, want nil for nil author", out.Author)
+	}
+	if out.AuthorUsername != "" {
+		t.Errorf("AuthorUsername = %q, want empty for nil author", out.AuthorUsername)
+	}
+	if out.Assignee != nil || out.Assignees != nil || out.Reviewers != nil {
+		t.Errorf("user objects must be nil when absent")
+	}
+	if out.MergeUser != nil || out.MergedBy != nil || out.ClosedBy != nil {
+		t.Errorf("merge/merged/closed users must be nil when absent")
+	}
+	if out.Milestone != nil || out.References != nil || out.TimeStats != nil {
+		t.Errorf("milestone/references/time_stats must be nil when absent")
+	}
+	if out.TaskCompletionStatus != nil || out.LabelDetails != nil || out.Labels != nil {
+		t.Errorf("task status/label details/labels must be nil when absent")
+	}
+	if out.CreatedAt != "" || out.MergedAt != "" {
+		t.Errorf("timestamps must be empty when absent")
 	}
 }
 
@@ -2927,8 +3079,8 @@ func TestListMRsClosing_SuccessCov(t *testing.T) {
 	if len(out.MergeRequests) != 1 {
 		t.Fatalf("ListMRsClosing len = %d, want 1", len(out.MergeRequests))
 	}
-	if out.MergeRequests[0].Author != "bob" {
-		t.Errorf("MR author = %q, want bob", out.MergeRequests[0].Author)
+	if a := out.MergeRequests[0].Author; a == nil || a.Username != "bob" {
+		t.Errorf("MR author = %+v, want bob", out.MergeRequests[0].Author)
 	}
 }
 
@@ -3043,6 +3195,72 @@ func TestListMRsRelated_WithPagination(t *testing.T) {
 	}
 	if len(out.MergeRequests) != 1 {
 		t.Errorf("len = %d, want 1", len(out.MergeRequests))
+	}
+}
+
+// TestListMRsClosing_KeysetOrderSort verifies that the keyset pagination,
+// order_by, and sort inputs are forwarded to the GitLab query string.
+func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssue10+"/closed_by" {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, closingMRsResponse)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		OrderBy:               "created_at",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf("ListMRsClosing keyset: %v", err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=asc", "pagination=keyset", "page_token=42"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestListMRsRelated_KeysetOrderSort verifies keyset/order_by/sort forwarding
+// for the related-MR list endpoint.
+func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssue10+"/related_merge_requests" {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, relatedMRsResponse)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		OrderBy:               "updated_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+	})
+	if err != nil {
+		t.Fatalf("ListMRsRelated keyset: %v", err)
+	}
+	for _, want := range []string{"order_by=updated_at", "sort=desc", "pagination=keyset", "page_token=7"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestMRListOptionsApplyTo_EmptyKeepsZero verifies that applyTo leaves OrderBy
+// and Sort untouched when the inputs are empty, exercising the false branches.
+func TestMRListOptionsApplyTo_EmptyKeepsZero(t *testing.T) {
+	var opts gl.ListOptions
+	mrListOptions{}.applyTo(&opts)
+	if opts.OrderBy != "" || opts.Sort != "" || opts.Pagination != "" || opts.PageToken != "" {
+		t.Errorf("applyTo(zero) mutated opts = %+v", opts)
 	}
 }
 

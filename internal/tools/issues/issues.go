@@ -1215,16 +1215,72 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 	return ParticipantsOutput{Participants: out}, nil
 }
 
-// RelatedMROutput represents a basic merge request linked to an issue.
+// RelatedMROutput mirrors gl.BasicMergeRequest, the merge-request object
+// returned by the closing-MR and related-MR issue endpoints. Per the 1:1 audit
+// policy it surfaces every SDK field with the correct type: user objects
+// (author, assignee, assignees, reviewers, merge_user, merged_by, closed_by)
+// are full *BasicUserOutput/[]*BasicUserOutput rather than flattened
+// usernames, and milestone/references/time_stats/task_completion_status/
+// label_details are full nested objects reusing the issue sub-object shapes.
+//
+// The prior flattened scalars are preserved additively: AuthorUsername keeps
+// the old author string under a new author_username key while the canonical
+// author key now carries the full user object. The MR's own internal id is
+// surfaced on iid (the BasicMergeRequest.iid field), and the legacy
+// merge_request_iid key is retained additively for backward compatibility.
 type RelatedMROutput struct {
-	ID           int64  `json:"id"`
-	IID          int64  `json:"merge_request_iid"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	Author       string `json:"author"`
-	WebURL       string `json:"web_url"`
+	ID                          int64                       `json:"id"`
+	IID                         int64                       `json:"iid"`
+	MergeRequestIID             int64                       `json:"merge_request_iid"`
+	ProjectID                   int64                       `json:"project_id"`
+	Title                       string                      `json:"title"`
+	State                       string                      `json:"state"`
+	Description                 string                      `json:"description"`
+	SourceBranch                string                      `json:"source_branch"`
+	TargetBranch                string                      `json:"target_branch"`
+	SourceProjectID             int64                       `json:"source_project_id"`
+	TargetProjectID             int64                       `json:"target_project_id"`
+	Author                      *BasicUserOutput            `json:"author"`
+	AuthorUsername              string                      `json:"author_username,omitempty"`
+	Assignee                    *BasicUserOutput            `json:"assignee"`
+	Assignees                   []*BasicUserOutput          `json:"assignees"`
+	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
+	MergeUser                   *BasicUserOutput            `json:"merge_user"`
+	MergedBy                    *BasicUserOutput            `json:"merged_by"`
+	ClosedBy                    *BasicUserOutput            `json:"closed_by"`
+	Milestone                   *MilestoneOutput            `json:"milestone"`
+	Labels                      []string                    `json:"labels"`
+	LabelDetails                []*LabelDetailsOutput       `json:"label_details"`
+	References                  *ReferencesOutput           `json:"references"`
+	TimeStats                   *TimeStatsOutput            `json:"time_stats"`
+	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status"`
+	Draft                       bool                        `json:"draft"`
+	Imported                    bool                        `json:"imported"`
+	ImportedFrom                string                      `json:"imported_from"`
+	DetailedMergeStatus         string                      `json:"detailed_merge_status"`
+	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds"`
+	SHA                         string                      `json:"sha"`
+	MergeCommitSHA              string                      `json:"merge_commit_sha"`
+	SquashCommitSHA             string                      `json:"squash_commit_sha"`
+	Squash                      bool                        `json:"squash"`
+	SquashOnMerge               bool                        `json:"squash_on_merge"`
+	ShouldRemoveSourceBranch    bool                        `json:"should_remove_source_branch"`
+	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch"`
+	AllowCollaboration          bool                        `json:"allow_collaboration"`
+	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push"`
+	DiscussionLocked            bool                        `json:"discussion_locked"`
+	HasConflicts                bool                        `json:"has_conflicts"`
+	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
+	Upvotes                     int64                       `json:"upvotes"`
+	Downvotes                   int64                       `json:"downvotes"`
+	UserNotesCount              int64                       `json:"user_notes_count"`
+	CreatedAt                   string                      `json:"created_at,omitempty"`
+	UpdatedAt                   string                      `json:"updated_at,omitempty"`
+	MergedAt                    string                      `json:"merged_at,omitempty"`
+	MergeAfter                  string                      `json:"merge_after,omitempty"`
+	PreparedAt                  string                      `json:"prepared_at,omitempty"`
+	ClosedAt                    string                      `json:"closed_at,omitempty"`
+	WebURL                      string                      `json:"web_url"`
 }
 
 // RelatedMRsOutput holds a paginated list of merge requests related to an issue.
@@ -1234,19 +1290,68 @@ type RelatedMRsOutput struct {
 	Pagination    toolutil.PaginationOutput `json:"pagination"`
 }
 
-// basicMRToOutput converts the GitLab API response to the tool output format.
+// basicMRToOutput converts a gl.BasicMergeRequest into the full-fidelity
+// RelatedMROutput, surfacing every SDK field with nested user/milestone/
+// references/time-stats objects and the additive author_username scalar.
 func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 	out := RelatedMROutput{
-		ID:           mr.ID,
-		IID:          mr.IID,
-		Title:        mr.Title,
-		State:        mr.State,
-		SourceBranch: mr.SourceBranch,
-		TargetBranch: mr.TargetBranch,
-		WebURL:       mr.WebURL,
+		ID:              mr.ID,
+		IID:             mr.IID,
+		MergeRequestIID: mr.IID,
+		ProjectID:       mr.ProjectID,
+		Title:           mr.Title,
+		State:           mr.State,
+		Description:     mr.Description,
+		SourceBranch:    mr.SourceBranch,
+		TargetBranch:    mr.TargetBranch,
+		SourceProjectID: mr.SourceProjectID,
+		TargetProjectID: mr.TargetProjectID,
+		Author:          basicUserOutput(mr.Author),
+		Assignee:        basicUserOutput(mr.Assignee),
+		Assignees:       basicUserOutputs(mr.Assignees),
+		Reviewers:       basicUserOutputs(mr.Reviewers),
+		MergeUser:       basicUserOutput(mr.MergeUser),
+		// MergedBy is deprecated in the SDK in favor of MergeUser, but the 1:1
+		// audit requires surfacing every BasicMergeRequest field the API still
+		// returns, so it is mirrored additively under merged_by.
+		MergedBy:                    basicUserOutput(mr.MergedBy), //nolint:staticcheck // SA1019: intentional 1:1 fidelity for deprecated merged_by
+		ClosedBy:                    basicUserOutput(mr.ClosedBy),
+		Milestone:                   milestoneOutput(mr.Milestone),
+		Labels:                      []string(mr.Labels),
+		LabelDetails:                labelDetailsOutputs(mr.LabelDetails),
+		References:                  referencesOutput(mr.References),
+		TimeStats:                   timeStatsPtr(mr.TimeStats),
+		TaskCompletionStatus:        taskCompletionStatusOutput(mr.TaskCompletionStatus),
+		Draft:                       mr.Draft,
+		Imported:                    mr.Imported,
+		ImportedFrom:                mr.ImportedFrom,
+		DetailedMergeStatus:         mr.DetailedMergeStatus,
+		MergeWhenPipelineSucceeds:   mr.MergeWhenPipelineSucceeds,
+		SHA:                         mr.SHA,
+		MergeCommitSHA:              mr.MergeCommitSHA,
+		SquashCommitSHA:             mr.SquashCommitSHA,
+		Squash:                      mr.Squash,
+		SquashOnMerge:               mr.SquashOnMerge,
+		ShouldRemoveSourceBranch:    mr.ShouldRemoveSourceBranch,
+		ForceRemoveSourceBranch:     mr.ForceRemoveSourceBranch,
+		AllowCollaboration:          mr.AllowCollaboration,
+		AllowMaintainerToPush:       mr.AllowMaintainerToPush,
+		DiscussionLocked:            mr.DiscussionLocked,
+		HasConflicts:                mr.HasConflicts,
+		BlockingDiscussionsResolved: mr.BlockingDiscussionsResolved,
+		Upvotes:                     mr.Upvotes,
+		Downvotes:                   mr.Downvotes,
+		UserNotesCount:              mr.UserNotesCount,
+		CreatedAt:                   formatTimePtr(mr.CreatedAt),
+		UpdatedAt:                   formatTimePtr(mr.UpdatedAt),
+		MergedAt:                    formatTimePtr(mr.MergedAt),
+		MergeAfter:                  formatTimePtr(mr.MergeAfter),
+		PreparedAt:                  formatTimePtr(mr.PreparedAt),
+		ClosedAt:                    formatTimePtr(mr.ClosedAt),
+		WebURL:                      mr.WebURL,
 	}
 	if mr.Author != nil {
-		out.Author = mr.Author.Username
+		out.AuthorUsername = mr.Author.Username
 	}
 	return out
 }
@@ -1261,16 +1366,27 @@ func relatedMRsOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) RelatedMRs
 	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
-// setPagination copies the page and perPage values from the MCP input into
-// the underlying [gl.ListOptions] when they are positive. It is used by
-// the issue <-> merge request link list helpers to avoid repeating the
-// same guard in every list handler.
-func setPagination(opts *gl.ListOptions, page, perPage int) {
-	if page > 0 {
-		opts.Page = int64(page)
+// mrListOptions captures the shared list-query parameters (pagination, keyset,
+// order_by, sort) for the issue <-> merge request link list helpers so the
+// closing-MR and related-MR handlers can build the underlying gl.ListOptions
+// once. OrderBy and Sort are applied after ApplyListOptions so an explicit
+// value always wins.
+type mrListOptions struct {
+	pagination toolutil.PaginationInput
+	keyset     toolutil.KeysetPaginationInput
+	orderBy    string
+	sort       string
+}
+
+// applyTo populates a [gl.ListOptions] from the captured input: offset/keyset
+// pagination via ApplyListOptions, then order_by/sort when supplied.
+func (o mrListOptions) applyTo(opts *gl.ListOptions) {
+	toolutil.ApplyListOptions(opts, o.pagination, o.keyset)
+	if o.orderBy != "" {
+		opts.OrderBy = o.orderBy
 	}
-	if perPage > 0 {
-		opts.PerPage = int64(perPage)
+	if o.sort != "" {
+		opts.Sort = o.sort
 	}
 }
 
@@ -1280,11 +1396,10 @@ func setPagination(opts *gl.ListOptions, page, perPage int) {
 type issueMergeRequestsListArgs struct {
 	projectID toolutil.StringOrInt
 	issueIID  int64
-	page      int
-	perPage   int
+	listOpts  mrListOptions
 	operation string
 	hint      string
-	list      func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)
+	list      func(string, int64, mrListOptions, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)
 }
 
 // listIssueMergeRequests validates the inputs, invokes the supplied list
@@ -1300,7 +1415,7 @@ func listIssueMergeRequests(ctx context.Context, args issueMergeRequestsListArgs
 	if args.issueIID <= 0 {
 		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64(args.operation, "issue_iid")
 	}
-	mrs, resp, err := args.list(string(args.projectID), args.issueIID, args.page, args.perPage, gl.WithContext(ctx))
+	mrs, resp, err := args.list(string(args.projectID), args.issueIID, args.listOpts, gl.WithContext(ctx))
 	if err != nil {
 		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.hint)
 	}
@@ -1309,20 +1424,27 @@ func listIssueMergeRequests(ctx context.Context, args issueMergeRequestsListArgs
 
 // ListMRsClosingInput defines parameters for listing MRs that close an issue on merge.
 type ListMRsClosingInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IssueIID  int64                `json:"issue_iid"  jsonschema:"Issue internal ID,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
+	IssueIID  int64                `json:"issue_iid"          jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListMRsClosing retrieves merge requests that will close this issue on merge.
 func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input ListMRsClosingInput) (RelatedMRsOutput, error) {
 	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
-		projectID: input.ProjectID, issueIID: input.IssueIID, page: input.Page, perPage: input.PerPage,
+		projectID: input.ProjectID, issueIID: input.IssueIID,
+		listOpts: mrListOptions{
+			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
+			orderBy: input.OrderBy, sort: input.Sort,
+		},
 		operation: "issueListMRsClosing",
 		hint:      "verify project_id and issue_iid with gitlab_issue_get - only MRs that include 'Closes #N' are returned",
-		list: func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+		list: func(projectID string, issueIID int64, lo mrListOptions, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsClosingIssueOptions{}
-			setPagination(&listOptions.ListOptions, page, perPage)
+			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().Issues.ListMergeRequestsClosingIssue(projectID, issueIID, listOptions, opts...)
 		},
 	})
@@ -1330,20 +1452,27 @@ func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input List
 
 // ListMRsRelatedInput defines parameters for listing MRs related to an issue.
 type ListMRsRelatedInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	IssueIID  int64                `json:"issue_iid"  jsonschema:"Issue internal ID,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
+	IssueIID  int64                `json:"issue_iid"          jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, updated_at)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListMRsRelated retrieves merge requests related to this issue.
 func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input ListMRsRelatedInput) (RelatedMRsOutput, error) {
 	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
-		projectID: input.ProjectID, issueIID: input.IssueIID, page: input.Page, perPage: input.PerPage,
+		projectID: input.ProjectID, issueIID: input.IssueIID,
+		listOpts: mrListOptions{
+			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
+			orderBy: input.OrderBy, sort: input.Sort,
+		},
 		operation: "issueListMRsRelated",
 		hint:      "verify project_id and issue_iid with gitlab_issue_get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
-		list: func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+		list: func(projectID string, issueIID int64, lo mrListOptions, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsRelatedToIssueOptions{}
-			setPagination(&listOptions.ListOptions, page, perPage)
+			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().Issues.ListMergeRequestsRelatedToIssue(projectID, issueIID, listOptions, opts...)
 		},
 	})

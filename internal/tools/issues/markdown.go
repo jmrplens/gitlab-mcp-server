@@ -145,7 +145,11 @@ func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
 	b.WriteString("| IID | Title | State | Author | Source → Target |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s → %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(mr.Author), mr.SourceBranch, mr.TargetBranch)
+		author := ""
+		if mr.Author != nil {
+			author = mr.Author.Username
+		}
+		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s → %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(author), mr.SourceBranch, mr.TargetBranch)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

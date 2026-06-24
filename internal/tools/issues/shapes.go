@@ -125,6 +125,49 @@ func iterationOutput(it *gl.GroupIteration) *IterationOutput {
 	}
 }
 
+// BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in
+// merge-request payloads (author, assignee, reviewers, merge_user, closed_by).
+// It differs from IssueAuthorOutput/IssueAssigneeOutput (which mirror the
+// issue-specific gl.IssueAuthor/gl.IssueAssignee types) by carrying a
+// created_at timestamp.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url"`
+	WebURL    string `json:"web_url"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// basicUserOutput converts a single gl.BasicUser to its output shape, returning
+// nil when the SDK value is nil.
+func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	if u == nil {
+		return nil
+	}
+	return &BasicUserOutput{
+		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+	}
+}
+
+// basicUserOutputs converts a slice of gl.BasicUser, skipping nil elements and
+// returning nil for an empty or all-nil slice.
+func basicUserOutputs(users []*gl.BasicUser) []*BasicUserOutput {
+	if len(users) == 0 {
+		return nil
+	}
+	out := make([]*BasicUserOutput, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		out = append(out, basicUserOutput(u))
+	}
+	return out
+}
+
 // IssueAuthorOutput mirrors gl.IssueAuthor (the issue author object).
 type IssueAuthorOutput struct {
 	ID        int64  `json:"id"`
