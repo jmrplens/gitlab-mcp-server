@@ -14,7 +14,7 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
-	capabilities := []string{"sampling", "", "sampling"}
+	capabilities := []string{"cap-x", "", "cap-x"}
 	actions := []toolutil.ActionSpec{toolutil.NewActionSpec("delete", testRoute(true), toolutil.ActionSpecOptions{
 		Destructive:  true,
 		Idempotent:   true,
@@ -50,8 +50,8 @@ func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	if cloned.Icons[0].Source != "data:image/svg+xml;base64,test" {
 		t.Fatalf("cloned icon source = %q, want original", cloned.Icons[0].Source)
 	}
-	if len(cloned.CapabilityRequirements) != 1 || cloned.CapabilityRequirements[0] != "sampling" {
-		t.Fatalf("capability requirements = %+v, want deduped sampling", cloned.CapabilityRequirements)
+	if len(cloned.CapabilityRequirements) != 1 || cloned.CapabilityRequirements[0] != "cap-x" {
+		t.Fatalf("capability requirements = %+v, want deduped cap-x", cloned.CapabilityRequirements)
 	}
 	if cloned.Actions[0].Name != "delete" {
 		t.Fatalf("cloned action = %+v, want original delete action", cloned.Actions[0])

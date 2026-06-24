@@ -3910,13 +3910,6 @@ var testRouteFixtures = map[string]toolutil.ActionMap{
 			},
 		},
 	},
-	"gitlab_analyze": {
-		"release_notes": {
-			Handler: func(_ context.Context, _ map[string]any) (any, error) {
-				return map[string]any{"release_notes": true}, nil
-			},
-		},
-	},
 }
 
 // textContent extracts text content from MCP result content for assertions.

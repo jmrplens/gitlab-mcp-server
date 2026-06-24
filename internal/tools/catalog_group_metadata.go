@@ -116,8 +116,8 @@ func catalogGroupSurfaceKind(_ string) actioncatalog.SurfaceKind {
 }
 
 // catalogGroupCapabilityRequirements returns the MCP capability
-// requirements for a meta-tool group. No group has capability
-// requirements (the sampling-backed group was removed).
+// requirements for a meta-tool group. No meta-tool group declares capability
+// requirements.
 func catalogGroupCapabilityRequirements(_ string) []string {
 	return nil
 }

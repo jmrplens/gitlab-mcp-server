@@ -15,7 +15,7 @@
 // # Startup Flow
 //
 // The command validates configuration, registers tools, resources, prompts,
-// completions, roots, logging, progress, sampling, and elicitation support, then
+// completions, progress, and elicitation support, then
 // starts the selected transport:
 //
 //	server

@@ -30,8 +30,8 @@ func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFin
 
 	noop := func(context.Context, map[string]any) (any, error) { return nil, errNoop }
 	routes := map[string]toolutil.ActionMap{
-		"gitlab_analyze": {
-			"issue_summary": {
+		"gitlab_pipeline": {
+			"get": {
 				Handler:      noop,
 				OutputSchema: toolutil.SchemaForRoute[toolutil.VoidOutput](),
 			},
@@ -57,15 +57,15 @@ func TestCollectRouteOutputSchemaFindings_MixedRoutes_ReturnsOneMissingSchemaFin
 	}
 }
 
-// TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes verifies that
+// TestCollectRouteOutputSchemaFindings_DoesNotSkipRoutes verifies that
 // analyze meta-tool routes are included in output-schema auditing.
-func TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes(t *testing.T) {
+func TestCollectRouteOutputSchemaFindings_DoesNotSkipRoutes(t *testing.T) {
 	t.Parallel()
 
 	noop := func(context.Context, map[string]any) (any, error) { return nil, errNoop }
 	routes := map[string]toolutil.ActionMap{
-		"gitlab_analyze": {
-			"issue_summary": {Handler: noop},
+		"gitlab_pipeline": {
+			"get": {Handler: noop},
 		},
 	}
 
@@ -73,8 +73,8 @@ func TestCollectRouteOutputSchemaFindings_DoesNotSkipAnalyzeRoutes(t *testing.T)
 	if len(got) != 1 {
 		t.Fatalf("collectRouteOutputSchemaFindings returned %d findings, want 1: %#v", len(got), got)
 	}
-	if got[0].tool != "gitlab_analyze" {
-		t.Fatalf("finding tool = %q, want gitlab_analyze", got[0].tool)
+	if got[0].tool != "gitlab_pipeline" {
+		t.Fatalf("finding tool = %q, want gitlab_pipeline", got[0].tool)
 	}
 }
 

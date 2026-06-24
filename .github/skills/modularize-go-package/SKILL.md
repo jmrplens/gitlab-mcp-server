@@ -303,7 +303,6 @@ The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0. Each `client.
 | `todos/` | `Todos` | `todos.go` |
 | `health/` | `Version` | `health.go` |
 | `environments/` | `Environments` | `environments.go` |
-| `sampling/` | _(MCP-only, no GitLab API)_ | `sampling_tools.go` |
 | `elicitation/` | _(MCP-only, no GitLab API)_ | `elicitation_tools.go` |
 
 > **⚠️ This table may be incomplete.** Always scan the source package for files not listed here before starting a migration session. Any unlisted handler file is a new domain to add to the plan.

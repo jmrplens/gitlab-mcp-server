@@ -236,8 +236,7 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	cmd.Env = env
 	transport := &mcp.CommandTransport{Command: cmd, TerminateDuration: 5 * time.Second}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-external-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		CreateMessageHandler: evalCreateMessageHandler,
-		ElicitationHandler:   evalElicitationHandler,
+		ElicitationHandler: evalElicitationHandler,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -447,8 +446,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		return nil, nil, nil, nil, fmt.Errorf("server connect: %w", serverErr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		CreateMessageHandler: evalCreateMessageHandler,
-		ElicitationHandler:   evalElicitationHandler,
+		ElicitationHandler: evalElicitationHandler,
 	})
 	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -514,5 +512,3 @@ func dynamicValidationRoutes(catalogRoutes map[string]toolutil.ActionMap) map[st
 func dynamicActionID(toolName, action string) string {
 	return strings.TrimPrefix(toolName, "gitlab_") + "." + action
 }
-
-// evalCreateMessageHandler handles eval create message handler and returns [*mcp.CreateMessageResult].

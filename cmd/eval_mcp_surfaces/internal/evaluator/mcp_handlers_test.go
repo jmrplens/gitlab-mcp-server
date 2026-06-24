@@ -1,27 +1,10 @@
 package evaluator
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-// TestEvalCreateMessageHandler_ReturnsDeterministicSamplingResult verifies the
-// sampling bridge returns stable mock analysis content for evaluator tools.
-func TestEvalCreateMessageHandler_ReturnsDeterministicSamplingResult(t *testing.T) {
-	result, err := evalCreateMessageHandler(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("evalCreateMessageHandler() error = %v", err)
-	}
-	content, ok := result.Content.(*mcp.TextContent)
-	if !ok || !strings.Contains(content.Text, "Mock Analysis") {
-		t.Fatalf("content = %#v, want mock analysis text", result.Content)
-	}
-	if result.Model != "eval-mcp-surfaces-sampling-mock" || result.Role != "assistant" {
-		t.Fatalf("result = %+v, want evaluator mock assistant", result)
-	}
-}
 
 // TestEvalElicitationHandler_DerivesNestedDefaults verifies elicitation schemas
 // are auto-accepted with type-aware deterministic fixture values.

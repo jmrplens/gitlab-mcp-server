@@ -125,10 +125,6 @@ mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in
 
 Provide domain-specific SVG icons on all tools, resources, and prompts for visual identification in client UIs.
 
-### Sampling
-
-Tools can request LLM assistance via `server.CreateMessage()` for analysis, summarization, and content generation tasks. Strip credentials from sampling prompts.
-
 ### Elicitation
 
 Tools can request user input via `server.Elicit()` for confirmation of destructive actions or collecting missing parameters.

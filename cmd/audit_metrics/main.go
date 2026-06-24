@@ -79,19 +79,13 @@ func main() {
 	dynamicGitLabComEnterpriseMetrics := dynamicSearchMetrics(dynamicGitLabComEnterpriseCatalog)
 	enterpriseActionAudit := auditEnterpriseActionSpecs(dynamicBaseCatalog, dynamicEnterpriseCatalog, dynamicGitLabComEnterpriseCatalog)
 	staticResources, templateResources := countResources(client)
-	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
+	resourceCount := staticResources + templateResources
 	promptCount := countPrompts(client)
 	toolPackages := countToolPackages()
 	srcFiles, testFiles := countSourceFiles()
 
-	samplingCount := 0
 	elicitationCount := 0
 	for _, tool := range individualTools {
-		if strings.HasPrefix(tool.Name, "gitlab_analyze_") || strings.HasPrefix(tool.Name, "gitlab_summarize_") ||
-			strings.HasPrefix(tool.Name, "gitlab_generate_") || strings.HasPrefix(tool.Name, "gitlab_review_mr_security") ||
-			strings.HasPrefix(tool.Name, "gitlab_find_technical_debt") {
-			samplingCount++
-		}
 		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
 			elicitationCount++
 		}
@@ -130,9 +124,8 @@ func main() {
 
 	fmt.Println("## Tool Categories")
 	fmt.Println()
-	printRow("Sampling tools", samplingCount)
 	printRow("Elicitation tools", elicitationCount)
-	printRow("Standard tools", len(individualTools)-samplingCount-elicitationCount)
+	printRow("Standard tools", len(individualTools)-elicitationCount)
 	fmt.Println()
 
 	fmt.Println("## Meta-Tool Schema Modes")

@@ -17,7 +17,6 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-032", "Search code inside project `my-org/tools/gitlab-mcp-server` for `func RegisterMCPMeta` using that project's `project_id`.", readStep("gitlab_search", "code", params("query", "project_id"), nil)),
 		baseReadEvalCase("MT-033", "Search all projects for `gitlab-mcp-server`.", readStep("gitlab_search", "projects", params("query"), nil)),
 		baseReadEvalCase("MT-038", "List deploy keys for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_access", "deploy_key_list_project", params("project_id"), params("page", "per_page"))),
-		baseReadEvalCase("MT-039", "Analyze why pipeline `12345` failed in project `my-org/tools/gitlab-mcp-server` using the LLM-assisted pipeline failure analyzer.", readStep("gitlab_analyze", "pipeline_failure", params("project_id", "pipeline_id"), nil)),
 		baseReadEvalCase("MT-040", "First use gitlab_find_action to locate the server health check action, then execute the GitLab connectivity check for the MCP server.", readStep("gitlab_server", "health_check", nil, nil)),
 		baseReadEvalCase("MT-043", "List generic packages in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_package", "list", params("project_id"), params("package_type", "per_page"))),
 		baseReadEvalCase("MT-045", "List online project runners for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_runner", "list_project", params("project_id"), params("status"))),
@@ -31,12 +30,6 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-077", "List feature flags in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_feature_flags", "feature_flag_list", params("project_id"), params("scope", "per_page"))),
 		baseReadEvalCase("MT-090", "List available Dockerfile templates.", readStep("gitlab_template", "dockerfile_list", nil, nil)),
 		baseReadEvalCase("MT-092", "List wiki pages in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_wiki", "list", params("project_id"), params("with_content"))),
-		baseReadEvalCase("MT-093", "Analyze merge request `7` code changes in project `my-org/tools/gitlab-mcp-server` with the LLM-assisted code review analyzer.", readStep("gitlab_analyze", "mr_changes", params("project_id", "merge_request_iid"), nil)),
-		baseReadEvalCase("MT-094", "In project `my-org/tools/gitlab-mcp-server`, summarize issue `42` discussion using the `analyze.issue_summary` catalog action.", readStep("gitlab_analyze", "issue_summary", params("project_id", "issue_iid"), nil)),
-		baseReadEvalCase("MT-095", "Generate release notes for project `my-org/tools/gitlab-mcp-server` from `main` to `v0.0.0-eval-ms`.", readStep("gitlab_analyze", "release_notes", params("project_id", "from", "to"), nil)),
-		baseReadEvalCase("MT-096", "Run a security review of merge request `7` in project `my-org/tools/gitlab-mcp-server` using the LLM-assisted security review analyzer.", readStep("gitlab_analyze", "mr_security", params("project_id", "merge_request_iid"), nil)),
-		baseReadEvalCase("MT-097", "Analyze the CI configuration for project `my-org/tools/gitlab-mcp-server` using content_ref `main`.", readStep("gitlab_analyze", "ci_config", params("project_id"), params("content_ref"))),
-		baseReadEvalCase("MT-098", "Analyze technical-debt markers on branch `main` in project `my-org/tools/gitlab-mcp-server` with the LLM-assisted technical debt analyzer.", readStep("gitlab_analyze", "technical_debt", params("project_id"), params("ref"))),
 		baseReadEvalCase("MT-179", "Inspect merge request `7` changes in project `my-org/tools/gitlab-mcp-server` without running an LLM analyzer.", readStep("gitlab_mr_review", "changes_get", params("project_id", "merge_request_iid"), nil)),
 		baseReadEvalCase("MT-110", "List merged merge requests in project `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
 		baseReadEvalCase("MT-111", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
@@ -70,18 +63,11 @@ func readEvalCases() []Case {
 			readStep("gitlab_repository", "file_get", params("project_id", "file_path", "ref"), nil),
 		),
 		baseReadEvalCase(
-			"MS-002", "Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `999` trace, then call the pipeline failure analyzer using that same pipeline ID.",
+			"MS-002", "Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `999` trace.",
 			readStep("gitlab_discover_project", "", params("remote_url"), nil),
 			readStep("gitlab_pipeline", "get", params("project_id", "pipeline_id"), nil),
 			readStep("gitlab_job", "list", params("project_id", "pipeline_id"), params("scope")),
 			readStep("gitlab_job", "trace", params("project_id", "job_id"), nil),
-			readStep("gitlab_analyze", "pipeline_failure", params("project_id", "pipeline_id"), nil),
-		),
-		baseReadEvalCase(
-			"MS-012", "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes.",
-			readStep("gitlab_release", "list", params("project_id"), params("per_page")),
-			readStep("gitlab_repository", "compare", params("project_id", "from", "to"), nil),
-			readStep("gitlab_analyze", "release_notes", params("project_id", "from", "to"), nil),
 		),
 		baseReadEvalCase(
 			"MS-037", "Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: get the project, list branches, list tags, list releases, list the repository tree at `main`, list project CI variables, list deploy keys, list deploy tokens, then list generic packages.",
@@ -128,16 +114,8 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 		return "List failed jobs in pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-022":
 		return "Get the trace for job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
-	case "MT-039":
-		return "Analyze why pipeline `{{ .Pipeline.ID }}` failed in project `{{ .Project.Path }}` using the LLM-assisted pipeline failure analyzer.", []string{fixtureFailedJobArtifact}
 	case "MT-050":
 		return "Get raw content of personal snippet ID `{{ .Values.snippet_id }}`.", []string{fixtureSnippet}
-	case "MT-093":
-		return "Analyze merge request `{{ .MergeRequest.IID }}` code changes in project `{{ .Project.Path }}` with the LLM-assisted code review analyzer.", []string{fixtureMergeRequest}
-	case "MT-094":
-		return "In project `{{ .Project.Path }}`, summarize issue `{{ .Issue.IID }}` discussion using the `analyze.issue_summary` catalog action.", []string{fixtureIssue}
-	case "MT-096":
-		return "Run a security review of merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` using the LLM-assisted security review analyzer.", []string{fixtureMergeRequest}
 	case "MT-179":
 		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []string{fixtureMergeRequest}
 	case "MT-110":
@@ -159,7 +137,7 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 	case "MT-120":
 		return "List members with their roles in project `{{ .Project.Path }}`.", []string{fixtureMember}
 	case "MS-002":
-		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace, then call the pipeline failure analyzer using that same pipeline ID.", []string{fixtureFailedJobArtifact}
+		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace.", []string{fixtureFailedJobArtifact}
 	default:
 		return "", nil
 	}

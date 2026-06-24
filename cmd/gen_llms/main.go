@@ -391,7 +391,7 @@ func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
 // writeLLMSTxt generates the concise llms.txt overview.
 func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	var b strings.Builder
-	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1 // +1 for workspace_roots
+	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates)
 	domains := classifyMetaDomains(catalog.MetaBase)
 
 	b.WriteString("# gitlab-mcp-server\n\n")
