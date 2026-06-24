@@ -98958,11 +98958,11 @@
       "additionalProperties": false,
       "properties": {
         "minimum_access_level_for_delete": {
-          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Omit together with push level to make matching tags immutable",
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
           "type": "string"
         },
         "minimum_access_level_for_push": {
-          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Omit together with delete level to make matching tags immutable",
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
           "type": "string"
         },
         "project_id": {

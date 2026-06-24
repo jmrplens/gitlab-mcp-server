@@ -103,6 +103,8 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 		requireTruef(t, createOut.ID > 0, "registry_tag_rule_create: expected ID > 0")
 		t.Logf("Created registry tag protection rule %d", createOut.ID)
 
+		// By this point create succeeded, so the registry is available; update
+		// must succeed too (consistent with the list/create/delete steps).
 		updateOut, err := callToolOn[containerregistry.TagProtectionRuleOutput](ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "registry_tag_rule_update",
 			"params": map[string]any{
@@ -111,11 +113,8 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 				"tag_name_pattern": "release-.+",
 			},
 		})
-		if err != nil {
-			t.Logf("registry_tag_rule_update may have limitations: %v", err)
-		} else {
-			requireTruef(t, updateOut.ID == createOut.ID, "registry_tag_rule_update: ID mismatch")
-		}
+		requireNoError(t, err, "registry_tag_rule_update")
+		requireTruef(t, updateOut.ID == createOut.ID, "registry_tag_rule_update: ID mismatch")
 
 		err = callToolVoidOn(ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "registry_tag_rule_delete",

@@ -1156,7 +1156,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
 	}
-	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete"} {
+	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete", "gitlab_registry_tag_protection_delete"} {
 		if !byTool[toolName].Route.Destructive {
 			t.Fatalf("%s should be destructive", toolName)
 		}

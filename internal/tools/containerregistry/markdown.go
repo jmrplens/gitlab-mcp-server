@@ -148,7 +148,7 @@ func FormatTagProtectionRuleMarkdown(out TagProtectionRuleOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Tag Protection Rule: %s\n\n", out.TagNamePattern)
 	fmt.Fprint(&b, toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| Tag Name Pattern | %s |\n", out.TagNamePattern)
+	fmt.Fprintf(&b, "| Tag Name Pattern | %s |\n", toolutil.EscapeMdTableCell(out.TagNamePattern))
 	fmt.Fprintf(&b, "| Min Access Level (Push) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForPush))
 	fmt.Fprintf(&b, "| Min Access Level (Delete) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForDelete))
 	toolutil.WriteHints(
@@ -172,7 +172,7 @@ func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string
 	b.WriteString(toolutil.MarkdownTableHeader("Tag Pattern", "Min Push", "Min Delete"))
 	for _, r := range out.Rules {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n",
-			r.TagNamePattern, protectionAccessLabel(r.MinimumAccessLevelForPush), protectionAccessLabel(r.MinimumAccessLevelForDelete))
+			toolutil.EscapeMdTableCell(r.TagNamePattern), protectionAccessLabel(r.MinimumAccessLevelForPush), protectionAccessLabel(r.MinimumAccessLevelForDelete))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

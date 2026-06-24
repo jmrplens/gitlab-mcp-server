@@ -2315,6 +2315,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"search", "gitlab_group_search", map[string]any{"query": "infra"}},
 		{"transfer_project", "gitlab_group_transfer_project", map[string]any{"group_id": "99", "project_id": "42"}},
 		{"list_projects", "gitlab_group_projects", map[string]any{"group_id": "99"}},
+		{"shared_with_list", "gitlab_group_shared_with_list", map[string]any{"group_id": "99"}},
+		{"invited_list", "gitlab_group_invited_list", map[string]any{"group_id": "99"}},
+		{"transfer_locations", "gitlab_group_transfer_locations", map[string]any{"group_id": "99"}},
 		{"hook_list", "gitlab_group_hook_list", map[string]any{"group_id": "99"}},
 		{"hook_get", "gitlab_group_hook_get", map[string]any{"group_id": "99", "hook_id": 10}},
 		{"hook_add", "gitlab_group_hook_add", map[string]any{"group_id": "99", "url": "https://example.com/hook"}},
@@ -2411,6 +2414,21 @@ func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	// List group projects
 	handler.HandleFunc("GET /api/v4/groups/99/projects", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, projectJSON)
+	})
+
+	// List groups shared with the group
+	handler.HandleFunc("GET /api/v4/groups/99/groups/shared", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+groupJSON+`]`)
+	})
+
+	// List groups invited to the group
+	handler.HandleFunc("GET /api/v4/groups/99/invited_groups", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+groupJSON+`]`)
+	})
+
+	// List candidate transfer locations
+	handler.HandleFunc("GET /api/v4/groups/99/transfer_locations", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"Target","full_name":"Target Group","full_path":"target","web_url":"https://gitlab.example.com/groups/target"}]`)
 	})
 
 	// List group hooks

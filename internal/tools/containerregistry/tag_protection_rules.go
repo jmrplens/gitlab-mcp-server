@@ -78,8 +78,8 @@ func ListTagProtectionRules(ctx context.Context, client *gitlabclient.Client, in
 type CreateTagProtectionRuleInput struct {
 	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	TagNamePattern              string               `json:"tag_name_pattern" jsonschema:"Tag name pattern as a RE2 regular expression (e.g. v.+),required"`
-	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Omit together with delete level to make matching tags immutable"`
-	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Omit together with push level to make matching tags immutable"`
+	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
+	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
 }
 
 // CreateTagProtectionRule creates a container registry tag protection rule.

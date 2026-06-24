@@ -173,6 +173,20 @@ type BitbucketCloudImportOutput struct {
 
 // ImportFromBitbucketCloud imports a repository from Bitbucket Cloud into GitLab.
 func ImportFromBitbucketCloud(ctx context.Context, client *gitlabclient.Client, input ImportFromBitbucketCloudInput) (*BitbucketCloudImportOutput, error) {
+	if input.BitbucketUsername == "" {
+		return nil, toolutil.ErrFieldRequired("bitbucket_username")
+	}
+	if input.RepoPath == "" {
+		return nil, toolutil.ErrFieldRequired("repo_path")
+	}
+	if input.TargetNamespace == "" {
+		return nil, toolutil.ErrFieldRequired("target_namespace")
+	}
+	// API-token auth requires the associated Atlassian account email.
+	if input.BitbucketAPIToken != "" && input.BitbucketEmail == "" {
+		return nil, toolutil.ErrFieldRequired("bitbucket_email")
+	}
+
 	opts := &gl.ImportRepositoryFromBitbucketCloudOptions{
 		BitbucketUsername: new(input.BitbucketUsername),
 		RepoPath:          new(input.RepoPath),
