@@ -453,7 +453,6 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 		"markdown",
 		"modelregistry",
 	})
-	assertSurfaceBackedDomain(t, report, "samplingtools", "sampling-utility", 11)
 	assertSurfaceBackedDomain(t, report, "elicitationtools", "interactive-utility", 4)
 	assertSurfaceBackedDomain(t, report, "projectdiscovery", "runtime-utility", 1)
 	assertSurfaceBackedDomain(t, report, "serverupdate", "server-maintenance", 2)

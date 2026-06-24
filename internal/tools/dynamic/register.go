@@ -44,7 +44,6 @@ const (
 
 	actionAdminBroadcastMessageList = "admin.broadcast_message_list"
 	actionAdminSettingsGet          = "admin.settings_get"
-	actionAnalyzeReleaseNotes       = "analyze.release_notes"
 	actionEnvironmentDeploymentList = "environment.deployment_list"
 	actionFeatureFlagUserListGet    = "feature_flags.ff_user_list_get"
 	actionFeatureFlagUserListList   = "feature_flags.ff_user_list_list"
@@ -1368,31 +1367,10 @@ func addAdminReleaseTags(add tagCollector, _, domain, action string) bool {
 		addReleaseActionTags(add, action)
 	case domain == "repository" && action == "compare":
 		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
-	case domain == "analyze":
-		addAnalyzeActionTags(add, action)
 	default:
 		return false
 	}
 	return true
-}
-
-func addAnalyzeActionTags(add tagCollector, action string) {
-	switch action {
-	case "release_notes":
-		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
-	case "pipeline_failure":
-		add("pipeline failure", "failed pipeline", "pipeline failed", "why pipeline failed", "root cause", "failed jobs", "job trace", "failure analysis")
-	case "ci_config":
-		add("configuration", "config", "ci configuration", "project ci configuration", "ci configuration analysis", "project ci configuration analysis", "ci config analysis", "project ci config", "analyze .gitlab-ci.yml", "gitlab ci yaml", "pipeline config", "branch ci configuration", "best practices", "maintainability")
-	case "mr_changes":
-		add("merge request changes", "merge request changes analyzer", "analyze merge request changes", "mr changes analysis", "code review", "diff analysis", "review merge request changes", "review merge request diff", "llm assisted analyzer", "llm-assisted analyzer")
-	case "issue_summary":
-		add("issue summary", "summarize issue", "issue discussion summary", "key decisions", "issue recap")
-	case "mr_security":
-		add("merge request security", "security review", "mr security review", "owasp", "vulnerabilities", "review security")
-	case "technical_debt":
-		add("technical debt", "technical debt markers", "technical-debt markers", "find technical debt markers", "todo", "fixme", "hack", "todo fixme hack", "debt markers", "branch technical debt")
-	}
 }
 
 func addAdminActionTags(add tagCollector, action string) {
@@ -2051,12 +2029,8 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		RelatedActions: []string{actionReleaseLinkGet, actionReleaseLinkList},
 	},
 	"repository.compare": {
-		Usage:          "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.",
-		RelatedActions: []string{actionAnalyzeReleaseNotes, "release.list", "tag.list"},
-	},
-	actionAnalyzeReleaseNotes: {
-		Usage:          "Generates release notes with params.project_id, params.from, and params.to; call after requested release/compare prerequisite steps.",
-		RelatedActions: []string{"repository.compare", "release.list", "tag.list"},
+		Usage:          "Compares two refs using params.from and params.to.",
+		RelatedActions: []string{"release.list", "tag.list"},
 	},
 	"package.list": {
 		Usage:          "Lists GitLab package registry packages; use package.registry_list_project only for container registry image repositories.",
@@ -2366,9 +2340,6 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreScopeIntentValue(entry, terms)
 	score += scoreCompareRefsIntentValue(entry, terms)
 	score += scoreReleaseListIntentValue(entry, terms)
-	score += scoreAnalyzeReleaseNotesIntentValue(entry, terms)
-	score += scoreAnalyzeMRChangesIntentValue(entry, terms)
-	score += scoreMRSecurityIntentValue(entry, terms)
 	score += scoreDiscoverProjectIntentValue(entry, terms)
 	score += scoreProjectGetIntentValue(entry, terms)
 	score += scoreSearchProjectsIntentValue(entry, terms)
@@ -2443,9 +2414,6 @@ func applyIntentAdjustments(entry actionEntry, terms []searchTerm, score int, re
 		scoreScopeIntent,
 		scoreCompareRefsIntent,
 		scoreReleaseListIntent,
-		scoreAnalyzeReleaseNotesIntent,
-		scoreAnalyzeMRChangesIntent,
-		scoreMRSecurityIntent,
 		scoreDiscoverProjectIntent,
 		scoreProjectGetIntent,
 		scoreSearchProjectsIntent,
@@ -2798,86 +2766,6 @@ func scoreReleaseListIntentValue(entry actionEntry, terms []searchTerm) int {
 		return 0
 	}
 	return scoreReleaseListIntentBoost
-}
-
-func scoreAnalyzeMRChangesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
-	score := scoreAnalyzeMRChangesIntentValue(entry, terms)
-	if score == 0 {
-		return 0, MatchReason{}
-	}
-	document := documentForEntry(entry)
-	return score, MatchReason{Field: searchFieldAnalyzeIntent, QueryTerm: "analyze mr changes", MatchedValue: document.CanonicalID, Score: score}
-}
-
-// scoreAnalyzeMRChangesIntentValue fires for analyze.mr_changes when the query
-// combines an LLM/analyzer signal with an MR context. Without this boost,
-// mr_review.changes_get outranks analyze.mr_changes because it accumulates more
-// match-ratio points from its broader set of "changes/review" tags.
-func scoreAnalyzeMRChangesIntentValue(entry actionEntry, terms []searchTerm) int {
-	document := documentForEntry(entry)
-	if document.Domain != "analyze" || document.Action != "mr_changes" {
-		return 0
-	}
-	hasLLMSignal := searchTermsContainWord(terms, "llm") ||
-		searchTermsContainWord(terms, "analyzer") ||
-		searchTermsContainWord(terms, "sampling")
-	if !hasLLMSignal {
-		return 0
-	}
-	hasMR := searchTermsContainWord(terms, "mr") || searchTermsContainWord(terms, "merge")
-	if !hasMR {
-		return 0
-	}
-	return scoreAnalyzeMRChangesIntentBoost
-}
-
-func scoreAnalyzeReleaseNotesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
-	score := scoreAnalyzeReleaseNotesIntentValue(entry, terms)
-	if score == 0 {
-		return 0, MatchReason{}
-	}
-	document := documentForEntry(entry)
-	return score, MatchReason{Field: searchFieldAnalyzeIntent, QueryTerm: "release notes", MatchedValue: document.CanonicalID, Score: score}
-}
-
-func scoreAnalyzeReleaseNotesIntentValue(entry actionEntry, terms []searchTerm) int {
-	document := documentForEntry(entry)
-	if document.Domain != "analyze" || document.Action != "release_notes" {
-		return 0
-	}
-	if !searchTermsContainWord(terms, "release") && !searchTermsContainWord(terms, "releases") {
-		return 0
-	}
-	if !searchTermsContainWord(terms, "notes") {
-		return 0
-	}
-	return scoreAnalyzeNotesIntentBoost
-}
-
-func scoreMRSecurityIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
-	score := scoreMRSecurityIntentValue(entry, terms)
-	if score == 0 {
-		return 0, MatchReason{}
-	}
-	document := documentForEntry(entry)
-	return score, MatchReason{Field: searchFieldSecurityIntent, QueryTerm: "mr security review", MatchedValue: document.CanonicalID, Score: score}
-}
-
-func scoreMRSecurityIntentValue(entry actionEntry, terms []searchTerm) int {
-	document := documentForEntry(entry)
-	if document.Domain != "analyze" || document.Action != "mr_security" {
-		return 0
-	}
-	if !searchTermsContainWord(terms, "security") && !searchTermsContainWord(terms, "secure") {
-		return 0
-	}
-	if !searchTermsContainWord(terms, "review") && !searchTermsContainWord(terms, "analyzer") && !searchTermsContainWord(terms, "analyze") {
-		return 0
-	}
-	if !searchTermsContainWord(terms, "merge") && !searchTermsContainWord(terms, "mr") && !searchTermsContainWord(terms, "merge_request") {
-		return 0
-	}
-	return scoreMRSecurityIntentBoost
 }
 
 func scoreDiscoverProjectIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {

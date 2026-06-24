@@ -1174,7 +1174,7 @@ func assertCapabilityResources(t *testing.T, session *mcp.ClientSession, wantFul
 		t.Fatalf("ListResources() error = %v", err)
 	}
 	resources := resourcesResult.Resources
-	for _, uri := range []string{"gitlab://workspace/roots", "gitlab://tools"} {
+	for _, uri := range []string{"gitlab://tools"} {
 		if !resourceListHasURI(resources, uri) {
 			t.Fatalf("resources = %+v, want %s", resources, uri)
 		}
@@ -1183,8 +1183,8 @@ func assertCapabilityResources(t *testing.T, session *mcp.ClientSession, wantFul
 		assertFullCatalogResources(t, resources)
 		return
 	}
-	if len(resources) != 2 {
-		t.Fatalf("minimal resources = %+v, want 2 resources", resources)
+	if len(resources) != 1 {
+		t.Fatalf("minimal resources = %+v, want 1 resource", resources)
 	}
 }
 
@@ -1467,9 +1467,6 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	session := newInMemorySession(t, server)
-	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://workspace/roots"}); err != nil {
-		t.Fatalf("workspace roots should still be readable after manifest inspection error: %v", err)
-	}
 	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); err == nil {
 		t.Fatal("tool manifest should be omitted when inspection fails")
 	}

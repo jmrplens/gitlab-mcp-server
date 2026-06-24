@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/logging"
 )
 
 // LogToolCall logs a structured message after a tool handler completes.
@@ -21,10 +19,10 @@ func LogToolCall(tool string, start time.Time, err error) {
 	slog.Info("tool call completed", "tool", tool, "duration", duration)
 }
 
-// LogToolCallAll logs to both stderr (slog) and the MCP client (protocol logging).
-// It is the standard logging function for all tool handlers. When the request
-// contains authenticated user identity (any mode), it includes the user in the
-// log output for audit trail purposes.
+// LogToolCallAll logs a tool call to stderr (slog). It is the standard logging
+// function for all tool handlers. When the request contains authenticated user
+// identity (any mode), it includes the user in the log output for audit trail
+// purposes.
 func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, start time.Time, err error) {
 	user := ResolveIdentity(ctx, req)
 	if user.IsAuthenticated() {
@@ -32,7 +30,6 @@ func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, 
 	} else {
 		LogToolCall(tool, start, err)
 	}
-	logging.FromToolRequest(req).LogToolCall(ctx, tool, start, err)
 }
 
 // logToolCallWithUser logs a tool call including the authenticated user identity.

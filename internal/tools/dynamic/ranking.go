@@ -19,8 +19,6 @@ const (
 	searchFieldSpecificity    = "action_specificity"
 	searchFieldCompareIntent  = "compare_refs_intent"
 	searchFieldReleaseIntent  = "release_list_intent"
-	searchFieldAnalyzeIntent  = "analyze_release_notes_intent"
-	searchFieldSecurityIntent = "mr_security_intent"
 	searchFieldDiscoverIntent = "discover_project_intent"
 	searchFieldProjectIntent  = "project_get_intent"
 	searchFieldSearchIntent   = "search_projects_intent"
@@ -60,20 +58,17 @@ const (
 )
 
 const (
-	minimumHighConfidenceScore       = 80
-	minimumHighConfidenceMargin      = 15
-	scoreVerbIntentBoost             = 16
-	scoreVerbIntentPenalty           = -24
-	scoreRequiredParamBoost          = 10
-	scoreCompoundTagBoost            = 50
-	scoreCompareRefsIntentBoost      = 90
-	scoreReleaseListIntentBoost      = 80
-	scoreAnalyzeNotesIntentBoost     = 70
-	scoreAnalyzeMRChangesIntentBoost = 200
-	scoreMRSecurityIntentBoost       = 95
-	scoreDiscoverIntentBoost         = 95
-	scoreProjectGetIntentBoost       = 220
-	scoreSearchProjectsBoost         = 90
+	minimumHighConfidenceScore  = 80
+	minimumHighConfidenceMargin = 15
+	scoreVerbIntentBoost        = 16
+	scoreVerbIntentPenalty      = -24
+	scoreRequiredParamBoost     = 10
+	scoreCompoundTagBoost       = 50
+	scoreCompareRefsIntentBoost = 90
+	scoreReleaseListIntentBoost = 80
+	scoreDiscoverIntentBoost    = 95
+	scoreProjectGetIntentBoost  = 220
+	scoreSearchProjectsBoost    = 90
 	// scoreSearchCodeIntentBoost and scoreCurrentUserIntentBoost are intentionally
 	// large. Both actions pass the match-ratio filter via an intent bypass (they
 	// match only 2 of ~10 tokens in long queries), so after scaling their base

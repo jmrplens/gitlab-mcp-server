@@ -4970,8 +4970,8 @@ func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
 	if resourcesErr != nil {
 		t.Fatalf("ListResources() error = %v", resourcesErr)
 	}
-	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://workspace/roots") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
-		t.Fatalf("resources = %+v, want tools, workspace roots, and normal GitLab resources", resourcesResult.Resources)
+	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
+		t.Fatalf("resources = %+v, want tools and normal GitLab resources", resourcesResult.Resources)
 	}
 	templatesResult, templatesErr := session.ListResourceTemplates(t.Context(), nil)
 	if templatesErr != nil {

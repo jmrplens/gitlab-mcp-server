@@ -53,8 +53,6 @@ func TestDebugScores_ActionSpecificityForSearchProjects(t *testing.T) {
 			base += scoreScopeIntentValue(entry, terms)
 			base += scoreCompareRefsIntentValue(entry, terms)
 			base += scoreReleaseListIntentValue(entry, terms)
-			base += scoreAnalyzeReleaseNotesIntentValue(entry, terms)
-			base += scoreMRSecurityIntentValue(entry, terms)
 			base += scoreDiscoverProjectIntentValue(entry, terms)
 			base += scoreProjectGetIntentValue(entry, terms)
 			boost := scoreSearchProjectsIntentValue(entry, terms)

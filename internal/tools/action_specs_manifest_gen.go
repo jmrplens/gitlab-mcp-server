@@ -6,7 +6,6 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 	return []actionSpecGroupBuilder{
 		buildAccessActionSpecs,
 		buildAdminActionSpecs,
-		buildAnalyzeActionSpecs,
 		buildAttestationActionSpecs,
 		buildAuditEventActionSpecs,
 		buildBranchActionSpecs,

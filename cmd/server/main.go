@@ -58,7 +58,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -657,10 +656,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	completionHandler := completions.NewHandler(client)
-	rootsManager := roots.NewManager()
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
 	serverCapabilities := &mcp.ServerCapabilities{
-		Logging:   &mcp.LoggingCapabilities{},
 		Tools:     &mcp.ToolCapabilities{ListChanged: true},
 		Resources: &mcp.ResourceCapabilities{ListChanged: true},
 	}
@@ -681,8 +678,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			"PROJECT DISCOVERY — To find the project_id needed for most operations:\n" +
 			"1. Read the .git/config file from the workspace to find [remote \"origin\"] url = ...\n" +
 			"2. Call gitlab_resolve_project_from_remote with that URL to get the project_id.\n" +
-			"3. Alternatively, use gitlab_list_projects (owned=true) or gitlab_search_projects to find projects by name.\n" +
-			"4. You can also read the gitlab://workspace/roots resource to discover workspace paths.\n\n" +
+			"3. Alternatively, use gitlab_list_projects (owned=true) or gitlab_search_projects to find projects by name.\n\n" +
 			"DEFAULT BRANCH — When generating URLs to repository files or branches:\n" +
 			"1. Call gitlab_project_get to retrieve the project metadata, which includes the default_branch field.\n" +
 			"2. ALWAYS use the returned default_branch value (e.g. develop, master) instead of assuming 'main'.\n" +
@@ -703,16 +699,6 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
-		},
-		InitializedHandler: func(ctx context.Context, req *mcp.InitializedRequest) {
-			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
-				slog.Debug("initial roots fetch failed; roots cache left empty", "error", err)
-			}
-		},
-		RootsListChangedHandler: func(ctx context.Context, req *mcp.RootsListChangedRequest) {
-			if err := rootsManager.Refresh(ctx, req.Session); err != nil {
-				slog.Warn("failed to refresh roots on change notification", "error", err)
-			}
 		},
 		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationServerRequest) {
 			slog.Debug(
@@ -753,7 +739,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 	}
 
-	registerConfiguredCapabilities(server, client, rootsManager, capabilitySurface)
+	registerConfiguredCapabilities(server, client, capabilitySurface)
 
 	// Force `additionalProperties: false` on tool input schemas so unknown
 	// properties produce actionable validation errors LLMs can self-correct
@@ -828,12 +814,9 @@ func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoute
 	}
 }
 
-func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Client, rootsManager *roots.Manager, capabilitySurface string) {
+func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Client, capabilitySurface string) {
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.Register(server, client)
-	}
-	resources.RegisterWorkspaceRoots(server, rootsManager)
-	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.RegisterWorkflowGuides(server)
 		prompts.Register(server, client)
 	}

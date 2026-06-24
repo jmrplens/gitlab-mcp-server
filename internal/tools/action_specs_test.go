@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -124,26 +123,6 @@ func TestCollectedActionSpecs_DeclareCatalogOwnership(t *testing.T) {
 		sort.Strings(missingActionOwners)
 		sort.Strings(unknownActionOwners)
 		t.Fatalf("catalog ownership drift:\nmissing group owners: %v\nunknown group owners: %v\nmissing action owners: %v\nunknown action owners: %v", missingGroupOwners, unknownGroupOwners, missingActionOwners, unknownActionOwners)
-	}
-}
-
-// TestCollectedActionSpecs_ClassifySamplingUtility verifies CollectedActionSpecs when classify sampling utility.
-func TestCollectedActionSpecs_ClassifySamplingUtility(t *testing.T) {
-	var analyzeGroup ActionSpecGroup
-	for _, group := range CollectActionSpecs(nil, false) {
-		if group.ToolName == "gitlab_analyze" {
-			analyzeGroup = group
-			break
-		}
-	}
-	if analyzeGroup.ToolName == "" {
-		t.Fatal("CollectActionSpecs() missing gitlab_analyze")
-	}
-	if analyzeGroup.SurfaceKind != actioncatalog.SurfaceKindSamplingUtility {
-		t.Fatalf("gitlab_analyze surface kind = %q, want %q", analyzeGroup.SurfaceKind, actioncatalog.SurfaceKindSamplingUtility)
-	}
-	if !slices.Contains(analyzeGroup.CapabilityRequirements, "sampling") {
-		t.Fatalf("gitlab_analyze capability requirements = %#v, want sampling", analyzeGroup.CapabilityRequirements)
 	}
 }
 

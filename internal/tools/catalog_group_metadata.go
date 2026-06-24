@@ -9,7 +9,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -111,22 +110,15 @@ func catalogGroupReadOnly(specs []toolutil.ActionSpec) bool {
 }
 
 // catalogGroupSurfaceKind returns the catalog [actioncatalog.SurfaceKind]
-// for a meta-tool group. The gitlab_analyze group is the sole sampling
-// utility surface; every other meta-tool group is a regular meta group.
-func catalogGroupSurfaceKind(toolName string) actioncatalog.SurfaceKind {
-	if toolName == "gitlab_analyze" {
-		return actioncatalog.SurfaceKindSamplingUtility
-	}
+// for a meta-tool group. Every meta-tool group is a regular meta group.
+func catalogGroupSurfaceKind(_ string) actioncatalog.SurfaceKind {
 	return actioncatalog.SurfaceKindMetaGroup
 }
 
 // catalogGroupCapabilityRequirements returns the MCP capability
-// requirements for a meta-tool group. The gitlab_analyze group requires
-// the "sampling" capability; every other group has no requirements.
-func catalogGroupCapabilityRequirements(toolName string) []string {
-	if toolName == "gitlab_analyze" {
-		return []string{"sampling"}
-	}
+// requirements for a meta-tool group. No group has capability
+// requirements (the sampling-backed group was removed).
+func catalogGroupCapabilityRequirements(_ string) []string {
 	return nil
 }
 
@@ -137,7 +129,6 @@ func catalogGroupCapabilityRequirements(toolName string) []string {
 var catalogGroupIconsByToolName = map[string][]mcp.Icon{
 	"gitlab_access":                toolutil.IconToken,
 	"gitlab_admin":                 toolutil.IconConfig,
-	"gitlab_analyze":               toolutil.IconAnalytics,
 	"gitlab_attestation":           toolutil.IconShield,
 	"gitlab_audit_event":           toolutil.IconAudit,
 	"gitlab_branch":                toolutil.IconBranch,
@@ -194,12 +185,7 @@ func catalogGroupIcons(toolName string) []mcp.Icon {
 }
 
 // catalogGroupFormatResult returns the [toolutil.FormatResultFunc] used
-// by a meta-tool group. The gitlab_analyze group uses the sampling-aware
-// formatter from the sampling sub-package; every other group has no
-// override and the default dispatcher applies.
-func catalogGroupFormatResult(toolName string) toolutil.FormatResultFunc {
-	if toolName == "gitlab_analyze" {
-		return samplingtools.MetaMarkdownForResult
-	}
+// by a meta-tool group. No group overrides the default dispatcher.
+func catalogGroupFormatResult(_ string) toolutil.FormatResultFunc {
 	return nil
 }

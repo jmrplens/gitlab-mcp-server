@@ -20,7 +20,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	mcpresources "github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -399,7 +398,6 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{
 		PageSize: 2000,
 		Capabilities: &mcp.ServerCapabilities{
-			Logging:   &mcp.LoggingCapabilities{},
 			Tools:     &mcp.ToolCapabilities{ListChanged: true},
 			Resources: &mcp.ResourceCapabilities{ListChanged: true},
 			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
@@ -490,7 +488,6 @@ func inspectEvalTools(server *mcp.Server) ([]*mcp.Tool, error) {
 // registerEvalResources mirrors the default full resource and prompt capability surface.
 func registerEvalResources(server *mcp.Server, client *gitlabclient.Client, toolSurface string, catalog *actioncatalog.Catalog, routes map[string]toolutil.ActionMap, toolList []*mcp.Tool) {
 	mcpresources.Register(server, client)
-	mcpresources.RegisterWorkspaceRoots(server, roots.NewManager())
 	mcpresources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)
 	mcpresources.RegisterToolSurfaceResources(server, mcpresources.ToolSurfaceResourceOptions{

@@ -51,23 +51,19 @@ func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 	dynamicCatalog := actioncatalog.FromActionMaps(routes)
 	dynamicTools := listDynamicTools(dynamicCatalog)
 	manifestTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
-		ToolManifest:   true,
-		ToolSurface:    config.ToolSurfaceDynamic,
-		ToolList:       dynamicTools,
-		ToolCatalog:    dynamicCatalog,
-		WorkspaceRoots: true,
+		ToolManifest: true,
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ToolList:     dynamicTools,
+		ToolCatalog:  dynamicCatalog,
 	})
-	rootOnlyTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
-	if rootOnlyTokens <= 0 {
-		t.Fatalf("workspace root tokens = %d, want positive token estimate", rootOnlyTokens)
-	}
-	if manifestTokens <= rootOnlyTokens {
-		t.Fatalf("manifest resource tokens = %d, want greater than roots-only %d", manifestTokens, rootOnlyTokens)
+	bareTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{})
+	if manifestTokens <= bareTokens {
+		t.Fatalf("manifest resource tokens = %d, want greater than bare server %d", manifestTokens, bareTokens)
 	}
 }
 
 // TestMeasureResourcesWithOptions_MinimalCandidate verifies the dynamic-minimal
-// candidate keeps the tool manifest and workspace roots while dropping the
+// candidate keeps the tool manifest while dropping the
 // heavier optional resource groups.
 func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 	client := newAuditTokensClient(t)
@@ -76,15 +72,14 @@ func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 	dynamicTools := listDynamicTools(dynamicCatalog)
 	fullDynamicTokens := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
 	minimalTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
-		ToolManifest:   true,
-		ToolSurface:    config.ToolSurfaceDynamic,
-		ToolList:       dynamicTools,
-		ToolCatalog:    dynamicCatalog,
-		WorkspaceRoots: true,
+		ToolManifest: true,
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ToolList:     dynamicTools,
+		ToolCatalog:  dynamicCatalog,
 	})
 
 	if minimalTokens <= 0 {
-		t.Fatalf("minimal resource tokens = %d, want positive workspace_roots estimate", minimalTokens)
+		t.Fatalf("minimal resource tokens = %d, want positive tool-manifest estimate", minimalTokens)
 	}
 	if minimalTokens >= fullDynamicTokens {
 		t.Fatalf("minimal resource tokens = %d, want less than full dynamic %d", minimalTokens, fullDynamicTokens)

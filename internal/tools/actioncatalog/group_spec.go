@@ -24,8 +24,6 @@ const (
 	SurfaceKindRuntimeUtility SurfaceKind = "runtime-utility"
 	// SurfaceKindInteractiveUtility identifies tools that require MCP elicitation.
 	SurfaceKindInteractiveUtility SurfaceKind = "interactive-utility"
-	// SurfaceKindSamplingUtility identifies tools that require MCP sampling.
-	SurfaceKindSamplingUtility SurfaceKind = "sampling-utility"
 	// SurfaceKindServerMaintenance identifies server maintenance tools.
 	SurfaceKindServerMaintenance SurfaceKind = "server-maintenance"
 )
@@ -133,7 +131,6 @@ func validSurfaceKind(kind SurfaceKind) bool {
 		SurfaceKindDynamicController,
 		SurfaceKindRuntimeUtility,
 		SurfaceKindInteractiveUtility,
-		SurfaceKindSamplingUtility,
 		SurfaceKindServerMaintenance:
 		return true
 	default:

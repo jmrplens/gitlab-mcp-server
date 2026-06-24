@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1039
+		const expectedTools = 1028
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -184,7 +184,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 877
+		const expectedTools = 866
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -248,7 +248,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 33
+		const expectedTools = 32
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -263,7 +263,7 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 49
+		const expectedTools = 48
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -406,7 +406,6 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 	expectedNames := map[string]bool{
 		"gitlab_access":                true,
 		"gitlab_admin":                 true,
-		"gitlab_analyze":               true,
 		"gitlab_attestation":           true,
 		"gitlab_audit_event":           true,
 		"gitlab_branch":                true,

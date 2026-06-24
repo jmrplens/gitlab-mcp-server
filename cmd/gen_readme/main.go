@@ -26,7 +26,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -153,7 +152,6 @@ type resourceRegistrationOptions struct {
 	ToolList       []*mcp.Tool
 	ToolCatalog    *actioncatalog.Catalog
 	WorkflowGuides bool
-	WorkspaceRoots bool
 }
 
 // sharedTokenMeasureOptions bundles the catalog metadata and capability
@@ -414,7 +412,6 @@ func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOpt
 		ToolList:       opts.ToolList,
 		ToolCatalog:    opts.ToolCatalog,
 		WorkflowGuides: opts.CapabilitySurface == config.CapabilitySurfaceFull,
-		WorkspaceRoots: true,
 	})
 	if err != nil {
 		return 0, err
@@ -437,9 +434,6 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 			Catalog:    opts.ToolCatalog,
 			MetaRoutes: routes,
 		})
-	}
-	if opts.WorkspaceRoots {
-		resources.RegisterWorkspaceRoots(server, roots.NewManager())
 	}
 	if opts.WorkflowGuides {
 		resources.RegisterWorkflowGuides(server)

@@ -137,16 +137,15 @@ func individualCatalogActionEligible(action actioncatalog.Action, opts Individua
 
 // individualCatalogGroupEligible reports whether the catalog group
 // should contribute actions to the individual surface. The base meta
-// and sampling groups are always eligible; runtime, interactive, and
+// groups are always eligible; runtime, interactive, and
 // server maintenance groups require
 // [IndividualCatalogRegisterOptions.IncludeStandaloneUtilities] to be
 // opted in. Edition and GitLab.com filters apply when the gating flag
 // is set.
 func individualCatalogGroupEligible(group actioncatalog.Group, opts IndividualCatalogRegisterOptions) bool {
 	switch group.SurfaceKind {
-	case actioncatalog.SurfaceKindMetaGroup, actioncatalog.SurfaceKindGitLabAction, actioncatalog.SurfaceKindSamplingUtility:
-		// Ordinary GitLab actions and sampling-backed actions are part of the
-		// current individual surface.
+	case actioncatalog.SurfaceKindMetaGroup, actioncatalog.SurfaceKindGitLabAction:
+		// Ordinary GitLab actions are part of the current individual surface.
 	case actioncatalog.SurfaceKindRuntimeUtility, actioncatalog.SurfaceKindInteractiveUtility, actioncatalog.SurfaceKindServerMaintenance:
 		if !opts.IncludeStandaloneUtilities {
 			return false
