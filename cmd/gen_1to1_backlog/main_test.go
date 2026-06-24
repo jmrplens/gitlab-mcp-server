@@ -1,0 +1,125 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// writeTemp writes content to a temp file and returns its path.
+func writeTemp(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+	return path
+}
+
+// TestBuildBacklog_MergesThreeStreams verifies the merge attributes each gap
+// stream to the right package, attributes a shared service to every referencing
+// package, and tallies the summary.
+func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
+	dir := t.TempDir()
+	structPath := writeTemp(t, dir, "struct.json", `{
+	  "packages": [
+	    {"package": "branches", "missing_input_count": 20, "missing_output_count": 4, "gaps": [{"kind":"input","mcp_type":"ProtectInput","sdk_type":"v2.ProtectRepositoryBranchesOptions","missing_fields":[{"tag":"name","sdk_type":"*string"}]}]}
+	  ]
+	}`)
+	actionPath := writeTemp(t, dir, "action.json", `{
+	  "services": [
+	    {"service": "DiscussionsServiceInterface", "packages": ["mrdiscussions","issuediscussions"], "api_methods": 31, "covered_methods": 25, "missing_methods": ["AddEpicDiscussionNote","CreateEpicDiscussion"]},
+	    {"service": "CleanServiceInterface", "packages": ["clean"], "api_methods": 4, "covered_methods": 4, "missing_methods": []}
+	  ]
+	}`)
+	metadataPath := writeTemp(t, dir, "metadata.json", `{
+	  "packages": [
+	    {"package": "branches", "actions": 10, "findings": [
+	      {"action":"branch.list","tool":"gitlab_branch_list","usage":"Use to execute branches domain action.","flags":["generic_usage","empty_related"]}
+	    ]}
+	  ]
+	}`)
+
+	bl, err := buildBacklog(structPath, actionPath, metadataPath)
+	if err != nil {
+		t.Fatalf("buildBacklog: %v", err)
+	}
+
+	// branches gets struct + metadata; mrdiscussions + issuediscussions get the
+	// shared service; clean (no missing methods) is absent.
+	pkgs := indexPackages(bl)
+	branches, ok := pkgs["branches"]
+	if !ok {
+		t.Fatal("branches missing from backlog")
+	}
+	if branches.Struct == nil || branches.Struct.MissingInput != 20 {
+		t.Errorf("branches struct gaps not merged: %+v", branches.Struct)
+	}
+	if branches.Metadata == nil || branches.Metadata.GenericUsage != 1 || branches.Metadata.EmptyRelated != 1 {
+		t.Errorf("branches metadata not merged: %+v", branches.Metadata)
+	}
+	for _, name := range []string{"mrdiscussions", "issuediscussions"} {
+		pkg, found := pkgs[name]
+		if !found || len(pkg.Actions) != 1 || len(pkg.Actions[0].MissingMethods) != 2 {
+			t.Errorf("%s did not receive shared service gap: %+v", name, pkg.Actions)
+		}
+	}
+	if _, found := pkgs["clean"]; found {
+		t.Error("clean service has no missing methods and must not appear")
+	}
+
+	if bl.Summary.StructMissingInput != 20 || bl.Summary.StructMissingOutput != 4 {
+		t.Errorf("struct summary = %d/%d, want 20/4", bl.Summary.StructMissingInput, bl.Summary.StructMissingOutput)
+	}
+	// Shared service attributed to two packages → counted twice in the summary.
+	if bl.Summary.ActionMissingMethods != 4 {
+		t.Errorf("action summary = %d, want 4 (2 methods × 2 packages)", bl.Summary.ActionMissingMethods)
+	}
+	if bl.Summary.MetaGenericUsage != 1 || bl.Summary.MetaEmptyRelated != 1 {
+		t.Errorf("meta summary = %d/%d, want 1/1", bl.Summary.MetaGenericUsage, bl.Summary.MetaEmptyRelated)
+	}
+}
+
+// TestBuildBacklog_PackagesSortedAndStructGapsPreserved verifies deterministic
+// package ordering and that the struct gaps blob is passed through verbatim.
+func TestBuildBacklog_PackagesSortedAndStructGapsPreserved(t *testing.T) {
+	dir := t.TempDir()
+	structPath := writeTemp(t, dir, "struct.json", `{"packages":[
+	  {"package":"zeta","missing_input_count":1,"missing_output_count":0,"gaps":[{"kind":"input"}]},
+	  {"package":"alpha","missing_input_count":0,"missing_output_count":2,"gaps":[{"kind":"output"}]}
+	]}`)
+	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
+	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
+
+	bl, err := buildBacklog(structPath, actionPath, metadataPath)
+	if err != nil {
+		t.Fatalf("buildBacklog: %v", err)
+	}
+	if len(bl.Packages) != 2 || bl.Packages[0].Package != "alpha" || bl.Packages[1].Package != "zeta" {
+		t.Fatalf("packages not sorted: %+v", bl.Packages)
+	}
+	var gaps []map[string]any
+	if unmarshalErr := json.Unmarshal(bl.Packages[0].Struct.Gaps, &gaps); unmarshalErr != nil {
+		t.Fatalf("struct gaps not valid JSON passthrough: %v", unmarshalErr)
+	}
+	if len(gaps) != 1 || gaps[0]["kind"] != "output" {
+		t.Errorf("struct gaps passthrough corrupted: %+v", gaps)
+	}
+}
+
+// TestReadJSON_MissingFile verifies a clear error when an input report is absent.
+func TestReadJSON_MissingFile(t *testing.T) {
+	var target structReport
+	if err := readJSON(filepath.Join(t.TempDir(), "nope.json"), &target); err == nil {
+		t.Fatal("expected error reading missing file")
+	}
+}
+
+func indexPackages(bl backlog) map[string]backlogPackage {
+	out := make(map[string]backlogPackage, len(bl.Packages))
+	for _, pkg := range bl.Packages {
+		out[pkg.Package] = pkg
+	}
+	return out
+}

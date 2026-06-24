@@ -43,18 +43,22 @@ gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
 │   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
+│   ├── audit_action_coverage/   # Audits client-go SDK endpoints with no MCP action (R-ACTION; 1:1 audit)
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_meta_schema/       # Audits meta-tool schema generation
+│   ├── audit_metadata_completeness/ # Audits ActionSpec discovery-metadata gaps (R-META; 1:1 audit)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_output/            # Audits MCP tool output quality
+│   ├── audit_struct_completeness/ # Audits MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT; 1:1 audit)
 │   ├── audit_test_names/        # Audits test function naming convention compliance
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces
 │   ├── audit_tools/             # Audits MCP tool metadata violations
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── find_dupes/              # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
+│   ├── gen_1to1_backlog/        # Merges the three 1:1-audit gap streams into plan/1to1-backlog.json
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
