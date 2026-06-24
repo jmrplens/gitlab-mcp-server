@@ -55,26 +55,51 @@ type DeleteInput struct {
 }
 
 // Output represents a single issue link.
+//
+// SourceIssue and TargetIssue surface the full SDK issue objects (1:1 audit
+// policy, full nested objects). The flattened SourceIssueIID/SourceProjectID/
+// TargetIssueIID/TargetProjectID scalars are kept additively for ergonomic
+// consumers that only need the identifiers.
 type Output struct {
 	toolutil.HintableOutput
-	ID              int    `json:"id"`
-	SourceIssueIID  int    `json:"source_issue_iid"`
-	SourceProjectID int    `json:"source_project_id"`
-	TargetIssueIID  int    `json:"target_issue_iid"`
-	TargetProjectID int    `json:"target_project_id"`
-	LinkType        string `json:"link_type"`
+	ID              int             `json:"id"`
+	SourceIssueIID  int             `json:"source_issue_iid"`
+	SourceProjectID int             `json:"source_project_id"`
+	TargetIssueIID  int             `json:"target_issue_iid"`
+	TargetProjectID int             `json:"target_project_id"`
+	LinkType        string          `json:"link_type"`
+	SourceIssue     *IssueRefOutput `json:"source_issue,omitempty"`
+	TargetIssue     *IssueRefOutput `json:"target_issue,omitempty"`
 }
 
-// RelationOutput represents a related issue from the list endpoint.
+// RelationOutput represents a related issue from the list endpoint. It mirrors
+// the full gitlab.IssueRelation struct: author/assignee/assignees/milestone/
+// references are surfaced as full nested objects and labels as a []string
+// (1:1 audit policy).
 type RelationOutput struct {
-	ID          int    `json:"id"`
-	IID         int    `json:"iid"`
-	Title       string `json:"title"`
-	State       string `json:"state"`
-	ProjectID   int    `json:"project_id"`
-	LinkType    string `json:"link_type"`
-	IssueLinkID int    `json:"issue_link_id"`
-	WebURL      string `json:"web_url"`
+	ID             int               `json:"id"`
+	IID            int               `json:"iid"`
+	State          string            `json:"state"`
+	Description    string            `json:"description,omitempty"`
+	Confidential   bool              `json:"confidential"`
+	Author         *UserOutput       `json:"author,omitempty"`
+	Milestone      *MilestoneOutput  `json:"milestone,omitempty"`
+	ProjectID      int               `json:"project_id"`
+	Assignees      []*UserOutput     `json:"assignees,omitempty"`
+	Assignee       *UserOutput       `json:"assignee,omitempty"`
+	UpdatedAt      string            `json:"updated_at,omitempty"`
+	Title          string            `json:"title"`
+	CreatedAt      string            `json:"created_at,omitempty"`
+	Labels         []string          `json:"labels,omitempty"`
+	DueDate        string            `json:"due_date,omitempty"`
+	WebURL         string            `json:"web_url"`
+	References     *ReferencesOutput `json:"references,omitempty"`
+	Weight         int64             `json:"weight,omitempty"`
+	UserNotesCount int64             `json:"user_notes_count,omitempty"`
+	IssueLinkID    int               `json:"issue_link_id"`
+	LinkType       string            `json:"link_type"`
+	LinkCreatedAt  string            `json:"link_created_at,omitempty"`
+	LinkUpdatedAt  string            `json:"link_updated_at,omitempty"`
 }
 
 // ListOutput represents a list of issue relations.
@@ -96,25 +121,44 @@ func toOutput(link *gitlab.IssueLink) Output {
 	if link.SourceIssue != nil {
 		out.SourceIssueIID = int(link.SourceIssue.IID)
 		out.SourceProjectID = int(link.SourceIssue.ProjectID)
+		out.SourceIssue = issueRefOutput(link.SourceIssue)
 	}
 	if link.TargetIssue != nil {
 		out.TargetIssueIID = int(link.TargetIssue.IID)
 		out.TargetProjectID = int(link.TargetIssue.ProjectID)
+		out.TargetIssue = issueRefOutput(link.TargetIssue)
 	}
 	return out
 }
 
-// toRelationOutput converts the GitLab API response to the tool output format.
+// toRelationOutput converts the GitLab API response to the tool output format,
+// mirroring every field of gitlab.IssueRelation (full nested objects for
+// author/assignee/assignees/milestone/references; labels as []string).
 func toRelationOutput(r *gitlab.IssueRelation) RelationOutput {
 	return RelationOutput{
-		ID:          int(r.ID),
-		IID:         int(r.IID),
-		Title:       r.Title,
-		State:       r.State,
-		ProjectID:   int(r.ProjectID),
-		LinkType:    r.LinkType,
-		IssueLinkID: int(r.IssueLinkID),
-		WebURL:      r.WebURL,
+		ID:             int(r.ID),
+		IID:            int(r.IID),
+		State:          r.State,
+		Description:    r.Description,
+		Confidential:   r.Confidential,
+		Author:         authorOutput(r.Author),
+		Milestone:      milestoneOutput(r.Milestone),
+		ProjectID:      int(r.ProjectID),
+		Assignees:      assigneeOutputs(r.Assignees),
+		Assignee:       assigneeOutput(r.Assignee),
+		UpdatedAt:      formatTimePtr(r.UpdatedAt),
+		Title:          r.Title,
+		CreatedAt:      formatTimePtr(r.CreatedAt),
+		Labels:         []string(r.Labels),
+		DueDate:        formatISOTimePtr(r.DueDate),
+		WebURL:         r.WebURL,
+		References:     referencesOutput(r.References),
+		Weight:         r.Weight,
+		UserNotesCount: r.UserNotesCount,
+		IssueLinkID:    int(r.IssueLinkID),
+		LinkType:       r.LinkType,
+		LinkCreatedAt:  formatTimePtr(r.LinkCreatedAt),
+		LinkUpdatedAt:  formatTimePtr(r.LinkUpdatedAt),
 	}
 }
 

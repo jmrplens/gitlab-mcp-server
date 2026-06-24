@@ -16,8 +16,8 @@ func FormatOutputMarkdown(v Output) string {
 	b.WriteString("## Issue Link\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, v.ID)
 	fmt.Fprintf(&b, "- **Link Type**: %s\n", v.LinkType)
-	fmt.Fprintf(&b, "- **Source Issue IID**: %d (project %d)\n", v.SourceIssueIID, v.SourceProjectID)
-	fmt.Fprintf(&b, "- **Target Issue IID**: %d (project %d)\n", v.TargetIssueIID, v.TargetProjectID)
+	fmt.Fprintf(&b, "- **Source Issue IID**: %d (project %d)%s\n", v.SourceIssueIID, v.SourceProjectID, issueRefSuffix(v.SourceIssue))
+	fmt.Fprintf(&b, "- **Target Issue IID**: %d (project %d)%s\n", v.TargetIssueIID, v.TargetProjectID, issueRefSuffix(v.TargetIssue))
 	toolutil.WriteHints(&b, "Use `gitlab_issue_link_list` to see all links for this issue")
 	return b.String()
 }
@@ -29,14 +29,27 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Issue Relations (%d)\n\n", len(out.Relations))
-	b.WriteString("| ID | IID | Title | State | Link Type | Link ID |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| ID | IID | Title | State | Link Type | Link ID | Author |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range out.Relations {
-		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %d |\n",
-			r.ID, r.IID, toolutil.MdTitleLink(r.Title, r.WebURL), r.State, r.LinkType, r.IssueLinkID)
+		author := ""
+		if r.Author != nil {
+			author = r.Author.Username
+		}
+		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %d | %s |\n",
+			r.ID, r.IID, toolutil.MdTitleLink(r.Title, r.WebURL), r.State, r.LinkType, r.IssueLinkID, author)
 	}
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_issue_link_create` to add a new link between issues")
 	return b.String()
+}
+
+// issueRefSuffix renders a " — Title" suffix for a source/target issue object,
+// or "" when the object is absent.
+func issueRefSuffix(ref *IssueRefOutput) string {
+	if ref == nil || ref.Title == "" {
+		return ""
+	}
+	return " — " + ref.Title
 }
 
 func init() {
