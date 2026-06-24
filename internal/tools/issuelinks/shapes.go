@@ -372,7 +372,7 @@ type IssueRefOutput struct {
 	UserNotesCount       int64                       `json:"user_notes_count,omitempty"`
 	Links                *LinksOutput                `json:"_links,omitempty"`
 	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
-	MergeRequestCount    int64                       `json:"merge_request_count,omitempty"`
+	MergeRequestCount    int64                       `json:"merge_requests_count,omitempty"`
 	EpicIssueID          int64                       `json:"epic_issue_id,omitempty"`
 	Epic                 *EpicOutput                 `json:"epic,omitempty"`
 	Iteration            *IterationOutput            `json:"iteration,omitempty"`

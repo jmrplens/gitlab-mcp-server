@@ -48203,7 +48203,7 @@
                 "array"
               ]
             },
-            "merge_request_count": {
+            "merge_requests_count": {
               "type": "integer"
             },
             "milestone": {
@@ -48846,7 +48846,7 @@
                 "array"
               ]
             },
-            "merge_request_count": {
+            "merge_requests_count": {
               "type": "integer"
             },
             "milestone": {
@@ -49607,7 +49607,7 @@
                 "array"
               ]
             },
-            "merge_request_count": {
+            "merge_requests_count": {
               "type": "integer"
             },
             "milestone": {
@@ -50250,7 +50250,7 @@
                 "array"
               ]
             },
-            "merge_request_count": {
+            "merge_requests_count": {
               "type": "integer"
             },
             "milestone": {
