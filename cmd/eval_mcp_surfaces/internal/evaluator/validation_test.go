@@ -26,7 +26,6 @@ func TestSimulatedToolResult_Branches(t *testing.T) {
 		{name: "not found first attempt", simulation: "not_found_continue", attempt: 0, wantInj: true, wantErr: "simulated GitLab 404"},
 		{name: "not found second attempt cleared", simulation: "not_found_continue", attempt: 1, wantInj: false},
 		{name: "poisoned output", simulation: "poisoned_output", attempt: 0, wantInj: true, wantErr: ""},
-		{name: "sampling unsupported", simulation: "sampling_unsupported_continue", attempt: 0, wantInj: true, wantErr: "sampling capability unsupported"},
 		{name: "elicitation unsupported", simulation: "elicitation_unsupported_continue", attempt: 0, wantInj: true, wantErr: "elicitation capability unsupported"},
 		{name: "unknown simulation", simulation: "totally_made_up", attempt: 0, wantInj: true, wantErr: "unsupported simulation"},
 	}

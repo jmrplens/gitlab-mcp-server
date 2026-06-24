@@ -20,7 +20,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	mcpresources "github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -237,8 +236,7 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	cmd.Env = env
 	transport := &mcp.CommandTransport{Command: cmd, TerminateDuration: 5 * time.Second}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-external-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		CreateMessageHandler: evalCreateMessageHandler,
-		ElicitationHandler:   evalElicitationHandler,
+		ElicitationHandler: evalElicitationHandler,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -399,7 +397,6 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{
 		PageSize: 2000,
 		Capabilities: &mcp.ServerCapabilities{
-			Logging:   &mcp.LoggingCapabilities{},
 			Tools:     &mcp.ToolCapabilities{ListChanged: true},
 			Resources: &mcp.ResourceCapabilities{ListChanged: true},
 			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
@@ -449,8 +446,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		return nil, nil, nil, nil, fmt.Errorf("server connect: %w", serverErr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-client", Version: "0.0.1"}, &mcp.ClientOptions{
-		CreateMessageHandler: evalCreateMessageHandler,
-		ElicitationHandler:   evalElicitationHandler,
+		ElicitationHandler: evalElicitationHandler,
 	})
 	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -490,7 +486,6 @@ func inspectEvalTools(server *mcp.Server) ([]*mcp.Tool, error) {
 // registerEvalResources mirrors the default full resource and prompt capability surface.
 func registerEvalResources(server *mcp.Server, client *gitlabclient.Client, toolSurface string, catalog *actioncatalog.Catalog, routes map[string]toolutil.ActionMap, toolList []*mcp.Tool) {
 	mcpresources.Register(server, client)
-	mcpresources.RegisterWorkspaceRoots(server, roots.NewManager())
 	mcpresources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)
 	mcpresources.RegisterToolSurfaceResources(server, mcpresources.ToolSurfaceResourceOptions{
@@ -517,5 +512,3 @@ func dynamicValidationRoutes(catalogRoutes map[string]toolutil.ActionMap) map[st
 func dynamicActionID(toolName, action string) string {
 	return strings.TrimPrefix(toolName, "gitlab_") + "." + action
 }
-
-// evalCreateMessageHandler handles eval create message handler and returns [*mcp.CreateMessageResult].

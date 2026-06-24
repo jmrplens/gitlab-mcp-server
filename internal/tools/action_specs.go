@@ -127,7 +127,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourcegroups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityattributes"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
@@ -193,13 +192,6 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 	specs = append(specs, accessrequests.ActionSpecs(client)...)
 	specs = append(specs, invites.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_access", specs)
-}
-
-// buildAnalyzeActionSpecs contributes the gitlab_analyze catalog group
-// backed by the sampling sub-package. The catalog marks this group as a
-// sampling utility surface.
-func buildAnalyzeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	return actionSpecGroup("gitlab_analyze", samplingtools.ActionSpecs(client))
 }
 
 // buildOrbitActionSpecs contributes the gitlab_orbit catalog group only

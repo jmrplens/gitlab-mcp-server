@@ -29,11 +29,8 @@ internal/resources/ @jmrplens
 internal/prompts/ @jmrplens
 
 # MCP capabilities
-internal/logging/ @jmrplens
 internal/completions/ @jmrplens
-internal/roots/ @jmrplens
 internal/progress/ @jmrplens
-internal/sampling/ @jmrplens
 internal/elicitation/ @jmrplens
 
 # Configuration and GitLab client

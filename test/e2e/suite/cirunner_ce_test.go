@@ -4,7 +4,6 @@
 // GitLab instance with a CI runner. Exercises the full CI lifecycle:
 // commit CI config → create pipeline → get/list pipelines → wait for
 // completion → list/get/trace jobs → retry → delete pipeline.
-// Also tests the sampling tool for pipeline failure analysis.
 package suite
 
 import (
@@ -15,7 +14,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -37,7 +35,7 @@ fast-pass:
 // NOT parallelized: pipeline-heavy tests share a single CI runner. Running
 // them concurrently causes pipelines to queue, leading to spurious timeouts.
 func TestIndividual_CIRunner(t *testing.T) {
-	RunWithCapabilities(t, []Capability{CapabilityRunner, CapabilitySampling}, func(_ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 		defer cancel()
 
@@ -124,19 +122,6 @@ func TestIndividual_CIRunner(t *testing.T) {
 			requireNoError(t, err, "job trace")
 			requireTruef(t, len(out.Trace) > 0, "expected non-empty job trace")
 			t.Logf("Got job trace: %d chars (truncated=%v)", len(out.Trace), out.Truncated)
-		})
-
-		t.Run("SamplingAnalyzePipelineFailure", func(t *testing.T) {
-			requireTruef(t, pipelineID > 0, "pipeline ID not set")
-
-			out, err := callToolOn[samplingtools.AnalyzePipelineFailureOutput](ctx, sess.sampling, "gitlab_analyze_pipeline_failure", samplingtools.AnalyzePipelineFailureInput{
-				ProjectID:  toolutil.StringOrInt(pidStr),
-				PipelineID: pipelineID,
-			})
-			requireNoError(t, err, "sampling analyze pipeline failure")
-			requireTruef(t, out.Analysis != "", "expected non-empty analysis")
-			requireTruef(t, out.Model == "e2e-mock-model", "expected mock model, got %q", out.Model)
-			t.Logf("Analyzed pipeline failure: model=%s, analysis_len=%d", out.Model, len(out.Analysis))
 		})
 
 		t.Run("PipelineRetry", func(t *testing.T) {

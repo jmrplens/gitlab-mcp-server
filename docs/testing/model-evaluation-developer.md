@@ -336,7 +336,7 @@ output is only progress logging and stays in the log file by default.
 1. Read the report metrics and identify failing tasks.
 2. Open each failing task trace in the `.traces/` directory.
 3. Classify the failure as model route miss, parameter shape miss, provider
-   adapter issue, fixture gap, GitLab edition limitation, sampling support gap,
+   adapter issue, fixture gap, GitLab edition limitation,
    or MCP implementation bug.
 4. Check whether the trace used the intended tool surface. Dynamic traces for
   ordinary GitLab operations should call `gitlab_find_action` before each

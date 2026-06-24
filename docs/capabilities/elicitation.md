@@ -96,7 +96,7 @@ The user can **decline** at the confirmation step or **cancel** at any step, abo
 
 ### Client
 
-The `Client` is a **zero-value-safe** value type, following the same pattern as `sampling.Client` and `progress.Tracker`. No initialization is needed — a zero-value `Client` simply reports unsupported.
+The `Client` is a **zero-value-safe** value type, following the same pattern as `progress.Tracker`. No initialization is needed — a zero-value `Client` simply reports unsupported.
 
 ```go
 elicitClient := elicitation.FromRequest(req)

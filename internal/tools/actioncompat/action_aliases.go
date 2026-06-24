@@ -215,7 +215,6 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("release_link.link_create", actionReleaseLinkCreate),
 		compatActionAlias("release_link.link_create_batch", actionReleaseLinkCreateBatch),
 		compatActionAlias("release_link.link_list", actionReleaseLinkList),
-		compatActionAlias("release.generate_notes", "analyze.release_notes"),
 		compatActionAlias("package.list_project", actionPackageList),
 		compatActionAlias("package.list_project_packages", actionPackageList),
 		compatActionAlias("variable.create", "ci_variable.create"),

@@ -30,7 +30,7 @@ flowchart TB
 ### Key principles
 
 - **Token isolation**: In stdio mode, the GitLab token never leaves the local server process. It is loaded from the environment and used exclusively for GitLab API calls.
-- **No token forwarding**: The token is never sent to the MCP client, never included in tool outputs, and never passed through MCP sampling requests.
+- **No token forwarding**: The token is never sent to the MCP client and never included in tool outputs.
 - **Process-level isolation**: The server runs as a local process communicating via stdin/stdout. No network ports are opened in stdio mode.
 - **Minimal privilege**: The server only needs a GitLab token with scopes required for the operations you intend to use.
 
@@ -108,30 +108,6 @@ Or in HTTP mode:
 
 :::note
 When scope detection is disabled, tools are still registered but API calls may fail with `403 Forbidden` if the token lacks required permissions.
-:::
-
-## Credential stripping in sampling
-
-When analysis tools use MCP sampling to send data to the client's LLM, the server applies **automatic credential stripping** before any data leaves the process. This is a critical defense-in-depth measure that prevents accidental token leakage through LLM context.
-
-### Stripped patterns
-
-The credential stripping engine uses regex patterns to detect and remove:
-
-| Pattern               | Example                           | Replacement                |
-| --------------------- | --------------------------------- | -------------------------- |
-| GitLab PAT            | `glpat-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
-| GitLab Pipeline Token | `glptt-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
-| AWS Access Key        | `AKIAIOSFODNN7EXAMPLE`            | `[REDACTED:AWS_KEY]`       |
-| AWS Secret Key        | `wJalrXUtnFEMI/K7MDENG/...`       | `[REDACTED:AWS_SECRET]`    |
-| Slack Token           | `xoxb-...` / `xoxp-...`           | `[REDACTED:SLACK_TOKEN]`   |
-| Slack Webhook         | `hooks.slack.com/services/...`    | `[REDACTED:SLACK_WEBHOOK]` |
-| JWT                   | `eyJhbGciOi...`                   | `[REDACTED:JWT]`           |
-| Generic API Key       | `api_key=...`, `apikey: ...`      | `[REDACTED:API_KEY]`       |
-| Private SSH Key       | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]`   |
-
-:::note
-Credential stripping is applied to all data sent through MCP sampling, including job logs, file contents, issue descriptions, and MR diffs.
 :::
 
 ## TLS verification

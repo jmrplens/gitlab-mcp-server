@@ -86,7 +86,6 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,
-		"If the task asks to compare refs before release notes, call gitlab_repository action 'compare' before gitlab_analyze release_notes",
 		"Use action 'get' with a tag_name to see full release details",
 		"Use action 'create' to create a new release",
 		"Use gitlab_tag action 'list' to see available tags",

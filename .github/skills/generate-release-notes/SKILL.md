@@ -20,7 +20,6 @@ Generate polished, categorized release notes for a GitLab project by comparing t
 
 - A GitLab project accessible via the MCP server
 - Two valid Git refs (tags, branches, or commit SHAs) to compare
-- For LLM-assisted mode: MCP client must support the sampling capability
 
 ## Workflow
 
@@ -37,27 +36,9 @@ Common patterns:
 
 ### Step 2: Gather Data (Choose One Approach)
 
-#### Approach A: LLM-Assisted (Recommended)
+#### Approach A: Manual Orchestration (Recommended)
 
-Use the `gitlab_generate_release_notes` sampling tool for fully automated, LLM-categorized release notes:
-
-```text
-Use gitlab_generate_release_notes with:
-  - project_id: <project_id or "namespace/project">
-  - from: <base_ref>  (e.g., "v1.0.0")
-  - to: <target_ref>  (e.g., "v1.1.0")
-```
-
-This single tool call:
-
-1. Compares the two refs to get commits and diffs
-2. Fetches all merge requests merged in the date range
-3. Sends the data to the LLM for intelligent categorization
-4. Returns polished, formatted release notes
-
-#### Approach B: Manual Orchestration
-
-If sampling is not available, orchestrate the tools manually:
+Orchestrate the tools manually and categorize the results yourself:
 
 1. **Compare refs** to get commits and diffs:
 
@@ -81,7 +62,7 @@ If sampling is not available, orchestrate the tools manually:
 
 4. **Categorize changes** based on MR labels, commit prefixes, and descriptions.
 
-#### Approach C: Use the MCP Prompt
+#### Approach B: Use the MCP Prompt
 
 For a prompt-based approach that provides enriched context to the LLM:
 
@@ -183,7 +164,6 @@ Assign each change to a category using these heuristics:
 
 ## Tips
 
-- For large ranges with many commits, the LLM-assisted approach (Approach A) produces the best results
 - If the range spans hundreds of commits, the data may be truncated — the tool will indicate this
 - Use specific tags rather than branch names for reproducible release notes
-- The prompt-based approach (Approach C) gives you the most control over the final output since you can edit the LLM response
+- The prompt-based approach (Approach B) gives you the most control over the final output since you can edit the LLM response

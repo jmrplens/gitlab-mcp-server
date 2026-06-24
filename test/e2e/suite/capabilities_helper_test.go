@@ -27,7 +27,6 @@ const (
 	CapabilityInstanceGlobal   Capability = "instance-global"
 	CapabilityCurrentUserState Capability = "current-user-state"
 	CapabilitySafeMode         Capability = "safe-mode"
-	CapabilitySampling         Capability = "sampling"
 	CapabilityElicitation      Capability = "elicitation"
 	CapabilityExternalNetwork  Capability = "external-network"
 )
@@ -72,10 +71,6 @@ func requireCapability(t *testing.T, capability Capability) {
 	case CapabilitySafeMode:
 		if sess.safeMode == nil {
 			t.Skip("safe-mode MCP session not configured")
-		}
-	case CapabilitySampling:
-		if sess.sampling == nil {
-			t.Skip("sampling MCP session not configured")
 		}
 	case CapabilityElicitation:
 		if sess.elicitation == nil {

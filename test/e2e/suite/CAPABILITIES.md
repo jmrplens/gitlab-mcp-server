@@ -28,10 +28,7 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 | `todos_test.go::TestMeta_Todos` | `current-user` | Yes | No, serialize current-user state | `CapabilityCurrentUserState` | Marks all current-user todos done through meta-tools. |
 | `pipelines_test.go::TestPipelines` | `project`, `runner` | No | No, keep runner lifecycle serial | `CapabilityRunner` | Intentionally not parallelized because Docker mode uses a shared runner. |
 | `wait_test.go::TestWaitTools` | `project`, `runner` | No | Yes, with runner availability | `CapabilityRunner` | Exercises pipeline/job wait tools and can time out on slow runner hosts. |
-| `capabilities_test.go::TestCapability_Logging` | `metadata` | No | Yes | None | Read-only MCP logging capability test. |
 | `capabilities_test.go::TestCapability_Progress` | `project` | No | Yes | None | Creates a project and verifies progress notifications during upload. |
-| `capabilities_test.go::TestCapability_Roots` | `metadata` | No | Yes | None | Verifies roots discovery through MCP resource reads. |
-| `capabilities_test.go::TestCapability_RootsListChanged` | `metadata` | No | Yes | None | Verifies roots/list_changed notification handling. |
 | `capabilities_test.go::TestCapability_Completions` | `project`, `metadata` | No | Yes | None | Creates a project to provide completion data, then runs parallel read-only subtests. |
 | `meta_schema_resource_test.go::TestToolManifestResource_ListsTemplate` | `metadata` | No | Yes | None | Verifies tool manifest resource templates. |
 | `meta_schema_resource_test.go::TestToolManifestResource_ReadMergeRequestCreate` | `metadata` | No | Yes | None | Reads and validates merge-request create schema. |

@@ -15,8 +15,8 @@ package cases
 // the existing docker presets pin their partition (base-read, etc.) and treat
 // simulation cases as "Special", so error-recovery needs a dedicated preset.
 //
-// The sampling_unsupported_continue / elicitation_unsupported_continue modes are
-// intentionally not covered here: as non-terminal "continue" faults they require
+// The elicitation_unsupported_continue mode is intentionally not covered
+// here: as a non-terminal "continue" fault it requires
 // a following fallback step whose exact read action no prompt can pin
 // deterministically across models (models legitimately pick issue.get vs
 // issue.list vs note_list as the fallback), so a single-expected-action case is

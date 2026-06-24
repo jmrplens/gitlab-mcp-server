@@ -3,7 +3,7 @@
 //
 // The Client is a value type — its zero value is safe to use and acts as a
 // no-op when the connected MCP client does not support elicitation. This
-// mirrors the pattern used by sampling.Client and progress.Tracker.
+// mirrors the pattern used by progress.Tracker.
 //
 // # Validation and Safety
 //

@@ -18,7 +18,7 @@ El modo dinámico de find/execute es la superficie predeterminada. Las meta-herr
 
 ## Por qué existe el modo dinámico
 
-Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1045 operaciones individuales en GitLab.com Enterprise/Premium con Orbit, y el catálogo opcional de meta-herramientas anuncia entre 33 y 50 herramientas de dominio.
+Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1034 operaciones individuales en GitLab.com Enterprise/Premium con Orbit, y el catálogo opcional de meta-herramientas anuncia entre 32 y 49 herramientas de dominio.
 
 El modo dinámico expone ese catálogo canónico mediante dos herramientas visibles. El modelo descubre solo lo que necesita para la tarea actual.
 
@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y los recursos de manifiesto de herramientas (`gitlab://tools` y `gitlab://tools/{id}`), y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
+`CAPABILITY_SURFACE=minimal` mantiene los recursos de manifiesto de herramientas (`gitlab://tools` y `gitlab://tools/{id}`), y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
 ## Flujo del modelo
 

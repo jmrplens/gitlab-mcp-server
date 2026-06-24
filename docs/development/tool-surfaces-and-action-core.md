@@ -105,10 +105,10 @@ The catalog-first runtime uses these model terms consistently:
 - `SurfaceKind`: an explicit classification for catalog and non-catalog
   surfaces. Valid values are `gitlab-action`, `meta-group`,
   `dynamic-controller`, `runtime-utility`, `interactive-utility`,
-  `sampling-utility`, and `server-maintenance`.
+  and `server-maintenance`.
 - `SurfaceToolSpec`: the planned non-GitLab utility model for visible tools that
   are not ordinary GitLab API actions, such as dynamic controllers,
-  interactive elicitation flows, sampling helpers, and server maintenance.
+  interactive elicitation flows and server maintenance.
 - Compatibility alias: an action-level alias with `Alias`, `Target`, `Source`,
   `Searchable`, `Deprecated`, `RemovalVersion`, and `Reason`. These replace
   hardcoded action-specific Dynamic aliases as the owned metadata source.
@@ -269,7 +269,7 @@ Historical names still handled as compatibility aliases:
 
 Package-level `RegisterMeta` functions are now treated as audit violations.
 Former delegated groups such as `gitlab_search`, `gitlab_runner`,
-`gitlab_analyze`, and `gitlab_orbit` are catalog-backed groups.
+`gitlab_orbit` are catalog-backed groups.
 
 ## Import Layering Rules
 

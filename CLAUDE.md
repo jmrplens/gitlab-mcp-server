@@ -20,17 +20,17 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1039 self-managed Enterprise/Premium; 1045 on GitLab.com Enterprise/Premium with Orbit                     |
-| Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
+| MCP Tools (individual)    | 1028 self-managed Enterprise/Premium; 1034 on GitLab.com Enterprise/Premium with Orbit                     |
+| Meta-mode tools           | 32 base / 48 self-managed enterprise / 49 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
-| MCP Resources             | 46 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
+| MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
-| MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
+| MCP Capabilities          | 3 (progress, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 741 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 357 test files under `internal/tools/`                                                                       |
-| Go packages               | 215 total; 176 under `internal/tools/...`                                                                    |
+| Source files (tools)      | 723 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 342 test files under `internal/tools/`                                                                       |
+| Go packages               | 211 total; 175 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
@@ -108,7 +108,6 @@ gitlab-mcp-server/
 │   │   ├── releaselinks/        # Release link tools
 │   │   ├── releases/            # Release tools
 │   │   ├── repository/          # Repository tree/compare tools
-│   │   ├── samplingtools/       # LLM sampling tools (summarize/analyze)
 │   │   ├── search/              # Search tools (code, MRs, issues, etc.)
 │   │   ├── serverupdate/       # Server self-update MCP tools (check/apply)
 │   │   ├── projectdiscovery/   # Git remote URL to GitLab project resolution
@@ -117,13 +116,10 @@ gitlab-mcp-server/
 │   │   ├── uploads/             # Project upload tools
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
-│   ├── resources/               # 46 MCP resource implementations
+│   ├── resources/               # 45 MCP resource implementations
 │   ├── prompts/                 # 37 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
-│   ├── logging/                 # MCP logging capability
 │   ├── progress/                # MCP progress notifications
-│   ├── roots/                   # MCP roots capability
-│   ├── sampling/                # MCP sampling capability
 │   ├── elicitation/             # MCP elicitation capability
 │   └── wizard/                  # Setup wizard (Web UI, TUI, CLI modes)
 ├── docs/                        # Project documentation (Diátaxis framework)
@@ -176,7 +172,7 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 176 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 175 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -281,7 +277,7 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `META_TOOLS` is explicitly set |
-| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps `gitlab://workspace/roots` plus the surface-aware `gitlab://tools` manifest |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
 | `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating tools and returns a JSON preview (`false` default) |
@@ -483,14 +479,14 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages, 1039 self-managed tools / 1045 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages, 1028 self-managed tools / 1034 GitLab.com Enterprise tools) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 176 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 175 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks
@@ -598,7 +594,7 @@ docker compose -f test/e2e/docker-compose.yml down -v
 
 The suite runs three sequential workflows:
 
-- **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → sampling → elicitation → cleanup)
+- **TestFullWorkflow** (~174 subtests): exercises all individual tools through a complete project lifecycle (user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → elicitation → cleanup)
 - **TestMetaToolWorkflow** (~151 subtests): exercises the same operations through meta-tools plus 15 additional domains (wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji, labels, milestones)
 - **TestDynamicToolSurface**: exercises the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this workflow in Docker mode after the Docker GitLab setup scripts complete:
 
@@ -616,5 +612,4 @@ Domains **added in Docker mode** (require CI runner):
 
 **MCP capability tests** (mock handlers, always available):
 
-- Sampling tools (11 tests): summarize issue, analyze MR, generate release notes, etc.
 - Elicitation tools (1 test): confirm destructive action

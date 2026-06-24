@@ -25,7 +25,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -59,8 +58,7 @@ type toolTokenInfo struct {
 // Core includes the static resources from [resources.Register]. ToolManifest
 // adds the surface-aware tool manifest template and tools/{id} template;
 // ToolSurface, ToolList, and ToolCatalog drive its content. WorkflowGuides
-// includes the static workflow guides. WorkspaceRoots includes the
-// gitlab://workspace/roots template.
+// includes the static workflow guides.
 type resourceRegistrationOptions struct {
 	Core           bool
 	ToolManifest   bool
@@ -68,7 +66,6 @@ type resourceRegistrationOptions struct {
 	ToolList       []*mcp.Tool
 	ToolCatalog    *actioncatalog.Catalog
 	WorkflowGuides bool
-	WorkspaceRoots bool
 }
 
 // main creates the mock GitLab-backed client, measures all MCP catalog modes,
@@ -112,11 +109,10 @@ func main() {
 	metaBaseResourceTokens := measureResources(client, metaBaseRoutes, actioncatalog.FromActionMaps(metaBaseRoutes), metaBaseTools, config.ToolSurfaceMeta)
 	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes, dynamicBaseCatalog, dynamicBaseTools, config.ToolSurfaceDynamic)
 	dynamicMinimalResourceTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
-		ToolManifest:   true,
-		ToolSurface:    config.ToolSurfaceDynamic,
-		ToolList:       dynamicBaseTools,
-		ToolCatalog:    dynamicBaseCatalog,
-		WorkspaceRoots: true,
+		ToolManifest: true,
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ToolList:     dynamicBaseTools,
+		ToolCatalog:  dynamicBaseCatalog,
 	})
 	promptTokens := measurePrompts(client)
 
@@ -183,7 +179,7 @@ func main() {
 	fmt.Println("## Minimal Capability Candidate")
 	fmt.Println()
 	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_action` performs execution.")
-	fmt.Println("  Retained minimal resources: `gitlab://workspace/roots` for local project discovery and `gitlab://tools` for action call shapes.")
+	fmt.Println("  Retained minimal resource: `gitlab://tools` for action call shapes.")
 	fmt.Println("  Optional in minimal mode: static GitLab data resources, workflow guide resources, and prompt templates.")
 	if dynamicBaseResourceTokens+promptTokens > 0 {
 		savings := float64(dynamicBaseResourceTokens+promptTokens-dynamicMinimalResourceTokens) / float64(dynamicBaseResourceTokens+promptTokens) * 100
@@ -333,7 +329,6 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 		ToolList:       toolList,
 		ToolCatalog:    catalog,
 		WorkflowGuides: true,
-		WorkspaceRoots: true,
 	})
 }
 
@@ -349,9 +344,6 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 			Catalog:    opts.ToolCatalog,
 			MetaRoutes: metaRoutes,
 		})
-	}
-	if opts.WorkspaceRoots {
-		resources.RegisterWorkspaceRoots(server, roots.NewManager())
 	}
 	if opts.WorkflowGuides {
 		resources.RegisterWorkflowGuides(server)

@@ -28,13 +28,12 @@ requests, and diffs, then produces polished release notes.
 
 ## Three Approaches
 
-The skill documents three complementary approaches:
+The skill documents two complementary approaches:
 
-| Approach            | Tool                                         | Requires      | Best For                           |
-| ------------------- | -------------------------------------------- | ------------- | ---------------------------------- |
-| **A. LLM-Assisted** | `gitlab_generate_release_notes`              | MCP Sampling  | Fully automated, categorized notes |
-| **B. Manual**       | `gitlab_repository` + `gitlab_merge_request` | Nothing extra | Full control, no LLM needed        |
-| **C. Prompt-Based** | `generate_release_notes` prompt              | LLM client    | Editable LLM-enriched context      |
+| Approach            | Tool                                         | Requires      | Best For                      |
+| ------------------- | -------------------------------------------- | ------------- | ----------------------------- |
+| **A. Manual**       | `gitlab_repository` + `gitlab_merge_request` | Nothing extra | Full control, no LLM needed   |
+| **B. Prompt-Based** | `generate_release_notes` prompt              | LLM client    | Editable LLM-enriched context |
 
 ## Categories
 
@@ -51,10 +50,8 @@ Changes are automatically sorted into:
 
 - gitlab-mcp-server MCP server running and connected
 - A GitLab project with two valid Git refs to compare
-- For Approach A: MCP client must support the [Sampling capability](../capabilities/sampling.md)
 
 ## Related
 
 - [Full skill source](../../.github/skills/generate-release-notes/SKILL.md) — complete workflow with examples
-- [Capabilities — Sampling](../capabilities/sampling.md) — how LLM-assisted tools work
 - [Usage Examples](usage-examples.md) — more MCP tool usage scenarios

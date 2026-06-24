@@ -62,19 +62,17 @@ Supports both HTTPS and SSH remote URL formats:
 
 ## Related Resources
 
-| Resource          | URI                        | Description                                                                         |
-| ----------------- | -------------------------- | ----------------------------------------------------------------------------------- |
-| `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories from the MCP client to find `.git/config` locations |
-| `current_user`    | `gitlab://user/current`    | Confirm authentication before project discovery                                     |
+| Resource       | URI                     | Description                                     |
+| -------------- | ----------------------- | ----------------------------------------------- |
+| `current_user` | `gitlab://user/current` | Confirm authentication before project discovery |
 
 ## Project Discovery Workflow
 
 When an LLM needs to work with a GitLab project in the current workspace:
 
-1. **Read workspace roots** — Fetch `gitlab://workspace/roots` to discover workspace directory paths
-2. **Find git config** — Read the `.git/config` file from a workspace root to find the `[remote "origin"]` URL
-3. **Resolve project** — Call `gitlab_discover_project` with the remote URL
-4. **Use project_id** — All subsequent GitLab operations use the returned `project_id`
+1. **Find git config** — Read the `.git/config` file from the workspace to find the `[remote "origin"]` URL
+2. **Resolve project** — Call `gitlab_discover_project` with the remote URL
+3. **Use project_id** — All subsequent GitLab operations use the returned `project_id`
 
 Alternative approaches (if `.git/config` is not accessible):
 

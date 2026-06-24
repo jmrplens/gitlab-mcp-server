@@ -80,10 +80,6 @@ _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 }, &data)
 ```
 
-#### Pattern 2: Aggregation for sampling tools
-
-Used by `samplingtools` to fetch rich context (vulnerability summaries, pipeline security reports) for LLM sampling prompts. Same `GraphQL.Do()` mechanism but queries aggregate data from multiple domains in a single request.
-
 ### Shared utilities
 
 Shared GraphQL utilities live in `internal/toolutil/graphql.go`:

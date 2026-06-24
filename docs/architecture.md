@@ -70,18 +70,14 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1039 self-managed / 1045 GitLab.com Premium/Ultimate tools]
-        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>1028 self-managed / 1034 GitLab.com Premium/Ultimate tools]
+        META[meta projection<br/>32 base / 48 self-managed enterprise / 49 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
-        SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
-        RES[resources<br/>46 resource handlers]
+        RES[resources<br/>45 resource handlers]
         PROMPTS[prompts<br/>37 prompt handlers]
-        LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
-        ROOTS[roots<br/>Workspace root tracking]
         PROG[progress<br/>Progress notifications]
-        SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 SVG domain icons]
         SRV[MCP Server<br/>go-sdk/mcp v1.6.1]
@@ -100,15 +96,12 @@ graph TD
     CATALOG --> IND
     CATALOG --> META
     CATALOG --> DYN
-    CATALOG --> SAMP
     STANDALONE --> ELIC
     STANDALONE -.->|dynamic route injection| DYN
     IND --> GL
     META --> GL
     DYN --> GL
-    SAMP --> GL
     ELIC --> GL
-    SAMP --> SAMPLING
     ELIC --> ELICIT
     RES --> GL
     PROMPTS --> GL
@@ -122,9 +115,7 @@ graph TD
     CATALOG -.->|icons| ICN
     RES -.->|icons| ICN
     PROMPTS -.->|icons| ICN
-    MAIN -->|setup| LOG
     MAIN -->|setup| COMP
-    MAIN -->|setup| ROOTS
 ```
 
 ## Component Detail
@@ -177,7 +168,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1039 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1045 total in that catalog, organized across 176 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1028 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1034 total in that catalog, organized across 175 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -196,7 +187,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                              |
 | `logging.go`        | `logToolCall` helper                                                                                                                        |
 
-**Representative `internal/tools` package groups** (176 packages total):
+**Representative `internal/tools` package groups** (175 packages total):
 
 | Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
@@ -209,7 +200,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | Groups            | `groups`                                                                                   |
 | Search & users    | `search`, `users`, `todos`                                                                 |
 | Infrastructure    | `environments`, `deployments`, `packages`, `wikis`, `health`                               |
-| LLM capabilities  | `samplingtools`, `elicitationtools`                                                        |
+| Interactive       | `elicitationtools`                                                                         |
 | Extended domains  | `snippets`, `snippetdiscussions`, `securefiles`, `terraformstates`, `resourcegroups`, etc. |
 
 ### Shared Tool Utilities (`internal/toolutil`)
@@ -267,7 +258,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 48; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 49. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -354,13 +345,12 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 ### Resources (`internal/resources`)
 
-46 read-only MCP resources in the default dynamic/full surface, accessed by URI templates. Resources provide contextual data without modifying state:
+45 read-only MCP resources in the default dynamic/full surface, accessed by URI templates. Resources provide contextual data without modifying state:
 
 | Resource                       | URI                                          | Description                         |
 | ------------------------------ | -------------------------------------------- | ----------------------------------- |
 | Current User                   | `gitlab://user/current`                      | Authenticated user profile          |
 | Groups                         | `gitlab://groups`                            | Accessible groups list              |
-| Workspace Roots                | `gitlab://workspace/roots`                   | Client workspace root directories   |
 | Tool Manifest                  | `gitlab://tools`                             | Active surface tool/action manifest |
 | Tool Detail                    | `gitlab://tools/{id}`                        | Call shape and input schema by ID   |
 | Group                          | `gitlab://group/{id}`                        | Group details by ID                 |
@@ -426,15 +416,12 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 ## Capabilities
 
-6 MCP capabilities extend the server beyond basic tool/resource/prompt handling:
+3 MCP capabilities extend the server beyond basic tool/resource/prompt handling:
 
 | Capability  | Package                | MCP Spec                | Description                                           |
 | ----------- | ---------------------- | ----------------------- | ----------------------------------------------------- |
-| Logging     | `internal/logging`     | Server → Client utility | Structured session logging (debug/info/warning/error) |
 | Completions | `internal/completions` | Server → Client utility | Autocomplete for 17 argument types plus resource URIs |
-| Roots       | `internal/roots`       | Client → Server         | Workspace root tracking with git heuristics           |
 | Progress    | `internal/progress`    | Bidirectional utility   | Progress notifications for multi-step operations      |
-| Sampling    | `internal/sampling`    | Client → Server (LLM)   | LLM-assisted analysis with credential sanitization    |
 | Elicitation | `internal/elicitation` | Client → Server (User)  | Interactive user prompts and confirmation dialogs     |
 
 See [Capabilities Overview](capabilities/README.md) for detailed documentation.
@@ -507,9 +494,7 @@ graph TB
     CALL["tools/call request"] --> TOOL["Tool Handler"]
 
     TOOL -->|"long operation"| PROG["Progress<br/>notifications/progress"]
-    TOOL -->|"needs LLM analysis"| SAMP["Sampling<br/>sampling/createMessage"]
     TOOL -->|"destructive action"| ELIC["Elicitation<br/>elicitation/create"]
-    TOOL -->|"debug info"| LOG["Logging<br/>notifications/message"]
     TOOL -->|"ID autocomplete"| COMP["Completions<br/>completion/complete"]
 ```
 
@@ -592,7 +577,7 @@ sequenceDiagram
 | Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                     | —                                                     |
 | Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                       | —                                                     |
 | Modular tools sub-packages         | Domain isolation, independent testing, clean imports                                                              | [ADR-0004](adr/adr-0004-modular-tools-subpackages.md) |
-| Meta-tool consolidation (33/49/50) | Reduce tool count for LLM token efficiency; enterprise tier adds 16 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)   |
+| Meta-tool consolidation (32/48/49) | Reduce tool count for LLM token efficiency; enterprise tier adds 16 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](adr/adr-0005-meta-tool-consolidation.md)   |
 | Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                    | Go SDK convention                                     |
 | Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                 | See [Output Format](output-format.md)                 |
 | Content annotations                | Audience targeting + priority for display optimization                                                            | See [Output Format](output-format.md)                 |
@@ -667,7 +652,7 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 - [Resource Consumption](resource-consumption.md) — memory, CPU, and capacity planning
 - [Configuration](configuration.md) — environment variables, CLI flags, and setup
 - [Development](development/development.md) — building, testing, and contributing
-- [Capabilities](capabilities.md) — all 6 capabilities in detail
+- [Capabilities](capabilities.md) — all 3 capabilities in detail
 - [Tools Overview](tools/README.md) — tool registration modes and inventory
 
 ### External References

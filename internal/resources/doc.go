@@ -15,7 +15,6 @@
 //   - Legacy schema compatibility helpers registered by [RegisterMetaSchemaResources]
 //     and [RegisterDynamicSchemaResources] in isolated tests and audits.
 //   - Workflow guide resources registered by [RegisterWorkflowGuides].
-//   - Workspace root resources registered by [RegisterWorkspaceRoots].
 //
 // The public tool manifest resources expose these URI shapes:
 //

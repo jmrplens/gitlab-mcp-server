@@ -28,15 +28,14 @@
 
 ## What Problem Does Progress Solve?
 
-Some MCP tools take several seconds to complete — sampling tools fetch GitLab data and wait for LLM analysis, elicitation tools collect multi-step user input. During this time, the user sees nothing. Are they still running? Did they hang?
+Some MCP tools take several seconds to complete — file uploads stream large payloads, and elicitation tools collect multi-step user input. During this time, the user sees nothing. Are they still running? Did they hang?
 
 Progress notifications solve this by sending **real-time step-by-step status updates** to the client. Instead of silence, the user sees:
 
 ```text
-Step 1/4: Checking sampling capability...
-Step 2/4: Fetching MR details and diffs...
-Step 3/4: Requesting LLM analysis...
-Step 4/4: Analysis complete
+Step 1/3: Preparing upload...
+Step 2/3: Uploading file to GitLab...
+Step 3/3: Upload complete
 ```
 
 This transforms a "is it frozen?" experience into transparent, predictable behavior.
@@ -50,15 +49,11 @@ sequenceDiagram
     participant GL as 🦊 GitLab API
 
     AI->>S: tools/call (with progressToken)
-    S->>AI: notifications/progress (1/4: "Checking capability...")
-    S->>GL: GET /projects/1835/merge_requests/15
-    S->>AI: notifications/progress (2/4: "Fetching MR details...")
-    GL-->>S: MR data
-    S->>GL: GET /projects/1835/merge_requests/15/changes
-    GL-->>S: Diffs
-    S->>AI: notifications/progress (3/4: "Requesting LLM analysis...")
-    Note over S,AI: sampling/createMessage...
-    S->>AI: notifications/progress (4/4: "Analysis complete")
+    S->>AI: notifications/progress (1/3: "Preparing upload...")
+    S->>GL: POST /projects/1835/uploads
+    S->>AI: notifications/progress (2/3: "Uploading file to GitLab...")
+    GL-->>S: Upload metadata
+    S->>AI: notifications/progress (3/3: "Upload complete")
     S-->>AI: Tool result
 ```
 
@@ -93,16 +88,14 @@ The most common pattern in tool handlers:
 
 ```go
 tracker := progress.FromRequest(req)
-tracker.Step(ctx, 1, 4, "Checking sampling capability...")
+tracker.Step(ctx, 1, 3, "Preparing upload...")
 // ... work ...
-tracker.Step(ctx, 2, 4, "Fetching MR details...")
+tracker.Step(ctx, 2, 3, "Uploading file to GitLab...")
 // ... work ...
-tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
-// ... work ...
-tracker.Step(ctx, 4, 4, "Analysis complete")
+tracker.Step(ctx, 3, 3, "Upload complete")
 ```
 
-`Step(ctx, 1, 4, msg)` sends `progress=0, total=4` to the client. The MCP protocol uses **0-based progress** with a total count, so the `Step` method translates from 1-based step numbers (more natural for the developer) to 0-based progress values (required by the protocol).
+`Step(ctx, 1, 3, msg)` sends `progress=0, total=3` to the client. The MCP protocol uses **0-based progress** with a total count, so the `Step` method translates from 1-based step numbers (more natural for the developer) to 0-based progress values (required by the protocol).
 
 ## Configuration
 
@@ -120,39 +113,34 @@ tracker.Step(ctx, 4, 4, "Analysis complete")
 
 ## Tools Using Progress
 
-| Tool                                | Steps | What Each Step Reports                                                      |
-| ----------------------------------- | ----: | --------------------------------------------------------------------------- |
-| `gitlab_analyze_mr_changes`         |     4 | Check capability → Fetch MR → Fetch diffs → LLM analysis                    |
-| `gitlab_summarize_issue`            |     4 | Check capability → Fetch issue → Fetch notes → LLM summary                  |
-| `gitlab_generate_release_notes`     |     5 | Check capability → Compare refs → Fetch MRs → LLM notes → Done              |
-| `gitlab_analyze_pipeline_failure`   |     5 | Check capability → Fetch pipeline → Fetch jobs/traces → LLM analysis → Done |
-| `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create                        |
-| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create                                |
-| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                                          |
-| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create                                |
+| Tool                                | Steps | What Each Step Reports                               |
+| ----------------------------------- | ----: | ---------------------------------------------------- |
+| `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create |
+| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create         |
+| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                   |
+| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create         |
 
-Progress is most valuable for **sampling tools** (which make multiple GitLab API calls and then wait for LLM analysis) and **elicitation tools** (which require multiple rounds of user interaction).
+Progress is most valuable for **file uploads** (which stream large payloads) and **elicitation tools** (which require multiple rounds of user interaction).
 
 ## Real-World Examples
 
-### Sampling Tool with Progress
+### File Upload with Progress
 
-When you ask the AI to analyze a merge request:
+When you upload a file to a project:
 
 ```text
-You:  "Analyze MR !15 in gitlab-mcp-server"
+You:  "Upload build-artifact.zip to gitlab-mcp-server"
 ```
 
 The client shows:
 
 ```text
-[1/4] Checking sampling capability...
-[2/4] Fetching merge request details and diffs...
-[3/4] Requesting LLM analysis...          ← This step can take several seconds
-[4/4] Analysis complete
+[1/3] Preparing upload...
+[2/3] Uploading file to GitLab...          ← This step can take several seconds for large files
+[3/3] Upload complete
 ```
 
-Without progress, you would see nothing for 5–10 seconds while the server fetches data and waits for the LLM. With progress, each step provides feedback.
+Without progress, you would see nothing while the server streams the file.  With progress, each step provides feedback.
 
 ### Elicitation Tool with Progress
 
@@ -196,7 +184,7 @@ Four methods: `IsActive()`, `Update()`, `Step()`, and `Done()`. The `Step` conve
 
 ### Does every tool show progress?
 
-No. Only tools with multi-step operations use progress: the 11 sampling tools and 4 elicitation tools. Simple tools (e.g., `gitlab_list_branches`) complete too quickly within a single API call to benefit from progress.
+No. Only tools with multi-step or streaming operations use progress: file uploads and the 4 elicitation tools. Simple tools (e.g., `gitlab_list_branches`) complete too quickly within a single API call to benefit from progress.
 
 ### What if my MCP client doesn't send a progress token?
 

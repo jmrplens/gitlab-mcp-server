@@ -121,29 +121,6 @@ func assertSearchExplanation(t *testing.T, explainOutput SearchOutput) {
 	}
 }
 
-// TestSearch_IncludesCuratedRelatedActions verifies compact search results keep
-// workflow hints in structured fields without enabling scoring explanations.
-func TestSearch_IncludesCuratedRelatedActions(t *testing.T) {
-	registry := realCatalogRegistry(t)
-
-	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "analyze.release_notes", Limit: 1})
-	if err != nil {
-		t.Fatalf("Search() error = %v", err)
-	}
-	if result == nil || result.IsError {
-		t.Fatalf("Search() result = %+v, want non-error", result)
-	}
-	if output.Count != 1 || output.Results[0].ID != "analyze.release_notes" {
-		t.Fatalf("Search() output = %+v, want analyze.release_notes", output)
-	}
-	if !slices.Contains(output.Results[0].RelatedActions, "repository.compare") {
-		t.Fatalf("RelatedActions = %v, want repository.compare", output.Results[0].RelatedActions)
-	}
-	if output.Results[0].Explanation != nil {
-		t.Fatalf("Explanation = %+v, want nil by default", output.Results[0].Explanation)
-	}
-}
-
 // TestCompactParameterGuidance_PrioritizesRequiredParamsAndShowsTruncation verifies that CompactParameterGuidance_PrioritizesRequiredParamsAndShowsTruncation forwards pagination parameters to the GitLab API and parses the response metadata.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
@@ -993,7 +970,6 @@ func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testi
 	actionIDs := []string{
 		"search.code",
 		"runner.enable_project",
-		"analyze.mr_changes",
 		"orbit.dsl",
 	}
 
@@ -1442,7 +1418,6 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"package.files":                             "package.file_list",
 		"group.audit_events":                        "audit_event.list_group",
 		"project.releases.list":                     "release.list",
-		"release.generate_notes":                    "analyze.release_notes",
 		"deploy_token.create":                       "access.deploy_token_create_project",
 		"deploy_key.create":                         "access.deploy_key_add",
 		"deploy_key.delete":                         "access.deploy_key_delete",
@@ -1578,7 +1553,6 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 		"repository.compare":               "params.from and params.to",
 		"search.code":                      "file contents",
 		"search.projects":                  "project name",
-		"analyze.release_notes":            "after requested release/compare",
 		"package.registry_list_project":    "container registry image repositories",
 	}
 
@@ -1594,9 +1568,6 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 			description := actionDescriptionByID(t, output, actionID)
 			if !strings.Contains(description.Usage, wantSubstring) {
 				t.Fatalf("usage = %q, want substring %q", description.Usage, wantSubstring)
-			}
-			if actionID == "repository.compare" && !slices.Contains(description.RelatedActions, "analyze.release_notes") {
-				t.Fatalf("RelatedActions = %v, want analyze.release_notes", description.RelatedActions)
 			}
 			if actionID == "repository.compare" && !strings.Contains(textContent(result), "Related actions") {
 				t.Fatalf("Describe() markdown = %q, want related actions", textContent(result))
@@ -2780,7 +2751,6 @@ func TestSearch_QueryShapeMatrix_ReturnsExpectedActions(t *testing.T) {
 		{name: "pipeline jobs alias", query: "pipeline jobs list", want: []string{"job.list"}},
 		{name: "ci secret create", query: "create ci secret variable", want: []string{"ci_variable.create"}},
 		{name: "package remove intent", query: "remove package", want: []string{"package.delete"}},
-		{name: "release notes alias", query: "release generate notes", want: []string{"analyze.release_notes"}},
 		{name: "project status checks alias", query: "project status checks list", want: []string{"external_status_check.list_project"}},
 		{name: "group audit events alias", query: "group audit events", want: []string{"audit_event.list_group"}},
 		{name: "mixed webhook and repository", query: "webhook create repository file read", limit: 10, want: []string{"project.hook_add", "repository.file_get"}},
@@ -2931,7 +2901,6 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "single artifact by numeric job", query: "download coverage/report.xml single artifact file from numeric job id", want: []string{"job.download_single_artifact"}},
 		{name: "current instance settings", query: "read current instance settings before creating broadcast message", want: []string{"admin.settings_get"}},
 		{name: "release cleanup first steps", query: "verify tag release asset links before deleting release and tag", limit: 8, want: []string{"tag.get", "release.get", "release.link_list"}},
-		{name: "compare refs before release notes", query: "list releases compare refs from v1.0.0 to main then generate release notes", limit: 8, want: []string{"release.list", "repository.compare", "analyze.release_notes"}},
 		{name: "generic package list", query: "list package registry packages", want: []string{"package.list"}},
 		{name: "runner removal by id", query: "remove runner by numeric runner_id", want: []string{"runner.remove"}},
 		{name: "issue time tracking sequence", query: "issue time tracking set estimate add spent time reset spent time reset estimate", limit: 8, want: []string{"issue.time_estimate_set", "issue.spent_time_add", "issue.spent_time_reset", "issue.time_estimate_reset"}},
@@ -2940,7 +2909,6 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.protected_get", "environment.deployment_list", "environment.deployment_approve_or_reject"}},
 		{name: "feature flag user list lifecycle", query: "feature flag user list get user_list_iid update delete", limit: 8, want: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}},
 		{name: "issue note lifecycle", query: "issue note get by note_id update delete comment", limit: 8, want: []string{"issue.note_get", "issue.note_update", "issue.note_delete"}},
-		{name: "mr security analyzer intent", query: "LLM-assisted security review analyzer for merge request 1 in project my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"analyze.mr_security"}},
 		{name: "discover project by path or url", query: "project find by path or url", limit: 8, want: []string{"discover_project.resolve"}},
 		{name: "project get by path", query: "project show by path my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"project.get"}},
 		{name: "search projects intent", query: "project list search gitlab-mcp-server", limit: 8, want: []string{"search.projects"}},
@@ -3942,13 +3910,6 @@ var testRouteFixtures = map[string]toolutil.ActionMap{
 			},
 		},
 	},
-	"gitlab_analyze": {
-		"release_notes": {
-			Handler: func(_ context.Context, _ map[string]any) (any, error) {
-				return map[string]any{"release_notes": true}, nil
-			},
-		},
-	},
 }
 
 // textContent extracts text content from MCP result content for assertions.
@@ -4902,9 +4863,6 @@ func TestScoreIntentFunctions_ReturnFalseForNonMatchingEntries(t *testing.T) {
 	if v := scoreReleaseListIntentValue(unrelated, terms); v != 0 {
 		t.Fatalf("scoreReleaseListIntentValue(unrelated) = %d, want 0", v)
 	}
-	if v := scoreMRSecurityIntentValue(unrelated, terms); v != 0 {
-		t.Fatalf("scoreMRSecurityIntentValue(unrelated) = %d, want 0", v)
-	}
 	if v := scoreProjectGetIntentValue(unrelated, terms); v != 0 {
 		t.Fatalf("scoreProjectGetIntentValue(unrelated) = %d, want 0", v)
 	}
@@ -4921,9 +4879,6 @@ func TestScoreIntentFunctions_ReturnFalseForNonMatchingEntries(t *testing.T) {
 	}
 	if score, reason := scoreReleaseListIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
 		t.Fatalf("scoreReleaseListIntent(unrelated) = %d, %v, want 0, empty", score, reason)
-	}
-	if score, reason := scoreMRSecurityIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
-		t.Fatalf("scoreMRSecurityIntent(unrelated) = %d, %v, want 0, empty", score, reason)
 	}
 	if score, reason := scoreProjectGetIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
 		t.Fatalf("scoreProjectGetIntent(unrelated) = %d, %v, want 0, empty", score, reason)
@@ -5181,40 +5136,6 @@ func TestIntentBoost_CurrentUserSurfacesForIdentityQueries(t *testing.T) {
 	}
 }
 
-// TestIntentBoost_AnalyzeMRChangesSurfacesForLLMReviewQueries verifies
-// analyze.mr_changes ranks above mr_review.changes_get when the query carries
-// an LLM/analyzer signal alongside an MR context. This was surface-eval task
-// MT-093 where mr_review.changes_get outranked the intended action.
-func TestIntentBoost_AnalyzeMRChangesSurfacesForLLMReviewQueries(t *testing.T) {
-	t.Parallel()
-	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("build action catalog: %v", err)
-	}
-	reg := NewRegistryFromCatalog(catalog)
-	queries := []string{
-		"LLM-assisted code review analyzer for merge request changes in project my-org/tools/gitlab-mcp-server",
-		"analyze merge request 7 code changes using the LLM code review analyzer in project my-org/tools/gitlab-mcp-server",
-	}
-	for _, query := range queries {
-		t.Run(query[:min(len(query), 60)], func(t *testing.T) {
-			t.Parallel()
-			var out SearchOutput
-			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
-			if err != nil {
-				t.Fatalf("search: %v", err)
-			}
-			if len(out.Results) == 0 {
-				t.Fatal("no results")
-			}
-			if out.Results[0].ID != "analyze.mr_changes" {
-				logRanking(t, query, out.Results)
-				t.Errorf("top result = %q, want analyze.mr_changes", out.Results[0].ID)
-			}
-		})
-	}
-}
-
 // TestIntentBoost_ControlsNotHijacked verifies the new explicit-intent boosts do
 // not fire for queries whose intent is genuinely project search, get-user-by-id,
 // or user listing. It asserts the boosted action is not promoted to the top,
@@ -5235,7 +5156,6 @@ func TestIntentBoost_ControlsNotHijacked(t *testing.T) {
 		{"find repositories matching backend", "search.code"},
 		{"get user by id 42", "user.current"},
 		{"list all users in the group", "user.current"},
-		{"analyze pipeline failure root cause", "analyze.mr_changes"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.query, func(t *testing.T) {
@@ -5280,19 +5200,6 @@ func TestIntentScorers_MatchReasonReturnedWhenIntentFires(t *testing.T) {
 		t.Fatalf("entry %s.%s not found in catalog", domain, action)
 		return actionEntry{}
 	}
-
-	t.Run("scoreAnalyzeMRChangesIntent", func(t *testing.T) {
-		t.Parallel()
-		e := find("analyze", "mr_changes")
-		terms := normalizeSearchTerms("llm analyzer for merge request changes")
-		score, reason := scoreAnalyzeMRChangesIntent(e, terms)
-		if score == 0 {
-			t.Error("expected non-zero score for analyze.mr_changes with llm+merge signal")
-		}
-		if reason.MatchedValue == "" {
-			t.Error("expected non-empty MatchReason.MatchedValue")
-		}
-	})
 
 	t.Run("scoreSearchCodeIntent", func(t *testing.T) {
 		t.Parallel()

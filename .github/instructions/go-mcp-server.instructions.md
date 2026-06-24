@@ -517,21 +517,6 @@ mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in
 })
 ```
 
-### Sampling (LLM Interaction)
-
-Request LLM assistance from within tool handlers:
-
-```go
-samplingReq := &mcp.CreateMessageRequest{
-    Messages: []mcp.SamplingMessage{{
-        Role:    mcp.RoleUser,
-        Content: mcp.TextContent{Text: prompt},
-    }},
-    MaxTokens: 1006,
-}
-result, err := server.CreateMessage(ctx, samplingReq)
-```
-
 ### Elicitation (User Input)
 
 Request user input during tool execution:

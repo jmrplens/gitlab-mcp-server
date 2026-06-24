@@ -11,11 +11,11 @@ Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaqueta
 
 ### Modo individual
 
-En modo individual, el servidor registra una herramienta por operación de GitLab: **877 herramientas** para CE, **1039 herramientas** para Enterprise/Premium autoalojado, o **1045 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
+En modo individual, el servidor registra una herramienta por operación de GitLab: **866 herramientas** para CE, **1028 herramientas** para Enterprise/Premium autoalojado, o **1034 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
 ### Modo meta-herramientas
 
-En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **33 meta-herramientas base**, **49 en Enterprise/Premium autoalojado**, o **50 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
+En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **32 meta-herramientas base**, **48 en Enterprise/Premium autoalojado**, o **49 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
 ```json
 {
@@ -93,7 +93,6 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 | Meta-herramienta | Descripción                                                      | Acciones principales                                                                      |
 | ---------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `gitlab_search`  | Búsqueda entre recursos en proyectos, grupos y ámbito global     | code, issues, merge_requests, commits, milestones, notes, projects, snippets, users, wiki |
-| `gitlab_analyze` | Análisis con sampling de IA (11 operaciones vía sampling de LLM) | analyze_mr_changes, summarize_issue, pipeline_failure, ...                                |
 
 ### Acceso y credenciales
 
@@ -141,5 +140,4 @@ Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate 
 - [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — arquitectura detallada de meta-herramientas y uso
 - [Conjunto dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — modo de búsqueda, descripción y ejecución con bajo consumo de tokens
 - [Orbit](/gitlab-mcp-server/es/tools/orbit/) — herramientas Knowledge Graph para GitLab.com Enterprise/Premium
-- [Herramientas de análisis](/gitlab-mcp-server/es/tools/analysis/) — herramientas de sampling impulsadas por IA
 - [Recursos y prompts](/gitlab-mcp-server/es/tools/resources-prompts/) — contexto de solo lectura y plantillas de prompts

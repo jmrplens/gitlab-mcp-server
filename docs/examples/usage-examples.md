@@ -52,17 +52,9 @@ You do not need to know tool names or parameters. Just ask naturally:
 
 The AI calls the `my_pending_reviews` prompt and returns a list of MRs assigned to you as reviewer, with clickable links to each one in GitLab.
 
-### "Summarize what changed in MR !15 of my-app"
-
-The AI calls `gitlab_analyze_mr_changes` which fetches the diff, sends it to the LLM for analysis, and returns a structured review covering: what changed, risk assessment, and suggestions.
-
 ### "Create an issue about fixing the login timeout"
 
 The AI calls `gitlab_create_issue` with a title derived from your request. It may ask you for the project name and any labels before creating the issue.
-
-### "Why did the latest pipeline fail?"
-
-The AI calls `gitlab_analyze_pipeline_failure` which fetches the pipeline logs, identifies the failing job, and returns a plain-language explanation of what went wrong and how to fix it.
 
 ### "Generate release notes from v1.1 to v1.2"
 
@@ -218,7 +210,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `TOOL_SURFACE=meta`, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
+With `TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
 
 ```text
 Call: gitlab_project(action="help")
@@ -229,18 +221,6 @@ Call: gitlab_merge_request(action="list", project_id="42")
 ```
 
 Available meta-tool domains: `project`, `branch`, `tag`, `release`, `merge_request`, `mr_review`, `repository`, `group`, `issue`, `pipeline`, `job`, `user`, `wiki`, `environment`, `ci_variable`, `template`, `admin`, `access`, `package`, `snippet`, `feature_flags`, `search`, `runner`, `analyze`.
-
-## Sampling Tools
-
-When the MCP client supports sampling, these tools delegate analysis to the LLM:
-
-```text
-gitlab_analyze_mr_changes(project_id="42", merge_request_iid=15)
-→ Sends MR diff data to LLM for code review analysis
-
-gitlab_summarize_issue(project_id="42", issue_iid=10)
-→ Sends issue details to LLM for summarization
-```
 
 ## Error Handling
 

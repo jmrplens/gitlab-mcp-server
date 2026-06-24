@@ -81,23 +81,12 @@ func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
 
-	for _, actionID := range []string{"project.list", "search.code", "runner.list", "analyze.issue_summary"} {
+	for _, actionID := range []string{"project.list", "search.code", "runner.list"} {
 		t.Run(actionID, func(t *testing.T) {
 			if _, ok := catalog.Action(actioncatalog.ActionID(actionID)); !ok {
 				t.Fatalf("catalog missing %s", actionID)
 			}
 		})
-	}
-
-	group, ok := catalog.Group("gitlab_analyze")
-	if !ok {
-		t.Fatal("catalog missing gitlab_analyze group")
-	}
-	if !group.ReadOnly {
-		t.Fatal("gitlab_analyze group should be read-only")
-	}
-	if group.FormatResult == nil {
-		t.Fatal("gitlab_analyze group should preserve its custom formatter")
 	}
 }
 
@@ -544,11 +533,11 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
-	expectedBaseDynamicCatalogActions = 881
+	expectedBaseDynamicCatalogActions = 870
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1043
+	expectedEnterpriseDynamicCatalogActions = 1032
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1049
+	expectedGitLabComEnterpriseCatalogActions = 1038
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

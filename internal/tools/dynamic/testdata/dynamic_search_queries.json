@@ -153,54 +153,6 @@
         "notes": "Instance/global CI variable wording should prefer the admin instance variable action."
     },
     {
-        "category": "analyze_pipeline_failure_phrase",
-        "query": "pipeline failure analysis",
-        "want_top": "analyze.pipeline_failure",
-        "notes": "Failure-analysis wording should select the sampling analyzer, not a raw pipeline read."
-    },
-    {
-        "category": "analyze_ci_config_phrase",
-        "query": "CI configuration analysis",
-        "want_top": "analyze.ci_config",
-        "notes": "CI configuration analysis should select the analyzer, not a template lint action."
-    },
-    {
-        "category": "analyze_ci_config_project_phrase",
-        "query": "project ci configuration",
-        "want_top": "analyze.ci_config",
-        "notes": "Observed Dynamic eval query should select the CI configuration analyzer over job, variable, or lint helpers."
-    },
-    {
-        "category": "analyze_mr_changes_phrase",
-        "query": "analyze merge request changes",
-        "want_top": "analyze.mr_changes",
-        "notes": "Analysis wording should select the MR changes analyzer over raw changes retrieval."
-    },
-    {
-        "category": "analyze_issue_summary_phrase",
-        "query": "issue summary analyzer",
-        "want_top": "analyze.issue_summary",
-        "notes": "Issue summary wording should select the issue summary analyzer."
-    },
-    {
-        "category": "analyze_mr_security_phrase",
-        "query": "merge request security review",
-        "want_top": "analyze.mr_security",
-        "notes": "Security review wording should select the MR security analyzer."
-    },
-    {
-        "category": "analyze_technical_debt_phrase",
-        "query": "technical debt markers",
-        "want_top": "analyze.technical_debt",
-        "notes": "Technical debt marker wording should select the analyzer instead of raw code search."
-    },
-    {
-        "category": "analyze_technical_debt_find_phrase",
-        "query": "find technical-debt markers on branch main",
-        "want_top": "analyze.technical_debt",
-        "notes": "Observed Dynamic eval wording with a branch should still select the technical-debt analyzer."
-    },
-    {
         "category": "search_projects_phrase",
         "query": "search projects gitlab-mcp-server",
         "want_top": "search.projects",
@@ -246,8 +198,7 @@
         "category": "mr_review_changes_phrase",
         "query": "merge request changes analyzer",
         "want_top_n": [
-            "mr_review.changes_get",
-            "analyze.mr_changes"
+            "mr_review.changes_get"
         ],
         "limit": 20,
         "notes": "Raw changes retrieval and the analyzer are both valid nearby actions, but both must be discoverable."

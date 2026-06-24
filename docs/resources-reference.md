@@ -1,6 +1,6 @@
 # MCP Resources Reference
 
-This document lists the MCP resources exposed by gitlab-mcp-server. With the default `TOOL_SURFACE=dynamic` and `CAPABILITY_SURFACE=full`, the server exposes **46 MCP resources**: GitLab data resources, workflow guides, and a surface-aware tool manifest. Meta and individual modes expose the same public resource shape; the `gitlab://tools` manifest adapts its payload to the active tool surface selected at startup.
+This document lists the MCP resources exposed by gitlab-mcp-server. With the default `TOOL_SURFACE=dynamic` and `CAPABILITY_SURFACE=full`, the server exposes **45 MCP resources**: GitLab data resources, workflow guides, and a surface-aware tool manifest. Meta and individual modes expose the same public resource shape; the `gitlab://tools` manifest adapts its payload to the active tool surface selected at startup.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, AI assistant users
@@ -16,12 +16,11 @@ MCP separates fixed resources from URI templates. In default dynamic full mode, 
 
 Static resources have a fixed URI and require no parameters.
 
-| #   | Name              | URI                        | Description                                                                                                                                                                              |
-| --- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `current_user`    | `gitlab://user/current`    | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                           |
-| 2   | `groups`          | `gitlab://groups`          | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                       |
-| 3   | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
-| 4   | `tool_manifest`   | `gitlab://tools`           | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema.       |
+| #   | Name            | URI                     | Description                                                                                                                                                                        |
+| --- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `current_user`  | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                     |
+| 2   | `groups`        | `gitlab://groups`       | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                 |
+| 4   | `tool_manifest` | `gitlab://tools`        | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema. |
 
 ## Resource Templates (37 core)
 
@@ -134,4 +133,4 @@ All URI template parameters support intelligent autocomplete via the completions
 
 ## Source
 
-Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/tool_manifest.go`](../internal/resources/tool_manifest.go) (surface-aware tool manifest), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).
+Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/tool_manifest.go`](../internal/resources/tool_manifest.go) (surface-aware tool manifest), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).

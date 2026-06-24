@@ -15,8 +15,8 @@ Use the dynamic toolset when the initial MCP `tools/list` payload is the limitin
 | Mode                     |                                                      Visible Tools | Best For                                                               |
 | ------------------------ | -----------------------------------------------------------------: | ---------------------------------------------------------------------- |
 | Dynamic toolset, default |                                                                  2 | Low-token clients that can find an action with schema, then execute it |
-| Meta-tools               |    33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection      |
-| Individual tools         | 877 CE / 1039 self-managed enterprise / 1045 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation                |
+| Meta-tools               |    32 base / 48 self-managed enterprise / 49 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection      |
+| Individual tools         | 866 CE / 1028 self-managed enterprise / 1034 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation                |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 
@@ -63,7 +63,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 
@@ -331,7 +331,7 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 | Concern              | Meta-tools                                                                   | Dynamic toolset                                    |
 | -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| Initial tool count   | 33/49/50                                                                     | 2                                                  |
+| Initial tool count   | 32/48/49                                                                     | 2                                                  |
 | Model selection      | Choose a domain tool and action                                              | Find an action with schema, execute                |
 | Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
 | Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources         | Keeps action schema discovery through find         |

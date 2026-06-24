@@ -63,34 +63,9 @@ func TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped(t *testing.T) {
 	}
 }
 
-// TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries verifies that
-// dynamic prompts for analyzer-style multi-step tasks include explicit
-// guidance to avoid placeholder retries and to keep ref identifiers stable
-// across the compare and analyzer steps.
-//
-// The test renders the prompt for a release-summary workflow with
-// release.list, repository.compare, and analyze.release_notes steps and
-// asserts the prompt mentions the placeholder warning, the find retry
-// guidance, and the stable-ref guidance. This protects the prompt builder
-// from regressing to a generic template that lets models hallucinate
-// placeholder values.
-func TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries(t *testing.T) {
-	task := evalTask{ID: "MS-012", Prompt: "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "release.list", RequiredParams: []string{"project_id"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "repository.compare", RequiredParams: []string{"project_id", "from", "to"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "analyze.release_notes", RequiredParams: []string{"project_id", "from", "to"}}}}
-	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	if !strings.Contains(got, "Never use placeholder values like <to>, <from>, or <project_id> in retries") {
-		t.Fatalf("dynamic prompt missing placeholder guidance:\n%s", got)
-	}
-	if !strings.Contains(got, "do not call gitlab_execute_action for an unrelated action just because it ranked higher") {
-		t.Fatalf("dynamic prompt missing find retry guidance:\n%s", got)
-	}
-	if !strings.Contains(got, "keep the same two refs across the compare step and the final analyzer step") {
-		t.Fatalf("dynamic prompt missing release compare guidance:\n%s", got)
-	}
-}
-
 // TestDynamicExampleParamValue_CompareRefsExtractsFromAndTo verifies that
 // dynamicExampleParamValue pulls the correct ref values for repository.compare
-// and analyze.release_notes actions from a prompt that names both refs in
+// actions from a prompt that names both refs in
 // backticks.
 //
 // The test invokes the helper with the from/to parameters for each action
@@ -104,12 +79,6 @@ func TestDynamicExampleParamValue_CompareRefsExtractsFromAndTo(t *testing.T) {
 	}
 	if got := dynamicExampleParamValue("repository.compare", "to", prompt); got != "v0.0.0-eval-ms" {
 		t.Fatalf("dynamicExampleParamValue(to) = %v, want v0.0.0-eval-ms", got)
-	}
-	if got := dynamicExampleParamValue("analyze.release_notes", "from", prompt); got != "main" {
-		t.Fatalf("dynamicExampleParamValue(analyze.from) = %v, want main", got)
-	}
-	if got := dynamicExampleParamValue("analyze.release_notes", "to", prompt); got != "v0.0.0-eval-ms" {
-		t.Fatalf("dynamicExampleParamValue(analyze.to) = %v, want v0.0.0-eval-ms", got)
 	}
 }
 

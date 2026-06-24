@@ -592,7 +592,6 @@ func TestDynamicFailureDiagnosticCategory_SeparatesDiscoveryBuckets(t *testing.T
 		{name: "params shape", notes: []string{"step 1: missing required params: project_id"}, want: "params_shape_miss"},
 		{name: "standalone params shape", notes: []string{"step 1: missing required project_id"}, want: "params_shape_miss"},
 		{name: "multi step order", notes: []string{"tool-call step limit reached after 2/3 scenario steps"}, want: "multi_step_order_miss"},
-		{name: "ce or sampling", notes: []string{"step 1 simulation sampling_unsupported_continue: simulated sampling capability unsupported"}, want: "ce_or_sampling_limitation"},
 		{name: "true discovery", notes: []string{"model returned no tool_use block"}, want: "true_discovery_miss"},
 	}
 	opts := options{ToolSurface: config.ToolSurfaceDynamic}
@@ -1004,14 +1003,6 @@ func TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.link_list"},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.delete"},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "tag.delete"},
-			}},
-		},
-		{
-			name: "release notes workflow",
-			task: evalTask{ID: "MS-012", Prompt: "List releases, compare refs, then generate release notes.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.list"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.compare"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "analyze.release_notes"},
 			}},
 		},
 		{
@@ -3367,12 +3358,11 @@ func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
 func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	task := evalTask{
 		ID:     "MS-002",
-		Prompt: "Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server`: inspect the pipeline, list failed jobs, fetch job `999` trace, then call the pipeline failure analyzer.",
+		Prompt: "Investigate failed pipeline `12345` for project `my-org/tools/gitlab-mcp-server`: inspect the pipeline, list failed jobs, fetch job `999` trace.",
 		Steps: []evalStep{
 			{ExpectedTool: "gitlab_pipeline", ExpectedAction: "get", RequiredParams: []string{"project_id", "pipeline_id"}},
 			{ExpectedTool: "gitlab_job", ExpectedAction: "list", RequiredParams: []string{"project_id", "pipeline_id"}, OptionalParams: []string{"scope"}},
 			{ExpectedTool: "gitlab_job", ExpectedAction: "trace", RequiredParams: []string{"project_id", "job_id"}},
-			{ExpectedTool: "gitlab_analyze", ExpectedAction: "pipeline_failure", RequiredParams: []string{"project_id", "pipeline_id"}},
 		},
 	}
 
@@ -3466,80 +3456,6 @@ func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T)
 				}
 			}
 		})
-	}
-}
-
-// TestTaskPrompt_AnalyzerTasksAvoidPrefetch verifies TaskPrompt when analyzer tasks avoid prefetch.
-func TestTaskPrompt_AnalyzerTasksAvoidPrefetch(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-093",
-		Prompt:         "Review merge request `7` changes in project `my-org/tools/gitlab-mcp-server` with the LLM-assisted analyzer.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "analyze.mr_changes",
-		RequiredParams: []string{"project_id", "merge_request_iid"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"analyze.mr_changes"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"merge_request_iid":7`,
-		"do not prefetch",
-		"do not use params:{}",
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want analyzer guidance containing %q", prompt, want)
-		}
-	}
-}
-
-// TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample verifies TaskPrompt when analyzer tasks include optional ref example.
-func TestTaskPrompt_AnalyzerTasksIncludeOptionalRefExample(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-097",
-		Prompt:         "Analyze the CI configuration on branch `main` for project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "analyze.ci_config",
-		RequiredParams: []string{"project_id"},
-		OptionalParams: []string{"content_ref"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"analyze.ci_config"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"content_ref":"main"`,
-		"Exact required call",
-		"do not call gitlab_discover_project",
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want analyzer guidance containing %q", prompt, want)
-		}
-	}
-}
-
-// TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance verifies TaskPrompt when split analyzer tasks include exact tool guidance.
-func TestTaskPrompt_SplitAnalyzerTasksIncludeExactToolGuidance(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-097",
-		Prompt:         "Analyze the CI configuration on branch `main` for project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab_analyze",
-		ExpectedAction: "ci_config",
-		RequiredParams: []string{"project_id"},
-		OptionalParams: []string{"content_ref"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"use the gitlab_analyze tool once",
-		`"action":"ci_config"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"content_ref":"main"`,
-		"do not use params:{}",
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want split analyzer guidance containing %q", prompt, want)
-		}
 	}
 }
 
@@ -4559,46 +4475,6 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	}
 }
 
-// TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer verifies EvalCreateMessageHandler when advertises sampling to MCP server.
-func TestEvalCreateMessageHandler_AdvertisesSamplingToMCPServer(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "sampling-probe", Version: "0"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "sampling_probe", Description: "sampling probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
-		params := req.Session.InitializeParams()
-		if params == nil || params.Capabilities.Sampling == nil {
-			return nil, nil, errors.New("sampling capability not advertised")
-		}
-		result, err := req.Session.CreateMessage(ctx, &mcp.CreateMessageParams{
-			Messages:  []*mcp.SamplingMessage{{Role: "user", Content: &mcp.TextContent{Text: "probe"}}},
-			MaxTokens: 64,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: result.Model}}}, nil, nil
-	})
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "sampling-probe-client", Version: "0"}, &mcp.ClientOptions{
-		CreateMessageHandler: evalCreateMessageHandler,
-	})
-	session, err := mcpClient.Connect(t.Context(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
-
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "sampling_probe", Arguments: map[string]any{}})
-	if err != nil {
-		t.Fatalf("CallTool() error = %v", err)
-	}
-	if got := toolResultContent(result); !strings.Contains(got, "eval-mcp-surfaces-sampling-mock") {
-		t.Fatalf("sampling result = %q, want evaluator sampling model", got)
-	}
-}
-
 // TestEvalElicitationHandler_AdvertisesElicitationToMCPServer verifies that the evaluator client can drive interactive tools.
 func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "elicitation-probe", Version: "0"}, nil)
@@ -4970,8 +4846,8 @@ func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
 	if resourcesErr != nil {
 		t.Fatalf("ListResources() error = %v", resourcesErr)
 	}
-	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://workspace/roots") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
-		t.Fatalf("resources = %+v, want tools, workspace roots, and normal GitLab resources", resourcesResult.Resources)
+	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
+		t.Fatalf("resources = %+v, want tools and normal GitLab resources", resourcesResult.Resources)
 	}
 	templatesResult, templatesErr := session.ListResourceTemplates(t.Context(), nil)
 	if templatesErr != nil {
@@ -5944,8 +5820,8 @@ func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
 		ID:   "call-1",
 		Type: "function",
 		Function: openAIFunctionCall{
-			Name:      "gitlab_analyze",
-			Arguments: `<tool_call>{"action":"pipeline_failure","params":{"project_id":"my-org/tools/gitlab-mcp-server","pipeline_id":12345}}</tool_call>`,
+			Name:      "gitlab_pipeline",
+			Arguments: `<tool_call>{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server","pipeline_id":12345}}</tool_call>`,
 		},
 	}}})
 	if err != nil {
@@ -5954,8 +5830,8 @@ func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
 	if len(blocks) != 1 {
 		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
 	}
-	if blocks[0].Input["action"] != "pipeline_failure" {
-		t.Fatalf("action = %v, want pipeline_failure", blocks[0].Input["action"])
+	if blocks[0].Input["action"] != "get" {
+		t.Fatalf("action = %v, want get", blocks[0].Input["action"])
 	}
 }
 

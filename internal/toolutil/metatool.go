@@ -184,7 +184,6 @@ var commonActionAliases = map[string]string{
 	"release.asset_link.create":                  "release.link_create",
 	"release.create_link":                        "release.link_create",
 	"release_link.link_list":                     "release.link_list",
-	"release.generate_notes":                     "analyze.release_notes",
 	"repository_tree":                            "repository.tree",
 	"repository_tree.list":                       "repository.tree",
 	"repository_file.get":                        "repository.file_get",

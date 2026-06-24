@@ -42,7 +42,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
@@ -1211,81 +1210,6 @@ func TestFormatSearch_MRsMarkdown(t *testing.T) {
 	})
 }
 
-// Sampling.
-
-// TestFormatAnalyze_MRChangesMarkdown verifies MR analysis rendering.
-func TestFormatAnalyze_MRChangesMarkdown(t *testing.T) {
-	a := samplingtools.AnalyzeMRChangesOutput{
-		MRIID: 42, Title: testTitleAddFeat, Analysis: "This MR adds a new feature.",
-		Model: "gpt-4o", Truncated: false,
-	}
-	md := samplingtools.FormatAnalyzeMRChangesMarkdown(a)
-	checks := []string{"## MR Analysis: !42", testTitleAddFeat, "This MR adds a new feature.", "*Model: gpt-4o*"}
-	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
-	}
-}
-
-// TestFormatAnalyze_MRChangesMarkdownTruncated verifies truncation warning.
-func TestFormatAnalyze_MRChangesMarkdownTruncated(t *testing.T) {
-	a := samplingtools.AnalyzeMRChangesOutput{MRIID: 1, Title: "x", Analysis: "text", Truncated: true}
-	md := samplingtools.FormatAnalyzeMRChangesMarkdown(a)
-	if !strings.Contains(md, "truncated") {
-		t.Error("missing truncation warning")
-	}
-}
-
-// TestFormatSummarize_IssueMarkdown verifies issue summary rendering.
-func TestFormatSummarize_IssueMarkdown(t *testing.T) {
-	s := samplingtools.SummarizeIssueOutput{
-		IssueIID: 10, Title: testTitleBugReport, Summary: "The issue describes a bug.",
-		Model: "claude-4", Truncated: false,
-	}
-	md := samplingtools.FormatSummarizeIssueMarkdown(s)
-	checks := []string{"## Issue Summary: #10", testTitleBugReport, "The issue describes a bug.", "*Model: claude-4*"}
-	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf(fmtMissing, c)
-		}
-	}
-}
-
-// TestMarkdownForResult_SamplingTypes verifies that markdownForResult correctly
-// dispatches all 11 sampling output types through the markdownForSamplingTypes
-// switch. Each subtest passes a zero-value output struct and asserts that the
-// dispatcher produces a non-nil CallToolResult (proving the type was matched).
-func TestMarkdownForResult_SamplingTypes(t *testing.T) {
-	tests := []struct {
-		name   string
-		result any
-	}{
-		{"AnalyzeMRChangesOutput", samplingtools.AnalyzeMRChangesOutput{MRIID: 1, Title: "t", Analysis: "a"}},
-		{"SummarizeIssueOutput", samplingtools.SummarizeIssueOutput{IssueIID: 1, Title: "t", Summary: "s"}},
-		{"GenerateReleaseNotesOutput", samplingtools.GenerateReleaseNotesOutput{From: "v1", ReleaseNotes: "notes"}},
-		{"AnalyzePipelineFailureOutput", samplingtools.AnalyzePipelineFailureOutput{PipelineID: 1, Analysis: "a"}},
-		{"SummarizeMRReviewOutput", samplingtools.SummarizeMRReviewOutput{MRIID: 1, Title: "t", Summary: "r"}},
-		{"GenerateMilestoneReportOutput", samplingtools.GenerateMilestoneReportOutput{Title: "m", Report: "r"}},
-		{"AnalyzeCIConfigOutput", samplingtools.AnalyzeCIConfigOutput{ProjectID: "1", Analysis: "a"}},
-		{"AnalyzeIssueScopeOutput", samplingtools.AnalyzeIssueScopeOutput{IssueIID: 1, Title: "t", Analysis: "s"}},
-		{"ReviewMRSecurityOutput", samplingtools.ReviewMRSecurityOutput{MRIID: 1, Title: "t", Review: "s"}},
-		{"FindTechnicalDebtOutput", samplingtools.FindTechnicalDebtOutput{ProjectID: "1", Analysis: "d"}},
-		{"AnalyzeDeploymentHistoryOutput", samplingtools.AnalyzeDeploymentHistoryOutput{ProjectID: "1", Analysis: "a"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := markdownForResult(tt.result)
-			if result == nil {
-				t.Fatal("markdownForResult returned nil — type not matched in dispatch")
-			}
-			if len(result.Content) == 0 {
-				t.Fatal("expected non-empty content from dispatch")
-			}
-		})
-	}
-}
-
 // TestMarkdownForResult_DispatchCompleteness exercises markdownForResult with
 // one representative Output type from every sub-dispatch function, ensuring the
 // full dispatch chain is wired correctly and no sub-function is accidentally
@@ -1674,10 +1598,6 @@ var allMarkdownFixtureData = []markdownFixture{
 	// Search
 	{"search.CodeOutput", search.CodeOutput{Blobs: []search.BlobOutput{{Filename: "f"}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}},
 	{"search.MergeRequestsOutput", search.MergeRequestsOutput{MergeRequests: []mergerequests.Output{{IID: 1}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}},
-
-	// Sampling
-	{"samplingtools.AnalyzeMRChangesOutput", samplingtools.AnalyzeMRChangesOutput{MRIID: 1, Analysis: "looks good"}},
-	{"samplingtools.SummarizeIssueOutput", samplingtools.SummarizeIssueOutput{IssueIID: 1, Summary: "summary text"}},
 
 	// Environments
 	{"environments.Output", environments.Output{ID: 1, Name: "production"}},

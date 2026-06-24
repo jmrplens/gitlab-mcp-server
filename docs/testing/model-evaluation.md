@@ -206,7 +206,6 @@ Use these categories when triaging traces:
 | Model route miss           | The model chose the wrong tool or action.                                | Improve descriptions, action names, examples, or aliases.          |
 | Model parameter shape miss | The model chose the right route but emitted invalid params.              | Strengthen schema descriptions or add safe alias normalization.    |
 | Provider adapter issue     | The provider API transformed or rejected a valid MCP schema.             | Fix the provider adapter without changing the global MCP contract. |
-| Sampling unsupported       | The evaluator client did not advertise MCP sampling.                     | Add a deterministic `CreateMessageHandler` for evaluator clients.  |
 | Fixture gap                | Docker GitLab lacks a resource the task expects.                         | Add initial or just-in-time fixture setup.                         |
 | GitLab limitation          | The Docker GitLab edition does not support the API.                      | Filter or mark the route unavailable for that edition.             |
 | MCP implementation bug     | The MCP handler fails despite valid model input and valid fixture state. | Fix the handler and add unit/E2E coverage.                         |
@@ -252,5 +251,5 @@ offline/schema runs or explicitly simulated failure scenarios.
 Schema-only evaluations can show that a model understands the catalog, but they
 cannot prove the server works against GitLab. Docker mode closes that gap by
 executing the actual MCP call against a populated GitLab instance. This catches
-real problems such as missing sampling capability, GitLab API edge cases,
+real problems such as GitLab API edge cases,
 stale fixture IDs, destructive ordering, and provider-specific argument repair.

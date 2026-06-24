@@ -268,7 +268,7 @@ func writeRepairDiagnostics(b *strings.Builder, opts options, results []taskResu
 // selected tool surface.
 func failureDiagnosticCategories(opts options) []string {
 	if isDynamicEvalSurface(opts.ToolSurface) {
-		return []string{"ranker_miss", "alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_or_sampling_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
+		return []string{"ranker_miss", "alias_miss", "standalone_unavailable", "params_shape_miss", "multi_step_order_miss", "ce_limitation", "true_discovery_miss", "mcp_implementation_bug", "model_provider_auth", "model_provider_model_unavailable", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
 	}
 	return []string{"mcp_implementation_bug", "gitlab_ce_limitation", "model_provider_auth", "model_provider_model_unavailable", "model_route_selection_miss", "model_parameter_shape_miss", "fixture_setup_failure", "transient_gitlab_5xx", "timeout_resource_exhaustion", "destructive_safety", "not_found", "other"}
 }
@@ -335,8 +335,8 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 	switch {
 	case text == "":
 		return "other"
-	case limitedByEditionOrSampling(text):
-		return "ce_or_sampling_limitation"
+	case limitedByEdition(text):
+		return "ce_limitation"
 	case standaloneUnavailable(text):
 		return "standalone_unavailable"
 	case dynamicRankerMiss(text):
@@ -356,8 +356,8 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 	}
 }
 
-func limitedByEditionOrSampling(text string) bool {
-	return strings.Contains(text, "sampling_unsupported") || strings.Contains(text, "sampling capability unsupported") || editionLimitation(text)
+func limitedByEdition(text string) bool {
+	return editionLimitation(text)
 }
 
 func editionLimitation(text string) bool {

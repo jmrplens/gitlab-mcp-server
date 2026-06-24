@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1039 self-managed Enterprise/Premium tools (1045 on GitLab.com Enterprise/Premium with Orbit), 33 base meta-tools (49 self-managed Enterprise, 50 GitLab.com Enterprise), 46 resources, and 37 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
+gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1028 self-managed Enterprise/Premium tools (1034 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -166,10 +166,10 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 ### Search and Analytics
 
-| Preview                                                                | Name            | Packages                                                                    |
-| ---------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------- |
-| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                                      |
-| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata |
+| Preview                                                                | Name            | Packages                                                     |
+| ---------------------------------------------------------------------- | --------------- | ------------------------------------------------------------ |
+| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                       |
+| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, usagedata |
 
 ### Security and Access
 
@@ -224,7 +224,7 @@ Alphabetical listing of all 50 icons and every sub-package that uses each one.
 | Icon          | Variable            | Packages                                                                                                                          |
 | ------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Alert         | `IconAlert`         | alertmanagement, errortracking                                                                                                    |
-| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata                                                       |
+| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, usagedata                                                                      |
 | Audit         | `IconAudit`         | auditevents                                                                                                                       |
 | Board         | `IconBoard`         | boards, groupboards                                                                                                               |
 | Bot           | `IconBot`           | groupserviceaccounts                                                                                                              |
