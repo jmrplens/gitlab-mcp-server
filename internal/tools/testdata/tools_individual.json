@@ -43085,6 +43085,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -43124,6 +43151,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -43133,8 +43163,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -43169,6 +43298,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -43178,11 +43310,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -44028,6 +44215,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -44067,6 +44281,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -44076,8 +44293,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -44112,6 +44428,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -44121,11 +44440,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -44694,6 +45068,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -44733,6 +45134,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -44742,8 +45146,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -44778,6 +45281,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -44787,11 +45293,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -44863,6 +45424,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -44902,6 +45490,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -44911,8 +45502,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -44947,6 +45637,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -44956,11 +45649,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -46095,6 +46843,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -46134,6 +46909,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -46143,8 +46921,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -46179,6 +47056,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -46188,11 +47068,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
@@ -46501,6 +47436,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -46540,6 +47502,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -46549,8 +47514,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -46585,6 +47649,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -46594,11 +47661,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
@@ -46902,6 +48024,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -46941,6 +48090,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -46950,8 +48102,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -46986,6 +48237,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -46995,11 +48249,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
@@ -47374,6 +48683,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -47413,6 +48749,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -47422,8 +48761,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -47458,6 +48896,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -47467,11 +48908,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -48862,6 +50358,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -48901,6 +50424,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -48910,8 +50436,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -48946,6 +50571,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -48955,11 +50583,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -49384,6 +51067,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -49423,6 +51133,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -49432,8 +51145,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -49468,6 +51280,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -49477,11 +51292,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -49743,6 +51613,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -49782,6 +51679,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -49791,8 +51691,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -49827,6 +51826,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -49836,11 +51838,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -49999,6 +52056,33 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "award_emoji": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "self",
+            "notes",
+            "award_emoji",
+            "project"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "type": "string"
@@ -50038,6 +52122,9 @@
         "epic_issue_id": {
           "type": "integer"
         },
+        "external_id": {
+          "type": "string"
+        },
         "health_status": {
           "type": "string"
         },
@@ -50047,8 +52134,107 @@
         "issue_iid": {
           "type": "integer"
         },
+        "issue_link_id": {
+          "type": "integer"
+        },
         "issue_type": {
           "type": "string"
+        },
+        "iteration": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "sequence",
+            "group_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -50083,6 +52269,9 @@
         "references": {
           "type": "string"
         },
+        "service_desk_reply_to": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -50092,11 +52281,66 @@
         "task_completion_count": {
           "type": "integer"
         },
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "task_completion_total": {
           "type": "integer"
         },
         "time_estimate": {
           "type": "integer"
+        },
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
@@ -70107,6 +72351,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -70146,6 +72417,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -70155,8 +72429,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -70191,6 +72564,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -70200,11 +72576,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
@@ -73733,6 +76164,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -73772,6 +76230,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -73781,8 +76242,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -73817,6 +76377,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -73826,11 +76389,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
@@ -107658,6 +110276,33 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "self",
+                  "notes",
+                  "award_emoji",
+                  "project"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "type": "string"
@@ -107697,6 +110342,9 @@
               "epic_issue_id": {
                 "type": "integer"
               },
+              "external_id": {
+                "type": "string"
+              },
               "health_status": {
                 "type": "string"
               },
@@ -107706,8 +110354,107 @@
               "issue_iid": {
                 "type": "integer"
               },
+              "issue_link_id": {
+                "type": "integer"
+              },
               "issue_type": {
                 "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -107742,6 +110489,9 @@
               "references": {
                 "type": "string"
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -107751,11 +110501,66 @@
               "task_completion_count": {
                 "type": "integer"
               },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "task_completion_total": {
                 "type": "integer"
               },
               "time_estimate": {
                 "type": "integer"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "next_steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"

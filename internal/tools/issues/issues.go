@@ -89,6 +89,17 @@ type Output struct {
 	TotalTimeSpent      int64    `json:"total_time_spent,omitempty"`
 	MovedToID           int64    `json:"moved_to_id,omitempty"`
 	EpicIssueID         int64    `json:"epic_issue_id,omitempty"`
+	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
+	// scalars not previously exposed). The flattened author/assignee/milestone/
+	// references strings above stay pending the strict-object migration slice.
+	ExternalID           string                      `json:"external_id,omitempty"`
+	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
+	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
+	LabelDetails         []*LabelDetailsOutput       `json:"label_details,omitempty"`
+	Iteration            *IterationOutput            `json:"iteration,omitempty"`
+	Links                *LinksOutput                `json:"_links,omitempty"`
+	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
+	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 }
 
 // GetInput defines parameters for retrieving a single issue.
@@ -284,6 +295,14 @@ func ToOutput(issue *gl.Issue) Output {
 		out.TotalTimeSpent = issue.TimeStats.TotalTimeSpent
 	}
 	out.EpicIssueID = issue.EpicIssueID
+	out.ExternalID = issue.ExternalID
+	out.IssueLinkID = issue.IssueLinkID
+	out.ServiceDeskReplyTo = issue.ServiceDeskReplyTo
+	out.LabelDetails = labelDetailsOutputs(issue.LabelDetails)
+	out.Iteration = iterationOutput(issue.Iteration)
+	out.Links = linksOutput(issue.Links)
+	out.TimeStats = timeStatsPtr(issue.TimeStats)
+	out.TaskCompletionStatus = taskCompletionStatusOutput(issue.TaskCompletionStatus)
 	return out
 }
 

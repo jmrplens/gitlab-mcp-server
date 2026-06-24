@@ -3796,3 +3796,54 @@ func TestUpdate_InvalidUpdatedAt(t *testing.T) {
 		t.Fatal("expected error for invalid updated_at, got nil")
 	}
 }
+
+// TestToOutput_AdditiveSubObjects verifies that ToOutput surfaces the additive
+// 1:1 sub-objects (label_details, iteration, _links, time_stats,
+// task_completion_status) and scalars (external_id, issue_link_id,
+// service_desk_reply_to) from the SDK issue.
+func TestToOutput_AdditiveSubObjects(t *testing.T) {
+	issue := &gl.Issue{
+		ID:                   1,
+		IID:                  10,
+		ExternalID:           "EXT-7",
+		IssueLinkID:          55,
+		ServiceDeskReplyTo:   "sd@example.com",
+		LabelDetails:         []*gl.LabelDetails{{ID: 3, Name: "bug", Color: "#ff0000", TextColor: "#ffffff"}},
+		Iteration:            &gl.GroupIteration{ID: 8, IID: 2, Title: "Sprint 1", State: 1, WebURL: "https://gl/iter/2"},
+		Links:                &gl.IssueLinks{Self: "https://gl/self", Notes: "https://gl/notes", AwardEmoji: "https://gl/awards", Project: "https://gl/project"},
+		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800, HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m"},
+		TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 5, CompletedCount: 2},
+	}
+
+	out := ToOutput(issue)
+	if out.ExternalID != "EXT-7" || out.IssueLinkID != 55 || out.ServiceDeskReplyTo != "sd@example.com" {
+		t.Errorf("scalars = %q/%d/%q", out.ExternalID, out.IssueLinkID, out.ServiceDeskReplyTo)
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" || out.LabelDetails[0].Color != "#ff0000" {
+		t.Errorf("label_details = %+v", out.LabelDetails)
+	}
+	if out.Iteration == nil || out.Iteration.Title != "Sprint 1" || out.Iteration.WebURL != "https://gl/iter/2" {
+		t.Errorf("iteration = %+v", out.Iteration)
+	}
+	if out.Links == nil || out.Links.Self != "https://gl/self" || out.Links.AwardEmoji != "https://gl/awards" {
+		t.Errorf("_links = %+v", out.Links)
+	}
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 || out.TimeStats.HumanTotalTimeSpent != "30m" {
+		t.Errorf("time_stats = %+v", out.TimeStats)
+	}
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.Count != 5 || out.TaskCompletionStatus.CompletedCount != 2 {
+		t.Errorf("task_completion_status = %+v", out.TaskCompletionStatus)
+	}
+}
+
+// TestToOutput_AdditiveSubObjects_NilSafe verifies the additive sub-objects are
+// nil/empty when absent on the SDK issue.
+func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
+	out := ToOutput(&gl.Issue{ID: 1, IID: 10})
+	if out.LabelDetails != nil || out.Iteration != nil || out.Links != nil || out.TimeStats != nil || out.TaskCompletionStatus != nil {
+		t.Errorf("expected nil additive sub-objects, got %+v", out)
+	}
+	if out.ExternalID != "" || out.IssueLinkID != 0 || out.ServiceDeskReplyTo != "" {
+		t.Errorf("expected zero additive scalars")
+	}
+}
