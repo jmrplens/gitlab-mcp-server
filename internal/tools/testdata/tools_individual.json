@@ -75970,7 +75970,7 @@
   },
   {
     "name": "gitlab_mr_add_spent_time",
-    "description": "Add spent time to a GitLab merge request. Duration uses human-readable format (e.g. '1h', '30m', '1w2d'). Optional summary describes the work done. Returns updated time stats.\n\nReturns: JSON with time stats including time_estimate, total_time_spent, and human-readable formats. See also: gitlab_mr_time_stats.",
+    "description": "Add spent time to a merge request. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: gitlab_mr_reset_spent_time, gitlab_mr_set_time_estimate, gitlab_mr_time_stats.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76039,7 +76039,7 @@
   },
   {
     "name": "gitlab_mr_approval_config",
-    "description": "Get the approval configuration for a merge request: total required approvals, list of users who already approved, suggested approvers, and whether the current user has approved. Use this to see who approved. For rule-level status, use gitlab_mr_approval_state.\n\nReturns: JSON with approval configuration, approvers, and approval status. See also: gitlab_mr_get, gitlab_mr_approval_state.",
+    "description": "Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76061,6 +76061,455 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approval_rules_left": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "approvals_required": {
+                "type": "integer"
+              },
+              "approved": {
+                "type": "boolean"
+              },
+              "approved_by": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "contains_hidden_groups": {
+                "type": "boolean"
+              },
+              "eligible_approvers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "groups": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
+                    },
+                    "full_path": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "lfs_enabled": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "type": "integer"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "request_access_enabled": {
+                      "type": "boolean"
+                    },
+                    "visibility": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path",
+                    "request_access_enabled",
+                    "lfs_enabled"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "report_type": {
+                "type": "string"
+              },
+              "rule_type": {
+                "type": "string"
+              },
+              "section": {
+                "type": "string"
+              },
+              "source_rule": {
+                "additionalProperties": false,
+                "properties": {
+                  "applies_to_all_protected_branches": {
+                    "type": "boolean"
+                  },
+                  "approvals_required": {
+                    "type": "integer"
+                  },
+                  "contains_hidden_groups": {
+                    "type": "boolean"
+                  },
+                  "eligible_approvers": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "groups": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        },
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "lfs_enabled": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent_id": {
+                          "type": "integer"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "request_access_enabled": {
+                          "type": "boolean"
+                        },
+                        "visibility": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "path",
+                        "request_access_enabled",
+                        "lfs_enabled"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "protected_branches": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "allow_force_push": {
+                          "type": "boolean"
+                        },
+                        "code_owner_approval_required": {
+                          "type": "boolean"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "allow_force_push",
+                        "code_owner_approval_required"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "report_type": {
+                    "type": "string"
+                  },
+                  "rule_type": {
+                    "type": "string"
+                  },
+                  "users": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "approvals_required",
+                  "contains_hidden_groups",
+                  "applies_to_all_protected_branches"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "users": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rule_type",
+              "approvals_required",
+              "approved"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "approvals_before_merge": {
           "type": "integer"
         },
@@ -76080,19 +76529,174 @@
               "approved_at": {
                 "type": "string"
               },
-              "name": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
-            "required": [
-              "name"
-            ],
-            "type": "object"
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
             "array"
           ]
+        },
+        "approver_groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "lfs_enabled",
+                  "request_access_enabled"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "group"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approvers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "approved_at": {
+                "type": "string"
+              },
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
         },
         "has_approval_rules": {
           "type": "boolean"
@@ -76100,8 +76704,17 @@
         "id": {
           "type": "integer"
         },
+        "merge_request_approvers_available": {
+          "type": "boolean"
+        },
         "merge_request_iid": {
           "type": "integer"
+        },
+        "merge_status": {
+          "type": "string"
+        },
+        "multiple_approval_rules_available": {
+          "type": "boolean"
         },
         "next_steps": {
           "items": {
@@ -76115,12 +76728,47 @@
         "project_id": {
           "type": "integer"
         },
+        "require_password_to_approve": {
+          "type": "boolean"
+        },
         "state": {
           "type": "string"
         },
         "suggested_approvers": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76128,6 +76776,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "updated_at": {
           "type": "string"
         },
         "user_can_approve": {
@@ -76147,9 +76798,12 @@
         "approvals_required",
         "approvals_left",
         "approvals_before_merge",
+        "require_password_to_approve",
         "has_approval_rules",
         "user_has_approved",
-        "user_can_approve"
+        "user_can_approve",
+        "merge_request_approvers_available",
+        "multiple_approval_rules_available"
       ],
       "type": "object"
     },
@@ -76162,7 +76816,7 @@
   },
   {
     "name": "gitlab_mr_approval_reset",
-    "description": "Reset all approvals on a GitLab merge request. Requires project_id and merge_request_iid.\n\nReturns: confirmation message.\n\nSee also: gitlab_mr_approval_rules.",
+    "description": "Reset all approvals on a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_state, gitlab_mr_approval_config, gitlab_mr_unapprove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76219,7 +76873,7 @@
   },
   {
     "name": "gitlab_mr_approval_rule_create",
-    "description": "Create an approval rule on a GitLab merge request. Specify the rule name, required approvals, and optionally user/group IDs.\n\nReturns: JSON with the created approval rule details. See also: gitlab_mr_approval_rules.",
+    "description": "Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76284,9 +76938,41 @@
         "approved": {
           "type": "boolean"
         },
-        "approved_by_names": {
+        "approved_by": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76296,18 +76982,102 @@
         "contains_hidden_groups": {
           "type": "boolean"
         },
-        "eligible_names": {
+        "eligible_approvers": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
             "array"
           ]
         },
-        "group_names": {
+        "groups": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "request_access_enabled",
+              "lfs_enabled"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76338,9 +77108,254 @@
         "section": {
           "type": "string"
         },
-        "user_names": {
+        "source_rule": {
+          "additionalProperties": false,
+          "properties": {
+            "applies_to_all_protected_branches": {
+              "type": "boolean"
+            },
+            "approvals_required": {
+              "type": "integer"
+            },
+            "contains_hidden_groups": {
+              "type": "boolean"
+            },
+            "eligible_approvers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "groups": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "protected_branches": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "allow_force_push": {
+                    "type": "boolean"
+                  },
+                  "code_owner_approval_required": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "allow_force_push",
+                  "code_owner_approval_required"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "report_type": {
+              "type": "string"
+            },
+            "rule_type": {
+              "type": "string"
+            },
+            "users": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "approvals_required",
+            "contains_hidden_groups",
+            "applies_to_all_protected_branches"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "users": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76364,7 +77379,7 @@
   },
   {
     "name": "gitlab_mr_approval_rule_delete",
-    "description": "Delete an approval rule from a GitLab merge request. Requires project_id, merge_request_iid, and approval_rule_id.\n\nReturns: confirmation message. See also: gitlab_mr_approval_rules.",
+    "description": "Delete an approval rule from a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76426,7 +77441,7 @@
   },
   {
     "name": "gitlab_mr_approval_rule_update",
-    "description": "Update an existing approval rule on a GitLab merge request. Modify the rule name, required approvals, or user/group IDs.\n\nReturns: JSON with the updated approval rule details. See also: gitlab_mr_approval_rules.",
+    "description": "Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76494,9 +77509,41 @@
         "approved": {
           "type": "boolean"
         },
-        "approved_by_names": {
+        "approved_by": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76506,18 +77553,102 @@
         "contains_hidden_groups": {
           "type": "boolean"
         },
-        "eligible_names": {
+        "eligible_approvers": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
             "array"
           ]
         },
-        "group_names": {
+        "groups": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "request_access_enabled",
+              "lfs_enabled"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76548,9 +77679,254 @@
         "section": {
           "type": "string"
         },
-        "user_names": {
+        "source_rule": {
+          "additionalProperties": false,
+          "properties": {
+            "applies_to_all_protected_branches": {
+              "type": "boolean"
+            },
+            "approvals_required": {
+              "type": "integer"
+            },
+            "contains_hidden_groups": {
+              "type": "boolean"
+            },
+            "eligible_approvers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "groups": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "protected_branches": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "allow_force_push": {
+                    "type": "boolean"
+                  },
+                  "code_owner_approval_required": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "allow_force_push",
+                  "code_owner_approval_required"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "report_type": {
+              "type": "string"
+            },
+            "rule_type": {
+              "type": "string"
+            },
+            "users": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "approvals_required",
+            "contains_hidden_groups",
+            "applies_to_all_protected_branches"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "users": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -76575,7 +77951,7 @@
   },
   {
     "name": "gitlab_mr_approval_rules",
-    "description": "List the approval rules configured for a merge request: rule names, types (regular, code_owner, any_approver), required approval count, current approvers, and eligible approvers. Use this to understand the rule configuration. For overall approval status, use gitlab_mr_approval_state instead.\n\nReturns: JSON with approval rules, required counts, and eligible approvers. See also: gitlab_mr_approval_config.",
+    "description": "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76616,9 +77992,41 @@
               "approved": {
                 "type": "boolean"
               },
-              "approved_by_names": {
+              "approved_by": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76628,18 +78036,102 @@
               "contains_hidden_groups": {
                 "type": "boolean"
               },
-              "eligible_names": {
+              "eligible_approvers": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
                   "array"
                 ]
               },
-              "group_names": {
+              "groups": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
+                    },
+                    "full_path": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "lfs_enabled": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "type": "integer"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "request_access_enabled": {
+                      "type": "boolean"
+                    },
+                    "visibility": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path",
+                    "request_access_enabled",
+                    "lfs_enabled"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76670,9 +78162,254 @@
               "section": {
                 "type": "string"
               },
-              "user_names": {
+              "source_rule": {
+                "additionalProperties": false,
+                "properties": {
+                  "applies_to_all_protected_branches": {
+                    "type": "boolean"
+                  },
+                  "approvals_required": {
+                    "type": "integer"
+                  },
+                  "contains_hidden_groups": {
+                    "type": "boolean"
+                  },
+                  "eligible_approvers": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "groups": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        },
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "lfs_enabled": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent_id": {
+                          "type": "integer"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "request_access_enabled": {
+                          "type": "boolean"
+                        },
+                        "visibility": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "path",
+                        "request_access_enabled",
+                        "lfs_enabled"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "protected_branches": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "allow_force_push": {
+                          "type": "boolean"
+                        },
+                        "code_owner_approval_required": {
+                          "type": "boolean"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "allow_force_push",
+                        "code_owner_approval_required"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "report_type": {
+                    "type": "string"
+                  },
+                  "rule_type": {
+                    "type": "string"
+                  },
+                  "users": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "approvals_required",
+                  "contains_hidden_groups",
+                  "applies_to_all_protected_branches"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "users": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76709,7 +78446,7 @@
   },
   {
     "name": "gitlab_mr_approval_state",
-    "description": "Get the overall approval state of a merge request: whether it is approved, which rules are satisfied or pending, and whether rules have been overridden. This is the primary tool for checking 'can this MR be merged?'. For editing approval rules, use gitlab_mr_approval_rules. For who approved, use gitlab_mr_approval_config.\n\nReturns: JSON with the overall approval state and rule satisfaction status. See also: gitlab_mr_get, gitlab_mr_approval_rules.",
+    "description": "Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag, and approvers. See also: gitlab_mr_approval_rules, gitlab_mr_approval_config, gitlab_mr_approve.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76753,9 +78490,41 @@
               "approved": {
                 "type": "boolean"
               },
-              "approved_by_names": {
+              "approved_by": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76765,18 +78534,102 @@
               "contains_hidden_groups": {
                 "type": "boolean"
               },
-              "eligible_names": {
+              "eligible_approvers": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
                   "array"
                 ]
               },
-              "group_names": {
+              "groups": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
+                    },
+                    "full_path": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "lfs_enabled": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "type": "integer"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "request_access_enabled": {
+                      "type": "boolean"
+                    },
+                    "visibility": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path",
+                    "request_access_enabled",
+                    "lfs_enabled"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76807,9 +78660,254 @@
               "section": {
                 "type": "string"
               },
-              "user_names": {
+              "source_rule": {
+                "additionalProperties": false,
+                "properties": {
+                  "applies_to_all_protected_branches": {
+                    "type": "boolean"
+                  },
+                  "approvals_required": {
+                    "type": "integer"
+                  },
+                  "contains_hidden_groups": {
+                    "type": "boolean"
+                  },
+                  "eligible_approvers": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "groups": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        },
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "lfs_enabled": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent_id": {
+                          "type": "integer"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "request_access_enabled": {
+                          "type": "boolean"
+                        },
+                        "visibility": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "path",
+                        "request_access_enabled",
+                        "lfs_enabled"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "protected_branches": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "allow_force_push": {
+                          "type": "boolean"
+                        },
+                        "code_owner_approval_required": {
+                          "type": "boolean"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "allow_force_push",
+                        "code_owner_approval_required"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "report_type": {
+                    "type": "string"
+                  },
+                  "rule_type": {
+                    "type": "string"
+                  },
+                  "users": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "approvals_required",
+                  "contains_hidden_groups",
+                  "applies_to_all_protected_branches"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "users": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -76847,7 +78945,7 @@
   },
   {
     "name": "gitlab_mr_approve",
-    "description": "Approve a GitLab merge request. Adds the authenticated user's approval to the merge request's approval list.\n\nReturns: JSON with approval details including approved_by list. See also: gitlab_mr_get, gitlab_mr_approval_rules.",
+    "description": "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -76857,6 +78955,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sha": {
+          "description": "Head SHA of the merge request — approve only if HEAD matches (safety check, applies to approve only)",
           "type": "string"
         }
       },
@@ -76903,10 +79005,24 @@
   },
   {
     "name": "gitlab_mr_cancel_auto_merge",
-    "description": "Cancel the 'merge when pipeline succeeds' (auto-merge) setting on a GitLab merge request. Returns the updated merge request details. Requires appropriate permissions; returns 405 if already merged/closed or 406 if auto-merge was not enabled.\n\nReturns: JSON with the updated merge request details. See also: gitlab_mr_merge.",
+    "description": "Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled. See also: gitlab_mr_merge, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -76914,6 +79030,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -77293,7 +79416,7 @@
   },
   {
     "name": "gitlab_mr_commits",
-    "description": "List all commits in a GitLab merge request. Returns commit ID, title, author, date, and web URL with pagination.\n\nReturns: JSON array of commits with pagination. Fields include id, title, author_name, authored_date, and web_url. See also: gitlab_mr_get, gitlab_commit_get.",
+    "description": "List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata. See also: gitlab_mr_get, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -77301,9 +79424,21 @@
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -77311,6 +79446,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -77490,7 +79629,7 @@
   },
   {
     "name": "gitlab_mr_create",
-    "description": "Create a new merge request in a GitLab project. Requires source and target branch names. IMPORTANT: if the user does not specify a target branch, retrieve the project default branch via gitlab_project_get and use its default_branch value — do NOT assume 'main'. Supports title, Markdown description, assignee IDs, reviewer IDs, labels, milestone ID, allow_collaboration, and target_project_id (for cross-project/fork MRs). The squash and remove_source_branch options are omitted by default to preserve repository-level settings; only set them when the user explicitly requests it.\n\nReturns: JSON with the created merge request details including iid, title, state, source/target branches, author, and web_url. See also: gitlab_mr_get, gitlab_project_get, gitlab_branch_create.",
+    "description": "Open a new merge request from a source branch into a target branch. Returns: the created MR with IID, state, source/target branches, merge status, assignees, reviewers, labels, and web URL. See also: gitlab_mr_get, gitlab_mr_list, gitlab_mr_merge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -77500,6 +79639,10 @@
             "null",
             "boolean"
           ]
+        },
+        "approvals_before_merge": {
+          "description": "Number of approvals required before this MR can be merged (deprecated; use the approval rules API)",
+          "type": "integer"
         },
         "assignee_id": {
           "description": "Single user ID to assign (use assignee_ids for multiple)",
@@ -77841,7 +79984,7 @@
   },
   {
     "name": "gitlab_mr_create_pipeline",
-    "description": "Create a new pipeline for a GitLab merge request. Triggers a CI/CD pipeline run on the MR's source branch. Returns the created pipeline details.\n\nReturns: JSON with the created pipeline details including id, status, ref, sha, and web_url. See also: gitlab_pipeline_get, gitlab_mr_get.",
+    "description": "Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL. See also: gitlab_mr_pipelines, gitlab_pipeline_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -77928,7 +80071,7 @@
   },
   {
     "name": "gitlab_mr_create_todo",
-    "description": "Create a to-do item on a GitLab merge request for the authenticated user. Adds the MR to the user's to-do list for later follow-up.\n\nReturns: JSON with the created to-do item details including id, target type, and action name. See also: gitlab_mr_get.",
+    "description": "Create a to-do for a merge request for the caller. Returns: the created to-do item with action, target, and state. See also: gitlab_mr_get, gitlab_mr_subscribe.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78001,7 +80144,7 @@
   },
   {
     "name": "gitlab_mr_delete",
-    "description": "Permanently delete a GitLab merge request. This action cannot be undone. Requires at least Maintainer access level.\n\nReturns: confirmation message. See also: gitlab_mr_list.",
+    "description": "Delete a merge request permanently. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_update, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78058,7 +80201,7 @@
   },
   {
     "name": "gitlab_mr_dependencies_list",
-    "description": "List all merge request dependencies (blockers) for a GitLab merge request. Returns the list of MRs that must be merged before this MR can be merged. Requires Premium or Ultimate license.\n\nReturns: JSON array of blocking merge requests with iid, title, state, and web_url. See also: gitlab_mr_get.",
+    "description": "List a merge request's blocking dependencies. Returns: the dependency links with blocking MR references and their states. See also: gitlab_mr_dependency_create, gitlab_mr_dependency_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78163,7 +80306,7 @@
   },
   {
     "name": "gitlab_mr_dependency_create",
-    "description": "Create a merge request dependency (blocker). The specified blocking MR must be merged before this MR can be merged. Requires Premium or Ultimate license.\n\nReturns: JSON with the dependency details including blocking merge request information. See also: gitlab_mr_dependencies_list.",
+    "description": "Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR. See also: gitlab_mr_dependency_delete, gitlab_mr_dependencies_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78247,7 +80390,7 @@
   },
   {
     "name": "gitlab_mr_dependency_delete",
-    "description": "Remove a merge request dependency (blocker). The specified blocking MR will no longer prevent this MR from being merged. Requires Premium or Ultimate license.\n\nReturns: confirmation message. See also: gitlab_mr_dependencies_list.",
+    "description": "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80771,10 +82914,24 @@
   },
   {
     "name": "gitlab_mr_get",
-    "description": "Retrieve detailed information about a GitLab merge request by its IID (project-scoped ID), including title, description, state, source/target branches, author, assignees, reviewers, labels, and pipeline status. See also: gitlab_mr_changes_get, gitlab_mr_discussion_list.\n\nReturns: JSON with merge request details including iid, title, description, state, author, assignees, reviewers, labels, pipeline status, and merge status.",
+    "description": "Get a single merge request from a project by its IID. Returns: MR metadata, state, source/target branches, merge status, assignees, reviewers, labels, milestone, and web URL. See also: gitlab_mr_list, gitlab_mr_update, gitlab_mr_merge, gitlab_mr_commits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -80782,6 +82939,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -81053,7 +83217,7 @@
   },
   {
     "name": "gitlab_mr_issues_closed",
-    "description": "List all issues that would be closed when a GitLab merge request is merged. Returns issue details including IID, title, state, author, and labels with pagination.\n\nReturns: JSON array of issues with pagination. Fields include iid, title, state, author, and labels. See also: gitlab_mr_get, gitlab_issue_get.",
+    "description": "List issues that will be closed when the merge request is merged. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: gitlab_mr_related_issues, gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -81061,9 +83225,21 @@
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -81071,6 +83247,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -82094,10 +84274,38 @@
   },
   {
     "name": "gitlab_mr_list",
-    "description": "List merge requests in a GitLab project. Supports filtering by state (opened/closed/merged/all), author, assignee, reviewer, labels, milestone, and source/target branch. Returns paginated results.\n\nReturns: JSON array of merge requests with pagination. Fields include iid, title, state, author, source/target branches, and web_url. See also: gitlab_mr_get, gitlab_mr_create.",
+    "description": "List merge requests in one project with filtering and pagination. Returns: matching MRs with state, branches, merge status, assignees, reviewers, labels, and pagination metadata. See also: gitlab_mr_get, gitlab_mr_create, gitlab_mr_list_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approved_by_ids": {
+          "description": "Filter by MRs approved by all listed user IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approver_ids": {
+          "description": "Filter by MRs with all listed users as eligible approvers",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_id": {
+          "description": "Filter by assignee user ID",
+          "type": "integer"
+        },
+        "author_id": {
+          "description": "Filter by author user ID",
+          "type": "integer"
+        },
         "author_username": {
           "description": "Filter by author username",
           "type": "string"
@@ -82110,12 +84318,24 @@
           "description": "Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
           "type": "string"
         },
+        "deployed_after": {
+          "description": "Return MRs deployed after date (ISO 8601 format)",
+          "type": "string"
+        },
+        "deployed_before": {
+          "description": "Return MRs deployed before date (ISO 8601 format)",
+          "type": "string"
+        },
         "draft": {
           "description": "Filter by draft status (true=only drafts, false=only non-drafts)",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "environment": {
+          "description": "Filter by deployment environment name",
+          "type": "string"
         },
         "iids": {
           "description": "Filter by merge request internal IDs",
@@ -82135,6 +84355,14 @@
           "description": "Milestone title to filter by",
           "type": "string"
         },
+        "my_reaction_emoji": {
+          "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_author_username": {
+          "description": "Exclude MRs authored by this username",
+          "type": "string"
+        },
         "not_labels": {
           "description": "Comma-separated label names to exclude",
           "type": "string"
@@ -82147,12 +84375,28 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "reviewer_id": {
+          "description": "Filter by reviewer user ID",
+          "type": "integer"
+        },
+        "reviewer_username": {
+          "description": "Filter by reviewer username",
           "type": "string"
         },
         "scope": {
@@ -82186,6 +84430,28 @@
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
           "type": "string"
+        },
+        "view": {
+          "description": "Set to 'simple' to return only basic MR fields",
+          "type": "string"
+        },
+        "wip": {
+          "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "type": "string"
+        },
+        "with_labels_details": {
+          "description": "Include full label details (color, description) in the response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_status_recheck": {
+          "description": "Asynchronously recalculate each MR's merge_status before returning",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -82517,10 +84783,42 @@
   },
   {
     "name": "gitlab_mr_list_global",
-    "description": "List merge requests across all projects visible to the authenticated user. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, and date ranges. Returns paginated results.\n\nReturns: JSON array of merge requests with pagination. Fields include iid, title, state, author, source/target branches, and web_url. See also: gitlab_mr_list, gitlab_mr_get.",
+    "description": "List merge requests across all accessible projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_group, gitlab_search_merge_requests.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approved": {
+          "description": "Filter by approval status: 'yes' or 'no' (Premium)",
+          "type": "string"
+        },
+        "approved_by_ids": {
+          "description": "Filter by MRs approved by all listed user IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approver_ids": {
+          "description": "Filter by MRs with all listed users as eligible approvers",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_id": {
+          "description": "Filter by assignee user ID",
+          "type": "integer"
+        },
+        "author_id": {
+          "description": "Filter by author user ID",
+          "type": "integer"
+        },
         "author_username": {
           "description": "Filter by author username",
           "type": "string"
@@ -82540,12 +84838,24 @@
             "boolean"
           ]
         },
+        "in": {
+          "description": "Scope of the search filter (e.g. title, description, or title,description)",
+          "type": "string"
+        },
         "labels": {
           "description": "Comma-separated label names to filter by",
           "type": "string"
         },
         "milestone": {
           "description": "Milestone title to filter by",
+          "type": "string"
+        },
+        "my_reaction_emoji": {
+          "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_author_username": {
+          "description": "Exclude MRs authored by this username",
           "type": "string"
         },
         "not_labels": {
@@ -82560,8 +84870,20 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "reviewer_id": {
+          "description": "Filter by reviewer user ID",
           "type": "integer"
         },
         "reviewer_username": {
@@ -82599,6 +84921,28 @@
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601)",
           "type": "string"
+        },
+        "view": {
+          "description": "Set to 'simple' to return only basic MR fields",
+          "type": "string"
+        },
+        "wip": {
+          "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "type": "string"
+        },
+        "with_labels_details": {
+          "description": "Include full label details (color, description) in the response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_status_recheck": {
+          "description": "Asynchronously recalculate each MR's merge_status before returning",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "type": "object"
@@ -82927,10 +85271,38 @@
   },
   {
     "name": "gitlab_mr_list_group",
-    "description": "List merge requests in a GitLab group. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, and date ranges. Returns paginated results.\n\nReturns: JSON array of merge requests with pagination. Fields include iid, title, state, author, source/target branches, and web_url. See also: gitlab_mr_list, gitlab_mr_get.",
+    "description": "List merge requests across a group and its projects. Returns: visible MRs with project context, state, branches, and pagination metadata. See also: gitlab_mr_list, gitlab_mr_list_global, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approved_by_ids": {
+          "description": "Filter by MRs approved by all listed user IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approver_ids": {
+          "description": "Filter by MRs with all listed users as eligible approvers",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_id": {
+          "description": "Filter by assignee user ID",
+          "type": "integer"
+        },
+        "author_id": {
+          "description": "Filter by author user ID",
+          "type": "integer"
+        },
         "author_username": {
           "description": "Filter by author username",
           "type": "string"
@@ -82954,12 +85326,24 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "in": {
+          "description": "Scope of the search filter (e.g. title, description, or title,description)",
+          "type": "string"
+        },
         "labels": {
           "description": "Comma-separated label names to filter by",
           "type": "string"
         },
         "milestone": {
           "description": "Milestone title to filter by",
+          "type": "string"
+        },
+        "my_reaction_emoji": {
+          "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_author_username": {
+          "description": "Exclude MRs authored by this username",
           "type": "string"
         },
         "not_labels": {
@@ -82974,8 +85358,20 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "reviewer_id": {
+          "description": "Filter by reviewer user ID",
           "type": "integer"
         },
         "reviewer_username": {
@@ -83013,6 +85409,28 @@
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601)",
           "type": "string"
+        },
+        "view": {
+          "description": "Set to 'simple' to return only basic MR fields",
+          "type": "string"
+        },
+        "wip": {
+          "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "type": "string"
+        },
+        "with_labels_details": {
+          "description": "Include full label details (color, description) in the response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_status_recheck": {
+          "description": "Asynchronously recalculate each MR's merge_status before returning",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -83344,7 +85762,7 @@
   },
   {
     "name": "gitlab_mr_merge",
-    "description": "Merge an accepted GitLab merge request into its target branch. Supports optional squash commits, custom merge commit message, and automatic source branch deletion after merge. The server automatically detects enforced project settings (squash_on_merge, force_remove_source_branch) and applies them — you do NOT need to set squash or should_remove_source_branch unless the user explicitly requests a specific value.\n\nReturns: JSON with the merged merge request details including final state and merge commit SHA. See also: gitlab_mr_get, gitlab_pipeline_list.",
+    "description": "Merge a merge request now, or schedule auto-merge when its pipeline succeeds. Returns: the merged MR with merge_commit_sha and updated state. See also: gitlab_mr_get, gitlab_mr_pipelines, gitlab_mr_cancel_auto_merge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -83366,6 +85784,13 @@
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
+        },
+        "merge_when_pipeline_succeeds": {
+          "description": "Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -84899,7 +87324,7 @@
   },
   {
     "name": "gitlab_mr_participants",
-    "description": "List all participants (users who have interacted via comments, approvals, or commits) in a GitLab merge request. This includes anyone who participated, not just assigned reviewers. For assigned reviewers with review state, use gitlab_mr_reviewers instead.\n\nReturns: JSON array of participant users with id, username, name, and avatar_url. See also: gitlab_mr_get.",
+    "description": "List the participants of a merge request. Returns: participating users with username, name, and state. See also: gitlab_mr_reviewers, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84981,7 +87406,7 @@
   },
   {
     "name": "gitlab_mr_pipelines",
-    "description": "List all pipelines associated with a GitLab merge request. Returns pipeline ID, status, source, ref, SHA, and web URL.\n\nReturns: JSON array of pipelines with pagination. Fields include id, status, source, ref, sha, and web_url. See also: gitlab_mr_get, gitlab_pipeline_get.",
+    "description": "List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL. See also: gitlab_mr_create_pipeline, gitlab_mr_merge, gitlab_pipeline_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85147,7 +87572,7 @@
   },
   {
     "name": "gitlab_mr_rebase",
-    "description": "Rebase a merge request's source branch against its target branch. Optionally skip triggering CI pipeline after rebase. Returns whether the rebase is in progress.\n\nReturns: JSON with rebase_in_progress status. See also: gitlab_mr_get.",
+    "description": "Rebase a merge request's source branch onto its target. Returns: whether a rebase is now in progress (poll merge_request.get to track completion). See also: gitlab_mr_get, gitlab_mr_merge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85199,7 +87624,7 @@
   },
   {
     "name": "gitlab_mr_related_issues",
-    "description": "List all issues related to a GitLab merge request (mentioned or linked). Returns issue details including IID, title, state, author, and labels with pagination.\n\nReturns: JSON array of related issues with pagination. Fields include iid, title, state, author, and labels. See also: gitlab_mr_get, gitlab_issue_get.",
+    "description": "List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata. See also: gitlab_mr_issues_closed, gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85207,9 +87632,21 @@
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -85217,6 +87654,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -85962,10 +88403,24 @@
   },
   {
     "name": "gitlab_mr_reset_spent_time",
-    "description": "Reset the total spent time for a GitLab merge request to zero. Returns updated time stats.\n\nReturns: JSON with time stats including time_estimate, total_time_spent, and human-readable formats. See also: gitlab_mr_time_stats.",
+    "description": "Reset a merge request's spent time. Returns: the updated time tracking stats. See also: gitlab_mr_add_spent_time, gitlab_mr_time_stats.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -85973,6 +88428,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -86022,10 +88484,24 @@
   },
   {
     "name": "gitlab_mr_reset_time_estimate",
-    "description": "Reset the time estimate for a GitLab merge request to zero. Returns updated time stats.\n\nReturns: JSON with time stats including time_estimate, total_time_spent, and human-readable formats. See also: gitlab_mr_time_stats.",
+    "description": "Clear a merge request's time estimate. Returns: the updated time tracking stats. See also: gitlab_mr_set_time_estimate, gitlab_mr_time_stats.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -86033,6 +88509,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -86082,7 +88565,7 @@
   },
   {
     "name": "gitlab_mr_reviewers",
-    "description": "List the explicitly assigned reviewers of a GitLab merge request with their review state (approved/reviewed/unreviewed) and assignment date. For all users who interacted (comments, commits, approvals), use gitlab_mr_participants instead.\n\nReturns: JSON array of reviewers with id, username, name, state, and created_at. See also: gitlab_mr_get, gitlab_mr_approve.",
+    "description": "List the reviewers of a merge request. Returns: reviewer users with username, name, and review state. See also: gitlab_mr_participants, gitlab_mr_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -86170,7 +88653,7 @@
   },
   {
     "name": "gitlab_mr_set_time_estimate",
-    "description": "Set the time estimate for a GitLab merge request using a human-readable duration string (e.g. '3h30m', '1w2d'). Returns updated time stats.\n\nReturns: JSON with time stats including time_estimate, total_time_spent, and human-readable formats. See also: gitlab_mr_time_stats.",
+    "description": "Set a merge request's time estimate. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable). See also: gitlab_mr_reset_time_estimate, gitlab_mr_add_spent_time, gitlab_mr_time_stats.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -86455,10 +88938,24 @@
   },
   {
     "name": "gitlab_mr_subscribe",
-    "description": "Subscribe to a GitLab merge request to receive notifications. Returns the updated MR. Returns 304 if already subscribed.\n\nReturns: JSON with the updated merge request details. See also: gitlab_mr_get.",
+    "description": "Subscribe the caller to a merge request's notifications. Returns: the MR with the updated subscription state. See also: gitlab_mr_unsubscribe, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -86466,6 +88963,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -86736,10 +89240,24 @@
   },
   {
     "name": "gitlab_mr_time_stats",
-    "description": "Get time tracking statistics for a GitLab merge request including estimated time and total time spent in both human-readable and seconds format.\n\nReturns: JSON with time stats including time_estimate, total_time_spent, and human-readable formats. See also: gitlab_mr_get.",
+    "description": "Read a merge request's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_mr_set_time_estimate, gitlab_mr_add_spent_time.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -86747,6 +89265,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -86797,7 +89322,7 @@
   },
   {
     "name": "gitlab_mr_unapprove",
-    "description": "Remove the authenticated user's approval from a GitLab merge request.\n\nReturns: confirmation message. See also: gitlab_mr_get, gitlab_mr_approve.",
+    "description": "Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project. See also: gitlab_mr_approve, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -86811,6 +89336,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sha": {
+          "description": "Head SHA of the merge request — approve only if HEAD matches (safety check, applies to approve only)",
           "type": "string"
         }
       },
@@ -86854,10 +89383,24 @@
   },
   {
     "name": "gitlab_mr_unsubscribe",
-    "description": "Unsubscribe from a GitLab merge request to stop receiving notifications. Returns the updated MR. Returns 304 if not subscribed.\n\nReturns: JSON with the updated merge request details. See also: gitlab_mr_get.",
+    "description": "Unsubscribe the caller from a merge request's notifications. Returns: the MR with the updated subscription state. See also: gitlab_mr_subscribe, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "include_diverged_commits_count": {
+          "description": "Include the count of commits the source branch is behind the target branch (diverged_commits_count)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_rebase_in_progress": {
+          "description": "Include whether a rebase is currently in progress (rebase_in_progress)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_request_iid": {
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
@@ -86865,6 +89408,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "render_html": {
+          "description": "Return the title and description rendered to HTML",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -87135,7 +89685,7 @@
   },
   {
     "name": "gitlab_mr_update",
-    "description": "Update a GitLab merge request's title, description, target branch, assignees, reviewers, labels (replace, add, or remove), milestone, discussion_locked, allow_collaboration, or state event (close/reopen). The squash and remove_source_branch options are omitted by default to preserve repository-level settings; only set them when explicitly requested. Only specified fields are changed.\n\nReturns: JSON with the updated merge request details. See also: gitlab_mr_get, gitlab_mr_merge.",
+    "description": "Update an existing merge request's fields or state. Returns: the updated MR with its new field values, state, labels, assignees, and reviewers. See also: gitlab_mr_get, gitlab_mr_merge, gitlab_mr_approve.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
