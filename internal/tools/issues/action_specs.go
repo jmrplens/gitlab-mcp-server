@@ -201,12 +201,13 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		description: "Get a single issue by its global ID. Returns: the issue with state, labels, assignees, author, and web URL. See also: gitlab_issue_get, gitlab_issue_list.",
 	},
 	// Note: gitlab_issue_list_group is dual-projected (issue.list_group and the
-	// group surface group.issues). The group surface owns the natural-language
-	// aliases and the individual-tool description, so this entry sets only
-	// Usage/related to avoid an alias collision and a projected-description drift
-	// across the two canonical actions.
+	// group surface group.issues). Both projections carry natural-language
+	// aliases so neither canonical action is aliases_only (1:1 audit metadata).
+	// The group surface owns the individual-tool description to avoid a
+	// projected-description drift across the two canonical actions.
 	"gitlab_issue_list_group": {
 		usage:   "List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.",
+		aliases: []string{"issues in a group", "group-scoped issue list", "list a group's issues", "issues across subgroups"},
 		related: []string{actionIssueList, "group.get", actionSearchIssues},
 	},
 	"gitlab_issue_delete": {

@@ -55,45 +55,63 @@ type CreateInput struct {
 // Output represents a GitLab issue.
 type Output struct {
 	toolutil.HintableOutput
-	ID                  int64    `json:"id"`
-	IID                 int64    `json:"issue_iid"`
-	Title               string   `json:"title"`
-	Description         string   `json:"description"`
-	State               string   `json:"state"`
-	Labels              []string `json:"labels"`
-	Assignees           []string `json:"assignees"`
-	Milestone           string   `json:"milestone"`
-	Author              string   `json:"author"`
-	ClosedBy            string   `json:"closed_by,omitempty"`
-	WebURL              string   `json:"web_url"`
-	CreatedAt           string   `json:"created_at"`
-	UpdatedAt           string   `json:"updated_at"`
-	ClosedAt            string   `json:"closed_at"`
-	DueDate             string   `json:"due_date"`
-	Confidential        bool     `json:"confidential"`
-	DiscussionLocked    bool     `json:"discussion_locked"`
-	ProjectID           int64    `json:"project_id"`
-	Weight              int64    `json:"weight,omitempty"`
-	IssueType           string   `json:"issue_type,omitempty"`
-	HealthStatus        string   `json:"health_status,omitempty"`
-	References          string   `json:"references,omitempty"`
-	MergeRequestCount   int64    `json:"merge_request_count,omitempty"`
-	TaskCompletionCount int64    `json:"task_completion_count,omitempty"`
-	TaskCompletionTotal int64    `json:"task_completion_total,omitempty"`
-	UserNotesCount      int64    `json:"user_notes_count,omitempty"`
-	Upvotes             int64    `json:"upvotes,omitempty"`
-	Downvotes           int64    `json:"downvotes,omitempty"`
-	Subscribed          bool     `json:"subscribed"`
-	TimeEstimate        int64    `json:"time_estimate,omitempty"`
-	TotalTimeSpent      int64    `json:"total_time_spent,omitempty"`
-	MovedToID           int64    `json:"moved_to_id,omitempty"`
-	EpicIssueID         int64    `json:"epic_issue_id,omitempty"`
+	ID          int64    `json:"id"`
+	IID         int64    `json:"issue_iid"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	State       string   `json:"state"`
+	Labels      []string `json:"labels"`
+	// Author is the full author object mirrored from the SDK (1:1 fidelity).
+	Author *IssueAuthorOutput `json:"author,omitempty"`
+	// AuthorUsername is the additive convenience scalar carrying the old
+	// flattened author username value.
+	AuthorUsername string `json:"author_username,omitempty"`
+	// Assignees is the list of full assignee objects mirrored from the SDK.
+	Assignees []*IssueAssigneeOutput `json:"assignees"`
+	// AssigneeUsernames is the additive convenience scalar list carrying the
+	// old flattened assignee usernames.
+	AssigneeUsernames []string `json:"assignee_usernames,omitempty"`
+	// Assignee is the singular (deprecated upstream) assignee object.
+	Assignee *IssueAssigneeOutput `json:"assignee,omitempty"`
+	// Milestone is the full milestone object mirrored from the SDK.
+	Milestone *MilestoneOutput `json:"milestone,omitempty"`
+	// MilestoneTitle is the additive convenience scalar carrying the old
+	// flattened milestone title value.
+	MilestoneTitle string `json:"milestone_title,omitempty"`
+	// ClosedBy is the full closer object mirrored from the SDK.
+	ClosedBy *IssueCloserOutput `json:"closed_by,omitempty"`
+	// ClosedByUsername is the additive convenience scalar carrying the old
+	// flattened closer username value.
+	ClosedByUsername    string `json:"closed_by_username,omitempty"`
+	WebURL              string `json:"web_url"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
+	ClosedAt            string `json:"closed_at"`
+	DueDate             string `json:"due_date"`
+	Confidential        bool   `json:"confidential"`
+	DiscussionLocked    bool   `json:"discussion_locked"`
+	ProjectID           int64  `json:"project_id"`
+	Weight              int64  `json:"weight,omitempty"`
+	IssueType           string `json:"issue_type,omitempty"`
+	HealthStatus        string `json:"health_status,omitempty"`
+	MergeRequestCount   int64  `json:"merge_request_count,omitempty"`
+	TaskCompletionCount int64  `json:"task_completion_count,omitempty"`
+	TaskCompletionTotal int64  `json:"task_completion_total,omitempty"`
+	UserNotesCount      int64  `json:"user_notes_count,omitempty"`
+	Upvotes             int64  `json:"upvotes,omitempty"`
+	Downvotes           int64  `json:"downvotes,omitempty"`
+	Subscribed          bool   `json:"subscribed"`
+	TimeEstimate        int64  `json:"time_estimate,omitempty"`
+	TotalTimeSpent      int64  `json:"total_time_spent,omitempty"`
+	MovedToID           int64  `json:"moved_to_id,omitempty"`
+	EpicIssueID         int64  `json:"epic_issue_id,omitempty"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
-	// scalars not previously exposed). The flattened author/assignee/milestone/
-	// references strings above stay pending the strict-object migration slice.
+	// scalars not previously exposed).
 	ExternalID           string                      `json:"external_id,omitempty"`
 	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
 	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
+	References           *ReferencesOutput           `json:"references,omitempty"`
+	Epic                 *EpicOutput                 `json:"epic,omitempty"`
 	LabelDetails         []*LabelDetailsOutput       `json:"label_details,omitempty"`
 	Iteration            *IterationOutput            `json:"iteration,omitempty"`
 	Links                *LinksOutput                `json:"_links,omitempty"`
@@ -242,17 +260,30 @@ func ToOutput(issue *gl.Issue) Output {
 	if out.Labels == nil {
 		out.Labels = []string{}
 	}
+	out.Author = issueAuthorOutput(issue.Author)
 	if issue.Author != nil {
-		out.Author = issue.Author.Username
+		out.AuthorUsername = issue.Author.Username
 	}
+	out.Milestone = milestoneOutput(issue.Milestone)
 	if issue.Milestone != nil {
-		out.Milestone = issue.Milestone.Title
+		out.MilestoneTitle = issue.Milestone.Title
 	}
-	assignees := make([]string, 0, len(issue.Assignees))
+	out.Assignees = issueAssigneeOutputs(issue.Assignees)
+	if out.Assignees == nil {
+		out.Assignees = []*IssueAssigneeOutput{}
+	}
+	usernames := make([]string, 0, len(issue.Assignees))
 	for _, a := range issue.Assignees {
-		assignees = append(assignees, a.Username)
+		if a == nil {
+			continue
+		}
+		usernames = append(usernames, a.Username)
 	}
-	out.Assignees = assignees
+	out.AssigneeUsernames = usernames
+	// The singular Assignee field is deprecated upstream in favor of Assignees,
+	// but the 1:1 audit requires surfacing every SDK field, so it is mirrored
+	// verbatim.
+	out.Assignee = issueAssigneeOutput(issue.Assignee) //nolint:staticcheck // SA1019: surfaced for 1:1 SDK fidelity
 	if issue.CreatedAt != nil {
 		out.CreatedAt = issue.CreatedAt.Format(time.RFC3339)
 	}
@@ -274,12 +305,11 @@ func ToOutput(issue *gl.Issue) Output {
 	if issue.IssueType != nil {
 		out.IssueType = *issue.IssueType
 	}
+	out.ClosedBy = issueCloserOutput(issue.ClosedBy)
 	if issue.ClosedBy != nil {
-		out.ClosedBy = issue.ClosedBy.Username
+		out.ClosedByUsername = issue.ClosedBy.Username
 	}
-	if issue.References != nil {
-		out.References = issue.References.Full
-	}
+	out.References = referencesOutput(issue.References)
 	out.UserNotesCount = issue.UserNotesCount
 	if issue.TaskCompletionStatus != nil {
 		out.TaskCompletionCount = issue.TaskCompletionStatus.CompletedCount
@@ -297,6 +327,7 @@ func ToOutput(issue *gl.Issue) Output {
 	out.ExternalID = issue.ExternalID
 	out.IssueLinkID = issue.IssueLinkID
 	out.ServiceDeskReplyTo = issue.ServiceDeskReplyTo
+	out.Epic = epicOutput(issue.Epic)
 	out.LabelDetails = labelDetailsOutputs(issue.LabelDetails)
 	out.Iteration = iterationOutput(issue.Iteration)
 	out.Links = linksOutput(issue.Links)

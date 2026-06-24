@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -128,8 +129,8 @@ func TestCreate_Success(t *testing.T) {
 	if len(out.Assignees) != 2 {
 		t.Errorf("len(out.Assignees) = %d, want 2", len(out.Assignees))
 	}
-	if out.Milestone != "v1.0" {
-		t.Errorf("out.Milestone = %q, want %q", out.Milestone, "v1.0")
+	if out.Milestone == nil || out.Milestone.Title != "v1.0" {
+		t.Errorf("out.Milestone.Title = %v, want %q", out.Milestone, "v1.0")
 	}
 	if out.DueDate != testDueDate {
 		t.Errorf("out.DueDate = %q, want %q", out.DueDate, testDueDate)
@@ -207,8 +208,8 @@ func TestGet_Success(t *testing.T) {
 	if out.IID != 10 {
 		t.Errorf(fmtIIDWant10, out.IID)
 	}
-	if out.Author != "charlie" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "charlie")
+	if out.Author == nil || out.Author.Username != "charlie" {
+		t.Errorf("out.Author.Username = %v, want %q", out.Author, "charlie")
 	}
 	if out.WebURL != "https://gitlab.example.com/project/issues/10" {
 		t.Errorf("out.WebURL = %q, want expected URL", out.WebURL)
@@ -584,8 +585,8 @@ func TestGet_EnrichedFields(t *testing.T) {
 	if len(out.Assignees) != 2 {
 		t.Errorf("len(out.Assignees) = %d, want 2", len(out.Assignees))
 	}
-	if out.Milestone != "v2.0" {
-		t.Errorf("out.Milestone = %q, want %q", out.Milestone, "v2.0")
+	if out.Milestone == nil || out.Milestone.Title != "v2.0" {
+		t.Errorf("out.Milestone.Title = %v, want %q", out.Milestone, "v2.0")
 	}
 	if out.DueDate != "2026-03-01" {
 		t.Errorf("out.DueDate = %q, want %q", out.DueDate, "2026-03-01")
@@ -676,8 +677,8 @@ func TestCreate_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.Author != "charlie" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "charlie")
+	if out.Author == nil || out.Author.Username != "charlie" {
+		t.Errorf("out.Author.Username = %v, want %q", out.Author, "charlie")
 	}
 	if out.TaskCompletionTotal != 5 {
 		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
@@ -1518,8 +1519,9 @@ const (
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 10, Title: "Big Bug", State: "opened",
-		Author: "alice", Assignees: []string{"bob", "carol"},
-		Labels: []string{"bug", "critical"}, Milestone: "v1.0",
+		Author:    &IssueAuthorOutput{Username: "alice"},
+		Assignees: []*IssueAssigneeOutput{{Username: "bob"}, {Username: "carol"}},
+		Labels:    []string{"bug", "critical"}, Milestone: &MilestoneOutput{Title: "v1.0"},
 		DueDate: testDueDateCov, Confidential: true,
 		CreatedAt: testCreatedAtCov, Description: "Details here",
 		WebURL:              "https://gitlab.example.com/issue/10",
@@ -1558,8 +1560,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 1, Title: "Issue1", State: "opened", Author: "alice", Labels: []string{"bug"}},
-			{IID: 2, Title: "Issue2", State: "closed", Author: "bob", Labels: []string{}},
+			{IID: 1, Title: "Issue1", State: "opened", Author: &IssueAuthorOutput{Username: "alice"}, Labels: []string{"bug"}},
+			{IID: 2, Title: "Issue2", State: "closed", Author: &IssueAuthorOutput{Username: "bob"}, Labels: []string{}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
@@ -1576,7 +1578,7 @@ func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 42, Title: "Bug", State: "opened", Author: "alice",
+				IID: 42, Title: "Bug", State: "opened", Author: &IssueAuthorOutput{Username: "alice"},
 				WebURL: "https://gitlab.example.com/issues/42",
 			},
 		},
@@ -1599,7 +1601,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
-			{IID: 5, Title: "GroupIssue", State: "opened", Author: "carol", Labels: []string{"feat"}},
+			{IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"}, Labels: []string{"feat"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1616,7 +1618,7 @@ func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
 			{
-				IID: 5, Title: "GroupIssue", State: "opened", Author: "carol",
+				IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"},
 				WebURL: "https://gitlab.example.com/issues/5",
 			},
 		},
@@ -1639,7 +1641,7 @@ func TestFormatListGroupMarkdown_Empty(t *testing.T) {
 func TestFormatListAllMarkdown_Populated(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 100, Title: "AllIssue", State: "closed", Author: "dave", Labels: []string{"doc"}},
+			{IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"}, Labels: []string{"doc"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1664,7 +1666,7 @@ func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 100, Title: "AllIssue", State: "closed", Author: "dave",
+				IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"},
 				WebURL: "https://gitlab.example.com/issues/100",
 			},
 		},
@@ -1962,14 +1964,54 @@ func TestBuildUpdateOpts_Empty(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestToOutput_Populated verifies ToOutput when populated.
+// assertPopulatedObjects verifies the strict object fields and their additive
+// convenience scalars produced by [ToOutput] for a fully-populated issue. It is
+// extracted from TestToOutput_Populated to keep that test below the cognitive
+// complexity threshold.
+func assertPopulatedObjects(t *testing.T, out Output) {
+	t.Helper()
+	assertPopulatedPeople(t, out)
+	if out.References == nil || out.References.Full != "proj#10" || out.References.Short != "#10" {
+		t.Errorf("References = %v, want full proj#10 short #10", out.References)
+	}
+	if out.Epic == nil || out.Epic.Title != "Big Epic" || out.Epic.Author == nil || out.Epic.Author.Username != "eve" {
+		t.Errorf("Epic = %v, want title Big Epic author eve", out.Epic)
+	}
+	if out.Milestone == nil || out.Milestone.Title != "v1" || out.MilestoneTitle != "v1" {
+		t.Errorf("Milestone = %v / %q, want title v1", out.Milestone, out.MilestoneTitle)
+	}
+}
+
+// assertPopulatedPeople verifies the author/assignee/closer object fields and
+// their convenience scalars produced by [ToOutput].
+func assertPopulatedPeople(t *testing.T, out Output) {
+	t.Helper()
+	if out.Author == nil || out.Author.Username != "alice" || out.AuthorUsername != "alice" {
+		t.Errorf("Author = %v / %q, want username alice", out.Author, out.AuthorUsername)
+	}
+	if len(out.Assignees) != 2 || out.Assignees[0].Username != "bob" {
+		t.Errorf("Assignees = %v, want 2 with bob first", out.Assignees)
+	}
+	if len(out.AssigneeUsernames) != 2 || out.AssigneeUsernames[1] != "carol" {
+		t.Errorf("AssigneeUsernames = %v, want [bob carol]", out.AssigneeUsernames)
+	}
+	if out.Assignee == nil || out.Assignee.Username != "bob" {
+		t.Errorf("Assignee = %v, want username bob", out.Assignee)
+	}
+	if out.ClosedBy == nil || out.ClosedBy.Username != "dave" || out.ClosedByUsername != "dave" {
+		t.Errorf("ClosedBy = %v / %q, want username dave", out.ClosedBy, out.ClosedByUsername)
+	}
+}
+
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{
 		ID: 1, IID: 10, Title: "Test", Description: "Desc", State: "opened",
 		Labels:               gl.Labels{"a", "b"},
-		Author:               &gl.IssueAuthor{Username: "alice"},
-		Milestone:            &gl.Milestone{Title: "v1"},
+		Author:               &gl.IssueAuthor{ID: 1, Username: "alice", Name: "Alice"},
+		Milestone:            &gl.Milestone{ID: 7, Title: "v1"},
 		Assignees:            []*gl.IssueAssignee{{Username: "bob"}, {Username: "carol"}},
+		Assignee:             &gl.IssueAssignee{Username: "bob"},
 		WebURL:               "https://example.com",
 		Confidential:         true,
 		DiscussionLocked:     true,
@@ -1984,27 +2026,14 @@ func TestToOutput_Populated(t *testing.T) {
 		EpicIssueID:          7,
 		DueDate:              now,
 		ClosedBy:             &gl.IssueCloser{Username: "dave"},
-		References:           &gl.IssueReferences{Full: "proj#10"},
+		References:           &gl.IssueReferences{Short: "#10", Relative: "proj#10", Full: "proj#10"},
+		Epic:                 &gl.Epic{ID: 3, Title: "Big Epic", Author: &gl.EpicAuthor{Username: "eve"}, Labels: []string{"x"}},
 		TaskCompletionStatus: &gl.TasksCompletionStatus{CompletedCount: 2, Count: 5},
 		Subscribed:           true,
 		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800},
 	}
 	out := ToOutput(issue)
-	if out.Author != "alice" {
-		t.Errorf("Author = %q, want alice", out.Author)
-	}
-	if out.Milestone != "v1" {
-		t.Errorf("Milestone = %q, want v1", out.Milestone)
-	}
-	if len(out.Assignees) != 2 {
-		t.Errorf("Assignees len = %d, want 2", len(out.Assignees))
-	}
-	if out.ClosedBy != "dave" {
-		t.Errorf("ClosedBy = %q, want dave", out.ClosedBy)
-	}
-	if out.References != "proj#10" {
-		t.Errorf("References = %q, want proj#10", out.References)
-	}
+	assertPopulatedObjects(t, out)
 	if out.TaskCompletionCount != 2 || out.TaskCompletionTotal != 5 {
 		t.Errorf("TaskCompletion = %d/%d, want 2/5", out.TaskCompletionCount, out.TaskCompletionTotal)
 	}
@@ -2034,23 +2063,105 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 		ID: 2, IID: 20, Title: "Minimal", State: "opened",
 	}
 	out := ToOutput(issue)
-	if out.Author != "" {
-		t.Errorf("Author = %q, want empty for nil author", out.Author)
+	if out.Author != nil {
+		t.Errorf("Author = %v, want nil for nil author", out.Author)
 	}
-	if out.Milestone != "" {
-		t.Errorf("Milestone = %q, want empty for nil milestone", out.Milestone)
+	if out.AuthorUsername != "" {
+		t.Errorf("AuthorUsername = %q, want empty for nil author", out.AuthorUsername)
 	}
-	if out.ClosedBy != "" {
-		t.Errorf("ClosedBy = %q, want empty for nil ClosedBy", out.ClosedBy)
+	if out.Milestone != nil {
+		t.Errorf("Milestone = %v, want nil for nil milestone", out.Milestone)
 	}
-	if out.References != "" {
-		t.Errorf("References = %q, want empty for nil references", out.References)
+	if out.MilestoneTitle != "" {
+		t.Errorf("MilestoneTitle = %q, want empty for nil milestone", out.MilestoneTitle)
+	}
+	if out.ClosedBy != nil {
+		t.Errorf("ClosedBy = %v, want nil for nil ClosedBy", out.ClosedBy)
+	}
+	if out.ClosedByUsername != "" {
+		t.Errorf("ClosedByUsername = %q, want empty for nil ClosedBy", out.ClosedByUsername)
+	}
+	if out.References != nil {
+		t.Errorf("References = %v, want nil for nil references", out.References)
+	}
+	if out.Epic != nil {
+		t.Errorf("Epic = %v, want nil for nil epic", out.Epic)
+	}
+	if out.Assignee != nil {
+		t.Errorf("Assignee = %v, want nil for nil assignee", out.Assignee)
 	}
 	if len(out.Labels) != 0 {
 		t.Errorf("Labels = %v, want empty slice", out.Labels)
 	}
-	if len(out.Assignees) != 0 {
-		t.Errorf("Assignees = %v, want empty slice", out.Assignees)
+	if out.Assignees == nil || len(out.Assignees) != 0 {
+		t.Errorf("Assignees = %v, want empty (non-nil) slice", out.Assignees)
+	}
+}
+
+// TestToOutput_ConverterBranches exercises the nil-element and full-field
+// branches of the strict object converters added in the 1:1 object migration:
+// an assignees slice containing a nil element, a full milestone object, and an
+// epic whose own author is nil.
+func TestToOutput_ConverterBranches(t *testing.T) {
+	now := new(gl.ISOTime)
+	ts := time.Now()
+	issue := &gl.Issue{
+		ID: 9, IID: 90, Title: "Branches", State: "opened",
+		// Slice carrying a nil element: the converter must skip it but keep the
+		// real assignee, and the convenience-scalar list must do the same.
+		Assignees: []*gl.IssueAssignee{nil, {Username: "real"}},
+		// LabelDetails slice with a nil element exercises that skip branch.
+		LabelDetails: []*gl.LabelDetails{nil, {ID: 1, Name: "bug"}},
+		Milestone: &gl.Milestone{
+			ID: 1, IID: 2, GroupID: 3, ProjectID: 4, Title: "M", Description: "D",
+			State: "active", WebURL: "https://example.com/m",
+			StartDate: now, DueDate: now, Expired: new(true),
+			// Non-nil time pointers exercise the formatTimePtr format branch.
+			CreatedAt: &ts, UpdatedAt: &ts,
+		},
+		// Epic with a nil author exercises the epicAuthorOutput nil branch.
+		Epic: &gl.Epic{ID: 5, Title: "E", StartDate: now, DueDate: now},
+	}
+	out := ToOutput(issue)
+	if len(out.Assignees) != 1 || out.Assignees[0].Username != "real" {
+		t.Fatalf("Assignees = %v, want one entry 'real' (nil skipped)", out.Assignees)
+	}
+	if len(out.AssigneeUsernames) != 1 || out.AssigneeUsernames[0] != "real" {
+		t.Fatalf("AssigneeUsernames = %v, want [real]", out.AssigneeUsernames)
+	}
+	if out.Milestone == nil || out.Milestone.WebURL != "https://example.com/m" || out.Milestone.Expired == nil || !*out.Milestone.Expired {
+		t.Fatalf("Milestone = %v, want full object with expired=true", out.Milestone)
+	}
+	if out.MilestoneTitle != "M" {
+		t.Fatalf("MilestoneTitle = %q, want M", out.MilestoneTitle)
+	}
+	if out.Epic == nil || out.Epic.Author != nil {
+		t.Fatalf("Epic = %v, want non-nil epic with nil author", out.Epic)
+	}
+	if out.Milestone.CreatedAt == "" {
+		t.Fatalf("Milestone.CreatedAt = empty, want formatted timestamp")
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" {
+		t.Fatalf("LabelDetails = %v, want one entry 'bug' (nil skipped)", out.LabelDetails)
+	}
+}
+
+// TestFormatMarkdown_ConvenienceScalarFallback verifies the Markdown helpers
+// fall back to the additive *_username convenience scalars when the full
+// objects are absent (e.g. a closed issue whose closer is only carried as the
+// flattened username).
+func TestFormatMarkdown_ConvenienceScalarFallback(t *testing.T) {
+	md := FormatMarkdown(Output{
+		IID: 7, Title: "Fallback", State: "closed",
+		AuthorUsername:    "scalar-author",
+		AssigneeUsernames: []string{"scalar-assignee"},
+		ClosedByUsername:  "scalar-closer",
+		WebURL:            "https://example.com/7",
+	})
+	for _, want := range []string{"scalar-author", "@scalar-assignee", "@scalar-closer"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("FormatMarkdown fallback missing %q in:\n%s", want, md)
+		}
 	}
 }
 
@@ -3287,8 +3398,8 @@ func TestUnsubscribe_APIError(t *testing.T) {
 func TestFormatGetMarkdown_EdgeCases(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Test", State: "closed",
-		References: "test/project#1", IssueType: "incident",
-		ClosedBy: "admin", ClosedAt: "2025-01-01T00:00:00Z",
+		References: &ReferencesOutput{Full: "test/project#1"}, IssueType: "incident",
+		ClosedBy: &IssueCloserOutput{Username: "admin"}, ClosedAt: "2025-01-01T00:00:00Z",
 	}
 	md := FormatMarkdown(out)
 	if !strings.Contains(md, "test/project#1") {

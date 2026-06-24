@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -289,7 +290,7 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, issue := range out.Issues {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n",
-			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issue.Author), strings.Join(issue.Labels, ", "))
+			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issues.AuthorName(issue)), strings.Join(issue.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -363,7 +364,7 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 			iss.WebURL,
 			toolutil.EscapeMdTableCell(iss.Title),
 			iss.State,
-			iss.Author,
+			issues.AuthorName(iss),
 			strings.Join(iss.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)

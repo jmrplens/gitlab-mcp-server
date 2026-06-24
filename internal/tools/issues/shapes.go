@@ -11,10 +11,10 @@ import (
 // struct and are replicated here rather than imported from sibling packages to
 // preserve the zero-import-cycle constraint (C-IMPORTS).
 //
-// This file currently covers the additive issue sub-objects (_links, time
-// tracking, task completion, label details, iteration). The author/assignee/
-// milestone/references string fields remain flattened pending the dedicated
-// strict-object migration slice (their json keys would otherwise collide).
+// This file covers the issue sub-objects surfaced on the canonical json keys
+// (author, assignees, assignee, closed_by, milestone, references, epic,
+// _links, time tracking, task completion, label details, iteration). The old
+// flattened scalars are preserved additively under *_username / *_title keys.
 
 // formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
 func formatTimePtr(t *time.Time) string {
@@ -123,4 +123,200 @@ func iterationOutput(it *gl.GroupIteration) *IterationOutput {
 		CreatedAt: formatTimePtr(it.CreatedAt), UpdatedAt: formatTimePtr(it.UpdatedAt),
 		StartDate: formatISOTimePtr(it.StartDate), DueDate: formatISOTimePtr(it.DueDate),
 	}
+}
+
+// IssueAuthorOutput mirrors gl.IssueAuthor (the issue author object).
+type IssueAuthorOutput struct {
+	ID        int64  `json:"id"`
+	State     string `json:"state"`
+	WebURL    string `json:"web_url"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	Username  string `json:"username"`
+}
+
+func issueAuthorOutput(a *gl.IssueAuthor) *IssueAuthorOutput {
+	if a == nil {
+		return nil
+	}
+	return &IssueAuthorOutput{
+		ID: a.ID, State: a.State, WebURL: a.WebURL,
+		Name: a.Name, AvatarURL: a.AvatarURL, Username: a.Username,
+	}
+}
+
+// IssueAssigneeOutput mirrors gl.IssueAssignee (an issue assignee object).
+type IssueAssigneeOutput struct {
+	ID        int64  `json:"id"`
+	State     string `json:"state"`
+	WebURL    string `json:"web_url"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	Username  string `json:"username"`
+}
+
+func issueAssigneeOutput(a *gl.IssueAssignee) *IssueAssigneeOutput {
+	if a == nil {
+		return nil
+	}
+	return &IssueAssigneeOutput{
+		ID: a.ID, State: a.State, WebURL: a.WebURL,
+		Name: a.Name, AvatarURL: a.AvatarURL, Username: a.Username,
+	}
+}
+
+func issueAssigneeOutputs(assignees []*gl.IssueAssignee) []*IssueAssigneeOutput {
+	if len(assignees) == 0 {
+		return nil
+	}
+	out := make([]*IssueAssigneeOutput, 0, len(assignees))
+	for _, a := range assignees {
+		if a == nil {
+			continue
+		}
+		out = append(out, issueAssigneeOutput(a))
+	}
+	return out
+}
+
+// IssueCloserOutput mirrors gl.IssueCloser (the user that closed the issue).
+type IssueCloserOutput struct {
+	ID        int64  `json:"id"`
+	State     string `json:"state"`
+	WebURL    string `json:"web_url"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	Username  string `json:"username"`
+}
+
+func issueCloserOutput(c *gl.IssueCloser) *IssueCloserOutput {
+	if c == nil {
+		return nil
+	}
+	return &IssueCloserOutput{
+		ID: c.ID, State: c.State, WebURL: c.WebURL,
+		Name: c.Name, AvatarURL: c.AvatarURL, Username: c.Username,
+	}
+}
+
+// MilestoneOutput mirrors gl.Milestone (the issue milestone object).
+type MilestoneOutput struct {
+	ID          int64  `json:"id"`
+	IID         int64  `json:"iid"`
+	GroupID     int64  `json:"group_id"`
+	ProjectID   int64  `json:"project_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+	WebURL      string `json:"web_url"`
+	StartDate   string `json:"start_date,omitempty"`
+	DueDate     string `json:"due_date,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	Expired     *bool  `json:"expired,omitempty"`
+}
+
+func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
+	if m == nil {
+		return nil
+	}
+	return &MilestoneOutput{
+		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
+		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
+		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
+		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
+		Expired: m.Expired,
+	}
+}
+
+// ReferencesOutput mirrors gl.IssueReferences (the issue references object).
+type ReferencesOutput struct {
+	Short    string `json:"short"`
+	Relative string `json:"relative"`
+	Full     string `json:"full"`
+}
+
+func referencesOutput(r *gl.IssueReferences) *ReferencesOutput {
+	if r == nil {
+		return nil
+	}
+	return &ReferencesOutput{Short: r.Short, Relative: r.Relative, Full: r.Full}
+}
+
+// EpicAuthorOutput mirrors gl.EpicAuthor (the author of an epic).
+type EpicAuthorOutput struct {
+	ID        int64  `json:"id"`
+	State     string `json:"state"`
+	WebURL    string `json:"web_url"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	Username  string `json:"username"`
+}
+
+func epicAuthorOutput(a *gl.EpicAuthor) *EpicAuthorOutput {
+	if a == nil {
+		return nil
+	}
+	return &EpicAuthorOutput{
+		ID: a.ID, State: a.State, WebURL: a.WebURL,
+		Name: a.Name, AvatarURL: a.AvatarURL, Username: a.Username,
+	}
+}
+
+// EpicOutput mirrors gl.Epic (the epic associated with an issue, EE only).
+type EpicOutput struct {
+	ID                      int64             `json:"id"`
+	IID                     int64             `json:"iid"`
+	GroupID                 int64             `json:"group_id"`
+	ParentID                int64             `json:"parent_id"`
+	Title                   string            `json:"title"`
+	Description             string            `json:"description"`
+	State                   string            `json:"state"`
+	Confidential            bool              `json:"confidential"`
+	WebURL                  string            `json:"web_url"`
+	URL                     string            `json:"url"`
+	Author                  *EpicAuthorOutput `json:"author,omitempty"`
+	Labels                  []string          `json:"labels,omitempty"`
+	Upvotes                 int64             `json:"upvotes,omitempty"`
+	Downvotes               int64             `json:"downvotes,omitempty"`
+	UserNotesCount          int64             `json:"user_notes_count,omitempty"`
+	StartDate               string            `json:"start_date,omitempty"`
+	StartDateIsFixed        bool              `json:"start_date_is_fixed,omitempty"`
+	StartDateFixed          string            `json:"start_date_fixed,omitempty"`
+	StartDateFromMilestones string            `json:"start_date_from_milestones,omitempty"`
+	DueDate                 string            `json:"due_date,omitempty"`
+	DueDateIsFixed          bool              `json:"due_date_is_fixed,omitempty"`
+	DueDateFixed            string            `json:"due_date_fixed,omitempty"`
+	DueDateFromMilestones   string            `json:"due_date_from_milestones,omitempty"`
+	CreatedAt               string            `json:"created_at,omitempty"`
+	UpdatedAt               string            `json:"updated_at,omitempty"`
+	ClosedAt                string            `json:"closed_at,omitempty"`
+}
+
+func epicOutput(e *gl.Epic) *EpicOutput {
+	if e == nil {
+		return nil
+	}
+	out := &EpicOutput{
+		ID: e.ID, IID: e.IID, GroupID: e.GroupID, ParentID: e.ParentID,
+		Title: e.Title, Description: e.Description, State: e.State,
+		Confidential: e.Confidential, WebURL: e.WebURL, URL: e.URL,
+		Author:                  epicAuthorOutput(e.Author),
+		Labels:                  e.Labels,
+		Upvotes:                 e.Upvotes,
+		Downvotes:               e.Downvotes,
+		UserNotesCount:          e.UserNotesCount,
+		StartDate:               formatISOTimePtr(e.StartDate),
+		StartDateIsFixed:        e.StartDateIsFixed,
+		StartDateFixed:          formatISOTimePtr(e.StartDateFixed),
+		StartDateFromMilestones: formatISOTimePtr(e.StartDateFromMilestones),
+		DueDate:                 formatISOTimePtr(e.DueDate),
+		DueDateIsFixed:          e.DueDateIsFixed,
+		DueDateFixed:            formatISOTimePtr(e.DueDateFixed),
+		DueDateFromMilestones:   formatISOTimePtr(e.DueDateFromMilestones),
+		CreatedAt:               formatTimePtr(e.CreatedAt),
+		UpdatedAt:               formatTimePtr(e.UpdatedAt),
+		ClosedAt:                formatTimePtr(e.ClosedAt),
+	}
+	return out
 }

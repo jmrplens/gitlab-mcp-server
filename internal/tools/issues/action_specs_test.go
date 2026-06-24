@@ -150,10 +150,28 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 		t.Fatalf("list_all Usage = %q", allSpec.Usage)
 	}
 
+	// The issue.list_group canonical action (projected from ActionSpecs) must
+	// carry natural-language aliases so it is not aliases_only (1:1 audit). They
+	// must be DISTINCT from the group.issues projection's aliases because the
+	// action catalog rejects an alias that maps to two canonical actions.
+	listGroupSpec := byTool["gitlab_issue_list_group"]
+	if !slices.Contains(listGroupSpec.Aliases, "group-scoped issue list") {
+		t.Fatalf("issue.list_group Aliases = %v, want group-scoped issue list", listGroupSpec.Aliases)
+	}
+	if len(listGroupSpec.Aliases) < 2 {
+		t.Fatalf("issue.list_group Aliases = %v, want natural-language aliases beyond the tool name", listGroupSpec.Aliases)
+	}
+
 	groupSpecs := issueSpecsByTool(t, GroupActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
 	groupSpec := groupSpecs["gitlab_issue_list_group"]
 	if !slices.Contains(groupSpec.Aliases, "list group issues") {
 		t.Fatalf("group list Aliases = %v, want list group issues", groupSpec.Aliases)
+	}
+	// No alias may appear on both projections (catalog uniqueness invariant).
+	for _, a := range listGroupSpec.Aliases {
+		if slices.Contains(groupSpec.Aliases, a) {
+			t.Fatalf("alias %q present on both issue.list_group and group.issues projections", a)
+		}
 	}
 	if guidance := groupSpec.ParameterGuidance["group_id"]; guidance.SemanticRole != "scope_group" {
 		t.Fatalf("group_id guidance = %+v, want scope_group", guidance)
@@ -291,4 +309,32 @@ func issueSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]tool
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestDecorateIssueMeta_UnknownToolIsNoOp verifies decorateIssueMeta leaves the
+// options untouched for tools that have no entry in issueActionMeta (the early
+// return path), e.g. actions whose dedicated spec builders already set rich
+// metadata.
+func TestDecorateIssueMeta_UnknownToolIsNoOp(t *testing.T) {
+	opts := toolutil.ActionSpecOptions{
+		Usage:          "original usage",
+		Aliases:        []string{"original"},
+		RelatedActions: []string{"issue.get"},
+	}
+	opts.IndividualTool.Description = "original description"
+
+	decorateIssueMeta(&opts, "gitlab_issue_not_a_real_tool")
+
+	if opts.Usage != "original usage" {
+		t.Fatalf("Usage = %q, want unchanged", opts.Usage)
+	}
+	if !slices.Equal(opts.Aliases, []string{"original"}) {
+		t.Fatalf("Aliases = %v, want unchanged", opts.Aliases)
+	}
+	if !slices.Equal(opts.RelatedActions, []string{"issue.get"}) {
+		t.Fatalf("RelatedActions = %v, want unchanged", opts.RelatedActions)
+	}
+	if opts.IndividualTool.Description != "original description" {
+		t.Fatalf("Description = %q, want unchanged", opts.IndividualTool.Description)
+	}
 }

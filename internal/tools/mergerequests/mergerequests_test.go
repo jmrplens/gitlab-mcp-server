@@ -1964,7 +1964,7 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
 		Issues: []issues.Output{
-			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: testAuthorAlice, Labels: []string{testLabelBug}},
+			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &issues.IssueAuthorOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -2035,7 +2035,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
 		Issues: []issues.Output{
-			{IID: 10, Title: "Related bug", State: testStateOpened, Author: testAuthorAlice, Labels: []string{testLabelBug, "critical"}},
+			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &issues.IssueAuthorOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})

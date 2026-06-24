@@ -547,9 +547,10 @@ func TestFormatGroup_MemberListMarkdown(t *testing.T) {
 func TestFormatIssue_Markdown(t *testing.T) {
 	i := issues.Output{
 		ID: 1, IID: 5, Title: testTitleBugReport, State: "opened",
-		Author: "reporter", Labels: []string{"bug", "critical"},
-		Assignees: []string{"dev1"}, Milestone: "v1.0",
-		DueDate: "2026-03-01", CreatedAt: testDate20260101,
+		Author: &issues.IssueAuthorOutput{Username: "reporter"}, Labels: []string{"bug", "critical"},
+		Assignees: []*issues.IssueAssigneeOutput{{Username: "dev1"}},
+		Milestone: &issues.MilestoneOutput{Title: "v1.0"},
+		DueDate:   "2026-03-01", CreatedAt: testDate20260101,
 		Description: "Something is broken",
 		WebURL:      "https://gitlab.example.com/issues/5",
 	}
@@ -572,7 +573,7 @@ func TestFormatIssue_Markdown(t *testing.T) {
 func TestFormatIssue_MarkdownConfidentialTasks(t *testing.T) {
 	i := issues.Output{
 		IID: 42, Title: "Secret task", State: "opened",
-		Author: "admin", Confidential: true,
+		Author: &issues.IssueAuthorOutput{Username: "admin"}, Confidential: true,
 		TaskCompletionCount: 2, TaskCompletionTotal: 5,
 		UserNotesCount: 3,
 		WebURL:         "https://gitlab.example.com/issues/42",
@@ -593,7 +594,7 @@ func TestFormatIssue_MarkdownConfidentialTasks(t *testing.T) {
 func TestFormatIssue_ListMarkdown(t *testing.T) {
 	out := issues.ListOutput{
 		Issues: []issues.Output{
-			{IID: 1, Title: "Feature req", State: "opened", Author: "user1", Labels: []string{"enhancement"}},
+			{IID: 1, Title: "Feature req", State: "opened", Author: &issues.IssueAuthorOutput{Username: "user1"}, Labels: []string{"enhancement"}},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
@@ -952,7 +953,7 @@ func TestFormatMR_RebaseMarkdown(t *testing.T) {
 func TestFormatIssue_ListGroupMarkdown(t *testing.T) {
 	t.Run("with issues", func(t *testing.T) {
 		out := issues.ListGroupOutput{
-			Issues:     []issues.Output{{IID: 5, Title: "bug", State: "opened", Author: "user", Labels: []string{"bug", "critical"}}},
+			Issues:     []issues.Output{{IID: 5, Title: "bug", State: "opened", Author: &issues.IssueAuthorOutput{Username: "user"}, Labels: []string{"bug", "critical"}}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := issues.FormatListGroupMarkdown(out)
@@ -1828,7 +1829,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: issues.Output{
 				ID: 10, IID: 5, Title: "Fix login bug", State: "opened",
 				WebURL: "https://gitlab.example.com/group/project/-/issues/5",
-				Author: "alice", CreatedAt: "2026-02-01 09:00",
+				Author: &issues.IssueAuthorOutput{Username: "alice"}, CreatedAt: "2026-02-01 09:00",
 			},
 			expectWebURL: true,
 		},
@@ -1836,8 +1837,8 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "issues.ListOutput",
 			result: issues.ListOutput{
 				Issues: []issues.Output{
-					{ID: 10, IID: 5, Title: "Fix login", State: "opened", Author: "alice"},
-					{ID: 11, IID: 6, Title: "Add tests", State: "closed", Author: "bob"},
+					{ID: 10, IID: 5, Title: "Fix login", State: "opened", Author: &issues.IssueAuthorOutput{Username: "alice"}},
+					{ID: 11, IID: 6, Title: "Add tests", State: "closed", Author: &issues.IssueAuthorOutput{Username: "bob"}},
 				},
 			},
 		},
