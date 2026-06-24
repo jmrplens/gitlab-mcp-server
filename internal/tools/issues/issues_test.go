@@ -1977,8 +1977,8 @@ func assertPopulatedObjects(t *testing.T, out Output) {
 	if out.Epic == nil || out.Epic.Title != "Big Epic" || out.Epic.Author == nil || out.Epic.Author.Username != "eve" {
 		t.Errorf("Epic = %v, want title Big Epic author eve", out.Epic)
 	}
-	if out.Milestone == nil || out.Milestone.Title != "v1" || out.MilestoneTitle != "v1" {
-		t.Errorf("Milestone = %v / %q, want title v1", out.Milestone, out.MilestoneTitle)
+	if out.Milestone == nil || out.Milestone.Title != "v1" {
+		t.Errorf("Milestone = %v, want title v1", out.Milestone)
 	}
 }
 
@@ -1986,20 +1986,17 @@ func assertPopulatedObjects(t *testing.T, out Output) {
 // their convenience scalars produced by [ToOutput].
 func assertPopulatedPeople(t *testing.T, out Output) {
 	t.Helper()
-	if out.Author == nil || out.Author.Username != "alice" || out.AuthorUsername != "alice" {
-		t.Errorf("Author = %v / %q, want username alice", out.Author, out.AuthorUsername)
+	if out.Author == nil || out.Author.Username != "alice" {
+		t.Errorf("Author = %v, want username alice", out.Author)
 	}
-	if len(out.Assignees) != 2 || out.Assignees[0].Username != "bob" {
-		t.Errorf("Assignees = %v, want 2 with bob first", out.Assignees)
-	}
-	if len(out.AssigneeUsernames) != 2 || out.AssigneeUsernames[1] != "carol" {
-		t.Errorf("AssigneeUsernames = %v, want [bob carol]", out.AssigneeUsernames)
+	if len(out.Assignees) != 2 || out.Assignees[0].Username != "bob" || out.Assignees[1].Username != "carol" {
+		t.Errorf("Assignees = %v, want bob, carol", out.Assignees)
 	}
 	if out.Assignee == nil || out.Assignee.Username != "bob" {
 		t.Errorf("Assignee = %v, want username bob", out.Assignee)
 	}
-	if out.ClosedBy == nil || out.ClosedBy.Username != "dave" || out.ClosedByUsername != "dave" {
-		t.Errorf("ClosedBy = %v / %q, want username dave", out.ClosedBy, out.ClosedByUsername)
+	if out.ClosedBy == nil || out.ClosedBy.Username != "dave" {
+		t.Errorf("ClosedBy = %v, want username dave", out.ClosedBy)
 	}
 }
 
@@ -2066,20 +2063,11 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 	if out.Author != nil {
 		t.Errorf("Author = %v, want nil for nil author", out.Author)
 	}
-	if out.AuthorUsername != "" {
-		t.Errorf("AuthorUsername = %q, want empty for nil author", out.AuthorUsername)
-	}
 	if out.Milestone != nil {
 		t.Errorf("Milestone = %v, want nil for nil milestone", out.Milestone)
 	}
-	if out.MilestoneTitle != "" {
-		t.Errorf("MilestoneTitle = %q, want empty for nil milestone", out.MilestoneTitle)
-	}
 	if out.ClosedBy != nil {
 		t.Errorf("ClosedBy = %v, want nil for nil ClosedBy", out.ClosedBy)
-	}
-	if out.ClosedByUsername != "" {
-		t.Errorf("ClosedByUsername = %q, want empty for nil ClosedBy", out.ClosedByUsername)
 	}
 	if out.References != nil {
 		t.Errorf("References = %v, want nil for nil references", out.References)
@@ -2126,14 +2114,11 @@ func TestToOutput_ConverterBranches(t *testing.T) {
 	if len(out.Assignees) != 1 || out.Assignees[0].Username != "real" {
 		t.Fatalf("Assignees = %v, want one entry 'real' (nil skipped)", out.Assignees)
 	}
-	if len(out.AssigneeUsernames) != 1 || out.AssigneeUsernames[0] != "real" {
-		t.Fatalf("AssigneeUsernames = %v, want [real]", out.AssigneeUsernames)
-	}
 	if out.Milestone == nil || out.Milestone.WebURL != "https://example.com/m" || out.Milestone.Expired == nil || !*out.Milestone.Expired {
 		t.Fatalf("Milestone = %v, want full object with expired=true", out.Milestone)
 	}
-	if out.MilestoneTitle != "M" {
-		t.Fatalf("MilestoneTitle = %q, want M", out.MilestoneTitle)
+	if out.Milestone.Title != "M" {
+		t.Fatalf("Milestone.Title = %q, want M", out.Milestone.Title)
 	}
 	if out.Epic == nil || out.Epic.Author != nil {
 		t.Fatalf("Epic = %v, want non-nil epic with nil author", out.Epic)
@@ -2146,22 +2131,29 @@ func TestToOutput_ConverterBranches(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ConvenienceScalarFallback verifies the Markdown helpers
-// fall back to the additive *_username convenience scalars when the full
-// objects are absent (e.g. a closed issue whose closer is only carried as the
-// flattened username).
-func TestFormatMarkdown_ConvenienceScalarFallback(t *testing.T) {
+// TestFormatMarkdown_ObjectDerivedFields verifies the Markdown helpers derive
+// author, assignee, and closer names from the full SDK objects.
+func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 	md := FormatMarkdown(Output{
-		IID: 7, Title: "Fallback", State: "closed",
-		AuthorUsername:    "scalar-author",
-		AssigneeUsernames: []string{"scalar-assignee"},
-		ClosedByUsername:  "scalar-closer",
-		WebURL:            "https://example.com/7",
+		IID: 7, Title: "Objects", State: "closed",
+		Author:    &IssueAuthorOutput{Username: "obj-author"},
+		Assignees: []*IssueAssigneeOutput{{Username: "obj-assignee"}},
+		ClosedBy:  &IssueCloserOutput{Username: "obj-closer"},
+		WebURL:    "https://example.com/7",
 	})
-	for _, want := range []string{"scalar-author", "@scalar-assignee", "@scalar-closer"} {
+	for _, want := range []string{"obj-author", "@obj-assignee", "@obj-closer"} {
 		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown fallback missing %q in:\n%s", want, md)
+			t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
 		}
+	}
+}
+
+// TestFormatMarkdown_ClosedNoCloser verifies a closed issue with a nil ClosedBy
+// object renders without a "Closed By" line (closerName nil branch).
+func TestFormatMarkdown_ClosedNoCloser(t *testing.T) {
+	md := FormatMarkdown(Output{IID: 8, Title: "Closed", State: "closed", WebURL: "https://example.com/8"})
+	if strings.Contains(md, "Closed By") {
+		t.Errorf("FormatMarkdown should omit Closed By for nil ClosedBy:\n%s", md)
 	}
 }
 
@@ -2209,8 +2201,8 @@ func TestTimeStatsToOutput_Populated(t *testing.T) {
 
 // TestBasicMRToOutput verifies basicMRToOutput surfaces the full
 // BasicMergeRequest fidelity: nested user objects, milestone, references,
-// time-stats, task-completion, label details, labels, scalar flags,
-// timestamps, and the additive author_username scalar.
+// time-stats, task-completion, label details, labels, scalar flags, and
+// timestamps.
 func TestBasicMRToOutput(t *testing.T) {
 	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	merged := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
@@ -2261,11 +2253,8 @@ func TestBasicMRToOutput(t *testing.T) {
 	if out.Author == nil || out.Author.Username != "alice" || out.Author.ID != 11 || out.Author.CreatedAt == "" {
 		t.Errorf("Author = %+v, want full alice user with created_at", out.Author)
 	}
-	if out.AuthorUsername != "alice" {
-		t.Errorf("AuthorUsername = %q, want alice", out.AuthorUsername)
-	}
-	if out.IID != 2 || out.MergeRequestIID != 2 {
-		t.Errorf("IID/MergeRequestIID = %d/%d, want 2/2", out.IID, out.MergeRequestIID)
+	if out.IID != 2 {
+		t.Errorf("IID = %d, want 2", out.IID)
 	}
 	if out.ProjectID != 7 || out.SourceProjectID != 7 || out.TargetProjectID != 8 {
 		t.Errorf("project ids = %d/%d/%d", out.ProjectID, out.SourceProjectID, out.TargetProjectID)
@@ -2357,16 +2346,13 @@ func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput) {
 }
 
 // TestBasicMRToOutput_NilAuthor verifies basicMRToOutput leaves every optional
-// nested object nil and the additive author_username empty when the SDK MR has
-// no author, users, milestone, references, time-stats, or task status.
+// nested object nil when the SDK MR has no author, users, milestone,
+// references, time-stats, or task status.
 func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ID: 1, IID: 2}
 	out := basicMRToOutput(mr)
 	if out.Author != nil {
 		t.Errorf("Author = %+v, want nil for nil author", out.Author)
-	}
-	if out.AuthorUsername != "" {
-		t.Errorf("AuthorUsername = %q, want empty for nil author", out.AuthorUsername)
 	}
 	if out.Assignee != nil || out.Assignees != nil || out.Reviewers != nil {
 		t.Errorf("user objects must be nil when absent")

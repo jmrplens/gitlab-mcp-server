@@ -422,14 +422,13 @@ func TestToOutput_FullAndNilIssues(t *testing.T) {
 		SourceIssue: &gl.Issue{ID: 50, IID: 10, ProjectID: 42, Title: "Source"},
 		TargetIssue: &gl.Issue{ID: 80, IID: 20, ProjectID: 43, Title: "Target"},
 	})
-	if full.SourceIssue == nil || full.SourceIssue.Title != "Source" || full.SourceIssueIID != 10 ||
-		full.TargetIssue == nil || full.TargetIssue.Title != "Target" || full.TargetProjectID != 43 {
+	if full.SourceIssue == nil || full.SourceIssue.Title != "Source" || full.SourceIssue.IID != 10 ||
+		full.TargetIssue == nil || full.TargetIssue.Title != "Target" || full.TargetIssue.ProjectID != 43 {
 		t.Errorf("toOutput (full) = %+v", full)
 	}
 
 	bare := toOutput(&gl.IssueLink{ID: 1, LinkType: "blocks"})
-	if bare.SourceIssue != nil || bare.TargetIssue != nil ||
-		bare.SourceIssueIID != 0 || bare.TargetIssueIID != 0 {
+	if bare.SourceIssue != nil || bare.TargetIssue != nil {
 		t.Errorf("toOutput (bare) = %+v", bare)
 	}
 }

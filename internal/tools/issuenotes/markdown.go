@@ -33,13 +33,13 @@ func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
 	return toolutil.NewNoteMarkdown(n.ID, n.Body, noteAuthorUsername(n), n.CreatedAt, flags, "")
 }
 
-// noteAuthorUsername returns the note author's username, preferring the canonical
-// author object and falling back to the additive author_username scalar.
+// noteAuthorUsername returns the note author's username, read from the canonical
+// author object.
 func noteAuthorUsername(n Output) string {
-	if n.Author != nil && n.Author.Username != "" {
+	if n.Author != nil {
 		return n.Author.Username
 	}
-	return n.AuthorUsername
+	return ""
 }
 
 func init() {

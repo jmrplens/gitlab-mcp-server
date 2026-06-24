@@ -58,40 +58,36 @@ func FormatListAllMarkdown(out ListOutput) string {
 	return b.String()
 }
 
-// AuthorName returns the issue author's display username for Markdown, falling
-// back to the additive convenience scalar when only that is populated. It is
-// exported so sibling packages (e.g. mergerequests) that embed [Output] in
-// their own tables can render the author without reaching into the object.
+// AuthorName returns the issue author's display username for Markdown, read from
+// the full author object. It is exported so sibling packages (e.g.
+// mergerequests) that embed [Output] in their own tables can render the author
+// without reaching into the object.
 func AuthorName(i Output) string {
-	if i.Author != nil && i.Author.Username != "" {
+	if i.Author != nil {
 		return i.Author.Username
 	}
-	return i.AuthorUsername
+	return ""
 }
 
 // assigneeUsernames returns the assignee usernames for Markdown rendering,
-// reading from the full assignee objects with a fallback to the convenience
-// scalar list.
+// read from the full assignee objects.
 func assigneeUsernames(i Output) []string {
-	if len(i.Assignees) > 0 {
-		names := make([]string, 0, len(i.Assignees))
-		for _, a := range i.Assignees {
-			if a != nil {
-				names = append(names, a.Username)
-			}
+	names := make([]string, 0, len(i.Assignees))
+	for _, a := range i.Assignees {
+		if a != nil {
+			names = append(names, a.Username)
 		}
-		return names
 	}
-	return i.AssigneeUsernames
+	return names
 }
 
 // closerName returns the username of the user that closed the issue for
-// Markdown, with a fallback to the additive convenience scalar.
+// Markdown, read from the full closer object.
 func closerName(i Output) string {
-	if i.ClosedBy != nil && i.ClosedBy.Username != "" {
+	if i.ClosedBy != nil {
 		return i.ClosedBy.Username
 	}
-	return i.ClosedByUsername
+	return ""
 }
 
 // FormatTimeStatsMarkdown renders time tracking statistics as Markdown.

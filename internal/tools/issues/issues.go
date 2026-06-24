@@ -63,48 +63,36 @@ type Output struct {
 	Labels      []string `json:"labels"`
 	// Author is the full author object mirrored from the SDK (1:1 fidelity).
 	Author *IssueAuthorOutput `json:"author,omitempty"`
-	// AuthorUsername is the additive convenience scalar carrying the old
-	// flattened author username value.
-	AuthorUsername string `json:"author_username,omitempty"`
 	// Assignees is the list of full assignee objects mirrored from the SDK.
 	Assignees []*IssueAssigneeOutput `json:"assignees"`
-	// AssigneeUsernames is the additive convenience scalar list carrying the
-	// old flattened assignee usernames.
-	AssigneeUsernames []string `json:"assignee_usernames,omitempty"`
 	// Assignee is the singular (deprecated upstream) assignee object.
 	Assignee *IssueAssigneeOutput `json:"assignee,omitempty"`
 	// Milestone is the full milestone object mirrored from the SDK.
 	Milestone *MilestoneOutput `json:"milestone,omitempty"`
-	// MilestoneTitle is the additive convenience scalar carrying the old
-	// flattened milestone title value.
-	MilestoneTitle string `json:"milestone_title,omitempty"`
 	// ClosedBy is the full closer object mirrored from the SDK.
-	ClosedBy *IssueCloserOutput `json:"closed_by,omitempty"`
-	// ClosedByUsername is the additive convenience scalar carrying the old
-	// flattened closer username value.
-	ClosedByUsername    string `json:"closed_by_username,omitempty"`
-	WebURL              string `json:"web_url"`
-	CreatedAt           string `json:"created_at"`
-	UpdatedAt           string `json:"updated_at"`
-	ClosedAt            string `json:"closed_at"`
-	DueDate             string `json:"due_date"`
-	Confidential        bool   `json:"confidential"`
-	DiscussionLocked    bool   `json:"discussion_locked"`
-	ProjectID           int64  `json:"project_id"`
-	Weight              int64  `json:"weight,omitempty"`
-	IssueType           string `json:"issue_type,omitempty"`
-	HealthStatus        string `json:"health_status,omitempty"`
-	MergeRequestCount   int64  `json:"merge_request_count,omitempty"`
-	TaskCompletionCount int64  `json:"task_completion_count,omitempty"`
-	TaskCompletionTotal int64  `json:"task_completion_total,omitempty"`
-	UserNotesCount      int64  `json:"user_notes_count,omitempty"`
-	Upvotes             int64  `json:"upvotes,omitempty"`
-	Downvotes           int64  `json:"downvotes,omitempty"`
-	Subscribed          bool   `json:"subscribed"`
-	TimeEstimate        int64  `json:"time_estimate,omitempty"`
-	TotalTimeSpent      int64  `json:"total_time_spent,omitempty"`
-	MovedToID           int64  `json:"moved_to_id,omitempty"`
-	EpicIssueID         int64  `json:"epic_issue_id,omitempty"`
+	ClosedBy            *IssueCloserOutput `json:"closed_by,omitempty"`
+	WebURL              string             `json:"web_url"`
+	CreatedAt           string             `json:"created_at"`
+	UpdatedAt           string             `json:"updated_at"`
+	ClosedAt            string             `json:"closed_at"`
+	DueDate             string             `json:"due_date"`
+	Confidential        bool               `json:"confidential"`
+	DiscussionLocked    bool               `json:"discussion_locked"`
+	ProjectID           int64              `json:"project_id"`
+	Weight              int64              `json:"weight,omitempty"`
+	IssueType           string             `json:"issue_type,omitempty"`
+	HealthStatus        string             `json:"health_status,omitempty"`
+	MergeRequestCount   int64              `json:"merge_request_count,omitempty"`
+	TaskCompletionCount int64              `json:"task_completion_count,omitempty"`
+	TaskCompletionTotal int64              `json:"task_completion_total,omitempty"`
+	UserNotesCount      int64              `json:"user_notes_count,omitempty"`
+	Upvotes             int64              `json:"upvotes,omitempty"`
+	Downvotes           int64              `json:"downvotes,omitempty"`
+	Subscribed          bool               `json:"subscribed"`
+	TimeEstimate        int64              `json:"time_estimate,omitempty"`
+	TotalTimeSpent      int64              `json:"total_time_spent,omitempty"`
+	MovedToID           int64              `json:"moved_to_id,omitempty"`
+	EpicIssueID         int64              `json:"epic_issue_id,omitempty"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
 	ExternalID           string                      `json:"external_id,omitempty"`
@@ -261,25 +249,11 @@ func ToOutput(issue *gl.Issue) Output {
 		out.Labels = []string{}
 	}
 	out.Author = issueAuthorOutput(issue.Author)
-	if issue.Author != nil {
-		out.AuthorUsername = issue.Author.Username
-	}
 	out.Milestone = milestoneOutput(issue.Milestone)
-	if issue.Milestone != nil {
-		out.MilestoneTitle = issue.Milestone.Title
-	}
 	out.Assignees = issueAssigneeOutputs(issue.Assignees)
 	if out.Assignees == nil {
 		out.Assignees = []*IssueAssigneeOutput{}
 	}
-	usernames := make([]string, 0, len(issue.Assignees))
-	for _, a := range issue.Assignees {
-		if a == nil {
-			continue
-		}
-		usernames = append(usernames, a.Username)
-	}
-	out.AssigneeUsernames = usernames
 	// The singular Assignee field is deprecated upstream in favor of Assignees,
 	// but the 1:1 audit requires surfacing every SDK field, so it is mirrored
 	// verbatim.
@@ -306,9 +280,6 @@ func ToOutput(issue *gl.Issue) Output {
 		out.IssueType = *issue.IssueType
 	}
 	out.ClosedBy = issueCloserOutput(issue.ClosedBy)
-	if issue.ClosedBy != nil {
-		out.ClosedByUsername = issue.ClosedBy.Username
-	}
 	out.References = referencesOutput(issue.References)
 	out.UserNotesCount = issue.UserNotesCount
 	if issue.TaskCompletionStatus != nil {
@@ -1223,15 +1194,11 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 // usernames, and milestone/references/time_stats/task_completion_status/
 // label_details are full nested objects reusing the issue sub-object shapes.
 //
-// The prior flattened scalars are preserved additively: AuthorUsername keeps
-// the old author string under a new author_username key while the canonical
-// author key now carries the full user object. The MR's own internal id is
-// surfaced on iid (the BasicMergeRequest.iid field), and the legacy
-// merge_request_iid key is retained additively for backward compatibility.
+// The canonical author key carries the full user object. The MR's own internal
+// id is surfaced on iid (the BasicMergeRequest.iid field).
 type RelatedMROutput struct {
 	ID                          int64                       `json:"id"`
 	IID                         int64                       `json:"iid"`
-	MergeRequestIID             int64                       `json:"merge_request_iid"`
 	ProjectID                   int64                       `json:"project_id"`
 	Title                       string                      `json:"title"`
 	State                       string                      `json:"state"`
@@ -1241,7 +1208,6 @@ type RelatedMROutput struct {
 	SourceProjectID             int64                       `json:"source_project_id"`
 	TargetProjectID             int64                       `json:"target_project_id"`
 	Author                      *BasicUserOutput            `json:"author"`
-	AuthorUsername              string                      `json:"author_username,omitempty"`
 	Assignee                    *BasicUserOutput            `json:"assignee"`
 	Assignees                   []*BasicUserOutput          `json:"assignees"`
 	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
@@ -1292,12 +1258,11 @@ type RelatedMRsOutput struct {
 
 // basicMRToOutput converts a gl.BasicMergeRequest into the full-fidelity
 // RelatedMROutput, surfacing every SDK field with nested user/milestone/
-// references/time-stats objects and the additive author_username scalar.
+// references/time-stats objects.
 func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 	out := RelatedMROutput{
 		ID:              mr.ID,
 		IID:             mr.IID,
-		MergeRequestIID: mr.IID,
 		ProjectID:       mr.ProjectID,
 		Title:           mr.Title,
 		State:           mr.State,
@@ -1349,9 +1314,6 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 		PreparedAt:                  formatTimePtr(mr.PreparedAt),
 		ClosedAt:                    formatTimePtr(mr.ClosedAt),
 		WebURL:                      mr.WebURL,
-	}
-	if mr.Author != nil {
-		out.AuthorUsername = mr.Author.Username
 	}
 	return out
 }

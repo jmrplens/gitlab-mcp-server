@@ -62,27 +62,13 @@ type LinePositionOutput struct {
 	NewLine  int64  `json:"new_line,omitempty"`
 }
 
-// LineRangeNotePositionOutput mirrors one endpoint of gl.LineRange. It is kept
-// for backward compatibility with the additive start_range/end_range keys;
-// LinePositionOutput is its canonical-key equivalent.
-type LineRangeNotePositionOutput struct {
-	LineCode string `json:"line_code,omitempty"`
-	Type     string `json:"type,omitempty"`
-	OldLine  int64  `json:"old_line,omitempty"`
-	NewLine  int64  `json:"new_line,omitempty"`
-}
-
 // LineRangeOutput mirrors gl.LineRange (the start/end of a multi-line diff note
-// position). Per the locked canonical-key convention the full *LinePositionOutput
-// objects are surfaced on the canonical `start` / `end` keys (mirroring
-// gl.LineRange.StartRange / gl.LineRange.EndRange, whose JSON tags are
-// `start` / `end`). The original start_range / end_range keys are retained
-// additively for existing consumers.
+// position). The full *LinePositionOutput objects are surfaced on the canonical
+// `start` / `end` keys (mirroring gl.LineRange.StartRange / gl.LineRange.EndRange,
+// whose JSON tags are `start` / `end`).
 type LineRangeOutput struct {
-	Start      *LinePositionOutput          `json:"start,omitempty"`
-	End        *LinePositionOutput          `json:"end,omitempty"`
-	StartRange *LineRangeNotePositionOutput `json:"start_range,omitempty"`
-	EndRange   *LineRangeNotePositionOutput `json:"end_range,omitempty"`
+	Start *LinePositionOutput `json:"start,omitempty"`
+	End   *LinePositionOutput `json:"end,omitempty"`
 }
 
 // linePositionOutput converts a *gl.LinePosition into the canonical-key
@@ -136,19 +122,7 @@ func lineRangeOutput(lr *gl.LineRange) *LineRangeOutput {
 		Start: linePositionOutput(lr.StartRange),
 		End:   linePositionOutput(lr.EndRange),
 	}
-	if lr.StartRange != nil {
-		out.StartRange = &LineRangeNotePositionOutput{
-			LineCode: lr.StartRange.LineCode, Type: lr.StartRange.Type,
-			OldLine: lr.StartRange.OldLine, NewLine: lr.StartRange.NewLine,
-		}
-	}
-	if lr.EndRange != nil {
-		out.EndRange = &LineRangeNotePositionOutput{
-			LineCode: lr.EndRange.LineCode, Type: lr.EndRange.Type,
-			OldLine: lr.EndRange.OldLine, NewLine: lr.EndRange.NewLine,
-		}
-	}
-	if out.Start == nil && out.End == nil && out.StartRange == nil && out.EndRange == nil {
+	if out.Start == nil && out.End == nil {
 		return nil
 	}
 	return out

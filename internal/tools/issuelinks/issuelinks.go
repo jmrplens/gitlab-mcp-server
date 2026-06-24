@@ -54,22 +54,15 @@ type DeleteInput struct {
 	IssueLinkID int                  `json:"issue_link_id" jsonschema:"Issue link ID to remove,required"`
 }
 
-// Output represents a single issue link.
-//
-// SourceIssue and TargetIssue surface the full SDK issue objects (1:1 audit
-// policy, full nested objects). The flattened SourceIssueIID/SourceProjectID/
-// TargetIssueIID/TargetProjectID scalars are kept additively for ergonomic
-// consumers that only need the identifiers.
+// Output represents a single issue link. It mirrors the gitlab.IssueLink struct
+// (id, source_issue, target_issue, link_type). SourceIssue and TargetIssue
+// surface the full SDK issue objects (1:1 audit policy, full nested objects).
 type Output struct {
 	toolutil.HintableOutput
-	ID              int             `json:"id"`
-	SourceIssueIID  int             `json:"source_issue_iid"`
-	SourceProjectID int             `json:"source_project_id"`
-	TargetIssueIID  int             `json:"target_issue_iid"`
-	TargetProjectID int             `json:"target_project_id"`
-	LinkType        string          `json:"link_type"`
-	SourceIssue     *IssueRefOutput `json:"source_issue,omitempty"`
-	TargetIssue     *IssueRefOutput `json:"target_issue,omitempty"`
+	ID          int             `json:"id"`
+	LinkType    string          `json:"link_type"`
+	SourceIssue *IssueRefOutput `json:"source_issue,omitempty"`
+	TargetIssue *IssueRefOutput `json:"target_issue,omitempty"`
 }
 
 // RelationOutput represents a related issue from the list endpoint. It mirrors
@@ -115,18 +108,10 @@ type ListOutput struct {
 // toOutput converts the GitLab API response to the tool output format.
 func toOutput(link *gitlab.IssueLink) Output {
 	out := Output{
-		ID:       int(link.ID),
-		LinkType: link.LinkType,
-	}
-	if link.SourceIssue != nil {
-		out.SourceIssueIID = int(link.SourceIssue.IID)
-		out.SourceProjectID = int(link.SourceIssue.ProjectID)
-		out.SourceIssue = issueRefOutput(link.SourceIssue)
-	}
-	if link.TargetIssue != nil {
-		out.TargetIssueIID = int(link.TargetIssue.IID)
-		out.TargetProjectID = int(link.TargetIssue.ProjectID)
-		out.TargetIssue = issueRefOutput(link.TargetIssue)
+		ID:          int(link.ID),
+		LinkType:    link.LinkType,
+		SourceIssue: issueRefOutput(link.SourceIssue),
+		TargetIssue: issueRefOutput(link.TargetIssue),
 	}
 	return out
 }
