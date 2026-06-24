@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -508,17 +509,17 @@ func TestMRGetEnrichedDraftAnd_Conflicts(t *testing.T) {
 // TestMRGet_EnrichedPeople verifies MRGet when enriched people.
 func TestMRGet_EnrichedPeople(t *testing.T) {
 	out := mrGetEnrichedSetup(t)
-	if out.Author != "alice" {
-		t.Errorf(fmtAuthorWant, out.Author, "alice")
+	if AuthorName(out) != "alice" {
+		t.Errorf(fmtAuthorWant, AuthorName(out), "alice")
 	}
 	if len(out.Assignees) != 2 {
 		t.Fatalf("len(out.Assignees) = %d, want 2", len(out.Assignees))
 	}
-	if out.Assignees[0] != "bob" || out.Assignees[1] != "carol" {
-		t.Errorf("out.Assignees = %v, want [bob carol]", out.Assignees)
+	if out.Assignees[0].Username != "bob" || out.Assignees[1].Username != "carol" {
+		t.Errorf("out.Assignees usernames = %v, want [bob carol]", userNames(out.Assignees))
 	}
-	if len(out.Reviewers) != 1 || out.Reviewers[0] != "dave" {
-		t.Errorf("out.Reviewers = %v, want [dave]", out.Reviewers)
+	if len(out.Reviewers) != 1 || out.Reviewers[0].Username != "dave" {
+		t.Errorf("out.Reviewers usernames = %v, want [dave]", userNames(out.Reviewers))
 	}
 }
 
@@ -581,8 +582,8 @@ func TestMRGet_MergedTimestamps(t *testing.T) {
 	if out.Draft {
 		t.Error("out.Draft = true, want false")
 	}
-	if out.Author != "eve" {
-		t.Errorf(fmtAuthorWant, out.Author, "eve")
+	if AuthorName(out) != "eve" {
+		t.Errorf(fmtAuthorWant, AuthorName(out), "eve")
 	}
 	if out.UserNotesCount != 12 {
 		t.Errorf("out.UserNotesCount = %d, want 12", out.UserNotesCount)
@@ -610,8 +611,8 @@ func TestMRGet_MinimalFields(t *testing.T) {
 	if out.HasConflicts {
 		t.Error("out.HasConflicts should default to false")
 	}
-	if out.Author != "" {
-		t.Errorf("out.Author = %q, want empty for minimal MR", out.Author)
+	if out.Author != nil {
+		t.Errorf("out.Author = %+v, want nil for minimal MR", out.Author)
 	}
 	if len(out.Assignees) != 0 {
 		t.Errorf("len(out.Assignees) = %d, want 0", len(out.Assignees))
@@ -651,8 +652,8 @@ func TestMRList_EnrichedFields(t *testing.T) {
 	if !mr1.Draft {
 		t.Error("MR[0].Draft = false, want true")
 	}
-	if mr1.Author != "alice" {
-		t.Errorf("MR[0].Author = %q, want %q", mr1.Author, "alice")
+	if AuthorName(mr1) != "alice" {
+		t.Errorf("MR[0].Author = %q, want %q", AuthorName(mr1), "alice")
 	}
 	if len(mr1.Labels) != 2 {
 		t.Errorf("len(MR[0].Labels) = %d, want 2", len(mr1.Labels))
@@ -678,8 +679,8 @@ func TestMRList_EnrichedFields(t *testing.T) {
 	if mr2.MergedAt == "" {
 		t.Error("MR[1].MergedAt should not be empty for merged MR")
 	}
-	if mr2.Author != "eve" {
-		t.Errorf("MR[1].Author = %q, want %q", mr2.Author, "eve")
+	if AuthorName(mr2) != "eve" {
+		t.Errorf("MR[1].Author = %q, want %q", AuthorName(mr2), "eve")
 	}
 }
 
@@ -703,8 +704,8 @@ func TestMRCreate_EnrichedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
 	}
-	if out.Author != "alice" {
-		t.Errorf(fmtAuthorWant, out.Author, "alice")
+	if AuthorName(out) != "alice" {
+		t.Errorf(fmtAuthorWant, AuthorName(out), "alice")
 	}
 	if !out.Draft {
 		t.Error("out.Draft = false, want true")
@@ -741,14 +742,17 @@ func TestMRGet_SuccessPipelineFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtMRGetErr, err)
 	}
-	if out.PipelineID != 100 {
-		t.Errorf("out.PipelineID = %d, want 100", out.PipelineID)
+	if out.Pipeline == nil {
+		t.Fatal("out.Pipeline = nil, want populated pipeline object")
 	}
-	if out.PipelineWebURL != "https://gitlab.example.com/pipelines/100" {
-		t.Errorf("out.PipelineWebURL = %q, want %q", out.PipelineWebURL, "https://gitlab.example.com/pipelines/100")
+	if out.Pipeline.ID != 100 {
+		t.Errorf("out.Pipeline.ID = %d, want 100", out.Pipeline.ID)
 	}
-	if out.PipelineName != "my-pipeline" {
-		t.Errorf("out.PipelineName = %q, want %q", out.PipelineName, "my-pipeline")
+	if out.Pipeline.WebURL != "https://gitlab.example.com/pipelines/100" {
+		t.Errorf("out.Pipeline.WebURL = %q, want %q", out.Pipeline.WebURL, "https://gitlab.example.com/pipelines/100")
+	}
+	if out.Pipeline.Name != "my-pipeline" {
+		t.Errorf("out.Pipeline.Name = %q, want %q", out.Pipeline.Name, "my-pipeline")
 	}
 }
 
@@ -1707,8 +1711,8 @@ func TestOutput_ProjectPathFromReferences(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Get() unexpected error: %v", err)
 			}
-			if out.ProjectPath != tt.wantPath {
-				t.Errorf("ProjectPath = %q, want %q", out.ProjectPath, tt.wantPath)
+			if got := ProjectPath(out); got != tt.wantPath {
+				t.Errorf("ProjectPath = %q, want %q", got, tt.wantPath)
 			}
 		})
 	}
@@ -1786,9 +1790,10 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 1, Title: "feat: new login", State: testStateOpened,
 		SourceBranch: testFeatureBranch, TargetBranch: testBranchMain,
-		MergeStatus: "can_be_merged", Draft: true, HasConflicts: true,
-		Author: testAuthorAlice, Assignees: []string{testAuthorBob, testAuthorCarol},
-		Reviewers: []string{"dave"}, Labels: []string{testLabelBug, "enhancement"},
+		DetailedMergeStatus: "can_be_merged", Draft: true, HasConflicts: true,
+		Author:    &BasicUserOutput{Username: testAuthorAlice},
+		Assignees: []*BasicUserOutput{{Username: testAuthorBob}, {Username: testAuthorCarol}},
+		Reviewers: []*BasicUserOutput{{Username: "dave"}}, Labels: []string{testLabelBug, "enhancement"},
 		CreatedAt: testCreatedAt, UserNotesCount: 5,
 		Description: "Full description here", WebURL: testMRWebURL,
 	})
@@ -1816,8 +1821,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
-			{IID: 1, Title: "MR1", State: testStateOpened, Draft: true, Author: testAuthorAlice, SourceBranch: "a", TargetBranch: "b"},
-			{IID: 2, Title: "MR2", State: testStateMerged, Author: testAuthorBob, SourceBranch: "c", TargetBranch: "d"},
+			{IID: 1, Title: "MR1", State: testStateOpened, Draft: true, Author: &BasicUserOutput{Username: testAuthorAlice}, SourceBranch: "a", TargetBranch: "b"},
+			{IID: 2, Title: "MR2", State: testStateMerged, Author: &BasicUserOutput{Username: testAuthorBob}, SourceBranch: "c", TargetBranch: "d"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
@@ -2082,7 +2087,7 @@ func TestFormatListMarkdown_ClickableMRLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
 			{
-				IID: 7, Title: "MR7", State: testStateOpened, Author: testAuthorAlice,
+				IID: 7, Title: "MR7", State: testStateOpened, Author: &BasicUserOutput{Username: testAuthorAlice},
 				WebURL: "https://gitlab.example.com/mr/7", SourceBranch: "a", TargetBranch: "b",
 			},
 		},
@@ -2133,8 +2138,11 @@ func TestFormatCreateTodoMarkdown_ClickableURL(t *testing.T) {
 // TestFormatDependencyMarkdown_Populated verifies FormatDependencyMarkdown when populated.
 func TestFormatDependencyMarkdown_Populated(t *testing.T) {
 	md := FormatDependencyMarkdown(DependencyOutput{
-		ID: 1, BlockingMRID: 100, BlockingMRIID: 10, BlockingMRTitle: testBlockerTitle,
-		BlockingMRState: testStateOpened, BlockingSourceBranch: testBranchFeatA, BlockingTargetBranch: testBranchMain,
+		ID: 1,
+		BlockingMergeRequest: &BlockingMergeRequestOutput{
+			ID: 100, IID: 10, Title: testBlockerTitle, State: testStateOpened,
+			SourceBranch: testBranchFeatA, TargetBranch: testBranchMain,
+		},
 	})
 	for _, want := range []string{testBlockerTitle, "!10", testStateOpened, testBranchFeatA, testBranchMain} {
 		if !strings.Contains(md, want) {
@@ -2155,8 +2163,8 @@ func TestFormatDependencyMarkdown_Empty(t *testing.T) {
 func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
 	md := FormatDependenciesMarkdown(DependenciesOutput{
 		Dependencies: []DependencyOutput{
-			{ID: 1, BlockingMRIID: 10, BlockingMRTitle: testDepTitleA, BlockingMRState: testStateOpened},
-			{ID: 2, BlockingMRIID: 20, BlockingMRTitle: "Dep B", BlockingMRState: testStateMerged},
+			{ID: 1, BlockingMergeRequest: &BlockingMergeRequestOutput{IID: 10, Title: testDepTitleA, State: testStateOpened}},
+			{ID: 2, BlockingMergeRequest: &BlockingMergeRequestOutput{IID: 20, Title: "Dep B", State: testStateMerged}},
 		},
 	})
 	for _, want := range []string{testDepTitleA, "Dep B", "!10", "!20", testStateOpened, testStateMerged, "Dependencies (2)"} {
@@ -2374,20 +2382,24 @@ func TestCreateDependency_Success(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf("out.ID = %d, want 1", out.ID)
 	}
-	if out.BlockingMRIID != 10 {
-		t.Errorf("out.BlockingMRIID = %d, want 10", out.BlockingMRIID)
+	bmr := out.BlockingMergeRequest
+	if bmr == nil {
+		t.Fatal("out.BlockingMergeRequest = nil, want populated object")
 	}
-	if out.BlockingMRTitle != testBlockerTitle {
-		t.Errorf("out.BlockingMRTitle = %q, want %q", out.BlockingMRTitle, testBlockerTitle)
+	if bmr.IID != 10 {
+		t.Errorf("BlockingMergeRequest.IID = %d, want 10", bmr.IID)
 	}
-	if out.BlockingMRState != testStateOpened {
-		t.Errorf("out.BlockingMRState = %q, want %q", out.BlockingMRState, testStateOpened)
+	if bmr.Title != testBlockerTitle {
+		t.Errorf("BlockingMergeRequest.Title = %q, want %q", bmr.Title, testBlockerTitle)
 	}
-	if out.BlockingSourceBranch != testBranchFeatA {
-		t.Errorf("out.BlockingSourceBranch = %q, want %q", out.BlockingSourceBranch, testBranchFeatA)
+	if bmr.State != testStateOpened {
+		t.Errorf("BlockingMergeRequest.State = %q, want %q", bmr.State, testStateOpened)
 	}
-	if out.BlockingTargetBranch != testBranchMain {
-		t.Errorf("out.BlockingTargetBranch = %q, want %q", out.BlockingTargetBranch, testBranchMain)
+	if bmr.SourceBranch != testBranchFeatA {
+		t.Errorf("BlockingMergeRequest.SourceBranch = %q, want %q", bmr.SourceBranch, testBranchFeatA)
+	}
+	if bmr.TargetBranch != testBranchMain {
+		t.Errorf("BlockingMergeRequest.TargetBranch = %q, want %q", bmr.TargetBranch, testBranchMain)
 	}
 }
 
@@ -2514,11 +2526,13 @@ func TestGetDependencies_Success(t *testing.T) {
 	if len(out.Dependencies) != 2 {
 		t.Fatalf("GetDependencies() returned %d deps, want 2", len(out.Dependencies))
 	}
-	if out.Dependencies[0].BlockingMRTitle != testDepTitleA {
-		t.Errorf("dep[0].BlockingMRTitle = %q, want %q", out.Dependencies[0].BlockingMRTitle, testDepTitleA)
+	dep0 := out.Dependencies[0].BlockingMergeRequest
+	if dep0 == nil || dep0.Title != testDepTitleA {
+		t.Errorf("dep[0].BlockingMergeRequest = %+v, want title %q", dep0, testDepTitleA)
 	}
-	if out.Dependencies[1].BlockingMRState != testStateMerged {
-		t.Errorf("dep[1].BlockingMRState = %q, want %q", out.Dependencies[1].BlockingMRState, testStateMerged)
+	dep1 := out.Dependencies[1].BlockingMergeRequest
+	if dep1 == nil || dep1.State != testStateMerged {
+		t.Errorf("dep[1].BlockingMergeRequest = %+v, want state %q", dep1, testStateMerged)
 	}
 }
 
@@ -3295,14 +3309,20 @@ func assertRichMRPipeline(t *testing.T, out Output) {
 	if out.DiffRefs.BaseSHA != "b1" {
 		t.Errorf("DiffRefs.BaseSHA = %q, want %q", out.DiffRefs.BaseSHA, "b1")
 	}
-	if out.PipelineID != 10 {
-		t.Errorf("PipelineID = %d, want 10", out.PipelineID)
+	if out.Pipeline == nil {
+		t.Fatal("Pipeline should not be nil for rich MR")
 	}
-	if out.PipelineWebURL != "http://p/10" {
-		t.Errorf("PipelineWebURL = %q", out.PipelineWebURL)
+	if out.Pipeline.ID != 10 {
+		t.Errorf("Pipeline.ID = %d, want 10", out.Pipeline.ID)
 	}
-	if out.HeadPipelineID != 20 {
-		t.Errorf("HeadPipelineID = %d, want 20", out.HeadPipelineID)
+	if out.Pipeline.WebURL != "http://p/10" {
+		t.Errorf("Pipeline.WebURL = %q", out.Pipeline.WebURL)
+	}
+	if out.HeadPipeline == nil {
+		t.Fatal("HeadPipeline should not be nil for rich MR")
+	}
+	if out.HeadPipeline.ID != 20 {
+		t.Errorf("HeadPipeline.ID = %d, want 20", out.HeadPipeline.ID)
 	}
 	if out.LatestBuildStartedAt == "" {
 		t.Error("LatestBuildStartedAt should not be empty")
@@ -3315,26 +3335,35 @@ func assertRichMRPipeline(t *testing.T, out Output) {
 // assertRichMRPeople checks rich MR people invariants for tests.
 func assertRichMRPeople(t *testing.T, out Output) {
 	t.Helper()
-	if out.MergedBy != testAuthorBob {
-		t.Errorf("MergedBy = %q, want %q", out.MergedBy, testAuthorBob)
+	if userName(out.MergeUser) != testAuthorBob {
+		t.Errorf("MergeUser = %q, want %q", userName(out.MergeUser), testAuthorBob)
 	}
-	if out.ClosedBy != testAuthorCarol {
-		t.Errorf("ClosedBy = %q, want %q", out.ClosedBy, testAuthorCarol)
+	if userName(out.MergedBy) != testAuthorBob {
+		t.Errorf("MergedBy = %q, want %q", userName(out.MergedBy), testAuthorBob)
 	}
-	if out.Milestone != testMilestoneV1 {
-		t.Errorf("Milestone = %q, want %q", out.Milestone, testMilestoneV1)
+	if userName(out.ClosedBy) != testAuthorCarol {
+		t.Errorf("ClosedBy = %q, want %q", userName(out.ClosedBy), testAuthorCarol)
 	}
-	if out.TaskCompletionCount != 3 {
-		t.Errorf("TaskCompletionCount = %d, want 3", out.TaskCompletionCount)
+	if out.Milestone == nil || out.Milestone.Title != testMilestoneV1 {
+		t.Errorf("Milestone = %+v, want title %q", out.Milestone, testMilestoneV1)
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf("TaskCompletionTotal = %d, want 5", out.TaskCompletionTotal)
+	if out.TaskCompletionStatus == nil {
+		t.Fatal("TaskCompletionStatus should not be nil for rich MR")
 	}
-	if out.TimeEstimate != 3600 {
-		t.Errorf("TimeEstimate = %d, want 3600", out.TimeEstimate)
+	if out.TaskCompletionStatus.CompletedCount != 3 {
+		t.Errorf("TaskCompletionStatus.CompletedCount = %d, want 3", out.TaskCompletionStatus.CompletedCount)
 	}
-	if out.TotalTimeSpent != 1800 {
-		t.Errorf("TotalTimeSpent = %d, want 1800", out.TotalTimeSpent)
+	if out.TaskCompletionStatus.Count != 5 {
+		t.Errorf("TaskCompletionStatus.Count = %d, want 5", out.TaskCompletionStatus.Count)
+	}
+	if out.TimeStats == nil {
+		t.Fatal("TimeStats should not be nil for rich MR")
+	}
+	if out.TimeStats.TimeEstimate != 3600 {
+		t.Errorf("TimeStats.TimeEstimate = %d, want 3600", out.TimeStats.TimeEstimate)
+	}
+	if out.TimeStats.TotalTimeSpent != 1800 {
+		t.Errorf("TimeStats.TotalTimeSpent = %d, want 1800", out.TimeStats.TotalTimeSpent)
 	}
 }
 
@@ -3353,8 +3382,8 @@ func assertRichMRTimestamps(t *testing.T, out Output) {
 	if out.PreparedAt == "" {
 		t.Error("PreparedAt should not be empty")
 	}
-	if out.References != "group/project!1" {
-		t.Errorf("References = %q, want %q", out.References, "group/project!1")
+	if out.References == nil || out.References.Full != "group/project!1" {
+		t.Errorf("References = %+v, want full %q", out.References, "group/project!1")
 	}
 }
 
@@ -4132,9 +4161,11 @@ func TestFormatMarkdown_MergedState(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 5, Title: "merged MR", State: "merged",
 		SourceBranch: "feat", TargetBranch: "main",
-		MergeStatus: "merged", ProjectPath: "group/project",
-		Milestone: "v1.0", PipelineID: 42, PipelineWebURL: "https://pipeline",
-		ChangesCount: "3", MergedBy: "alice", MergedAt: testCreatedAt,
+		DetailedMergeStatus: "merged",
+		References:          &ReferencesOutput{Full: "group/project!5"},
+		Milestone:           &MilestoneOutput{Title: "v1.0"},
+		Pipeline:            &PipelineInfoOutput{ID: 42, WebURL: "https://pipeline"},
+		ChangesCount:        "3", MergeUser: &BasicUserOutput{Username: "alice"}, MergedAt: testCreatedAt,
 	})
 	for _, want := range []string{"group/project", "v1.0", "[#42](https://pipeline)", "3 files", "@alice"} {
 		if !strings.Contains(md, want) {
@@ -4149,9 +4180,9 @@ func TestFormatMarkdown_MergedState(t *testing.T) {
 func TestFormatMarkdown_ClosedState(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 6, Title: "closed MR", State: "closed",
-		SourceBranch: "fix", TargetBranch: "main", MergeStatus: "cannot_be_merged",
-		ClosedBy: "bob", ClosedAt: testCreatedAt,
-		PipelineID: 99,
+		SourceBranch: "fix", TargetBranch: "main", DetailedMergeStatus: "cannot_be_merged",
+		ClosedBy: &BasicUserOutput{Username: "bob"}, ClosedAt: testCreatedAt,
+		Pipeline: &PipelineInfoOutput{ID: 99},
 	})
 	if !strings.Contains(md, "@bob") {
 		t.Error("expected closed-by in output")
@@ -4642,4 +4673,78 @@ func mergeRequestSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestShapeConverters_EdgeBranches exercises the nil/empty/zero branches of the
+// local output-shape converters introduced by the 1:1 output migration so that
+// every guard path (nil pointers, nil slice elements, all-nil slices, zero
+// times) is covered.
+func TestShapeConverters_EdgeBranches(t *testing.T) {
+	if got := formatISOTimePtr(nil); got != "" {
+		t.Errorf("formatISOTimePtr(nil) = %q, want empty", got)
+	}
+	iso := gl.ISOTime(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC))
+	if got := formatISOTimePtr(&iso); got != "2026-01-02" {
+		t.Errorf("formatISOTimePtr = %q, want 2026-01-02", got)
+	}
+	if got := formatTimeValue(time.Time{}); got != "" {
+		t.Errorf("formatTimeValue(zero) = %q, want empty", got)
+	}
+	nonZero := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	if got := formatTimeValue(nonZero); got != "2026-01-02T03:04:05Z" {
+		t.Errorf("formatTimeValue(non-zero) = %q, want RFC3339", got)
+	}
+	if got := derefString(nil); got != "" {
+		t.Errorf("derefString(nil) = %q, want empty", got)
+	}
+	s := "v1.0"
+	if got := derefString(&s); got != "v1.0" {
+		t.Errorf("derefString = %q, want v1.0", got)
+	}
+	if got := labelOptionsToStrings(nil); len(got) != 0 {
+		t.Errorf("labelOptionsToStrings(nil) = %v, want empty", got)
+	}
+	labels := gl.LabelOptions{"a", "b"}
+	if got := labelOptionsToStrings(&labels); len(got) != 2 {
+		t.Errorf("labelOptionsToStrings = %v, want 2", got)
+	}
+	// basicUserOutputs: nil-element skipped and all-nil collapses to nil.
+	if got := basicUserOutputs([]*gl.BasicUser{nil}); got != nil {
+		t.Errorf("basicUserOutputs(all-nil) = %v, want nil", got)
+	}
+	mixed := basicUserOutputs([]*gl.BasicUser{nil, {Username: "x"}})
+	if len(mixed) != 1 || mixed[0].Username != "x" {
+		t.Errorf("basicUserOutputs(mixed) = %v, want [x]", mixed)
+	}
+	// labelDetailsOutputs: empty -> nil, all-nil -> nil, populated path.
+	if got := labelDetailsOutputs(nil); got != nil {
+		t.Errorf("labelDetailsOutputs(nil) = %v, want nil", got)
+	}
+	if got := labelDetailsOutputs([]*gl.LabelDetails{nil}); got != nil {
+		t.Errorf("labelDetailsOutputs(all-nil) = %v, want nil", got)
+	}
+	ld := labelDetailsOutputs([]*gl.LabelDetails{nil, {ID: 1, Name: "bug"}})
+	if len(ld) != 1 || ld[0].Name != "bug" {
+		t.Errorf("labelDetailsOutputs(mixed) = %v, want [bug]", ld)
+	}
+	if got := pipelineDetailedStatusOutput(nil); got != nil {
+		t.Errorf("pipelineDetailedStatusOutput(nil) = %v, want nil", got)
+	}
+	if got := pipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Text != "running" {
+		t.Errorf("pipelineDetailedStatusOutput = %v, want text running", got)
+	}
+}
+
+// TestMarkdownHelpers_EdgeBranches exercises the nil/empty branches of the
+// markdown helper functions added for the output migration.
+func TestMarkdownHelpers_EdgeBranches(t *testing.T) {
+	if got := mrProjectPath(Output{References: &ReferencesOutput{Full: "noseparator"}}); got != "" {
+		t.Errorf("mrProjectPath(no-sep) = %q, want empty", got)
+	}
+	if got := userName(nil); got != "" {
+		t.Errorf("userName(nil) = %q, want empty", got)
+	}
+	if got := userNames([]*BasicUserOutput{nil, {Username: "x"}}); len(got) != 1 || got[0] != "x" {
+		t.Errorf("userNames(mixed) = %v, want [x]", got)
+	}
 }

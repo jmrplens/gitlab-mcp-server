@@ -270,10 +270,11 @@ func TestFormatMR_Markdown(t *testing.T) {
 	mr := mergerequests.Output{
 		ID: 1, IID: 15, Title: testTitleAddFeat, State: "opened",
 		SourceBranch: "feature", TargetBranch: "main",
-		MergeStatus: "can_be_merged", Description: "Adds a feature",
+		DetailedMergeStatus: "can_be_merged", Description: "Adds a feature",
 		WebURL: "https://gitlab.example.com/mr/15",
-		Author: "dev1", Labels: []string{"enhancement"},
-		Assignees: []string{"dev2"}, Reviewers: []string{"dev3"},
+		Author: &mergerequests.BasicUserOutput{Username: "dev1"}, Labels: []string{"enhancement"},
+		Assignees: []*mergerequests.BasicUserOutput{{Username: "dev2"}},
+		Reviewers: []*mergerequests.BasicUserOutput{{Username: "dev3"}},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	md := mergerequests.FormatMarkdown(mr)
@@ -296,7 +297,7 @@ func TestFormatMRMarkdownDraft_Conflicts(t *testing.T) {
 	mr := mergerequests.Output{
 		IID: 99, Title: "WIP", State: "opened",
 		SourceBranch: "wip", TargetBranch: "main",
-		MergeStatus: "cannot_be_merged", Draft: true, HasConflicts: true,
+		DetailedMergeStatus: "cannot_be_merged", Draft: true, HasConflicts: true,
 		WebURL: "https://gitlab.example.com/mr/99",
 	}
 	md := mergerequests.FormatMarkdown(mr)
@@ -312,7 +313,7 @@ func TestFormatMRMarkdownDraft_Conflicts(t *testing.T) {
 func TestFormatMR_ListMarkdown(t *testing.T) {
 	out := mergerequests.ListOutput{
 		MergeRequests: []mergerequests.Output{
-			{IID: 1, Title: testTitleFixBug, State: "merged", SourceBranch: "fix", TargetBranch: "main", Author: "dev"},
+			{IID: 1, Title: testTitleFixBug, State: "merged", SourceBranch: "fix", TargetBranch: "main", Author: &mergerequests.BasicUserOutput{Username: "dev"}},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
@@ -1489,7 +1490,7 @@ var allMarkdownFixtureData = []markdownFixture{
 	{"mergerequests.TimeStatsOutput", mergerequests.TimeStatsOutput{HumanTimeEstimate: "1h"}},
 	{"mergerequests.RelatedIssuesOutput", mergerequests.RelatedIssuesOutput{Issues: []issues.Output{{IID: 1}}}},
 	{"mergerequests.CreateTodoOutput", mergerequests.CreateTodoOutput{ID: 1, ActionName: "marked"}},
-	{"mergerequests.DependencyOutput", mergerequests.DependencyOutput{ID: 1, BlockingMRIID: 2}},
+	{"mergerequests.DependencyOutput", mergerequests.DependencyOutput{ID: 1, BlockingMergeRequest: &mergerequests.BlockingMergeRequestOutput{IID: 2}}},
 	{"mergerequests.DependenciesOutput", mergerequests.DependenciesOutput{Dependencies: []mergerequests.DependencyOutput{{ID: 1}}}},
 
 	// MR Notes
@@ -1846,7 +1847,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "mergerequests.Output",
 			result: mergerequests.Output{
 				ID: 20, IID: 3, Title: "Feature branch", State: "opened",
-				SourceBranch: "feature/x", TargetBranch: "main", Author: "alice",
+				SourceBranch: "feature/x", TargetBranch: "main", Author: &mergerequests.BasicUserOutput{Username: "alice"},
 				WebURL:    "https://gitlab.example.com/group/project/-/merge_requests/3",
 				CreatedAt: "2026-03-10 14:00",
 			},
@@ -1856,7 +1857,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "mergerequests.ListOutput",
 			result: mergerequests.ListOutput{
 				MergeRequests: []mergerequests.Output{
-					{ID: 20, IID: 3, Title: "MR 1", State: "opened", Author: "alice", SourceBranch: "f1", TargetBranch: "main"},
+					{ID: 20, IID: 3, Title: "MR 1", State: "opened", Author: &mergerequests.BasicUserOutput{Username: "alice"}, SourceBranch: "f1", TargetBranch: "main"},
 				},
 			},
 		},

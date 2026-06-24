@@ -49,69 +49,76 @@ type CreateInput struct {
 	ApprovalsBeforeMerge int64 `json:"approvals_before_merge,omitempty" jsonschema:"Number of approvals required before this MR can be merged (deprecated; use the approval rules API)"`
 }
 
-// Output represents a merge request.
+// Output represents a merge request. It mirrors the fuller gl.MergeRequest
+// (the get endpoint) as a superset; fields present only on gl.MergeRequest are
+// left zero/nil (and elided via omitempty) when converting from the lighter
+// gl.BasicMergeRequest returned by list endpoints.
 type Output struct {
 	toolutil.HintableOutput
-	ID                          int64           `json:"id"`
-	IID                         int64           `json:"merge_request_iid"`
-	ProjectID                   int64           `json:"project_id"`
-	ProjectPath                 string          `json:"project_path,omitempty"`
-	SourceProjectID             int64           `json:"source_project_id,omitempty"`
-	TargetProjectID             int64           `json:"target_project_id,omitempty"`
-	Title                       string          `json:"title"`
-	Description                 string          `json:"description"`
-	State                       string          `json:"state"`
-	SourceBranch                string          `json:"source_branch"`
-	TargetBranch                string          `json:"target_branch"`
-	WebURL                      string          `json:"web_url"`
-	MergeStatus                 string          `json:"merge_status"`
-	Draft                       bool            `json:"draft"`
-	HasConflicts                bool            `json:"has_conflicts"`
-	BlockingDiscussionsResolved bool            `json:"blocking_discussions_resolved"`
-	Squash                      bool            `json:"squash,omitempty"`
-	SquashOnMerge               bool            `json:"squash_on_merge,omitempty"`
-	MergeWhenPipelineSucceeds   bool            `json:"merge_when_pipeline_succeeds,omitempty"`
-	ShouldRemoveSourceBranch    bool            `json:"should_remove_source_branch,omitempty"`
-	DiscussionLocked            bool            `json:"discussion_locked"`
-	RebaseInProgress            bool            `json:"rebase_in_progress,omitempty"`
-	Author                      string          `json:"author,omitempty"`
-	MergedBy                    string          `json:"merged_by,omitempty"`
-	Assignees                   []string        `json:"assignees"`
-	Reviewers                   []string        `json:"reviewers"`
-	Labels                      []string        `json:"labels"`
-	Milestone                   string          `json:"milestone,omitempty"`
-	References                  string          `json:"references,omitempty"`
-	SHA                         string          `json:"sha,omitempty"`
-	MergeCommitSHA              string          `json:"merge_commit_sha,omitempty"`
-	MergeError                  string          `json:"merge_error,omitempty"`
-	ChangesCount                string          `json:"changes_count,omitempty"`
-	DivergedCommitsCount        int64           `json:"diverged_commits_count,omitempty"`
-	Upvotes                     int64           `json:"upvotes,omitempty"`
-	Downvotes                   int64           `json:"downvotes,omitempty"`
-	SquashCommitSHA             string          `json:"squash_commit_sha,omitempty"`
-	ForceRemoveSourceBranch     bool            `json:"force_remove_source_branch,omitempty"`
-	AllowCollaboration          bool            `json:"allow_collaboration,omitempty"`
-	ClosedBy                    string          `json:"closed_by,omitempty"`
-	MergeAfter                  string          `json:"merge_after,omitempty"`
-	TaskCompletionCount         int64           `json:"task_completion_count,omitempty"`
-	TaskCompletionTotal         int64           `json:"task_completion_total,omitempty"`
-	TimeEstimate                int64           `json:"time_estimate,omitempty"`
-	TotalTimeSpent              int64           `json:"total_time_spent,omitempty"`
-	Subscribed                  bool            `json:"subscribed,omitempty"`
-	FirstContribution           bool            `json:"first_contribution,omitempty"`
-	DiffRefs                    *DiffRefsOutput `json:"diff_refs,omitempty"`
-	PipelineID                  int64           `json:"pipeline_id,omitempty"`
-	PipelineWebURL              string          `json:"pipeline_web_url,omitempty"`
-	PipelineName                string          `json:"pipeline_name,omitempty"`
-	HeadPipelineID              int64           `json:"head_pipeline_id,omitempty"`
-	LatestBuildStartedAt        string          `json:"latest_build_started_at,omitempty"`
-	LatestBuildFinishedAt       string          `json:"latest_build_finished_at,omitempty"`
-	CreatedAt                   string          `json:"created_at"`
-	UpdatedAt                   string          `json:"updated_at"`
-	MergedAt                    string          `json:"merged_at,omitempty"`
-	ClosedAt                    string          `json:"closed_at,omitempty"`
-	PreparedAt                  string          `json:"prepared_at,omitempty"`
-	UserNotesCount              int64           `json:"user_notes_count,omitempty"`
+	ID                          int64                       `json:"id"`
+	IID                         int64                       `json:"iid"`
+	ProjectID                   int64                       `json:"project_id"`
+	SourceProjectID             int64                       `json:"source_project_id,omitempty"`
+	TargetProjectID             int64                       `json:"target_project_id,omitempty"`
+	Title                       string                      `json:"title"`
+	Description                 string                      `json:"description"`
+	State                       string                      `json:"state"`
+	Imported                    bool                        `json:"imported,omitempty"`
+	ImportedFrom                string                      `json:"imported_from,omitempty"`
+	SourceBranch                string                      `json:"source_branch"`
+	TargetBranch                string                      `json:"target_branch"`
+	WebURL                      string                      `json:"web_url"`
+	DetailedMergeStatus         string                      `json:"detailed_merge_status,omitempty"`
+	Draft                       bool                        `json:"draft"`
+	WorkInProgress              bool                        `json:"work_in_progress,omitempty"`
+	HasConflicts                bool                        `json:"has_conflicts"`
+	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
+	Squash                      bool                        `json:"squash,omitempty"`
+	SquashOnMerge               bool                        `json:"squash_on_merge,omitempty"`
+	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds,omitempty"`
+	ShouldRemoveSourceBranch    bool                        `json:"should_remove_source_branch,omitempty"`
+	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push,omitempty"`
+	DiscussionLocked            bool                        `json:"discussion_locked"`
+	RebaseInProgress            bool                        `json:"rebase_in_progress,omitempty"`
+	Author                      *BasicUserOutput            `json:"author,omitempty"`
+	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
+	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
+	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
+	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
+	Assignees                   []*BasicUserOutput          `json:"assignees"`
+	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
+	Labels                      []string                    `json:"labels"`
+	LabelDetails                []*LabelDetailsOutput       `json:"label_details,omitempty"`
+	Milestone                   *MilestoneOutput            `json:"milestone,omitempty"`
+	References                  *ReferencesOutput           `json:"references,omitempty"`
+	SHA                         string                      `json:"sha,omitempty"`
+	MergeCommitSHA              string                      `json:"merge_commit_sha,omitempty"`
+	MergeError                  string                      `json:"merge_error,omitempty"`
+	ChangesCount                string                      `json:"changes_count,omitempty"`
+	DivergedCommitsCount        int64                       `json:"diverged_commits_count,omitempty"`
+	Upvotes                     int64                       `json:"upvotes,omitempty"`
+	Downvotes                   int64                       `json:"downvotes,omitempty"`
+	SquashCommitSHA             string                      `json:"squash_commit_sha,omitempty"`
+	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch,omitempty"`
+	AllowCollaboration          bool                        `json:"allow_collaboration,omitempty"`
+	MergeAfter                  string                      `json:"merge_after,omitempty"`
+	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	TimeStats                   *TimeStatsOutput            `json:"time_stats,omitempty"`
+	Subscribed                  bool                        `json:"subscribed,omitempty"`
+	FirstContribution           bool                        `json:"first_contribution,omitempty"`
+	User                        *MergeRequestUserOutput     `json:"user,omitempty"`
+	DiffRefs                    *DiffRefsOutput             `json:"diff_refs,omitempty"`
+	Pipeline                    *PipelineInfoOutput         `json:"pipeline,omitempty"`
+	HeadPipeline                *PipelineOutput             `json:"head_pipeline,omitempty"`
+	LatestBuildStartedAt        string                      `json:"latest_build_started_at,omitempty"`
+	LatestBuildFinishedAt       string                      `json:"latest_build_finished_at,omitempty"`
+	FirstDeployedToProductionAt string                      `json:"first_deployed_to_production_at,omitempty"`
+	CreatedAt                   string                      `json:"created_at"`
+	UpdatedAt                   string                      `json:"updated_at"`
+	MergedAt                    string                      `json:"merged_at,omitempty"`
+	ClosedAt                    string                      `json:"closed_at,omitempty"`
+	PreparedAt                  string                      `json:"prepared_at,omitempty"`
+	UserNotesCount              int64                       `json:"user_notes_count,omitempty"`
 }
 
 // DiffRefsOutput represents the diff refs (base, head, start SHAs) of a merge request.
@@ -390,7 +397,9 @@ type ApproveOutput struct {
 	Approved          bool `json:"approved"`
 }
 
-// ToOutput converts a GitLab API [gl.MergeRequest] to the MCP tool output format.
+// ToOutput converts a GitLab API [gl.MergeRequest] (the get endpoint payload)
+// to the MCP tool output format. It first projects the embedded
+// BasicMergeRequest, then layers on the MergeRequest-only fields.
 func ToOutput(m *gl.MergeRequest) Output {
 	out := BasicToOutput(&m.BasicMergeRequest)
 	out.MergeError = m.MergeError
@@ -399,6 +408,8 @@ func ToOutput(m *gl.MergeRequest) Output {
 	out.DivergedCommitsCount = m.DivergedCommitsCount
 	out.Subscribed = m.Subscribed
 	out.FirstContribution = m.FirstContribution
+	out.WorkInProgress = m.WorkInProgress //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
+	out.User = mergeRequestUserOutput(m.User)
 	if m.DiffRefs.BaseSha != "" || m.DiffRefs.HeadSha != "" || m.DiffRefs.StartSha != "" {
 		out.DiffRefs = &DiffRefsOutput{
 			BaseSHA:  m.DiffRefs.BaseSha,
@@ -406,20 +417,11 @@ func ToOutput(m *gl.MergeRequest) Output {
 			StartSHA: m.DiffRefs.StartSha,
 		}
 	}
-	if m.Pipeline != nil {
-		out.PipelineID = m.Pipeline.ID
-		out.PipelineWebURL = m.Pipeline.WebURL
-		out.PipelineName = m.Pipeline.Name
-	}
-	if m.HeadPipeline != nil {
-		out.HeadPipelineID = m.HeadPipeline.ID
-	}
-	if m.LatestBuildStartedAt != nil {
-		out.LatestBuildStartedAt = m.LatestBuildStartedAt.Format(time.RFC3339)
-	}
-	if m.LatestBuildFinishedAt != nil {
-		out.LatestBuildFinishedAt = m.LatestBuildFinishedAt.Format(time.RFC3339)
-	}
+	out.Pipeline = pipelineInfoOutput(m.Pipeline)
+	out.HeadPipeline = pipelineOutput(m.HeadPipeline)
+	out.LatestBuildStartedAt = formatTimePtr(m.LatestBuildStartedAt)
+	out.LatestBuildFinishedAt = formatTimePtr(m.LatestBuildFinishedAt)
+	out.FirstDeployedToProductionAt = formatTimePtr(m.FirstDeployedToProductionAt)
 	return out
 }
 
@@ -434,10 +436,12 @@ func BasicToOutput(m *gl.BasicMergeRequest) Output {
 		Title:                       m.Title,
 		Description:                 m.Description,
 		State:                       m.State,
+		Imported:                    m.Imported,
+		ImportedFrom:                m.ImportedFrom,
 		SourceBranch:                m.SourceBranch,
 		TargetBranch:                m.TargetBranch,
 		WebURL:                      m.WebURL,
-		MergeStatus:                 m.DetailedMergeStatus,
+		DetailedMergeStatus:         m.DetailedMergeStatus,
 		Draft:                       m.Draft,
 		HasConflicts:                m.HasConflicts,
 		BlockingDiscussionsResolved: m.BlockingDiscussionsResolved,
@@ -451,7 +455,8 @@ func BasicToOutput(m *gl.BasicMergeRequest) Output {
 }
 
 // populatePeople extracts author, assignees, reviewers, labels, and metadata
-// from a BasicMergeRequest into the Output.
+// from a BasicMergeRequest into the Output, mirroring the SDK sub-objects on
+// their canonical json keys.
 func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 	out.SourceProjectID = m.SourceProjectID
 	out.TargetProjectID = m.TargetProjectID
@@ -460,76 +465,45 @@ func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 	out.ShouldRemoveSourceBranch = m.ShouldRemoveSourceBranch
 	out.ForceRemoveSourceBranch = m.ForceRemoveSourceBranch
 	out.AllowCollaboration = m.AllowCollaboration
+	out.AllowMaintainerToPush = m.AllowMaintainerToPush
 	out.SquashOnMerge = m.SquashOnMerge
 	out.SquashCommitSHA = m.SquashCommitSHA
 	out.Upvotes = m.Upvotes
 	out.Downvotes = m.Downvotes
-	if m.Author != nil {
-		out.Author = m.Author.Username
-	}
-	if m.MergeUser != nil {
-		out.MergedBy = m.MergeUser.Username
-	}
-	if m.ClosedBy != nil {
-		out.ClosedBy = m.ClosedBy.Username
-	}
-	for _, a := range m.Assignees {
-		out.Assignees = append(out.Assignees, a.Username)
-	}
+	out.Author = basicUserOutput(m.Author)
+	out.Assignee = basicUserOutput(m.Assignee)
+	out.MergeUser = basicUserOutput(m.MergeUser)
+	out.ClosedBy = basicUserOutput(m.ClosedBy)
+	out.MergedBy = basicUserOutput(m.MergedBy) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+	out.Assignees = basicUserOutputs(m.Assignees)
 	if out.Assignees == nil {
-		out.Assignees = []string{}
+		out.Assignees = []*BasicUserOutput{}
 	}
-	for _, r := range m.Reviewers {
-		out.Reviewers = append(out.Reviewers, r.Username)
-	}
+	out.Reviewers = basicUserOutputs(m.Reviewers)
 	if out.Reviewers == nil {
-		out.Reviewers = []string{}
+		out.Reviewers = []*BasicUserOutput{}
 	}
 	out.Labels = []string(m.Labels)
 	if out.Labels == nil {
 		out.Labels = []string{}
 	}
-	if m.Milestone != nil {
-		out.Milestone = m.Milestone.Title
-	}
-	if m.TaskCompletionStatus != nil {
-		out.TaskCompletionCount = m.TaskCompletionStatus.CompletedCount
-		out.TaskCompletionTotal = m.TaskCompletionStatus.Count
-	}
-	if m.TimeStats != nil {
-		out.TimeEstimate = m.TimeStats.TimeEstimate
-		out.TotalTimeSpent = m.TimeStats.TotalTimeSpent
-	}
+	out.LabelDetails = labelDetailsOutputs(m.LabelDetails)
+	out.Milestone = milestoneOutput(m.Milestone)
+	out.TaskCompletionStatus = taskCompletionStatusOutput(m.TaskCompletionStatus)
+	out.TimeStats = timeStatsPtr(m.TimeStats)
 	populateTimestamps(out, m)
 }
 
 // populateTimestamps extracts timestamps and references from a
 // BasicMergeRequest into the Output.
 func populateTimestamps(out *Output, m *gl.BasicMergeRequest) {
-	if m.MergeAfter != nil {
-		out.MergeAfter = m.MergeAfter.Format(time.RFC3339)
-	}
-	if m.CreatedAt != nil {
-		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
-	}
-	if m.UpdatedAt != nil {
-		out.UpdatedAt = m.UpdatedAt.Format(time.RFC3339)
-	}
-	if m.MergedAt != nil {
-		out.MergedAt = m.MergedAt.Format(time.RFC3339)
-	}
-	if m.ClosedAt != nil {
-		out.ClosedAt = m.ClosedAt.Format(time.RFC3339)
-	}
-	if m.PreparedAt != nil {
-		out.PreparedAt = m.PreparedAt.Format(time.RFC3339)
-	}
-	if m.References != nil {
-		out.References = m.References.Full
-		if idx := strings.LastIndex(m.References.Full, "!"); idx > 0 {
-			out.ProjectPath = m.References.Full[:idx]
-		}
-	}
+	out.MergeAfter = formatTimePtr(m.MergeAfter)
+	out.CreatedAt = formatTimePtr(m.CreatedAt)
+	out.UpdatedAt = formatTimePtr(m.UpdatedAt)
+	out.MergedAt = formatTimePtr(m.MergedAt)
+	out.ClosedAt = formatTimePtr(m.ClosedAt)
+	out.PreparedAt = formatTimePtr(m.PreparedAt)
+	out.References = referencesOutput(m.References)
 }
 
 // Create creates a new merge request in the specified GitLab project.
@@ -1918,18 +1892,14 @@ type DependencyInput struct {
 	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one"`
 }
 
-// DependencyOutput represents a merge request dependency.
+// DependencyOutput mirrors gl.MergeRequestDependency. The blocking merge
+// request is surfaced as a full nested object on the canonical
+// blocking_merge_request key rather than flattened scalars.
 type DependencyOutput struct {
 	toolutil.HintableOutput
-	ID                   int64  `json:"id"`
-	BlockingMRID         int64  `json:"blocking_merge_request_id"`
-	BlockingMRIID        int64  `json:"blocking_merge_request_iid"`
-	BlockingMRTitle      string `json:"blocking_merge_request_title"`
-	BlockingMRState      string `json:"blocking_merge_request_state"`
-	BlockingMRProjectID  int64  `json:"blocking_merge_request_project_id"`
-	BlockingSourceBranch string `json:"blocking_source_branch"`
-	BlockingTargetBranch string `json:"blocking_target_branch"`
-	ProjectID            int64  `json:"project_id"`
+	ID                   int64                       `json:"id"`
+	BlockingMergeRequest *BlockingMergeRequestOutput `json:"blocking_merge_request,omitempty"`
+	ProjectID            int64                       `json:"project_id"`
 }
 
 // DependenciesOutput holds a list of merge request dependencies.
@@ -1940,18 +1910,11 @@ type DependenciesOutput struct {
 
 // dependencyToOutput converts the GitLab API response to the tool output format.
 func dependencyToOutput(d *gl.MergeRequestDependency) DependencyOutput {
-	out := DependencyOutput{
-		ID:        d.ID,
-		ProjectID: d.ProjectID,
+	return DependencyOutput{
+		ID:                   d.ID,
+		ProjectID:            d.ProjectID,
+		BlockingMergeRequest: blockingMergeRequestOutput(d.BlockingMergeRequest),
 	}
-	out.BlockingMRID = d.BlockingMergeRequest.ID
-	out.BlockingMRIID = d.BlockingMergeRequest.Iid
-	out.BlockingMRTitle = d.BlockingMergeRequest.Title
-	out.BlockingMRState = d.BlockingMergeRequest.State
-	out.BlockingMRProjectID = d.BlockingMergeRequest.ProjectID
-	out.BlockingSourceBranch = d.BlockingMergeRequest.SourceBranch
-	out.BlockingTargetBranch = d.BlockingMergeRequest.TargetBranch
-	return out
 }
 
 // CreateDependency creates a new dependency (blocker) on a merge request.
