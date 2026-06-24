@@ -14,27 +14,116 @@ import (
 
 // ListInput defines parameters for listing project members.
 type ListInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Query     string               `json:"query,omitempty" jsonschema:"Filter members by name or username"`
+	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Query        string               `json:"query,omitempty" jsonschema:"Filter members by name or username"`
+	UserIDs      []int                `json:"user_ids,omitempty" jsonschema:"Filter the results to only the listed user IDs"`
+	ShowSeatInfo bool                 `json:"show_seat_info,omitempty" jsonschema:"Include seat usage information (is_using_seat) for each member"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name, username, access_level)"`
+	Sort         string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a project or group member.
 type Output struct {
 	toolutil.HintableOutput
-	ID                     int64  `json:"id"`
-	Username               string `json:"username"`
-	Name                   string `json:"name"`
-	State                  string `json:"state"`
-	AvatarURL              string `json:"avatar_url,omitempty"`
-	AccessLevel            int    `json:"access_level"`
-	AccessLevelDescription string `json:"access_level_description"`
-	WebURL                 string `json:"web_url"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	ExpiresAt              string `json:"expires_at,omitempty"`
-	Email                  string `json:"email,omitempty"`
-	MemberRoleName         string `json:"member_role_name,omitempty"`
-	IsUsingSeat            bool   `json:"is_using_seat,omitempty"`
+	ID          int64             `json:"id"`
+	Username    string            `json:"username"`
+	Name        string            `json:"name"`
+	State       string            `json:"state"`
+	AvatarURL   string            `json:"avatar_url,omitempty"`
+	AccessLevel int               `json:"access_level"`
+	WebURL      string            `json:"web_url"`
+	CreatedAt   string            `json:"created_at,omitempty"`
+	CreatedBy   *CreatedByOutput  `json:"created_by,omitempty"`
+	ExpiresAt   string            `json:"expires_at,omitempty"`
+	Email       string            `json:"email,omitempty"`
+	MemberRole  *MemberRoleOutput `json:"member_role,omitempty"`
+	IsUsingSeat bool              `json:"is_using_seat,omitempty"`
+}
+
+// CreatedByOutput mirrors [gl.MemberCreatedBy], the user who created the
+// membership record (1:1 SDK fidelity).
+type CreatedByOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+}
+
+// MemberRoleOutput mirrors [gl.MemberRole], the custom member role attached
+// to a membership (Premium/Ultimate). All permission flags are surfaced for
+// 1:1 SDK fidelity.
+type MemberRoleOutput struct {
+	ID                         int64  `json:"id"`
+	Name                       string `json:"name"`
+	Description                string `json:"description,omitempty"`
+	GroupID                    int64  `json:"group_id"`
+	BaseAccessLevel            int    `json:"base_access_level"`
+	AdminCICDVariables         bool   `json:"admin_cicd_variables,omitempty"`
+	AdminComplianceFramework   bool   `json:"admin_compliance_framework,omitempty"`
+	AdminGroupMembers          bool   `json:"admin_group_member,omitempty"`
+	AdminMergeRequests         bool   `json:"admin_merge_request,omitempty"`
+	AdminPushRules             bool   `json:"admin_push_rules,omitempty"`
+	AdminTerraformState        bool   `json:"admin_terraform_state,omitempty"`
+	AdminVulnerability         bool   `json:"admin_vulnerability,omitempty"`
+	AdminWebHook               bool   `json:"admin_web_hook,omitempty"`
+	ArchiveProject             bool   `json:"archive_project,omitempty"`
+	ManageDeployTokens         bool   `json:"manage_deploy_tokens,omitempty"`
+	ManageGroupAccessTokens    bool   `json:"manage_group_access_tokens,omitempty"`
+	ManageMergeRequestSettings bool   `json:"manage_merge_request_settings,omitempty"`
+	ManageProjectAccessTokens  bool   `json:"manage_project_access_tokens,omitempty"`
+	ManageSecurityPolicyLink   bool   `json:"manage_security_policy_link,omitempty"`
+	ReadCode                   bool   `json:"read_code,omitempty"`
+	ReadRunners                bool   `json:"read_runners,omitempty"`
+	ReadDependency             bool   `json:"read_dependency,omitempty"`
+	ReadVulnerability          bool   `json:"read_vulnerability,omitempty"`
+	RemoveGroup                bool   `json:"remove_group,omitempty"`
+	RemoveProject              bool   `json:"remove_project,omitempty"`
+}
+
+// createdByOutput converts [gl.MemberCreatedBy] into the local mirror, or nil.
+func createdByOutput(c *gl.MemberCreatedBy) *CreatedByOutput {
+	if c == nil {
+		return nil
+	}
+	return &CreatedByOutput{
+		ID: c.ID, Username: c.Username, Name: c.Name,
+		State: c.State, AvatarURL: c.AvatarURL, WebURL: c.WebURL,
+	}
+}
+
+// memberRoleOutput converts [gl.MemberRole] into the local mirror, or nil.
+func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
+	if r == nil {
+		return nil
+	}
+	return &MemberRoleOutput{
+		ID: r.ID, Name: r.Name, Description: r.Description, GroupID: r.GroupID,
+		BaseAccessLevel:            int(r.BaseAccessLevel),
+		AdminCICDVariables:         r.AdminCICDVariables,
+		AdminComplianceFramework:   r.AdminComplianceFramework,
+		AdminGroupMembers:          r.AdminGroupMembers,
+		AdminMergeRequests:         r.AdminMergeRequests,
+		AdminPushRules:             r.AdminPushRules,
+		AdminTerraformState:        r.AdminTerraformState,
+		AdminVulnerability:         r.AdminVulnerability,
+		AdminWebHook:               r.AdminWebHook,
+		ArchiveProject:             r.ArchiveProject,
+		ManageDeployTokens:         r.ManageDeployTokens,
+		ManageGroupAccessTokens:    r.ManageGroupAccessTokens,
+		ManageMergeRequestSettings: r.ManageMergeRequestSettings,
+		ManageProjectAccessTokens:  r.ManageProjectAccessTokens,
+		ManageSecurityPolicyLink:   r.ManageSecurityPolicyLink,
+		ReadCode:                   r.ReadCode,
+		ReadRunners:                r.ReadRunners,
+		ReadDependency:             r.ReadDependency,
+		ReadVulnerability:          r.ReadVulnerability,
+		RemoveGroup:                r.RemoveGroup,
+		RemoveProject:              r.RemoveProject,
+	}
 }
 
 // ListOutput holds a paginated list of members.
@@ -51,29 +140,29 @@ func AccessLevelDescription(level gl.AccessLevelValue) string {
 	return toolutil.AccessLevelDescription(level)
 }
 
-// ToOutput converts a GitLab API [gl.ProjectMember] to the MCP
-// tool output format, including a human-readable access level description
-// derived from the numeric access level value.
+// ToOutput converts a GitLab API [gl.ProjectMember] to the MCP tool output
+// format, mirroring the SDK fields 1:1 including the full created_by and
+// member_role sub-objects. The numeric access level is surfaced directly;
+// callers can map it via [toolutil.AccessLevelDescription] when a label is
+// needed.
 func ToOutput(m *gl.ProjectMember) Output {
 	out := Output{
-		ID:                     m.ID,
-		Username:               m.Username,
-		Name:                   m.Name,
-		State:                  m.State,
-		AvatarURL:              m.AvatarURL,
-		AccessLevel:            int(m.AccessLevel),
-		AccessLevelDescription: toolutil.AccessLevelDescription(m.AccessLevel),
-		WebURL:                 m.WebURL,
-		Email:                  m.Email,
+		ID:          m.ID,
+		Username:    m.Username,
+		Name:        m.Name,
+		State:       m.State,
+		AvatarURL:   m.AvatarURL,
+		AccessLevel: int(m.AccessLevel),
+		WebURL:      m.WebURL,
+		Email:       m.Email,
+		CreatedBy:   createdByOutput(m.CreatedBy),
+		MemberRole:  memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
 	}
 	if m.ExpiresAt != nil {
 		out.ExpiresAt = m.ExpiresAt.String()
-	}
-	if m.MemberRole != nil {
-		out.MemberRoleName = m.MemberRole.Name
 	}
 	out.IsUsingSeat = m.IsUsingSeat
 	return out
@@ -92,14 +181,25 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListProjectMembersOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Query != "" {
 		opts.Query = new(input.Query)
+	}
+	if input.ShowSeatInfo {
+		opts.ShowSeatInfo = new(true)
+	}
+	if len(input.UserIDs) > 0 {
+		ids := make([]int64, len(input.UserIDs))
+		for i, id := range input.UserIDs {
+			ids[i] = int64(id)
+		}
+		opts.UserIDs = &ids
 	}
 
 	members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(string(input.ProjectID), opts, gl.WithContext(ctx))

@@ -59,14 +59,8 @@ func TestProjectMembersList_Success(t *testing.T) {
 	if out.Members[0].AccessLevel != 30 {
 		t.Errorf("out.Members[0].AccessLevel = %d, want 30", out.Members[0].AccessLevel)
 	}
-	if out.Members[0].AccessLevelDescription != "Developer" {
-		t.Errorf("out.Members[0].AccessLevelDescription = %q, want %q", out.Members[0].AccessLevelDescription, "Developer")
-	}
 	if out.Members[1].AccessLevel != 40 {
 		t.Errorf("out.Members[1].AccessLevel = %d, want 40", out.Members[1].AccessLevel)
-	}
-	if out.Members[1].AccessLevelDescription != "Maintainer" {
-		t.Errorf("out.Members[1].AccessLevelDescription = %q, want %q", out.Members[1].AccessLevelDescription, "Maintainer")
 	}
 	if out.Pagination.TotalItems != 2 {
 		t.Errorf("out.Pagination.TotalItems = %d, want 2", out.Pagination.TotalItems)
@@ -151,19 +145,22 @@ func TestProjectMembersList_CancelledContext(t *testing.T) {
 }
 
 // TestAccessLevelDescription_Mapping uses table-driven subtests to verify
-// that accessLevelDescription correctly maps GitLab numeric access levels
-// (10=Guest through 50=Owner) to their human-readable labels.
+// that the numeric access_level returned by List is preserved 1:1 and that
+// the access-level Markdown rendering derives the human-readable label
+// (10=Guest through 50=Owner) from that numeric value via the shared
+// toolutil helper.
 func TestAccessLevelDescription_Mapping(t *testing.T) {
 	tests := []struct {
-		name string
-		json string
-		want string
+		name        string
+		json        string
+		accessLevel int
+		want        string
 	}{
-		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"u"}]`, "Guest"},
-		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"u"}]`, "Reporter"},
-		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`, "Developer"},
-		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"u"}]`, "Maintainer"},
-		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"u"}]`, "Owner"},
+		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"u"}]`, 10, "Guest"},
+		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"u"}]`, 20, "Reporter"},
+		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`, 30, "Developer"},
+		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"u"}]`, 40, "Maintainer"},
+		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"u"}]`, 50, "Owner"},
 	}
 
 	for _, tc := range tests {
@@ -176,8 +173,12 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtMembersListErr, err)
 			}
-			if out.Members[0].AccessLevelDescription != tc.want {
-				t.Errorf("AccessLevelDescription = %q, want %q", out.Members[0].AccessLevelDescription, tc.want)
+			if out.Members[0].AccessLevel != tc.accessLevel {
+				t.Errorf("AccessLevel = %d, want %d", out.Members[0].AccessLevel, tc.accessLevel)
+			}
+			md := FormatMarkdown(out.Members[0])
+			if !strings.Contains(md, tc.want) {
+				t.Errorf("FormatMarkdown access level label = %q, want it to contain %q", md, tc.want)
 			}
 		})
 	}
@@ -220,15 +221,64 @@ func TestProjectMembersList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestMembersList_RoleAndSeatFields verifies that projectMembersList maps
-// MemberRoleName and IsUsingSeat from the API response.
+// TestProjectMembersList_AllListOptions verifies that projectMembersList
+// forwards order_by, sort, show_seat_info, user_ids[], and keyset pagination
+// (pagination + page_token) query parameters to the GitLab API.
+func TestProjectMembersList_AllListOptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathProjectMembers {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		checks := map[string]string{
+			"order_by":       "access_level",
+			"sort":           "desc",
+			"show_seat_info": "true",
+			"pagination":     "keyset",
+			"page_token":     "tok42",
+		}
+		for key, want := range checks {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		if got := q["user_ids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "20" {
+			t.Errorf("query user_ids[] = %v, want [10 20]", got)
+		}
+		testutil.RespondJSON(
+			w, http.StatusOK,
+			`[{"id":10,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`,
+		)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		OrderBy:               "access_level",
+		Sort:                  "desc",
+		ShowSeatInfo:          true,
+		UserIDs:               []int{10, 20},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtMembersListErr, err)
+	}
+	if len(out.Members) != 1 {
+		t.Fatalf("len(out.Members) = %d, want 1", len(out.Members))
+	}
+}
+
+// TestMembersList_RoleAndSeatFields verifies that projectMembersList maps the
+// full member_role and created_by sub-objects and IsUsingSeat 1:1 from the API
+// response.
 func TestMembersList_RoleAndSeatFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectMembers {
 			testutil.RespondJSON(w, http.StatusOK, `[{
 				"id":1,"username":"jdoe","name":"John Doe","state":"active",
 				"access_level":40,"web_url":"https://gitlab.example.com/jdoe",
-				"member_role":{"name":"Security Lead"},
+				"member_role":{"id":7,"name":"Security Lead","base_access_level":40,"read_vulnerability":true},
+				"created_by":{"id":99,"username":"admin","name":"Admin User","state":"active"},
 				"is_using_seat":true
 			}]`)
 			return
@@ -243,8 +293,26 @@ func TestMembersList_RoleAndSeatFields(t *testing.T) {
 	if len(out.Members) != 1 {
 		t.Fatalf("len(out.Members) = %d, want 1", len(out.Members))
 	}
-	if out.Members[0].MemberRoleName != "Security Lead" {
-		t.Errorf("out.Members[0].MemberRoleName = %q, want %q", out.Members[0].MemberRoleName, "Security Lead")
+	if out.Members[0].MemberRole == nil {
+		t.Fatal("out.Members[0].MemberRole = nil, want non-nil")
+	}
+	if out.Members[0].MemberRole.Name != "Security Lead" {
+		t.Errorf("out.Members[0].MemberRole.Name = %q, want %q", out.Members[0].MemberRole.Name, "Security Lead")
+	}
+	if out.Members[0].MemberRole.ID != 7 {
+		t.Errorf("out.Members[0].MemberRole.ID = %d, want 7", out.Members[0].MemberRole.ID)
+	}
+	if out.Members[0].MemberRole.BaseAccessLevel != 40 {
+		t.Errorf("out.Members[0].MemberRole.BaseAccessLevel = %d, want 40", out.Members[0].MemberRole.BaseAccessLevel)
+	}
+	if !out.Members[0].MemberRole.ReadVulnerability {
+		t.Error("out.Members[0].MemberRole.ReadVulnerability = false, want true")
+	}
+	if out.Members[0].CreatedBy == nil {
+		t.Fatal("out.Members[0].CreatedBy = nil, want non-nil")
+	}
+	if out.Members[0].CreatedBy.Username != "admin" {
+		t.Errorf("out.Members[0].CreatedBy.Username = %q, want %q", out.Members[0].CreatedBy.Username, "admin")
 	}
 	if !out.Members[0].IsUsingSeat {
 		t.Error("out.Members[0].IsUsingSeat = false, want true")
@@ -695,8 +763,8 @@ func TestMemberAdd_WithMemberRoleID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add() unexpected error: %v", err)
 	}
-	if out.MemberRoleName != "Custom Role" {
-		t.Errorf("out.MemberRoleName = %q, want %q", out.MemberRoleName, "Custom Role")
+	if out.MemberRole == nil || out.MemberRole.Name != "Custom Role" {
+		t.Errorf("out.MemberRole = %+v, want Name %q", out.MemberRole, "Custom Role")
 	}
 }
 
@@ -760,8 +828,8 @@ func TestMemberEdit_WithMemberRoleID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Edit() unexpected error: %v", err)
 	}
-	if out.MemberRoleName != "Lead Dev" {
-		t.Errorf("out.MemberRoleName = %q, want %q", out.MemberRoleName, "Lead Dev")
+	if out.MemberRole == nil || out.MemberRole.Name != "Lead Dev" {
+		t.Errorf("out.MemberRole = %+v, want Name %q", out.MemberRole, "Lead Dev")
 	}
 }
 
@@ -833,17 +901,17 @@ func TestToOutput_WithExpiresAt(t *testing.T) {
 // TestFormatMarkdown_AllOptionalFields covers FormatMarkdown with table-driven subtests for all optional fields.
 func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 	out := Output{
-		ID:                     10,
-		Username:               "alice",
-		Name:                   "Alice Smith",
-		State:                  "active",
-		AccessLevel:            40,
-		AccessLevelDescription: "Maintainer",
-		WebURL:                 "https://gitlab.example.com/alice",
-		Email:                  "alice@example.com",
-		MemberRoleName:         "Security Lead",
-		ExpiresAt:              "2026-06-30",
-		CreatedAt:              "2026-01-15T10:00:00Z",
+		ID:          10,
+		Username:    "alice",
+		Name:        "Alice Smith",
+		State:       "active",
+		AccessLevel: 40,
+		WebURL:      "https://gitlab.example.com/alice",
+		Email:       "alice@example.com",
+		MemberRole:  &MemberRoleOutput{ID: 3, Name: "Security Lead"},
+		CreatedBy:   &CreatedByOutput{ID: 99, Username: "admin", Name: "Admin User"},
+		ExpiresAt:   "2026-06-30",
+		CreatedAt:   "2026-01-15T10:00:00Z",
 	}
 
 	md := FormatMarkdown(out)
@@ -860,7 +928,8 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 		{"access_level", "- **Access Level**: Maintainer (40)"},
 		{"web_url", "- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)"},
 		{"email", "- **Email**: alice@example.com"},
-		{"member_role", "- **Member Role**: Security Lead"},
+		{"member_role", "- **Member Role**: Security Lead (3)"},
+		{"created_by", "- **Created By**: Admin User (@admin)"},
 		{"expires_at", "- **Expires At**: 30 Jun 2026"},
 		{"created_at", "- **Created**: 15 Jan 2026 10:00 UTC"},
 	}
@@ -876,13 +945,12 @@ func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 // TestFormatMarkdown_NoOptionalFields verifies FormatMarkdown when no optional fields.
 func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 	out := Output{
-		ID:                     10,
-		Username:               "alice",
-		Name:                   "Alice",
-		State:                  "active",
-		AccessLevel:            30,
-		AccessLevelDescription: "Developer",
-		WebURL:                 "https://gitlab.example.com/alice",
+		ID:          10,
+		Username:    "alice",
+		Name:        "Alice",
+		State:       "active",
+		AccessLevel: 30,
+		WebURL:      "https://gitlab.example.com/alice",
 	}
 
 	md := FormatMarkdown(out)
@@ -892,6 +960,9 @@ func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 	}
 	if strings.Contains(md, "**Member Role**") {
 		t.Error("FormatMarkdown should not contain Member Role when empty")
+	}
+	if strings.Contains(md, "**Created By**") {
+		t.Error("FormatMarkdown should not contain Created By when empty")
 	}
 	if strings.Contains(md, "**Expires At**") {
 		t.Error("FormatMarkdown should not contain Expires At when empty")
@@ -917,8 +988,8 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
-			{Username: "alice", Name: "Alice", AccessLevelDescription: "Developer", State: "active"},
-			{Username: "bob", Name: "Bob", AccessLevelDescription: "Maintainer", State: "active"},
+			{Username: "alice", Name: "Alice", AccessLevel: 30, State: "active"},
+			{Username: "bob", Name: "Bob", AccessLevel: 40, State: "active"},
 		},
 	}
 	got := FormatListMarkdownString(lo)
@@ -939,7 +1010,7 @@ func TestFormatListMarkdownString_ClickableUsernameLinks(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
 			{
-				Username: "alice", Name: "Alice", AccessLevelDescription: "Developer",
+				Username: "alice", Name: "Alice", AccessLevel: 30,
 				State: "active", WebURL: "https://gitlab.example.com/alice",
 			},
 		},
@@ -955,7 +1026,7 @@ func TestFormatListMarkdownString_ClickableUsernameLinks(t *testing.T) {
 func TestFormatListMarkdownString_NoLinkWithoutWebURL(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
-			{Username: "bob", Name: "Bob", AccessLevelDescription: "Maintainer", State: "active"},
+			{Username: "bob", Name: "Bob", AccessLevel: 40, State: "active"},
 		},
 	}
 	got := FormatListMarkdownString(lo)
@@ -972,8 +1043,8 @@ func TestFormatListMarkdownString_NoLinkWithoutWebURL(t *testing.T) {
 func TestFormatMarkdown_ClickableURL(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 10, Username: "alice", Name: "Alice", State: "active",
-		AccessLevel: 40, AccessLevelDescription: "Maintainer",
-		WebURL: "https://gitlab.example.com/alice",
+		AccessLevel: 40,
+		WebURL:      "https://gitlab.example.com/alice",
 	})
 	if !strings.Contains(md, "[https://gitlab.example.com/alice](https://gitlab.example.com/alice)") {
 		t.Errorf("expected clickable URL in detail, got:\n%s", md)
@@ -985,7 +1056,7 @@ func TestFormatMarkdown_ClickableURL(t *testing.T) {
 func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
 	md := FormatMarkdown(Output{
 		ID: 10, Username: "alice", Name: "Alice", State: "active",
-		AccessLevel: 30, AccessLevelDescription: "Developer",
+		AccessLevel: 30,
 	})
 	if strings.Contains(md, "**URL**") {
 		t.Errorf("should not contain URL when empty, got:\n%s", md)
@@ -1000,7 +1071,7 @@ func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
 func TestFormatListMarkdown_ReturnsCallToolResult(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
-			{Username: "alice", Name: "Alice", AccessLevelDescription: "Developer", State: "active"},
+			{Username: "alice", Name: "Alice", AccessLevel: 30, State: "active"},
 		},
 	}
 	result := FormatListMarkdown(lo)

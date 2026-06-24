@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -27,7 +28,7 @@ func FormatListMarkdownString(v ListOutput) string {
 			&b, "| %s | %s | %s | %s |\n",
 			username,
 			toolutil.EscapeMdTableCell(m.Name),
-			toolutil.EscapeMdTableCell(m.AccessLevelDescription),
+			toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))),
 			m.State,
 		)
 	}
@@ -54,15 +55,18 @@ func FormatMarkdown(v Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdName, v.Name)
 	fmt.Fprintf(&b, toolutil.FmtMdUsername, v.Username)
 	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
-	fmt.Fprintf(&b, "- **Access Level**: %s (%d)\n", v.AccessLevelDescription, v.AccessLevel)
+	fmt.Fprintf(&b, "- **Access Level**: %s (%d)\n", toolutil.AccessLevelDescription(gl.AccessLevelValue(v.AccessLevel)), v.AccessLevel)
 	if v.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, v.WebURL)
 	}
 	if v.Email != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdEmail, v.Email)
 	}
-	if v.MemberRoleName != "" {
-		fmt.Fprintf(&b, "- **Member Role**: %s\n", v.MemberRoleName)
+	if v.MemberRole != nil {
+		fmt.Fprintf(&b, "- **Member Role**: %s (%d)\n", v.MemberRole.Name, v.MemberRole.ID)
+	}
+	if v.CreatedBy != nil {
+		fmt.Fprintf(&b, "- **Created By**: %s (@%s)\n", v.CreatedBy.Name, v.CreatedBy.Username)
 	}
 	if v.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(v.ExpiresAt))
