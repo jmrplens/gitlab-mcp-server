@@ -1142,3 +1142,181 @@ func TestUpdate_WithPositionValidation(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.
+
+// ---------------------------------------------------------------------------
+// Full position object (1:1 audit) tests
+// ---------------------------------------------------------------------------.
+
+// TestToDiffPositionOptions_FullImageAndRange verifies that the expanded
+// DiffPosition mirrors every PositionOptions field, including image coordinates
+// and a multi-line line_range.
+func TestToDiffPositionOptions_FullImageAndRange(t *testing.T) {
+	pos := &DiffPosition{
+		BaseSHA:      "base",
+		StartSHA:     "start",
+		HeadSHA:      "head",
+		NewPath:      "img.png",
+		OldPath:      "img.png",
+		PositionType: "image",
+		Width:        800,
+		Height:       600,
+		X:            12.5,
+		Y:            34.5,
+		LineRange: &DiffLineRange{
+			Start: &DiffLinePosition{LineCode: "lc1", Type: "new", OldLine: 0, NewLine: 10},
+			End:   &DiffLinePosition{LineCode: "lc2", Type: "new", OldLine: 0, NewLine: 12},
+		},
+	}
+
+	opts := toDiffPositionOptions(pos)
+
+	if *opts.PositionType != "image" {
+		t.Errorf("expected PositionType=image, got %q", *opts.PositionType)
+	}
+	if opts.Width == nil || *opts.Width != 800 {
+		t.Errorf("expected Width=800, got %v", opts.Width)
+	}
+	if opts.Height == nil || *opts.Height != 600 {
+		t.Errorf("expected Height=600, got %v", opts.Height)
+	}
+	if opts.X == nil || *opts.X != 12.5 {
+		t.Errorf("expected X=12.5, got %v", opts.X)
+	}
+	if opts.Y == nil || *opts.Y != 34.5 {
+		t.Errorf("expected Y=34.5, got %v", opts.Y)
+	}
+	if opts.LineRange == nil || opts.LineRange.Start == nil || opts.LineRange.End == nil {
+		t.Fatal("expected line_range start and end")
+	}
+	if *opts.LineRange.Start.LineCode != "lc1" || *opts.LineRange.Start.NewLine != 10 {
+		t.Errorf("unexpected line_range start: %+v", opts.LineRange.Start)
+	}
+	if *opts.LineRange.End.Type != "new" || *opts.LineRange.End.NewLine != 12 {
+		t.Errorf("unexpected line_range end: %+v", opts.LineRange.End)
+	}
+}
+
+// TestToLinePositionOptions_Nil verifies the line-position converter handles nil.
+func TestToLinePositionOptions_Nil(t *testing.T) {
+	if toLinePositionOptions(nil) != nil {
+		t.Error("expected nil for nil input")
+	}
+	// A line position with only OldLine set should omit empty fields.
+	opt := toLinePositionOptions(&DiffLinePosition{OldLine: 7})
+	if opt.LineCode != nil || opt.Type != nil || opt.NewLine != nil {
+		t.Error("expected empty fields to be omitted")
+	}
+	if opt.OldLine == nil || *opt.OldLine != 7 {
+		t.Errorf("expected OldLine=7, got %v", opt.OldLine)
+	}
+}
+
+// TestToOutput_LineCodeAndLineRange verifies ToOutput surfaces line_code and the
+// full NotePosition line_range.
+func TestToOutput_LineCodeAndLineRange(t *testing.T) {
+	dn := &gl.DraftNote{
+		ID:             40,
+		AuthorID:       1,
+		MergeRequestID: 99,
+		Note:           "inline",
+		LineCode:       "abc_1_2",
+		Position: &gl.NotePosition{
+			BaseSHA:      "aaa",
+			StartSHA:     "bbb",
+			HeadSHA:      "ccc",
+			PositionType: "text",
+			NewPath:      "main.go",
+			NewLine:      42,
+			LineRange: &gl.LineRange{
+				StartRange: &gl.LinePosition{LineCode: "s", Type: "new", NewLine: 40},
+				EndRange:   &gl.LinePosition{LineCode: "e", Type: "new", NewLine: 42},
+			},
+		},
+	}
+
+	out := ToOutput(dn)
+	if out.LineCode != "abc_1_2" {
+		t.Errorf("expected LineCode=abc_1_2, got %q", out.LineCode)
+	}
+	if out.Position == nil || out.Position.PositionType != "text" {
+		t.Fatalf("expected position with type text, got %+v", out.Position)
+	}
+	if out.Position.LineRange == nil || out.Position.LineRange.Start == nil || out.Position.LineRange.End == nil {
+		t.Fatal("expected line_range start and end in output")
+	}
+	if out.Position.LineRange.Start.NewLine != 40 || out.Position.LineRange.End.NewLine != 42 {
+		t.Errorf("unexpected output line_range: %+v", out.Position.LineRange)
+	}
+}
+
+// TestToLinePositionOutput_Nil verifies the output line-position converter
+// returns nil when the source range boundary is absent.
+func TestToLinePositionOutput_Nil(t *testing.T) {
+	if toLinePositionOutput(nil) != nil {
+		t.Error("expected nil for nil input")
+	}
+}
+
+// TestDraftNoteList_Keyset verifies keyset pagination parameters are forwarded.
+func TestDraftNoteList_Keyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok99" {
+			t.Errorf("expected page_token=tok99, got %q", q.Get("page_token"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		MRIID:                 1,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestFormatOutputMarkdown_PositionAndLineCode verifies the single-note
+// Markdown renders the line code and inline diff position.
+func TestFormatOutputMarkdown_PositionAndLineCode(t *testing.T) {
+	out := Output{
+		ID:             11,
+		AuthorID:       1,
+		MergeRequestID: 99,
+		Note:           "inline note",
+		LineCode:       "code_3_4",
+		Position: &PositionOutput{
+			BaseSHA: "a", StartSHA: "b", HeadSHA: "c",
+			NewPath: "main.go", NewLine: 7,
+		},
+	}
+	md := FormatOutputMarkdown(out)
+	for _, want := range []string{
+		"**Line Code**: `code_3_4`",
+		"**Position**: `main.go` line 7",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatOutputMarkdown_PositionOldPathFallback verifies the position
+// renderer falls back to old_path/old_line when new values are absent.
+func TestFormatOutputMarkdown_PositionOldPathFallback(t *testing.T) {
+	out := Output{
+		ID: 12, AuthorID: 1, MergeRequestID: 99, Note: "removed line",
+		Position: &PositionOutput{
+			BaseSHA: "a", StartSHA: "b", HeadSHA: "c",
+			OldPath: "old.go", OldLine: 3,
+		},
+	}
+	md := FormatOutputMarkdown(out)
+	if !strings.Contains(md, "**Position**: `old.go` line 3") {
+		t.Errorf("expected old_path fallback in markdown:\n%s", md)
+	}
+}
