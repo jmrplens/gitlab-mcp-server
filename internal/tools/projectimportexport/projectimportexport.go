@@ -21,12 +21,28 @@ import (
 // Schedule Export
 // ---------------------------------------------------------------------------.
 
-// ScheduleExportInput is the input for scheduling a project export.
+// ScheduleExportUploadInput mirrors [gl.ScheduleExportUploadOptions]: the
+// nested upload destination for a scheduled export. When set, GitLab uploads
+// the generated archive to the given URL instead of (or in addition to)
+// keeping it for download.
+type ScheduleExportUploadInput struct {
+	URL        string `json:"url,omitempty" jsonschema:"URL to upload the exported project archive to after export completes"`
+	HTTPMethod string `json:"http_method,omitempty" jsonschema:"HTTP method to use for the upload (PUT or POST; default PUT)"`
+}
+
+// ScheduleExportInput is the input for scheduling a project export. Fields
+// mirror [gl.ScheduleExportOptions] 1:1.
 type ScheduleExportInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Description string               `json:"description,omitempty" jsonschema:"Override the project description in the export"`
-	UploadURL   string               `json:"upload_url,omitempty" jsonschema:"URL to upload the exported project to after export completes"`
-	UploadHTTP  string               `json:"upload_http_method,omitempty" jsonschema:"HTTP method to use for the upload (PUT or POST)"`
+	ProjectID   toolutil.StringOrInt       `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Description string                     `json:"description,omitempty" jsonschema:"Override the project description in the export"`
+	Upload      *ScheduleExportUploadInput `json:"upload,omitempty" jsonschema:"Optional upload destination for the generated export archive (mirrors the GitLab upload[] options)"`
+
+	// Deprecated: use Upload.URL. Retained as a flat alias for backward
+	// compatibility; ignored when Upload is set.
+	UploadURL string `json:"upload_url,omitempty" jsonschema:"Deprecated: use upload.url. URL to upload the exported project to after export completes"`
+	// Deprecated: use Upload.HTTPMethod. Retained as a flat alias for backward
+	// compatibility; ignored when Upload is set.
+	UploadHTTP string `json:"upload_http_method,omitempty" jsonschema:"Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)"`
 }
 
 // ScheduleExportOutput is the output for scheduling a project export.
@@ -41,12 +57,21 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.UploadURL != "" {
+
+	// Prefer the structured nested upload options; fall back to the deprecated
+	// flat fields for backward compatibility.
+	uploadURL := input.UploadURL
+	uploadHTTP := input.UploadHTTP
+	if input.Upload != nil {
+		uploadURL = input.Upload.URL
+		uploadHTTP = input.Upload.HTTPMethod
+	}
+	if uploadURL != "" {
 		opts.Upload = gl.ScheduleExportUploadOptions{
-			URL: new(input.UploadURL),
+			URL: new(uploadURL),
 		}
-		if input.UploadHTTP != "" {
-			opts.Upload.HTTPMethod = new(input.UploadHTTP)
+		if uploadHTTP != "" {
+			opts.Upload.HTTPMethod = new(uploadHTTP)
 		}
 	}
 
@@ -146,14 +171,38 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 // Import From File
 // ---------------------------------------------------------------------------.
 
-// ImportFromFileInput is the input for importing a project from an archive file.
+// ImportOverrideParamsInput mirrors the project-create attributes that GitLab
+// accepts under the import-from-file `override_params` field. It maps to
+// [gl.CreateProjectOptions] (the type of [gl.ImportFileOptions.OverrideParams]).
+//
+// GitLab documents override_params as accepting the same attributes as the
+// create-project API; this struct surfaces the attributes that are meaningful
+// to override during an import. Only set fields are forwarded.
+type ImportOverrideParamsInput struct {
+	Description              string `json:"description,omitempty" jsonschema:"Override the imported project's description"`
+	Visibility               string `json:"visibility,omitempty" jsonschema:"Override visibility level (private, internal, public)"`
+	DefaultBranch            string `json:"default_branch,omitempty" jsonschema:"Override the default branch name"`
+	MergeMethod              string `json:"merge_method,omitempty" jsonschema:"Override merge method (merge, rebase_merge, ff)"`
+	RequestAccessEnabled     *bool  `json:"request_access_enabled,omitempty" jsonschema:"Override whether users can request access"`
+	LFSEnabled               *bool  `json:"lfs_enabled,omitempty" jsonschema:"Override Git LFS enablement"`
+	IssuesAccessLevel        string `json:"issues_access_level,omitempty" jsonschema:"Override issues access level (disabled, private, enabled)"`
+	MergeRequestsAccessLevel string `json:"merge_requests_access_level,omitempty" jsonschema:"Override merge requests access level (disabled, private, enabled)"`
+	WikiAccessLevel          string `json:"wiki_access_level,omitempty" jsonschema:"Override wiki access level (disabled, private, enabled)"`
+	BuildsAccessLevel        string `json:"builds_access_level,omitempty" jsonschema:"Override CI/CD builds access level (disabled, private, enabled)"`
+	SnippetsAccessLevel      string `json:"snippets_access_level,omitempty" jsonschema:"Override snippets access level (disabled, private, enabled)"`
+}
+
+// ImportFromFileInput is the input for importing a project from an archive
+// file. Fields mirror [gl.ImportFileOptions] 1:1 (override_params is exposed as
+// a curated nested struct over [gl.CreateProjectOptions]).
 type ImportFromFileInput struct {
-	FilePath      string `json:"file_path,omitempty" jsonschema:"Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided."`
-	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded export archive content. Only one of file_path or content_base64 should be provided."`
-	Namespace     string `json:"namespace,omitempty" jsonschema:"Namespace to import the project into (user or group path)"`
-	Name          string `json:"name,omitempty" jsonschema:"Name for the imported project"`
-	Path          string `json:"path,omitempty" jsonschema:"URL path for the imported project"`
-	Overwrite     *bool  `json:"overwrite,omitempty" jsonschema:"If true, overwrite an existing project with the same path"`
+	FilePath       string                     `json:"file_path,omitempty" jsonschema:"Canonical path to a local export archive (.tar.gz) under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS. Symlinks are resolved and escapes are rejected. Only one of file_path or content_base64 should be provided."`
+	ContentBase64  string                     `json:"content_base64,omitempty" jsonschema:"Base64-encoded export archive content. Only one of file_path or content_base64 should be provided."`
+	Namespace      string                     `json:"namespace,omitempty" jsonschema:"Namespace to import the project into (user or group path)"`
+	Name           string                     `json:"name,omitempty" jsonschema:"Name for the imported project"`
+	Path           string                     `json:"path,omitempty" jsonschema:"URL path for the imported project"`
+	Overwrite      *bool                      `json:"overwrite,omitempty" jsonschema:"If true, overwrite an existing project with the same path"`
+	OverrideParams *ImportOverrideParamsInput `json:"override_params,omitempty" jsonschema:"Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])"`
 }
 
 // ImportStatusOutput is the output for import operations.
@@ -217,6 +266,9 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 	if input.Overwrite != nil {
 		opts.Overwrite = input.Overwrite
 	}
+	if op := buildOverrideParams(input.OverrideParams); op != nil {
+		opts.OverrideParams = op
+	}
 
 	status, _, err := client.GL().ProjectImportExport.ImportFromFile(archiveReader, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -248,6 +300,73 @@ func GetImportStatus(ctx context.Context, client *gitlabclient.Client, input Get
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.
+
+// buildOverrideParams maps the curated [ImportOverrideParamsInput] onto the
+// SDK's [gl.CreateProjectOptions] used by [gl.ImportFileOptions.OverrideParams].
+// It returns nil when no override field is set so the API receives no
+// override_params payload.
+func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions {
+	if in == nil {
+		return nil
+	}
+	opts := &gl.CreateProjectOptions{}
+	set := false
+	if in.Description != "" {
+		opts.Description = new(in.Description)
+		set = true
+	}
+	if in.Visibility != "" {
+		v := gl.VisibilityValue(in.Visibility)
+		opts.Visibility = &v
+		set = true
+	}
+	if in.DefaultBranch != "" {
+		opts.DefaultBranch = new(in.DefaultBranch)
+		set = true
+	}
+	if in.MergeMethod != "" {
+		m := gl.MergeMethodValue(in.MergeMethod)
+		opts.MergeMethod = &m
+		set = true
+	}
+	if in.RequestAccessEnabled != nil {
+		opts.RequestAccessEnabled = in.RequestAccessEnabled
+		set = true
+	}
+	if in.LFSEnabled != nil {
+		opts.LFSEnabled = in.LFSEnabled
+		set = true
+	}
+	if in.IssuesAccessLevel != "" {
+		v := gl.AccessControlValue(in.IssuesAccessLevel)
+		opts.IssuesAccessLevel = &v
+		set = true
+	}
+	if in.MergeRequestsAccessLevel != "" {
+		v := gl.AccessControlValue(in.MergeRequestsAccessLevel)
+		opts.MergeRequestsAccessLevel = &v
+		set = true
+	}
+	if in.WikiAccessLevel != "" {
+		v := gl.AccessControlValue(in.WikiAccessLevel)
+		opts.WikiAccessLevel = &v
+		set = true
+	}
+	if in.BuildsAccessLevel != "" {
+		v := gl.AccessControlValue(in.BuildsAccessLevel)
+		opts.BuildsAccessLevel = &v
+		set = true
+	}
+	if in.SnippetsAccessLevel != "" {
+		v := gl.AccessControlValue(in.SnippetsAccessLevel)
+		opts.SnippetsAccessLevel = &v
+		set = true
+	}
+	if !set {
+		return nil
+	}
+	return opts
+}
 
 // importStatusToOutput converts the GitLab API response to the tool output format.
 func importStatusToOutput(s *gl.ImportStatus) ImportStatusOutput {

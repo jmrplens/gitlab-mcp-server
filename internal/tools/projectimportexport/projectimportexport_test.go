@@ -696,6 +696,114 @@ func TestActionSpecs_ImportFileError(t *testing.T) {
 	}
 }
 
+// TestScheduleExport_NestedUpload verifies that the structured Upload input is
+// mapped onto the SDK upload options, including the HTTP method.
+func TestScheduleExport_NestedUpload(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID: "1",
+		Upload: &ScheduleExportUploadInput{
+			URL:        "https://example.com/upload",
+			HTTPMethod: "POST",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Message == "" {
+		t.Error("expected non-empty message")
+	}
+}
+
+// TestScheduleExport_NestedUploadNoMethod verifies the nested upload path works
+// when only the URL is supplied (HTTP method left empty).
+func TestScheduleExport_NestedUploadNoMethod(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID: "1",
+		Upload:    &ScheduleExportUploadInput{URL: "https://example.com/upload"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestImportFromFile_OverrideParams verifies that override_params are mapped
+// onto the SDK ImportFileOptions and forwarded in the multipart request body.
+func TestImportFromFile_OverrideParams(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
+			if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if got := r.FormValue("override_params[visibility]"); got != "private" {
+				t.Errorf("override_params[visibility] = %q, want private", got)
+			}
+			if got := r.FormValue("override_params[description]"); got != "overridden" {
+				t.Errorf("override_params[description] = %q, want overridden", got)
+			}
+			testutil.RespondJSON(w, http.StatusCreated,
+				`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	lfs := true
+	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
+		Name:          "p",
+		Path:          "p",
+		OverrideParams: &ImportOverrideParamsInput{
+			Description:              "overridden",
+			Visibility:               "private",
+			DefaultBranch:            "main",
+			MergeMethod:              "ff",
+			RequestAccessEnabled:     &lfs,
+			LFSEnabled:               &lfs,
+			IssuesAccessLevel:        "enabled",
+			MergeRequestsAccessLevel: "private",
+			WikiAccessLevel:          "disabled",
+			BuildsAccessLevel:        "enabled",
+			SnippetsAccessLevel:      "private",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ImportFromFile() error: %v", err)
+	}
+	if out.ID != 99 {
+		t.Errorf("ID = %d, want 99", out.ID)
+	}
+}
+
+// TestBuildOverrideParams_NilAndEmpty verifies that buildOverrideParams returns
+// nil for a nil input and for an input with no fields set.
+func TestBuildOverrideParams_NilAndEmpty(t *testing.T) {
+	if got := buildOverrideParams(nil); got != nil {
+		t.Errorf("buildOverrideParams(nil) = %v, want nil", got)
+	}
+	if got := buildOverrideParams(&ImportOverrideParamsInput{}); got != nil {
+		t.Errorf("buildOverrideParams(empty) = %v, want nil", got)
+	}
+}
+
 func projectImportExportSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
