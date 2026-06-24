@@ -8407,7 +8407,7 @@
   },
   {
     "name": "gitlab_create_group_member_role",
-    "description": "Create a custom member role for a GitLab group. Define name, base access level, and optional permissions.\n\nReturns: JSON with created role details. See also: gitlab_list_group_member_roles.",
+    "description": "Create a group-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: gitlab_list_group_member_roles, gitlab_delete_group_member_role, gitlab_create_instance_member_role.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -8916,7 +8916,7 @@
   },
   {
     "name": "gitlab_create_instance_member_role",
-    "description": "Create a custom member role at the GitLab instance level. Define name, base access level, and optional permissions.\n\nReturns: JSON with created role details. See also: gitlab_list_instance_member_roles.",
+    "description": "Create an instance-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_delete_instance_member_role, gitlab_create_group_member_role.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12318,7 +12318,7 @@
   },
   {
     "name": "gitlab_delete_group_member_role",
-    "description": "Delete a custom member role from a GitLab group.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_group_member_roles.",
+    "description": "Delete a group-level custom member role. Returns: a success confirmation naming the deleted role and group. See also: gitlab_list_group_member_roles, gitlab_create_group_member_role.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12546,7 +12546,7 @@
   },
   {
     "name": "gitlab_delete_instance_member_role",
-    "description": "Delete a custom member role at the GitLab instance level.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_instance_member_roles.",
+    "description": "Delete an instance-level custom member role. Returns: a success confirmation naming the deleted role. See also: gitlab_list_instance_member_roles, gitlab_create_instance_member_role.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16849,7 +16849,7 @@
   },
   {
     "name": "gitlab_download_project_export",
-    "description": "Download the finished export archive of a project. Returns the archive as base64-encoded content.\n\nReturns: JSON with the base64-encoded export archive.\n\nSee also: gitlab_get_project_export_status, gitlab_import_project_from_file",
+    "description": "Download a finished project export archive as base64. Returns: base64 archive content and size in bytes. See also: gitlab_get_project_export_status, gitlab_import_project_from_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26311,7 +26311,7 @@
   },
   {
     "name": "gitlab_get_project_export_status",
-    "description": "Get the export status of a project, including download links when the export is finished.\n\nReturns: JSON with export status and download links when finished.\n\nSee also: gitlab_schedule_project_export, gitlab_download_project_export",
+    "description": "Get the export status of a project. Returns: export id, name, path, status, message, and download links. See also: gitlab_schedule_project_export, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26391,7 +26391,7 @@
   },
   {
     "name": "gitlab_get_project_import_status",
-    "description": "Get the import status of a project.\n\nReturns: JSON with import status details.\n\nSee also: gitlab_import_project_from_file, gitlab_schedule_project_export",
+    "description": "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, and import error. See also: gitlab_import_project_from_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27223,7 +27223,7 @@
   },
   {
     "name": "gitlab_get_project_template",
-    "description": "Get a single project template by type and key.\n\nReturns: JSON with the template details.\n\nSee also: gitlab_list_project_templates, gitlab_list_dockerfile_templates",
+    "description": "Returns one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33322,7 +33322,7 @@
   },
   {
     "name": "gitlab_group_invite",
-    "description": "Invite a user to a group by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_group_invite_list_pending, gitlab_group_member_add",
+    "description": "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status and per-email messages. See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33340,6 +33340,10 @@
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "id": {
+          "description": "Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to group_id)",
           "type": "string"
         },
         "user_id": {
@@ -33387,7 +33391,7 @@
   },
   {
     "name": "gitlab_group_invite_list_pending",
-    "description": "List all pending invitations for a group. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_group_invite, gitlab_group_members_list",
+    "description": "List a group's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: gitlab_group_invite, gitlab_group_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33395,16 +33399,32 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "query": {
           "description": "Filter invitations by email or name",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset-paginated results: 'asc' or 'desc'",
           "type": "string"
         }
       },
@@ -42558,7 +42578,7 @@
   },
   {
     "name": "gitlab_import_project_from_file",
-    "description": "Import a project from an export archive file. Accepts either base64-encoded content or a local .tar.gz file_path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.\n\nReturns: JSON with import status details.\n\nSee also: gitlab_get_project_import_status, gitlab_import_from_github",
+    "description": "Import a project from an export archive. Returns: the new project's import status, type, correlation id, and any import error. See also: gitlab_get_project_import_status, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -42577,6 +42597,66 @@
         "namespace": {
           "description": "Namespace to import the project into (user or group path)",
           "type": "string"
+        },
+        "override_params": {
+          "additionalProperties": false,
+          "description": "Optional project attributes to override on the imported project (mirrors the create-project attributes accepted by override_params[])",
+          "properties": {
+            "builds_access_level": {
+              "description": "Override CI/CD builds access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "default_branch": {
+              "description": "Override the default branch name",
+              "type": "string"
+            },
+            "description": {
+              "description": "Override the imported project's description",
+              "type": "string"
+            },
+            "issues_access_level": {
+              "description": "Override issues access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "lfs_enabled": {
+              "description": "Override Git LFS enablement",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "merge_method": {
+              "description": "Override merge method (merge, rebase_merge, ff)",
+              "type": "string"
+            },
+            "merge_requests_access_level": {
+              "description": "Override merge requests access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "request_access_enabled": {
+              "description": "Override whether users can request access",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "snippets_access_level": {
+              "description": "Override snippets access level (disabled, private, enabled)",
+              "type": "string"
+            },
+            "visibility": {
+              "description": "Override visibility level (private, internal, public)",
+              "type": "string"
+            },
+            "wiki_access_level": {
+              "description": "Override wiki access level (disabled, private, enabled)",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "overwrite": {
           "description": "If true, overwrite an existing project with the same path",
@@ -68868,7 +68948,7 @@
   },
   {
     "name": "gitlab_list_group_member_roles",
-    "description": "List all custom member roles for a GitLab group.\n\nReturns: JSON with roles array. See also: gitlab_create_group_member_role.",
+    "description": "List group-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_create_group_member_role, gitlab_delete_group_member_role.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -69928,7 +70008,7 @@
   },
   {
     "name": "gitlab_list_instance_member_roles",
-    "description": "List all custom member roles at the GitLab instance level. Requires admin access.\n\nReturns: JSON with roles array. See also: gitlab_create_instance_member_role.",
+    "description": "List instance-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_create_instance_member_role, gitlab_delete_instance_member_role, gitlab_list_group_member_roles.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -72698,32 +72778,54 @@
   },
   {
     "name": "gitlab_list_project_templates",
-    "description": "List project templates of a given type (dockerfiles, gitignores, gitlab_ci_ymls, licenses).\n\nReturns: JSON array of templates with pagination.\n\nSee also: gitlab_get_project_template, gitlab_list_ci_yml_templates",
+    "description": "Lists project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. See also: gitlab_get_project_template, gitlab_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "page": {
-          "description": "Page number for pagination",
+        "id": {
+          "description": "Filter to a single template by numeric id (maps to gl.ListProjectTemplatesOptions.ID)",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column by which to order keyset-paginated results",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "type": "string"
+        },
         "template_type": {
-          "description": "Template type: dockerfiles, gitignores, gitlab_ci_ymls, licenses",
+          "description": "Template family in the request path: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests",
+          "type": "string"
+        },
+        "type": {
+          "description": "Optional secondary template type filter passed as the 'type' query parameter (maps to gl.ListProjectTemplatesOptions.Type)",
           "type": "string"
         }
       },
       "required": [
         "project_id",
-        "template_type",
-        "page",
-        "per_page"
+        "template_type"
       ],
       "type": "object"
     },
@@ -109209,7 +109311,7 @@
   },
   {
     "name": "gitlab_project_add_push_rule",
-    "description": "Add push rule configuration to a project. Enforce commit message format, branch naming, file size limits, secret detection, and signed commits.\n\nReturns: JSON with the created push rule configuration.\n\nSee also: gitlab_project_get_push_rules.",
+    "description": "Add push rules to a project. Returns: the created push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_edit_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109381,7 +109483,7 @@
   },
   {
     "name": "gitlab_project_approval_config_change",
-    "description": "Update the project-level merge request approval configuration. Only specified fields are modified.\n\nReturns: JSON with updated approval settings.\n\nSee also: gitlab_project_approval_config_get.",
+    "description": "Change a project's approval configuration. Returns: the updated approval settings. See also: gitlab_project_approval_config_get, gitlab_project_approval_rule_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109416,6 +109518,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "require_password_to_approve": {
+          "description": "Require the approver's password to approve (deprecated: use require_reauthentication_to_approve)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "require_reauthentication_to_approve": {
           "description": "Require reauthentication to approve",
@@ -109497,7 +109606,7 @@
   },
   {
     "name": "gitlab_project_approval_config_get",
-    "description": "Get the project-level merge request approval configuration including required approvals, author self-approval, committer approval, and password requirements.\n\nReturns: JSON with approval settings.\n\nSee also: gitlab_project_approval_config_change, gitlab_project_approval_rule_list.",
+    "description": "Get a project's approval configuration. Returns: the approval settings such as reset_approvals_on_push and author approval flags. See also: gitlab_project_approval_config_change, gitlab_project_approval_rule_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109565,7 +109674,7 @@
   },
   {
     "name": "gitlab_project_approval_rule_create",
-    "description": "Create a new project-level approval rule with the specified number of required approvals and approver groups/users.\n\nReturns: JSON with the created approval rule details.\n\nSee also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
+    "description": "Create a project approval rule. Returns: the created rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109607,6 +109716,10 @@
             "null",
             "array"
           ]
+        },
+        "report_type": {
+          "description": "Report type for report-approver rules (e.g. code_coverage, license_scanning)",
+          "type": "string"
         },
         "rule_type": {
           "description": "Rule type (regular, code_owner)",
@@ -109717,7 +109830,7 @@
   },
   {
     "name": "gitlab_project_approval_rule_delete",
-    "description": "Delete a project-level approval rule.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_create.",
+    "description": "Delete a project approval rule. Returns: a success confirmation naming the rule and project. See also: gitlab_project_approval_rule_list, gitlab_project_approval_config_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109774,7 +109887,7 @@
   },
   {
     "name": "gitlab_project_approval_rule_get",
-    "description": "Get details of a specific project-level approval rule.\n\nReturns: JSON with approval rule details including name, approvals_required, eligible approvers, and protected branches.\n\nSee also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
+    "description": "Get a single project approval rule. Returns: the rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109872,13 +109985,25 @@
   },
   {
     "name": "gitlab_project_approval_rule_list",
-    "description": "List project-level approval rules. Each rule specifies the number of required approvals and eligible approvers.\n\nReturns: JSON array of approval rules with pagination.\n\nSee also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_create.",
+    "description": "List a project's approval rules. Returns: rules with name, approvals_required, eligible approvers, and groups, plus pagination metadata. See also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -109886,6 +110011,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -110034,7 +110163,7 @@
   },
   {
     "name": "gitlab_project_approval_rule_update",
-    "description": "Update an existing project-level approval rule. Only specified fields are modified.\n\nReturns: JSON with the updated approval rule details.\n\nSee also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_delete.",
+    "description": "Update a project approval rule. Returns: the updated rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -110189,7 +110318,7 @@
   },
   {
     "name": "gitlab_project_archive",
-    "description": "Archive a GitLab project, making it read-only. Archived projects are hidden from default project list.\n\nReturns: JSON with updated project details. See also: gitlab_project_unarchive, gitlab_project_get.",
+    "description": "Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -110445,7 +110574,7 @@
   },
   {
     "name": "gitlab_project_create",
-    "description": "Create a new GitLab project (repository). Supports setting namespace, visibility (private/internal/public), description, default branch, optional README initialization, merge method, squash option, topics, and feature flags (issues_enabled, merge_requests_enabled, wiki_enabled, jobs_enabled, lfs_enabled, request_access_enabled). Also supports CI/CD config path, allow_merge_on_skipped_pipeline, remove_source_branch_after_merge, and autoclose_referenced_issues.\n\nReturns: JSON with the created project details including id, name, path_with_namespace, web_url, visibility, and namespace. See also: gitlab_project_get, gitlab_project_list.",
+    "description": "Create a new GitLab project. Returns: the created project with id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_get, gitlab_project_update, gitlab_project_create_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -111203,7 +111332,7 @@
   },
   {
     "name": "gitlab_project_create_for_user",
-    "description": "Create a new project owned by the specified user (admin operation). The project is created in the target user's personal namespace by default.\n\nReturns: JSON with the created project details.\n\nSee also: gitlab_project_create, gitlab_project_get.",
+    "description": "Create a project on behalf of a user (admin). Returns: the created project with id, owner namespace, visibility, and web URL. See also: gitlab_project_create, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -111966,7 +112095,7 @@
   },
   {
     "name": "gitlab_project_create_fork_relation",
-    "description": "Create a fork relation between two existing projects. This makes the project appear as forked from the specified source project.\n\nReturns: JSON with fork relation details including forked_to_project_id and forked_from_project_id.\n\nSee also: gitlab_project_fork, gitlab_project_delete_fork_relation.",
+    "description": "Create a fork relationship to an upstream project. Returns: a confirmation of the new relation. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112027,7 +112156,7 @@
   },
   {
     "name": "gitlab_project_delete",
-    "description": "Delete a GitLab project. On instances with delayed deletion enabled, the project is marked for deletion (scheduled) rather than removed immediately — the response includes the scheduled deletion date. Set permanently_remove=true with full_path to bypass delayed deletion and permanently remove the project immediately (requires admin on some instances). Use gitlab_project_restore to cancel a scheduled deletion. Use gitlab_project_list with include_pending_delete=true to see projects awaiting deletion.\n\nReturns: confirmation message with scheduled deletion date if delayed deletion is enabled. See also: gitlab_project_create, gitlab_project_list.",
+    "description": "Delete a project. Returns: a deletion status; on instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112094,7 +112223,7 @@
   },
   {
     "name": "gitlab_project_delete_fork_relation",
-    "description": "Remove the fork relation from a project. The project will no longer be marked as a fork.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_create_fork_relation.",
+    "description": "Remove a project's fork relationship. Returns: a success confirmation naming the project. See also: gitlab_project_create_fork_relation, gitlab_project_fork.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112146,7 +112275,7 @@
   },
   {
     "name": "gitlab_project_delete_push_rule",
-    "description": "Delete the push rule configuration from a project. This removes all push restrictions (commit format, branch naming, file size, etc.).\n\nReturns: confirmation message.\n\nSee also: gitlab_project_get_push_rules.",
+    "description": "Delete a project's push rules. Returns: a success confirmation naming the project. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112198,7 +112327,7 @@
   },
   {
     "name": "gitlab_project_delete_shared_group",
-    "description": "Remove a shared group from a project, revoking the group's access.\n\nReturns: confirmation message. See also: gitlab_project_share_with_group.",
+    "description": "Remove a group share from a project. Returns: a success confirmation naming the group and project. See also: gitlab_project_share_with_group, gitlab_project_list_invited_groups.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112255,7 +112384,7 @@
   },
   {
     "name": "gitlab_project_download_avatar",
-    "description": "Download the avatar image for a project as base64-encoded data.\n\nReturns: JSON with content_base64 (base64-encoded image) and size_bytes.\n\nSee also: gitlab_project_get, gitlab_project_upload_avatar.",
+    "description": "Download a project's avatar. Returns: the avatar image content. See also: gitlab_project_upload_avatar, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112303,7 +112432,7 @@
   },
   {
     "name": "gitlab_project_edit_push_rule",
-    "description": "Modify the push rule configuration of a project. Update commit message, branch name, file restrictions, or signing requirements.\n\nReturns: JSON with the updated push rule configuration.\n\nSee also: gitlab_project_get_push_rules.",
+    "description": "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112651,7 +112780,7 @@
   },
   {
     "name": "gitlab_project_fork",
-    "description": "Fork a GitLab project into a new project. Optionally specify target namespace (namespace_id or namespace_path), name, path, description, visibility, branches to include, and whether MR default target should be the fork itself (mr_default_target_self).\n\nReturns: JSON with the forked project details including id, name, web_url, and forked_from_project. See also: gitlab_project_get, gitlab_branch_create.",
+    "description": "Fork a project. Returns: the new fork with id, path_with_namespace, forked_from_project, and web URL. See also: gitlab_project_list_forks, gitlab_project_create_fork_relation.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -112672,6 +112801,10 @@
         },
         "name": {
           "description": "Name for the forked project",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Namespace ID or path to fork into (deprecated: use namespace_id or namespace_path)",
           "type": "string"
         },
         "namespace_id": {
@@ -112941,7 +113074,7 @@
   },
   {
     "name": "gitlab_project_get",
-    "description": "Retrieve detailed metadata for a GitLab project including name, description, visibility, web URL, default branch, and namespace. Accepts numeric project ID or URL-encoded path (e.g. 'group/subgroup/project'). The response includes default_branch which MUST be used instead of assuming 'main' when generating repository file URLs. Set statistics=true to include repository statistics, license=true to include license info, with_custom_attributes=true to include custom attributes.\n\nReturns: JSON with project details including id, name, description, visibility, web_url, default_branch, namespace, and statistics (if requested). See also: gitlab_project_update, gitlab_project_list.",
+    "description": "Get a single project by ID or namespace path. Returns: project metadata including id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_update, gitlab_project_archive, gitlab_project_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113219,7 +113352,7 @@
   },
   {
     "name": "gitlab_project_get_push_rules",
-    "description": "Get the push rule configuration for a project (commit message, branch name, file size restrictions, etc.).\n\nReturns: JSON with push rule configuration including commit_message_regex, branch_name_regex, max_file_size, and signing requirements.\n\nSee also: gitlab_project_get.",
+    "description": "Get a project's push rules. Returns: the singleton push-rule configuration such as commit_message_regex and reject_unsigned_commits. See also: gitlab_project_add_push_rule, gitlab_project_edit_push_rule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113317,7 +113450,7 @@
   },
   {
     "name": "gitlab_project_hook_add",
-    "description": "Add a webhook to a GitLab project. Configure the URL, secret token, SSL verification, and which events trigger the webhook (push, issues, MRs, tags, notes, jobs, pipelines, wiki, deployments, releases, emoji, etc.).\n\nReturns: JSON with the created webhook details including id, url, and event settings. See also: gitlab_project_hook_list, gitlab_project_hook_edit.",
+    "description": "Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113337,6 +113470,31 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "custom_headers": {
+          "description": "Custom HTTP headers sent with each webhook request (key/value pairs)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Header name",
+                "type": "string"
+              },
+              "value": {
+                "description": "Header value (write-only; not returned by the API)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "custom_webhook_template": {
@@ -113684,7 +113842,7 @@
   },
   {
     "name": "gitlab_project_hook_delete",
-    "description": "Delete a webhook from a GitLab project.\n\nReturns: confirmation message. See also: gitlab_project_hook_list, gitlab_project_hook_add.",
+    "description": "Delete a project webhook. Returns: a success confirmation naming the webhook and project. See also: gitlab_project_hook_list, gitlab_project_hook_add.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113741,7 +113899,7 @@
   },
   {
     "name": "gitlab_project_hook_delete_custom_header",
-    "description": "Delete a custom header from a project webhook.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_hook_get, gitlab_project_hook_set_custom_header.",
+    "description": "Delete a custom header from a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_set_custom_header, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113803,7 +113961,7 @@
   },
   {
     "name": "gitlab_project_hook_delete_url_variable",
-    "description": "Delete a URL variable from a project webhook.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_hook_get, gitlab_project_hook_set_url_variable.",
+    "description": "Delete a URL variable from a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_set_url_variable, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113865,7 +114023,7 @@
   },
   {
     "name": "gitlab_project_hook_edit",
-    "description": "Edit an existing project webhook. Update the URL, events, SSL verification, secret token, or other settings.\n\nReturns: JSON with the updated webhook details. See also: gitlab_project_hook_get, gitlab_project_hook_delete.",
+    "description": "Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -113885,6 +114043,31 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "custom_headers": {
+          "description": "Custom HTTP headers sent with each webhook request (key/value pairs)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "description": "Header name",
+                "type": "string"
+              },
+              "value": {
+                "description": "Header value (write-only; not returned by the API)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "custom_webhook_template": {
@@ -114237,7 +114420,7 @@
   },
   {
     "name": "gitlab_project_hook_get",
-    "description": "Get details of a specific project webhook including all event trigger settings.\n\nReturns: JSON with webhook details including id, url, created_at, and all event trigger settings. See also: gitlab_project_hook_list, gitlab_project_hook_edit.",
+    "description": "Get a single project webhook. Returns: the webhook with URL, enabled events, and SSL settings. See also: gitlab_project_hook_list, gitlab_project_hook_edit.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -114443,13 +114626,25 @@
   },
   {
     "name": "gitlab_project_hook_list",
-    "description": "List webhooks configured for a GitLab project.\n\nReturns: JSON array of webhooks with pagination. Fields include id, url, created_at, and event trigger settings. See also: gitlab_project_hook_get, gitlab_project_hook_add.",
+    "description": "List a project's webhooks. Returns: webhooks with URL, enabled events, and SSL settings, plus pagination metadata. See also: gitlab_project_hook_get, gitlab_project_hook_add.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -114457,6 +114652,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -114713,7 +114912,7 @@
   },
   {
     "name": "gitlab_project_hook_set_custom_header",
-    "description": "Set a custom header on a project webhook. The header will be included in all webhook requests. If the header already exists, its value will be updated.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_hook_get, gitlab_project_hook_delete_custom_header.",
+    "description": "Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -114775,7 +114974,7 @@
   },
   {
     "name": "gitlab_project_hook_set_url_variable",
-    "description": "Set a URL variable on a project webhook. URL variables can be used in the webhook URL as {variable_name}. If already exists, its value will be updated.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_hook_get, gitlab_project_hook_delete_url_variable.",
+    "description": "Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -114837,7 +115036,7 @@
   },
   {
     "name": "gitlab_project_hook_test",
-    "description": "Trigger a test event for a project webhook. Sends a sample payload for the specified event type (push_events, issues_events, merge_requests_events, etc.).\n\nReturns: confirmation message indicating the test event was sent. See also: gitlab_project_hook_get, gitlab_project_hook_list.",
+    "description": "Trigger a test event for a project webhook. Returns: a confirmation that the test event was fired. See also: gitlab_project_hook_get, gitlab_project_hook_edit.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -114890,7 +115089,7 @@
   },
   {
     "name": "gitlab_project_invite",
-    "description": "Invite a user to a project by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).\n\nReturns: JSON with the invitation result.\n\nSee also: gitlab_project_invite_list_pending, gitlab_project_member_add",
+    "description": "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status and per-email messages. See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -114904,6 +115103,10 @@
         },
         "expires_at": {
           "description": "Expiration date for the invitation (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "id": {
+          "description": "Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to project_id)",
           "type": "string"
         },
         "project_id": {
@@ -114955,16 +115158,28 @@
   },
   {
     "name": "gitlab_project_invite_list_pending",
-    "description": "List all pending invitations for a project. Supports filtering by query and pagination.\n\nReturns: JSON array of pending invitations with pagination.\n\nSee also: gitlab_project_invite, gitlab_project_members_list",
+    "description": "List a project's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: gitlab_project_invite, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
@@ -114973,6 +115188,10 @@
         },
         "query": {
           "description": "Filter invitations by email or name",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset-paginated results: 'asc' or 'desc'",
           "type": "string"
         }
       },
@@ -115083,7 +115302,7 @@
   },
   {
     "name": "gitlab_project_languages",
-    "description": "List programming languages used in a GitLab project with their percentages.\n\nReturns: JSON object mapping language names to their percentage of the codebase. See also: gitlab_project_get, gitlab_repository_tree.",
+    "description": "Get a project's detected languages. Returns: language names with their percentage of the codebase. See also: gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -115146,10 +115365,17 @@
   },
   {
     "name": "gitlab_project_list",
-    "description": "List GitLab projects accessible to the authenticated user. Supports filtering by ownership, search term, visibility, archived status, topic, minimum access level, starred, membership, last_activity_after/before dates, and feature flags (with_issues_enabled, with_merge_requests_enabled). Set include_pending_delete=true to include projects that are marked/scheduled for deletion (hidden by default). Supports ordering, sorting, simple mode, search_namespaces, and statistics.\n\nReturns: JSON array of projects with pagination. Fields include id, name, path_with_namespace, visibility, web_url, and default_branch. See also: gitlab_project_get, gitlab_project_create.",
+    "description": "List projects accessible to the user with filtering and pagination. Returns: projects with namespace, visibility, last_activity_at, and pagination metadata. See also: gitlab_project_get, gitlab_project_list_user_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "active": {
+          "description": "Limit to active (non-archived, non-pending-deletion) projects",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "archived": {
           "description": "Filter by archived status (true=only archived, false=only active)",
           "type": [
@@ -115164,6 +115390,13 @@
         "id_before": {
           "description": "Return projects with ID less than this value (keyset pagination)",
           "type": "integer"
+        },
+        "imported": {
+          "description": "Limit to projects imported from an external source by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "include_hidden": {
           "description": "Include hidden projects in results",
@@ -115218,9 +115451,28 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "repository_checksum_failed": {
+          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_storage": {
+          "description": "Limit to projects on the given repository storage shard (admin only)",
+          "type": "string"
         },
         "search": {
           "description": "Search query for project name",
@@ -115266,6 +115518,20 @@
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
           "type": "string"
+        },
+        "wiki_checksum_failed": {
+          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "with_issues_enabled": {
           "description": "Filter by projects with issues feature enabled",
@@ -115592,10 +115858,72 @@
   },
   {
     "name": "gitlab_project_list_forks",
-    "description": "List forks of a GitLab project. Supports filtering by ownership, search, visibility, ordering, and pagination.\n\nReturns: JSON array of forked projects with pagination. Fields include id, name, path_with_namespace, and web_url. See also: gitlab_project_fork, gitlab_project_get.",
+    "description": "List a project's forks. Returns: forked projects with namespace, visibility, and pagination metadata. See also: gitlab_project_fork, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "active": {
+          "description": "Limit to active (non-archived, non-pending-deletion) forks",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "archived": {
+          "description": "Filter by archived status (true=only archived, false=only active)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id_after": {
+          "description": "Return forks with ID greater than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "id_before": {
+          "description": "Return forks with ID less than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "imported": {
+          "description": "Limit to forks imported from an external source by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_hidden": {
+          "description": "Include hidden forks in results",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_pending_delete": {
+          "description": "Include forks marked/scheduled for deletion. Default false.",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "last_activity_after": {
+          "description": "Return forks with last activity after date (ISO 8601 format)",
+          "type": "string"
+        },
+        "last_activity_before": {
+          "description": "Return forks with last activity before date (ISO 8601 format)",
+          "type": "string"
+        },
+        "membership": {
+          "description": "Limit to forks where the current user is a member",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "min_access_level": {
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "type": "integer"
+        },
         "order_by": {
           "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
           "type": "string"
@@ -115608,6 +115936,14 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
@@ -115616,16 +115952,88 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "repository_checksum_failed": {
+          "description": "Limit to forks where the repository checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_storage": {
+          "description": "Limit to forks on the given repository storage shard (admin only)",
+          "type": "string"
+        },
         "search": {
           "description": "Search query for fork name",
           "type": "string"
+        },
+        "search_namespaces": {
+          "description": "Include namespace in search",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "simple": {
+          "description": "Return only limited fields (faster for large result sets)",
+          "type": "boolean"
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
           "type": "string"
         },
+        "starred": {
+          "description": "Limit to forks starred by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "statistics": {
+          "description": "Include project statistics in response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "topic": {
+          "description": "Filter by topic name",
+          "type": "string"
+        },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "type": "string"
+        },
+        "wiki_checksum_failed": {
+          "description": "Limit to forks where the wiki checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_issues_enabled": {
+          "description": "Filter by forks with issues feature enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_requests_enabled": {
+          "description": "Filter by forks with merge requests enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_programming_language": {
+          "description": "Filter by programming language name",
           "type": "string"
         }
       },
@@ -115938,13 +116346,25 @@
   },
   {
     "name": "gitlab_project_list_groups",
-    "description": "List ancestor groups of a project. Supports filtering by search, shared groups, minimum access level, skip_groups, and pagination.\n\nReturns: JSON array of groups with pagination. Fields include id, name, path, and visibility.\n\nSee also: gitlab_project_get.",
+    "description": "List a project's associated groups. Returns: groups with id, full_path, and full_name, plus pagination metadata. See also: gitlab_project_list_invited_groups, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -115978,6 +116398,10 @@
             "null",
             "array"
           ]
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
+          "type": "string"
         },
         "with_shared": {
           "description": "Include shared groups (default true)",
@@ -116092,7 +116516,7 @@
   },
   {
     "name": "gitlab_project_list_invited_groups",
-    "description": "List groups that have been invited/shared to a project. Supports filtering by search, minimum access level, and pagination.\n\nReturns: JSON array of invited groups with pagination. Fields include id, name, path, and visibility.\n\nSee also: gitlab_project_list_groups.",
+    "description": "List groups invited to a project. Returns: invited groups with id, full_path, and full_name, plus pagination metadata. See also: gitlab_project_share_with_group, gitlab_project_list_groups.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -116100,9 +116524,21 @@
           "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -116112,9 +116548,30 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "relation": {
+          "description": "Filter by group relation to the project (e.g. direct, inherited)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "search": {
           "description": "Search by group name",
           "type": "string"
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
+          "type": "string"
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -116222,13 +116679,25 @@
   },
   {
     "name": "gitlab_project_list_starrers",
-    "description": "List users who have starred a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of users who starred the project with pagination. Fields include starred_since and user details.\n\nSee also: gitlab_project_get.",
+    "description": "List a project's starrers. Returns: users with their starred_since date, plus pagination metadata. See also: gitlab_project_star, gitlab_project_list_user_starred.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -116240,6 +116709,10 @@
         },
         "search": {
           "description": "Search by name or username",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -116361,32 +116834,117 @@
   },
   {
     "name": "gitlab_project_list_user_contributed",
-    "description": "List projects that a specific user has contributed to. Supports filtering by search, visibility, archived status, and pagination.\n\nReturns: JSON array of projects with pagination. Fields include id, name, path_with_namespace, visibility, and web_url.\n\nSee also: gitlab_project_list.",
+    "description": "List projects a user contributed to. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_user_starred.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "archived": {
-          "description": "Filter by archived status",
+        "active": {
+          "description": "Limit to active (non-archived, non-pending-deletion) projects",
           "type": [
             "null",
             "boolean"
           ]
         },
+        "archived": {
+          "description": "Filter by archived status (true=only archived, false=only active)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id_after": {
+          "description": "Return projects with ID greater than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "id_before": {
+          "description": "Return projects with ID less than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "imported": {
+          "description": "Limit to projects imported from an external source by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_hidden": {
+          "description": "Include hidden projects in results",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_pending_delete": {
+          "description": "Include projects marked/scheduled for deletion. Default false.",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "last_activity_after": {
+          "description": "Return projects with last activity after date (ISO 8601 format)",
+          "type": "string"
+        },
+        "last_activity_before": {
+          "description": "Return projects with last activity before date (ISO 8601 format)",
+          "type": "string"
+        },
+        "membership": {
+          "description": "Limit to projects where the current user is a member",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "min_access_level": {
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "type": "integer"
+        },
         "order_by": {
           "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
           "type": "string"
+        },
+        "owned": {
+          "description": "Limit to projects explicitly owned by the current user",
+          "type": "boolean"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "repository_checksum_failed": {
+          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_storage": {
+          "description": "Limit to projects on the given repository storage shard (admin only)",
+          "type": "string"
+        },
         "search": {
           "description": "Search query for project name",
           "type": "string"
+        },
+        "search_namespaces": {
+          "description": "Include namespace in search",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "simple": {
           "description": "Return only limited fields (faster)",
@@ -116396,12 +116954,62 @@
           "description": "Sort direction (asc, desc)",
           "type": "string"
         },
+        "starred": {
+          "description": "Limit to projects starred by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "statistics": {
+          "description": "Include project statistics in response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "topic": {
+          "description": "Filter by topic name",
+          "type": "string"
+        },
         "user_id": {
           "description": "User ID or username",
           "type": "string"
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "type": "string"
+        },
+        "wiki_checksum_failed": {
+          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_issues_enabled": {
+          "description": "Filter by projects with issues feature enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_requests_enabled": {
+          "description": "Filter by projects with merge requests enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_programming_language": {
+          "description": "Filter by programming language name",
           "type": "string"
         }
       },
@@ -116714,32 +117322,117 @@
   },
   {
     "name": "gitlab_project_list_user_projects",
-    "description": "List projects owned by a specific user. Accepts user ID or username. Supports filtering by search, visibility, archived status, and pagination.\n\nReturns: JSON array of projects with pagination. Fields include id, name, path_with_namespace, visibility, and web_url.\n\nSee also: gitlab_project_list.",
+    "description": "List a user's owned projects. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_contributed, gitlab_project_list_user_starred.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "archived": {
-          "description": "Filter by archived status",
+        "active": {
+          "description": "Limit to active (non-archived, non-pending-deletion) projects",
           "type": [
             "null",
             "boolean"
           ]
         },
+        "archived": {
+          "description": "Filter by archived status (true=only archived, false=only active)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id_after": {
+          "description": "Return projects with ID greater than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "id_before": {
+          "description": "Return projects with ID less than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "imported": {
+          "description": "Limit to projects imported from an external source by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_hidden": {
+          "description": "Include hidden projects in results",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_pending_delete": {
+          "description": "Include projects marked/scheduled for deletion. Default false.",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "last_activity_after": {
+          "description": "Return projects with last activity after date (ISO 8601 format)",
+          "type": "string"
+        },
+        "last_activity_before": {
+          "description": "Return projects with last activity before date (ISO 8601 format)",
+          "type": "string"
+        },
+        "membership": {
+          "description": "Limit to projects where the current user is a member",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "min_access_level": {
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "type": "integer"
+        },
         "order_by": {
           "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
           "type": "string"
+        },
+        "owned": {
+          "description": "Limit to projects explicitly owned by the current user",
+          "type": "boolean"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "repository_checksum_failed": {
+          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_storage": {
+          "description": "Limit to projects on the given repository storage shard (admin only)",
+          "type": "string"
+        },
         "search": {
           "description": "Search query for project name",
           "type": "string"
+        },
+        "search_namespaces": {
+          "description": "Include namespace in search",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "simple": {
           "description": "Return only limited fields (faster)",
@@ -116749,12 +117442,62 @@
           "description": "Sort direction (asc, desc)",
           "type": "string"
         },
+        "starred": {
+          "description": "Limit to projects starred by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "statistics": {
+          "description": "Include project statistics in response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "topic": {
+          "description": "Filter by topic name",
+          "type": "string"
+        },
         "user_id": {
           "description": "User ID or username",
           "type": "string"
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "type": "string"
+        },
+        "wiki_checksum_failed": {
+          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_issues_enabled": {
+          "description": "Filter by projects with issues feature enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_requests_enabled": {
+          "description": "Filter by projects with merge requests enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_programming_language": {
+          "description": "Filter by programming language name",
           "type": "string"
         }
       },
@@ -117067,32 +117810,117 @@
   },
   {
     "name": "gitlab_project_list_user_starred",
-    "description": "List projects that a specific user has starred. Supports filtering by search, visibility, archived status, and pagination.\n\nReturns: JSON array of projects with pagination. Fields include id, name, path_with_namespace, visibility, and web_url.\n\nSee also: gitlab_project_list.",
+    "description": "List projects a user starred. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_starrers.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "archived": {
-          "description": "Filter by archived status",
+        "active": {
+          "description": "Limit to active (non-archived, non-pending-deletion) projects",
           "type": [
             "null",
             "boolean"
           ]
         },
+        "archived": {
+          "description": "Filter by archived status (true=only archived, false=only active)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id_after": {
+          "description": "Return projects with ID greater than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "id_before": {
+          "description": "Return projects with ID less than this value (keyset pagination)",
+          "type": "integer"
+        },
+        "imported": {
+          "description": "Limit to projects imported from an external source by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_hidden": {
+          "description": "Include hidden projects in results",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "include_pending_delete": {
+          "description": "Include projects marked/scheduled for deletion. Default false.",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "last_activity_after": {
+          "description": "Return projects with last activity after date (ISO 8601 format)",
+          "type": "string"
+        },
+        "last_activity_before": {
+          "description": "Return projects with last activity before date (ISO 8601 format)",
+          "type": "string"
+        },
+        "membership": {
+          "description": "Limit to projects where the current user is a member",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "min_access_level": {
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
+          "type": "integer"
+        },
         "order_by": {
           "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
           "type": "string"
+        },
+        "owned": {
+          "description": "Limit to projects explicitly owned by the current user",
+          "type": "boolean"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "repository_checksum_failed": {
+          "description": "Limit to projects where the repository checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "repository_storage": {
+          "description": "Limit to projects on the given repository storage shard (admin only)",
+          "type": "string"
+        },
         "search": {
           "description": "Search query for project name",
           "type": "string"
+        },
+        "search_namespaces": {
+          "description": "Include namespace in search",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "simple": {
           "description": "Return only limited fields (faster)",
@@ -117102,12 +117930,62 @@
           "description": "Sort direction (asc, desc)",
           "type": "string"
         },
+        "starred": {
+          "description": "Limit to projects starred by the current user",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "statistics": {
+          "description": "Include project statistics in response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "topic": {
+          "description": "Filter by topic name",
+          "type": "string"
+        },
         "user_id": {
           "description": "User ID or username",
           "type": "string"
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "type": "string"
+        },
+        "wiki_checksum_failed": {
+          "description": "Limit to projects where the wiki checksum calculation failed (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response (admin only)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_issues_enabled": {
+          "description": "Filter by projects with issues feature enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_requests_enabled": {
+          "description": "Filter by projects with merge requests enabled",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_programming_language": {
+          "description": "Filter by programming language name",
           "type": "string"
         }
       },
@@ -117420,13 +118298,25 @@
   },
   {
     "name": "gitlab_project_list_users",
-    "description": "List users who are members of a project. Supports filtering by search (name or username) and pagination.\n\nReturns: JSON array of project users with pagination. Fields include id, username, name, and state.\n\nSee also: gitlab_project_members_list.",
+    "description": "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Keyset ordering column (for keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -117438,6 +118328,10 @@
         },
         "search": {
           "description": "Search by name or username",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Keyset sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -118152,7 +119046,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_configure",
-    "description": "Configure or update pull mirroring for a project. Set the mirror URL, authentication, branch filtering, and trigger options.\n\nReturns: JSON with updated pull mirror configuration.\n\nSee also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+    "description": "Configure a project's pull mirror. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -118276,7 +119170,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_get",
-    "description": "Get pull mirror configuration for a project including URL, status, last update times, and mirror settings.\n\nReturns: JSON with pull mirror details.\n\nSee also: gitlab_project_pull_mirror_configure, gitlab_project_start_mirroring.",
+    "description": "Get a project's pull-mirror configuration. Returns: the mirror URL, enabled flag, and last sync status. See also: gitlab_project_pull_mirror_configure, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -118357,7 +119251,7 @@
   },
   {
     "name": "gitlab_project_repository_storage_get",
-    "description": "Get repository storage information for a project including disk path and storage name.\n\nReturns: JSON with project_id, disk_path, repository_storage, and created_at.\n\nSee also: gitlab_project_get.",
+    "description": "Get a project's repository storage shard. Returns: the storage shard name. See also: gitlab_project_start_housekeeping, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -118412,7 +119306,7 @@
   },
   {
     "name": "gitlab_project_restore",
-    "description": "Restore a GitLab project that has been marked/scheduled for deletion. Use gitlab_project_list with include_pending_delete=true to discover projects pending deletion.\n\nReturns: JSON with the restored project details including id, name, web_url, and visibility.\n\nSee also: gitlab_project_get.",
+    "description": "Restore a project marked for deletion. Returns: the restored project. See also: gitlab_project_delete, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -119509,7 +120403,7 @@
   },
   {
     "name": "gitlab_project_share_with_group",
-    "description": "Share a project with a group, granting the specified access level. Optionally set an expiration date (YYYY-MM-DD). Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer.\n\nReturns: JSON with the group share details including group_id, group_access, and expires_at. See also: gitlab_project_delete_shared_group, gitlab_group_list.",
+    "description": "Share a project with a group. Returns: a confirmation with the group ID and granted access role. See also: gitlab_project_delete_shared_group, gitlab_project_list_invited_groups.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -120409,7 +121303,7 @@
   },
   {
     "name": "gitlab_project_star",
-    "description": "Star a GitLab project for the authenticated user.\n\nReturns: JSON with updated project details including incremented star_count. See also: gitlab_project_get.",
+    "description": "Star a project. Returns: the project with the updated star_count. See also: gitlab_project_unstar, gitlab_project_list_starrers.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -120664,7 +121558,7 @@
   },
   {
     "name": "gitlab_project_start_housekeeping",
-    "description": "Trigger housekeeping for a project (git gc, repack, and other repository optimization tasks).\n\nReturns: confirmation message.\n\nSee also: gitlab_project_get, gitlab_project_repository_storage_get.",
+    "description": "Start housekeeping for a project. Returns: a success confirmation naming the project. See also: gitlab_project_repository_storage_get, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -120711,7 +121605,7 @@
   },
   {
     "name": "gitlab_project_start_mirroring",
-    "description": "Trigger an immediate pull mirror update for a project. The project must have pull mirroring configured.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_pull_mirror_get, gitlab_project_pull_mirror_configure.",
+    "description": "Trigger a pull-mirror sync. Returns: a success confirmation naming the project. See also: gitlab_project_pull_mirror_get, gitlab_project_pull_mirror_configure.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -120758,7 +121652,7 @@
   },
   {
     "name": "gitlab_project_transfer",
-    "description": "Transfer a GitLab project to a different namespace. Requires the namespace (ID or path) to transfer to.\n\nReturns: JSON with updated project details including new path and namespace. See also: gitlab_project_get, gitlab_group_list.",
+    "description": "Transfer a project to another namespace. Returns: the project in its new namespace. See also: gitlab_project_get, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -121024,7 +121918,7 @@
   },
   {
     "name": "gitlab_project_unarchive",
-    "description": "Unarchive a GitLab project, restoring it from read-only state.\n\nReturns: JSON with updated project details. See also: gitlab_project_archive, gitlab_project_get.",
+    "description": "Unarchive a project. Returns: the project with archived set to false. See also: gitlab_project_archive, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -121280,7 +122174,7 @@
   },
   {
     "name": "gitlab_project_unstar",
-    "description": "Remove star from a GitLab project for the authenticated user.\n\nReturns: JSON with updated project details including decremented star_count. See also: gitlab_project_get.",
+    "description": "Unstar a project. Returns: the project with the updated star_count. See also: gitlab_project_star, gitlab_project_list_starrers.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -121536,7 +122430,7 @@
   },
   {
     "name": "gitlab_project_update",
-    "description": "Update GitLab project settings such as name, description, visibility, default branch, merge method, squash option, topics, and feature flags (issues_enabled, merge_requests_enabled, wiki_enabled, jobs_enabled, lfs_enabled). Also supports CI/CD config path, merge commit/squash commit templates, merge_pipelines_enabled, merge_trains_enabled, allow_merge_on_skipped_pipeline, remove_source_branch_after_merge, autoclose_referenced_issues, resolve_outdated_diff_discussions, and approvals_before_merge. Only specified fields are modified; unset fields remain unchanged.\n\nReturns: JSON with the updated project details. See also: gitlab_project_get, gitlab_project_delete.",
+    "description": "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -122470,7 +123364,7 @@
   },
   {
     "name": "gitlab_project_upload_avatar",
-    "description": "Upload or replace the avatar image for a project. Provide either file_path (absolute path to a local image file) or content_base64 (base64-encoded image content), not both.\n\nReturns: JSON with updated project details including avatar_url.\n\nSee also: gitlab_project_get, gitlab_project_download_avatar.",
+    "description": "Upload a project avatar. Returns: the project with its new avatar_url. See also: gitlab_project_download_avatar, gitlab_project_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -133650,7 +134544,7 @@
   },
   {
     "name": "gitlab_schedule_project_export",
-    "description": "Schedule an asynchronous export of a project. After scheduling, use gitlab_get_project_export_status to check progress.\n\nReturns: JSON confirmation that the export was scheduled.\n\nSee also: gitlab_get_project_export_status, gitlab_schedule_group_export",
+    "description": "Schedule an asynchronous project export. Returns: a confirmation message. See also: gitlab_get_project_export_status, gitlab_download_project_export.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -133662,12 +134556,30 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "upload": {
+          "additionalProperties": false,
+          "description": "Optional upload destination for the generated export archive (mirrors the GitLab upload[] options)",
+          "properties": {
+            "http_method": {
+              "description": "HTTP method to use for the upload (PUT or POST; default PUT)",
+              "type": "string"
+            },
+            "url": {
+              "description": "URL to upload the exported project archive to after export completes",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "upload_http_method": {
-          "description": "HTTP method to use for the upload (PUT or POST)",
+          "description": "Deprecated: use upload.http_method. HTTP method to use for the upload (PUT or POST)",
           "type": "string"
         },
         "upload_url": {
-          "description": "URL to upload the exported project to after export completes",
+          "description": "Deprecated: use upload.url. URL to upload the exported project to after export completes",
           "type": "string"
         }
       },
