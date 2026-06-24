@@ -116,7 +116,7 @@ gitlab-mcp-server/
 │   │   ├── uploads/             # Project upload tools
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
-│   ├── resources/               # 46 MCP resource implementations
+│   ├── resources/               # 45 MCP resource implementations
 │   ├── prompts/                 # 37 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
 │   ├── progress/                # MCP progress notifications
@@ -172,7 +172,7 @@ See `docs/output-format.md` for the complete response format specification.
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 176 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 175 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -486,7 +486,7 @@ ADRs document key decisions in `docs/adr/`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 176 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 175 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks

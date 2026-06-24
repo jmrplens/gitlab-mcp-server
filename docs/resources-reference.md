@@ -1,6 +1,6 @@
 # MCP Resources Reference
 
-This document lists the MCP resources exposed by gitlab-mcp-server. With the default `TOOL_SURFACE=dynamic` and `CAPABILITY_SURFACE=full`, the server exposes **46 MCP resources**: GitLab data resources, workflow guides, and a surface-aware tool manifest. Meta and individual modes expose the same public resource shape; the `gitlab://tools` manifest adapts its payload to the active tool surface selected at startup.
+This document lists the MCP resources exposed by gitlab-mcp-server. With the default `TOOL_SURFACE=dynamic` and `CAPABILITY_SURFACE=full`, the server exposes **45 MCP resources**: GitLab data resources, workflow guides, and a surface-aware tool manifest. Meta and individual modes expose the same public resource shape; the `gitlab://tools` manifest adapts its payload to the active tool surface selected at startup.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, AI assistant users

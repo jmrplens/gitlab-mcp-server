@@ -16,7 +16,7 @@
 
 ## Detailed Documentation
 
-- **[capabilities/README.md](capabilities/README.md)** — overview of all 6 capabilities with design principles
+- **[capabilities/README.md](capabilities/README.md)** — overview of all 3 capabilities with design principles
 - **[capabilities/progress.md](capabilities/progress.md)** — step-by-step progress tracker, tools that use it
 - **[capabilities/completions.md](capabilities/completions.md)** — 17 argument types, per-project and global completers
 - **[capabilities/elicitation.md](capabilities/elicitation.md)** — interactive creation wizards, 4 tools, JSON Schema validation
@@ -37,8 +37,8 @@ if capabilitySurface == config.CapabilitySurfaceFull {
 
 The `tools` and `resources` `ListChanged: true` flags are always advertised.
 The `prompts` capability is advertised only when `CAPABILITY_SURFACE=full`.
-`CAPABILITY_SURFACE=minimal` keeps tool execution, logging, completions, roots
-handling, and progress handling, but
+`CAPABILITY_SURFACE=minimal` keeps tool execution, completions, and
+progress handling, but
 omits optional prompts, static GitLab resources, and workflow guides. It also
 keeps `gitlab://tools` and `gitlab://tools/{id}` so callers can retrieve exact
 action call shapes without expanding `tools/list`.
@@ -69,6 +69,6 @@ Client capabilities (Elicitation) are negotiated during the MCP `initialize` han
 
 ## External References
 
-- [MCP Specification — Capabilities](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/logging)
+- [MCP Specification — Capabilities](https://modelcontextprotocol.io/specification/2025-11-25/server)
 - [MCP Go SDK — ServerCapabilities](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerCapabilities)
 - [MCP Specification](https://modelcontextprotocol.io/specification/) — official protocol documentation

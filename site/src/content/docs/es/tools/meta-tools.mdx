@@ -11,17 +11,17 @@ Las meta-herramientas son un modo de operación explícito de GitLab MCP Server,
 
 ## ¿Por qué meta-herramientas?
 
-Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1045 en GitLab.com Enterprise/Premium con Orbit), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
+Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1034 en GitLab.com Enterprise/Premium con Orbit), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
 
 | Modo              | Nº de herramientas | Overhead de tokens | Funcionalidad               |
 | ----------------- | ------------------ | ------------------ | --------------------------- |
-| Individual        | 877 / 1039 / 1045  | Muy alto           | Completa                    |
+| Individual        | 866 / 1028 / 1034  | Muy alto           | Completa                    |
 | Meta (base)       | 33                 | Bajo               | Completa                    |
 | Meta (enterprise) | 49 / 50            | Bajo               | Completa + Premium/Ultimate |
 
 Las meta-herramientas reducen el recuento de herramientas en **más del 95%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
-El helper de actualización `gitlab_server` puede aparecer por separado para acciones de mantenimiento del servidor y no está incluido en los conteos 33/49/50 del catálogo de acciones GitLab.
+El helper de actualización `gitlab_server` puede aparecer por separado para acciones de mantenimiento del servidor y no está incluido en los conteos 32/48/49 del catálogo de acciones GitLab.
 
 :::note[Compatibilidad con clientes]
 Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas (33 herramientas base, 49 herramientas enterprise autoalojadas o 50 herramientas GitLab.com Enterprise con Orbit) funciona dentro de estas restricciones. Si seleccionas herramientas individuales con `TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales.

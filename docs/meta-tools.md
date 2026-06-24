@@ -1,14 +1,14 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1039 self-managed Enterprise/Premium individual tools or 1045 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (49 self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1028 self-managed Enterprise/Premium individual tools or 1034 GitLab.com Enterprise/Premium tools, **32 base meta-tools** (48 self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **33 base GitLab/interactive tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **48 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **49 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
-The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in the 33/49/50 GitLab action catalog counts.
+The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in the 32/48/49 GitLab action catalog counts.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 
@@ -63,8 +63,8 @@ Meta-tools remain available because they are the most broadly compatible consoli
 
 | Mode             |                                                                         Tool Count | Best For                                                                   |
 | ---------------- | ---------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
-| Meta-tools       |    33 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 877 CE / 1039 self-managed Enterprise/Premium / 1045 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation                |
+| Meta-tools       |    32 base / 48 self-managed Enterprise/Premium / 49 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Individual tools | 866 CE / 1028 self-managed Enterprise/Premium / 1034 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation                |
 
 ---
 
@@ -115,11 +115,6 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | --- | --------------- | ------- | ---------------------------------------------- |
 | 25  | `gitlab_search` | 10      | Global, project, group search                  |
 | 26  | `gitlab_runner` | 34      | Runners, runner management, runner controllers |
-
-### Sampling Tools (1)
-
-| #   | Tool Name | Actions | Source |
-| --- | --------- | ------- | ------ |
 
 ### Standalone Tools (1)
 

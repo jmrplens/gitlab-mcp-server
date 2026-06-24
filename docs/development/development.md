@@ -33,9 +33,7 @@ gitlab-mcp-server/
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation
 │   ├── gitlab/                  # GitLab API client wrapper with TLS support
-│   ├── logging/                 # Structured MCP session logging
 │   ├── completions/             # Autocomplete handler for 17 argument types
-│   ├── roots/                   # Client workspace root tracking
 │   ├── progress/                # Progress notification tracker
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
@@ -49,7 +47,7 @@ gitlab-mcp-server/
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
 │   │   └── ...                  # 176 internal/tools packages total
-│   ├── resources/               # 46 MCP resource handlers
+│   ├── resources/               # 45 MCP resource handlers
 │   └── prompts/                 # 37 MCP prompt handlers
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
 ├── docs/                        # Documentation (this directory)
@@ -59,7 +57,7 @@ gitlab-mcp-server/
 └── .env                         # Local secrets (gitignored)
 ```
 
-Meta-tool counts are additive: 33 base tools, 16 Enterprise/Premium-specific meta-tools for 49 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 50 when Orbit is available.
+Meta-tool counts are additive: 32 base tools, 16 Enterprise/Premium-specific meta-tools for 49 on self-managed GitLab, plus the GitLab.com-only Orbit meta-tool for 50 when Orbit is available.
 
 ## Architecture
 
@@ -84,9 +82,7 @@ graph TD
     MAIN -->|registers standalone| STANDALONE
     MAIN -->|registers| RES[resources.Register]
     MAIN -->|registers| PROMPTS[prompts.Register]
-    MAIN -->|setup| LOG[logging]
     MAIN -->|setup| COMP[completions]
-    MAIN -->|setup| ROOTS[roots]
     SRV -->|runs| STDIO[StdioTransport]
     SRV -->|runs| HTTP[StreamableHTTPHandler]
     PROJECTION --> GL
@@ -100,7 +96,7 @@ graph TD
 1. **Config** loads settings from `.env` + environment variables
 2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
 3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
-4. **Meta-tools** group catalog actions into 33 base tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
+4. **Meta-tools** group catalog actions into 32 base tools (49 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
 7. **Capabilities** provide completions, progress, and elicitation

@@ -2,7 +2,7 @@
 title: GitLab MCP Server
 description: Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.
 hero:
-  tagline: Up to 1045 individual tools on GitLab.com Enterprise/Premium (1039 self-managed), consolidated into 33 base meta-tools via the Model Context Protocol
+  tagline: Up to 1034 individual tools on GitLab.com Enterprise/Premium (1028 self-managed), consolidated into 32 base meta-tools via the Model Context Protocol
   image:
     dark: ../../assets/logo-dark.svg
     light: ../../assets/logo-light.svg
@@ -50,8 +50,8 @@ The server translates these requests into GitLab API calls, executes them, and r
 | Feature                  | Details                                                                                                                                                                                        |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Dynamic Toolset**      | Default 2-tool low-token mode: find canonical actions with exact schemas, then execute canonical GitLab actions                                                                                |
-| **Meta-Tools**           | Optional domain mode with 33 base tools, 49 on self-managed Enterprise/Premium, and 50 on GitLab.com Enterprise/Premium with Orbit, covering projects, issues, MRs, pipelines, CI/CD, and more |
-| **46 MCP Resources**     | Read-only data endpoints for project info, user profiles, workflow guides, and the surface-aware `gitlab://tools` manifest                                                                     |
+| **Meta-Tools**           | Optional domain mode with 32 base tools, 49 on self-managed Enterprise/Premium, and 49 on GitLab.com Enterprise/Premium with Orbit, covering projects, issues, MRs, pipelines, CI/CD, and more |
+| **45 MCP Resources**     | Read-only data endpoints for project info, user profiles, workflow guides, and the surface-aware `gitlab://tools` manifest                                                                     |
 | **37 MCP Prompts**       | Pre-built prompt templates for reports, audits, Git workflow quality, cross-project analysis, and team workflows                                                                               |
 | **Multi-User HTTP Mode** | Deploy as a shared server with per-token isolation for team environments                                                                                                                       |
 | **GitLab CE & EE**       | Compatible with both Community Edition and Enterprise Edition, including self-hosted instances                                                                                                 |

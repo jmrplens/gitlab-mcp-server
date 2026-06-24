@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v2.2.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1034 individual MCP tools across 93 GitLab API domains, 32 base meta-tools, 48 self-managed enterprise meta-tools, 49 GitLab.com Enterprise meta-tools,
-a default 2-tool dynamic find/execute surface, 46 resources, 37 prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
 
@@ -82,7 +82,7 @@ tool with an "action" parameter. Key meta-tools:
 
 Resources:
 
-46 read-only resources:
+45 read-only resources:
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review

@@ -39,7 +39,7 @@ These targets are best-effort for a maintainer-driven open-source project. We wi
 - The `gitlab-mcp-server` source code in this repository (Go server, MCP tools, transports, prompts, resources).
 - Authentication and authorization handling (token storage, OAuth flows, HTTP session isolation).
 - Input validation in MCP tool handlers.
-- Path handling and MCP Roots enforcement (file uploads, downloads).
+- Path handling for file uploads and downloads.
 - TLS configuration handling and `GITLAB_SKIP_TLS_VERIFY` semantics.
 - Error messages and logs that could leak credentials or sensitive metadata.
 - Released binaries and Docker images published from this repository.
@@ -113,12 +113,11 @@ The remainder of this document describes how the server handles security-sensiti
 - In HTTP mode, each client authenticates via `PRIVATE-TOKEN` or `Authorization: Bearer` header — tokens are isolated per session.
 - The `.env` file containing credentials is excluded from version control via `.gitignore`.
 
-### File System Access (MCP Roots)
+### File System Access (`file_path` uploads)
 
-- File upload via `file_path` is restricted to directories declared as MCP Roots by the client.
-- Path traversal attacks are prevented by validating absolute paths against allowed root directories.
-- Symlinks and relative paths (`..`) are resolved before validation.
-- If no MCP Roots are configured, `file_path` uploads are denied (fail-safe).
+- `gitlab_project_upload` accepts a `file_path` to read a local file from the MCP server's filesystem (an alternative to `content_base64`).
+- The server reads any path its process can access, so run it with least privilege and treat `file_path` as trusted input from the MCP client.
+- Prefer `content_base64` when the caller should not be able to read arbitrary server-side files.
 
 ### TLS Configuration
 
@@ -164,7 +163,7 @@ The remainder of this document describes how the server handles security-sensiti
 2. **Run the server as a non-privileged user** — avoid root/administrator.
 3. **Enable TLS** between the MCP server and GitLab instance in production.
 4. **Keep the `.env` file permissions restrictive** (`chmod 600` on Unix systems).
-5. **Use MCP Roots** to limit file system access to specific directories.
+5. **Run the server with least privilege** so `file_path` uploads cannot read sensitive files (or use `content_base64`).
 6. **Use read-only or safe mode** (`GITLAB_READ_ONLY=true` or `GITLAB_SAFE_MODE=true`) when mutation is not needed or must be reviewed.
 7. **Monitor token usage** via GitLab's admin panel.
 8. **Rotate tokens periodically** according to your organization's policy.

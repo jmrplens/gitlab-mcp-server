@@ -51,7 +51,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 
 ## Highlights
 
-- **1039 MCP tools** on self-managed Enterprise/Premium, or **1045 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 176 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
+- **1028 MCP tools** on self-managed Enterprise/Premium, or **1034 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 175 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
 - **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_action` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 32 base, 48 on self-managed Enterprise/Premium, or 49 on GitLab.com Enterprise/Premium
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against populated GitLab CE and licensed Enterprise instances measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -248,8 +248,8 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | Mode                          | Tools                                                                              | Description                                                                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Dynamic Toolset** (default) | 2 visible tools                                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
-| **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual**                | 877 CE / 1039 self-managed enterprise / 1045 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
+| **Meta-Tools**                | 32 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 32/48/49 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
+| **Individual**                | 866 CE / 1028 self-managed enterprise / 1034 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Minimal keeps the surface-aware `gitlab://tools` manifest so dynamic, meta, and individual deployments can still read accepted call shapes. The default remains `full`.
 
@@ -259,16 +259,15 @@ The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-too
 
 ## Compatibility
 
-| MCP Capability  | Support                                    |
-| --------------- | ------------------------------------------ |
-| **Tools**       | Up to 1045 individual / 33–50 meta         |
-| **Resources**   | 46 (static + templates)                    |
-| **Prompts**     | 37 templates                               |
-| **Completions** | Project, user, group, branch, tag          |
-| **Logging**     | Structured (text/JSON) + MCP notifications |
-| **Progress**    | Tool execution progress reporting          |
-| **Elicitation** | 4 interactive creation wizards             |
-| **Roots**       | Workspace root tracking                    |
+| MCP Capability  | Support                            |
+| --------------- | ---------------------------------- |
+| **Tools**       | Up to 1034 individual / 32–49 meta |
+| **Resources**   | 45 (static + templates)            |
+| **Prompts**     | 37 templates                       |
+| **Completions** | Project, user, group, branch, tag  |
+| **Logging**     | Structured (text/JSON) to stderr   |
+| **Progress**    | Tool execution progress reporting  |
+| **Elicitation** | 4 interactive creation wizards     |
 
 Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline, Roo Code.
 
@@ -349,9 +348,9 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [CLI Reference](docs/cli-reference.md)               | All command-line flags, exit codes, and runtime examples                               |
 | [HTTP Server Mode](docs/http-server-mode.md)         | Shared HTTP deployments, authentication, server pool isolation                         |
 | [Tools Reference](docs/tools/README.md)              | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
-| [Meta-Tools](docs/meta-tools.md)                     | 33/49/50 domain meta-tools with action dispatching                                     |
+| [Meta-Tools](docs/meta-tools.md)                     | 32/48/49 domain meta-tools with action dispatching                                     |
 | [Dynamic Toolset](docs/dynamic-tools.md)             | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
-| [Resources](docs/resources-reference.md)             | All 46 resources with URI templates                                                    |
+| [Resources](docs/resources-reference.md)             | All 45 resources with URI templates                                                    |
 | [Prompts](docs/prompts-reference.md)                 | All 37 prompts with arguments and output format                                        |
 | [Auto-Update](docs/auto-update.md)                   | Self-update mechanism, modes, and release format                                       |
 | [Testing](docs/testing/README.md)                    | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
@@ -445,19 +444,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       892 |     155,394 |
-| Unit tests (`_test.go`)  |       479 |     264,813 |
+| Source (`.go`, non-test) |       892 |     155,328 |
+| Unit tests (`_test.go`)  |       479 |     264,631 |
 | End-to-end tests         |       141 |      34,966 |
-| **Total**                | **1,512** | **455,173** |
+| **Total**                | **1,512** | **454,925** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,423 |
+| Source functions                |  6,421 |
 | — exported (public)             |  2,411 |
-| — unexported (private)          |  4,012 |
-| Unit test functions (`TestXxx`) | 10,432 |
+| — unexported (private)          |  4,010 |
+| Unit test functions (`TestXxx`) | 10,426 |
 | Subtests (`t.Run(...)`)         |  2,577 |
 | End-to-end test functions       |    286 |
 
@@ -468,14 +467,14 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines         | 1.70× more tests than code |
 | Average source file length         |                 ~174 lines |
 | Average test file length           |                 ~552 lines |
-| Comment lines in source            |   14,563 (~9.4% of source) |
+| Comment lines in source            |   14,560 (~9.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,031 |
+| `if err != nil` checks             | 6,027 |
 | `defer` statements                 |   690 |
 | `struct` types defined             | 2,302 |
 | `//nolint` suppressions            |    91 |
@@ -488,7 +487,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   216 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   206 |
+| Git commits                    |   209 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -502,8 +501,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,825 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,889 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,824 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,869 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

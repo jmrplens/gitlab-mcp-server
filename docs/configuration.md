@@ -212,8 +212,8 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | Mode                          | Variable                  | Tools Exposed                                                      | Best For                                                                      |
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                      | Most users — lowest startup context while retaining full catalog reachability |
-| **Meta-tools**                | `TOOL_SURFACE=meta`       | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
-| **Individual tools**          | `TOOL_SURFACE=individual` | 877 CE / 1039 self-managed enterprise / 1045 GitLab.com Enterprise | Clients that need granular tool selection                                     |
+| **Meta-tools**                | `TOOL_SURFACE=meta`       | 32 base / 48 self-managed enterprise / 49 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
+| **Individual tools**          | `TOOL_SURFACE=individual` | 866 CE / 1028 self-managed enterprise / 1034 GitLab.com Enterprise | Clients that need granular tool selection                                     |
 
 Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 
@@ -235,7 +235,7 @@ The evaluated modes remain `opaque`, `compact`, and `full`. The setting name rem
 
 `CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode: it keeps `gitlab://tools` for surface-aware action discovery, and omits static GitLab data resources, workflow guide resources, and prompt templates. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline.
 
-Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead low by advertising only roots plus the unified tool manifest. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing low-token workflows. Reconsider an intermediate mode only if future audits show a concrete client that needs more resources but cannot tolerate prompts or static resources.
+Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead low by advertising only the unified tool manifest. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing low-token workflows. Reconsider an intermediate mode only if future audits show a concrete client that needs more resources but cannot tolerate prompts or static resources.
 
 ### HTTP Server Mode
 

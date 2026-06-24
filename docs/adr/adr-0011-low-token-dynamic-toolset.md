@@ -16,8 +16,8 @@ Status: Accepted.
 
 ## Context
 
-ADR-0005 consolidated the GitLab MCP meta-tool catalog from 68 tools to 33 base tools, with 49 self-managed
-Enterprise/Premium tools and 50 GitLab.com Enterprise/Premium tools when all gated capabilities are visible. This remains
+ADR-0005 consolidated the GitLab MCP meta-tool catalog from 68 tools to 32 base tools, with 48 self-managed
+Enterprise/Premium tools and 49 GitLab.com Enterprise/Premium tools when all gated capabilities are visible. This remains
 the most compatible general-purpose mode and already reduces advertised tool-definition cost by about 89.5% versus the
 individual tool catalog.
 
@@ -48,7 +48,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Positive
 
-- **POS-001**: Reduces the initial visible tool count from 33/49/50 to 2 in low-token mode.
+- **POS-001**: Reduces the initial visible tool count from 32/48/49 to 2 in low-token mode.
 - **POS-002**: Keeps plain MCP compatibility because discovery and execution remain ordinary tool calls.
 - **POS-003**: Reuses canonical `ActionSpec`/catalog routes, per-action schemas, handlers, markdown formatters, destructive flags,
   read-only mode, safe mode, and scope filtering.
@@ -68,7 +68,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Keep Current Domain Meta-Tools Only
 
-- **ALT-001**: **Description**: Continue optimizing descriptions and schema resources within the 33/49/50 meta-tool model.
+- **ALT-001**: **Description**: Continue optimizing descriptions and schema resources within the 32/48/49 meta-tool model.
 - **ALT-002**: **Rejection Reason**: This preserves compatibility but cannot reach the 2-4 visible tool target.
 
 ### Unified Dispatcher

@@ -1,13 +1,13 @@
 # MCP Capabilities
 
-Detailed documentation for the **6 MCP capabilities** implemented by gitlab-mcp-server.
+Detailed documentation for the **3 MCP capabilities** implemented by gitlab-mcp-server.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, contributors, integrators
 
 ## What Are Capabilities?
 
-Capabilities are protocol-level features negotiated during the MCP `initialize` handshake. They determine what the server and client can do beyond basic tool calls — structured logging, progress updates, autocomplete, workspace discovery, LLM delegation, and interactive user input.
+Capabilities are protocol-level features negotiated during the MCP `initialize` handshake. They determine what the server and client can do beyond basic tool calls — progress updates, autocomplete, and interactive user input.
 
 ## Server Capabilities
 
@@ -45,9 +45,8 @@ server := mcp.NewServer(
 
 `CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
 and registers the full prompt/resource catalog. `CAPABILITY_SURFACE=minimal`
-omits the prompt capability and keeps the workspace roots resource while leaving
-tool execution, completions, roots handling, logging, and progress handling
-available. Minimal also registers `gitlab://tools` and `gitlab://tools/{id}`
+omits the prompt capability while leaving tool execution, completions, and
+progress handling available. Minimal also registers `gitlab://tools` and `gitlab://tools/{id}`
 for exact action call shapes across every tool surface.
 
 Client capabilities (Elicitation) are not declared by the server — they are advertised by the client during the `initialize` handshake. The server checks for their presence at tool execution time via `FromRequest()` helpers.
@@ -66,11 +65,11 @@ All capability implementations in this project follow consistent patterns:
 
 - **Zero-value safety** — `progress.Tracker` and `elicitation.Client` are value types whose zero values are safe no-ops. Tool handlers never need nil-checks.
 - **Graceful degradation** — If a client doesn't support a capability, tools return informational messages instead of errors. The server never crashes due to missing capabilities.
-- **Security boundaries** — Logging never includes secrets. Sampling uses a hardened, non-configurable system prompt. Elicitation validates all responses against schemas.
+- **Security boundaries** — Elicitation validates all responses against schemas.
 - **Nil-safe receivers** — `SessionLogger` methods are safe to call on nil receivers.
 
 ## External References
 
-- [MCP Specification — Capabilities](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/logging)
+- [MCP Specification — Capabilities](https://modelcontextprotocol.io/specification/2025-11-25/server)
 - [MCP Go SDK — ServerCapabilities](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerCapabilities)
 - [MCP Specification](https://modelcontextprotocol.io/specification/) — official protocol documentation

@@ -149,9 +149,9 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 ## Tool Modes
 
-By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
+By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **32 meta-tools** (49 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit).
 
-To register the complete individual tool set instead (one tool per GitLab operation; up to 1045 on GitLab.com Enterprise/Premium), set:
+To register the complete individual tool set instead (one tool per GitLab operation; up to 1034 on GitLab.com Enterprise/Premium), set:
 
 ```env
 TOOL_SURFACE=individual

@@ -9,13 +9,13 @@ Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two ad
 
 MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for providing background information that helps the LLM make better decisions.
 
-The server exposes **46 resources** across several categories:
+The server exposes **45 resources** across several categories:
 
 :::note
-MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 9 fixed URIs: current user, groups, workspace roots, the tool manifest, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
+MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 8 fixed URIs: current user, groups, the tool manifest, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
 :::
 
-### Static resources (4)
+### Static resources (3)
 
 | Resource                   | Description                                                                                                    |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -271,7 +271,7 @@ The server returns a structured prompt with context-aware content that the LLM u
 
 | Variable             | Default | Description                                                                                                                       |
 | -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, workflow guides, prompts, and `gitlab://tools`; `minimal` keeps workspace roots plus `gitlab://tools` |
+| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, workflow guides, prompts, and `gitlab://tools`; `minimal` keeps `gitlab://tools` |
 
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
