@@ -67,6 +67,63 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 			},
 		})
 	})
+
+	// Container registry TAG protection rules (separate REST surface from the
+	// repository-path rules above). The immutable-tags API requires GitLab
+	// 17.8+, so list/create tolerate a 404 on older instances and skip the
+	// rest; when available the full CRUD lifecycle is asserted.
+	t.Run("RegistryTagRuleCRUD", func(t *testing.T) {
+		listOut, err := callToolOn[containerregistry.TagProtectionRuleListOutput](ctx, sess.meta, "gitlab_package", map[string]any{
+			"action": "registry_tag_rule_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		})
+		if err != nil {
+			if isHTTPStatus(err, 404) {
+				t.Skipf("container registry tag protection not available on this GitLab version: %v", err)
+			}
+			requireNoError(t, err, "registry_tag_rule_list")
+		}
+		t.Logf("Registry tag protection rules: %d", len(listOut.Rules))
+
+		createOut, err := callToolOn[containerregistry.TagProtectionRuleOutput](ctx, sess.meta, "gitlab_package", map[string]any{
+			"action": "registry_tag_rule_create",
+			"params": map[string]any{
+				"project_id":                      proj.pidStr(),
+				"tag_name_pattern":                "v.+",
+				"minimum_access_level_for_push":   "maintainer",
+				"minimum_access_level_for_delete": "maintainer",
+			},
+		})
+		if err != nil && isHTTPStatus(err, 404) {
+			t.Skipf("container registry tag protection create not available: %v", err)
+		}
+		requireNoError(t, err, "registry_tag_rule_create")
+		requireTruef(t, createOut.ID > 0, "registry_tag_rule_create: expected ID > 0")
+		t.Logf("Created registry tag protection rule %d", createOut.ID)
+
+		updateOut, err := callToolOn[containerregistry.TagProtectionRuleOutput](ctx, sess.meta, "gitlab_package", map[string]any{
+			"action": "registry_tag_rule_update",
+			"params": map[string]any{
+				"project_id":       proj.pidStr(),
+				"rule_id":          createOut.ID,
+				"tag_name_pattern": "release-.+",
+			},
+		})
+		if err != nil {
+			t.Logf("registry_tag_rule_update may have limitations: %v", err)
+		} else {
+			requireTruef(t, updateOut.ID == createOut.ID, "registry_tag_rule_update: ID mismatch")
+		}
+
+		err = callToolVoidOn(ctx, sess.meta, "gitlab_package", map[string]any{
+			"action": "registry_tag_rule_delete",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"rule_id":    createOut.ID,
+			},
+		})
+		requireNoError(t, err, "registry_tag_rule_delete")
+	})
 }
 
 // TestMeta_PackagesProtectionRules exercises package protection rules via gitlab_package.

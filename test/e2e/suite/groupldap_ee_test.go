@@ -131,4 +131,25 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 		}
 		t.Fatalf("ldap_link_delete: unexpected error: %v", err)
 	})
+
+	t.Run("Meta/GroupLDAP/Sync", func(t *testing.T) {
+		out, err := callToolOn[groupldap.DeleteOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_sync",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		})
+		if err == nil {
+			// The API accepts the request (202) and runs the sync
+			// asynchronously; the handler returns a success status.
+			requireTruef(t, out.Status == "success", "ldap_sync status = %q, want success", out.Status)
+			t.Logf("LDAP sync triggered (integration is configured): %s", out.Message)
+			return
+		}
+		// Without LDAP configured the endpoint returns 404/422 (or 502/503 if
+		// the LDAP server is unreachable). All indicate correct tool routing.
+		if isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503) {
+			t.Logf("ldap_sync returned expected error (integration may be absent): %v", err)
+			return
+		}
+		t.Fatalf("ldap_sync: unexpected error: %v", err)
+	})
 }

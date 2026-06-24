@@ -101,6 +101,36 @@ func TestIndividual_Groups(t *testing.T) {
 		t.Logf("Group %d has %d subgroups", groupID, len(out.Groups))
 	})
 
+	t.Run("SharedWithList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		gid := strconv.FormatInt(groupID, 10)
+		out, err := callToolOn[groups.ListOutput](ctx, sess.individual, "gitlab_group_shared_with_list", groups.SharedWithListInput{
+			GroupID: toolutil.StringOrInt(gid),
+		})
+		requireNoError(t, err, "group shared_with list")
+		t.Logf("Group %d has %d groups shared with it", groupID, len(out.Groups))
+	})
+
+	t.Run("InvitedList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		gid := strconv.FormatInt(groupID, 10)
+		out, err := callToolOn[groups.ListOutput](ctx, sess.individual, "gitlab_group_invited_list", groups.InvitedListInput{
+			GroupID: toolutil.StringOrInt(gid),
+		})
+		requireNoError(t, err, "group invited list")
+		t.Logf("Group %d has %d invited groups", groupID, len(out.Groups))
+	})
+
+	t.Run("TransferLocations", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		gid := strconv.FormatInt(groupID, 10)
+		out, err := callToolOn[groups.TransferLocationsListOutput](ctx, sess.individual, "gitlab_group_transfer_locations", groups.TransferLocationsListInput{
+			GroupID: toolutil.StringOrInt(gid),
+		})
+		requireNoError(t, err, "group transfer_locations")
+		t.Logf("Group %d has %d candidate transfer locations", groupID, len(out.Locations))
+	})
+
 	t.Run("Delete", func(t *testing.T) {
 		requireTruef(t, groupID > 0, "groupID not set")
 		gid := strconv.FormatInt(groupID, 10)
@@ -209,6 +239,36 @@ func TestMeta_Groups(t *testing.T) {
 		})
 		requireNoError(t, err, "meta subgroups list")
 		t.Logf("Group %d has %d subgroups via meta-tool", groupID, len(out.Groups))
+	})
+
+	t.Run("SharedWithList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groups.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "shared_with",
+			"params": map[string]any{"group_id": strconv.FormatInt(groupID, 10)},
+		})
+		requireNoError(t, err, "meta group shared_with list")
+		t.Logf("Group %d has %d groups shared with it via meta-tool", groupID, len(out.Groups))
+	})
+
+	t.Run("InvitedList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groups.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "invited_groups",
+			"params": map[string]any{"group_id": strconv.FormatInt(groupID, 10)},
+		})
+		requireNoError(t, err, "meta group invited list")
+		t.Logf("Group %d has %d invited groups via meta-tool", groupID, len(out.Groups))
+	})
+
+	t.Run("TransferLocations", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groups.TransferLocationsListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "transfer_locations",
+			"params": map[string]any{"group_id": strconv.FormatInt(groupID, 10)},
+		})
+		requireNoError(t, err, "meta group transfer_locations")
+		t.Logf("Group %d has %d candidate transfer locations via meta-tool", groupID, len(out.Locations))
 	})
 
 	t.Run("Delete", func(t *testing.T) {
