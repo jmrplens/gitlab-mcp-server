@@ -43436,7 +43436,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -43550,7 +43551,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -43661,9 +43662,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -43682,12 +43680,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -43728,9 +43720,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -43749,7 +43738,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -44916,7 +44905,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -45030,7 +45020,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -45141,9 +45131,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -45162,12 +45149,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -45208,9 +45189,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -45229,7 +45207,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -46113,7 +46091,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -46227,7 +46206,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -46338,9 +46317,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -46359,12 +46335,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -46405,9 +46375,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -46426,7 +46393,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -46813,7 +46780,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -46927,7 +46895,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -47038,9 +47006,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -47059,12 +47024,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -47105,9 +47064,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -47126,7 +47082,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -51360,7 +51316,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -51474,7 +51431,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -51585,9 +51542,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -51606,12 +51560,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -51652,9 +51600,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -51673,7 +51618,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
@@ -52309,7 +52254,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -52423,7 +52369,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -52534,9 +52480,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -52555,12 +52498,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -52601,9 +52538,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -52622,7 +52556,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
@@ -53253,7 +53187,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -53367,7 +53302,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -53478,9 +53413,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -53499,12 +53431,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -53545,9 +53471,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -53566,7 +53489,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
@@ -54256,7 +54179,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -54370,7 +54294,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -54481,9 +54405,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -54502,12 +54423,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -54548,9 +54463,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -54569,7 +54481,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -58159,7 +58071,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -58273,7 +58186,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -58384,9 +58297,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -58405,12 +58315,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -58451,9 +58355,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -58472,7 +58373,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -59212,7 +59113,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -59326,7 +59228,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -59437,9 +59339,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -59458,12 +59357,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -59504,9 +59397,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -59525,7 +59415,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -60102,7 +59992,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -60216,7 +60107,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -60327,9 +60218,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -60348,12 +60236,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -60394,9 +60276,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -60415,7 +60294,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -60907,7 +60786,8 @@
         "id": {
           "type": "integer"
         },
-        "issue_iid": {
+        "iid": {
+          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -61021,7 +60901,7 @@
             "array"
           ]
         },
-        "merge_request_count": {
+        "merge_requests_count": {
           "type": "integer"
         },
         "milestone": {
@@ -61132,9 +61012,6 @@
         "subscribed": {
           "type": "boolean"
         },
-        "task_completion_count": {
-          "type": "integer"
-        },
         "task_completion_status": {
           "additionalProperties": false,
           "properties": {
@@ -61153,12 +61030,6 @@
             "null",
             "object"
           ]
-        },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -61199,9 +61070,6 @@
         "title": {
           "type": "string"
         },
-        "total_time_spent": {
-          "type": "integer"
-        },
         "updated_at": {
           "type": "string"
         },
@@ -61220,7 +61088,7 @@
       },
       "required": [
         "id",
-        "issue_iid",
+        "iid",
         "title",
         "description",
         "state",
@@ -81562,7 +81430,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -81676,7 +81545,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -81787,9 +81656,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -81808,12 +81674,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -81854,9 +81714,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -81875,7 +81732,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
@@ -85719,7 +85576,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -85833,7 +85691,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -85944,9 +85802,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -85965,12 +85820,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -86011,9 +85860,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -86032,7 +85878,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
@@ -120175,7 +120021,8 @@
               "id": {
                 "type": "integer"
               },
-              "issue_iid": {
+              "iid": {
+                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -120289,7 +120136,7 @@
                   "array"
                 ]
               },
-              "merge_request_count": {
+              "merge_requests_count": {
                 "type": "integer"
               },
               "milestone": {
@@ -120400,9 +120247,6 @@
               "subscribed": {
                 "type": "boolean"
               },
-              "task_completion_count": {
-                "type": "integer"
-              },
               "task_completion_status": {
                 "additionalProperties": false,
                 "properties": {
@@ -120421,12 +120265,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "task_completion_total": {
-                "type": "integer"
-              },
-              "time_estimate": {
-                "type": "integer"
               },
               "time_stats": {
                 "additionalProperties": false,
@@ -120467,9 +120305,6 @@
               "title": {
                 "type": "string"
               },
-              "total_time_spent": {
-                "type": "integer"
-              },
               "updated_at": {
                 "type": "string"
               },
@@ -120488,7 +120323,7 @@
             },
             "required": [
               "id",
-              "issue_iid",
+              "iid",
               "title",
               "description",
               "state",
