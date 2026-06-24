@@ -342,7 +342,7 @@ func TestFormatMR_ApproveMarkdown(t *testing.T) {
 // TestFormatMR_NoteMarkdown verifies MR note fields in Markdown and that
 // non-system notes do not include the system note marker.
 func TestFormatMR_NoteMarkdown(t *testing.T) {
-	n := mrnotes.Output{ID: 10, Body: "LGTM", Author: "dev", CreatedAt: testDate20260101, System: false}
+	n := mrnotes.Output{ID: 10, Body: "LGTM", Author: &mrnotes.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, System: false}
 	md := mrnotes.FormatOutputMarkdown(n)
 
 	if !strings.Contains(md, "## MR Note #10") {
@@ -368,7 +368,7 @@ func TestFormatMR_NotesListMarkdown(t *testing.T) {
 
 // TestFormatDiscussion_NoteMarkdown verifies discussion note fields in Markdown.
 func TestFormatDiscussion_NoteMarkdown(t *testing.T) {
-	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: "reviewer", CreatedAt: testDate20260101, Resolved: false}
+	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &mrdiscussions.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101, Resolved: false}
 	md := mrdiscussions.FormatNoteMarkdown(n)
 
 	if !strings.Contains(md, "## Discussion Note #5") {
@@ -385,9 +385,9 @@ func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	d := mrdiscussions.Output{
 		ID:             "abc123",
 		IndividualNote: false,
-		Notes: []mrdiscussions.NoteOutput{
-			{ID: 1, Body: "First note", Author: "dev1"},
-			{ID: 2, Body: "Reply", Author: "dev2"},
+		Notes: []*mrdiscussions.NoteOutput{
+			{ID: 1, Body: "First note", Author: &mrdiscussions.NoteUserOutput{Username: "dev1"}},
+			{ID: 2, Body: "Reply", Author: &mrdiscussions.NoteUserOutput{Username: "dev2"}},
 		},
 	}
 	md := mrdiscussions.FormatOutputMarkdown(d)

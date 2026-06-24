@@ -80601,7 +80601,7 @@
   },
   {
     "name": "gitlab_mr_changes_get",
-    "description": "Get the current file diffs (changes) for a merge request. This is the primary tool for viewing MR changes. Returns old/new paths, diff content, file status (added/deleted/renamed), and file modes. For historical diff versions use gitlab_mr_diff_versions_list. For raw git-apply format use gitlab_mr_raw_diffs.\n\nReturns: JSON with file diffs and change metadata. See also: gitlab_mr_get, gitlab_mr_discussion_create.",
+    "description": "Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), file modes, and truncated_files when GitLab collapses large diffs. See also: gitlab_mr_diff_versions_list, gitlab_mr_raw_diffs, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80609,9 +80609,37 @@
           "description": "Merge request internal ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "type": "string"
+        },
+        "unidiff": {
+          "description": "Return diffs in unified diff format (default: false)",
+          "type": "boolean"
         }
       },
       "required": [
@@ -80633,6 +80661,9 @@
               "b_mode": {
                 "type": "string"
               },
+              "collapsed": {
+                "type": "boolean"
+              },
               "deleted_file": {
                 "type": "boolean"
               },
@@ -80652,6 +80683,9 @@
                 "type": "string"
               },
               "renamed_file": {
+                "type": "boolean"
+              },
+              "too_large": {
                 "type": "boolean"
               }
             },
@@ -83417,7 +83451,7 @@
   },
   {
     "name": "gitlab_mr_diff_version_get",
-    "description": "Get a single merge request diff version with its commits and file diffs. Use the version_id from gitlab_mr_diff_versions_list. Optionally request unified diff format.\n\nReturns: JSON with diff version commits and file diffs. See also: gitlab_mr_diff_versions_list.",
+    "description": "Get a single merge request diff version with its commits and file diffs. Returns: the diff version with id, SHAs, state, real_size, the full commit list, and per-file diffs (optionally in unified-diff format). See also: gitlab_mr_diff_versions_list, gitlab_mr_changes_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -83455,19 +83489,90 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "author_email": {
+                "type": "string"
+              },
               "author_name": {
+                "type": "string"
+              },
+              "authored_date": {
+                "type": "string"
+              },
+              "committed_date": {
+                "type": "string"
+              },
+              "committer_email": {
+                "type": "string"
+              },
+              "committer_name": {
                 "type": "string"
               },
               "created_at": {
                 "type": "string"
               },
+              "extended_trailers": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
               "id": {
                 "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "parent_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
               },
               "short_id": {
                 "type": "string"
               },
+              "stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "additions": {
+                    "type": "integer"
+                  },
+                  "deletions": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "additions",
+                  "deletions",
+                  "total"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
               "title": {
+                "type": "string"
+              },
+              "trailers": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "web_url": {
                 "type": "string"
               }
             },
@@ -83497,6 +83602,9 @@
               "b_mode": {
                 "type": "string"
               },
+              "collapsed": {
+                "type": "boolean"
+              },
               "deleted_file": {
                 "type": "boolean"
               },
@@ -83516,6 +83624,9 @@
                 "type": "string"
               },
               "renamed_file": {
+                "type": "boolean"
+              },
+              "too_large": {
                 "type": "boolean"
               }
             },
@@ -83579,7 +83690,7 @@
   },
   {
     "name": "gitlab_mr_diff_versions_list",
-    "description": "List all diff versions (historical snapshots) of a merge request. Returns version IDs, SHAs, state, and timestamps — NOT the actual diffs. Use gitlab_mr_diff_version_get with a version_id to retrieve diffs for a specific version. For current diffs, use gitlab_mr_changes_get instead.\n\nReturns: JSON array of diff versions with pagination. See also: gitlab_mr_changes_get.",
+    "description": "List all diff versions (historical snapshots) of a merge request. Returns: an array of diff versions with id, head/base/start SHAs, state, real_size, and created_at, plus pagination metadata. See also: gitlab_mr_diff_version_get, gitlab_mr_changes_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -83587,9 +83698,21 @@
           "description": "Merge request internal ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -83597,6 +83720,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
           "type": "string"
         }
       },
@@ -83620,19 +83747,90 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "author_email": {
+                      "type": "string"
+                    },
                     "author_name": {
+                      "type": "string"
+                    },
+                    "authored_date": {
+                      "type": "string"
+                    },
+                    "committed_date": {
+                      "type": "string"
+                    },
+                    "committer_email": {
+                      "type": "string"
+                    },
+                    "committer_name": {
                       "type": "string"
                     },
                     "created_at": {
                       "type": "string"
                     },
+                    "extended_trailers": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "parent_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
                     },
                     "short_id": {
                       "type": "string"
                     },
+                    "stats": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "additions": {
+                          "type": "integer"
+                        },
+                        "deletions": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "additions",
+                        "deletions",
+                        "total"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
                     "title": {
+                      "type": "string"
+                    },
+                    "trailers": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "web_url": {
                       "type": "string"
                     }
                   },
@@ -83662,6 +83860,9 @@
                     "b_mode": {
                       "type": "string"
                     },
+                    "collapsed": {
+                      "type": "boolean"
+                    },
                     "deleted_file": {
                       "type": "boolean"
                     },
@@ -83681,6 +83882,9 @@
                       "type": "string"
                     },
                     "renamed_file": {
+                      "type": "boolean"
+                    },
+                    "too_large": {
                       "type": "boolean"
                     }
                   },
@@ -83801,12 +84005,20 @@
   },
   {
     "name": "gitlab_mr_discussion_create",
-    "description": "Start a new threaded discussion on a GitLab merge request. For a general discussion, just provide 'body'. For an inline diff comment, also provide 'position' with base_sha, start_sha, head_sha (get these from gitlab_mr_get diff_refs field), new_path, and old_line/new_line.\n\nReturns: JSON with the created discussion. See also: gitlab_mr_get, gitlab_mr_discussion_list.",
+    "description": "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "body": {
           "description": "Discussion body",
+          "type": "string"
+        },
+        "commit_id": {
+          "description": "SHA of the commit to anchor the discussion to (optional).",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
           "type": "string"
         },
         "merge_request_iid": {
@@ -83825,6 +84037,72 @@
               "description": "HEAD commit SHA of the MR source branch",
               "type": "string"
             },
+            "height": {
+              "description": "Image height in pixels (position_type=image).",
+              "type": "integer"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "description": "Start/end line range for a multi-line text diff comment.",
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "description": "End endpoint of a multi-line diff comment range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying this line in the diff.",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this endpoint.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this endpoint.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type (new, old, or expanded).",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "description": "Start endpoint of a multi-line diff comment range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying this line in the diff.",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this endpoint.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this endpoint.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type (new, old, or expanded).",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "description": "Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines.",
               "type": "integer"
@@ -83841,9 +84119,25 @@
               "description": "File path before the change (for modified/deleted files)",
               "type": "string"
             },
+            "position_type": {
+              "description": "Position type: 'text' for line comments (default) or 'image' for coordinate comments.",
+              "type": "string"
+            },
             "start_sha": {
               "description": "SHA of the first commit in the MR",
               "type": "string"
+            },
+            "width": {
+              "description": "Image width in pixels (position_type=image).",
+              "type": "integer"
+            },
+            "x": {
+              "description": "X coordinate of the comment on the image (position_type=image).",
+              "type": "number"
+            },
+            "y": {
+              "description": "Y coordinate of the comment on the image (position_type=image).",
+              "type": "number"
             }
           },
           "required": [
@@ -83891,8 +84185,43 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "author": {
+              "attachment": {
                 "type": "string"
+              },
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
@@ -83900,7 +84229,16 @@
               "commit_id": {
                 "type": "string"
               },
+              "confidential": {
+                "type": "boolean"
+              },
               "created_at": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "file_name": {
                 "type": "string"
               },
               "id": {
@@ -83918,11 +84256,98 @@
                   "array"
                 ]
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_iid": {
+              "noteable_iid": {
                 "type": "integer"
+              },
+              "noteable_type": {
+                "type": "string"
+              },
+              "position": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "new_line": {
+                    "type": "integer"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "old_line": {
+                    "type": "integer"
+                  },
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "project_id": {
                 "type": "integer"
@@ -83933,8 +84358,49 @@
               "resolved": {
                 "type": "boolean"
               },
+              "resolved_at": {
+                "type": "string"
+              },
+              "resolved_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "system": {
                 "type": "boolean"
+              },
+              "title": {
+                "type": "string"
               },
               "type": {
                 "type": "string"
@@ -83946,14 +84412,17 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "resolved",
               "resolvable",
               "system",
-              "internal"
+              "internal",
+              "confidential"
             ],
-            "type": "object"
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -83975,7 +84444,7 @@
   },
   {
     "name": "gitlab_mr_discussion_get",
-    "description": "Get a single discussion thread from a GitLab merge request by its discussion ID, including all notes in the thread.\n\nReturns: JSON with discussion details and notes. See also: gitlab_mr_discussion_list.",
+    "description": "Get a single merge request discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: gitlab_mr_discussion_list, gitlab_mr_discussion_reply, gitlab_mr_discussion_resolve.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84021,8 +84490,43 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "author": {
+              "attachment": {
                 "type": "string"
+              },
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
@@ -84030,7 +84534,16 @@
               "commit_id": {
                 "type": "string"
               },
+              "confidential": {
+                "type": "boolean"
+              },
               "created_at": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "file_name": {
                 "type": "string"
               },
               "id": {
@@ -84048,11 +84561,98 @@
                   "array"
                 ]
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_iid": {
+              "noteable_iid": {
                 "type": "integer"
+              },
+              "noteable_type": {
+                "type": "string"
+              },
+              "position": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "new_line": {
+                    "type": "integer"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "old_line": {
+                    "type": "integer"
+                  },
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "project_id": {
                 "type": "integer"
@@ -84063,8 +84663,49 @@
               "resolved": {
                 "type": "boolean"
               },
+              "resolved_at": {
+                "type": "string"
+              },
+              "resolved_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "system": {
                 "type": "boolean"
+              },
+              "title": {
+                "type": "string"
               },
               "type": {
                 "type": "string"
@@ -84076,14 +84717,17 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "resolved",
               "resolvable",
               "system",
-              "internal"
+              "internal",
+              "confidential"
             ],
-            "type": "object"
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -84107,7 +84751,7 @@
   },
   {
     "name": "gitlab_mr_discussion_list",
-    "description": "List all discussion threads on a GitLab merge request including inline diff comments and general discussions. Each thread contains its notes and resolution status. Returns paginated results.\n\nReturns: JSON array of discussions with pagination. See also: gitlab_mr_get, gitlab_mr_notes_list.",
+    "description": "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84115,9 +84759,21 @@
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -84125,6 +84781,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc or desc)",
           "type": "string"
         }
       },
@@ -84160,8 +84820,43 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
-                    "author": {
+                    "attachment": {
                       "type": "string"
+                    },
+                    "author": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
                     },
                     "body": {
                       "type": "string"
@@ -84169,7 +84864,16 @@
                     "commit_id": {
                       "type": "string"
                     },
+                    "confidential": {
+                      "type": "boolean"
+                    },
                     "created_at": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "type": "string"
+                    },
+                    "file_name": {
                       "type": "string"
                     },
                     "id": {
@@ -84187,11 +84891,98 @@
                         "array"
                       ]
                     },
-                    "notable_id": {
+                    "noteable_id": {
                       "type": "integer"
                     },
-                    "notable_iid": {
+                    "noteable_iid": {
                       "type": "integer"
+                    },
+                    "noteable_type": {
+                      "type": "string"
+                    },
+                    "position": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "base_sha": {
+                          "type": "string"
+                        },
+                        "head_sha": {
+                          "type": "string"
+                        },
+                        "line_range": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "end": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "line_code": {
+                                  "type": "string"
+                                },
+                                "new_line": {
+                                  "type": "integer"
+                                },
+                                "old_line": {
+                                  "type": "integer"
+                                },
+                                "type": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": [
+                                "null",
+                                "object"
+                              ]
+                            },
+                            "start": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "line_code": {
+                                  "type": "string"
+                                },
+                                "new_line": {
+                                  "type": "integer"
+                                },
+                                "old_line": {
+                                  "type": "integer"
+                                },
+                                "type": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": [
+                                "null",
+                                "object"
+                              ]
+                            }
+                          },
+                          "type": [
+                            "null",
+                            "object"
+                          ]
+                        },
+                        "new_line": {
+                          "type": "integer"
+                        },
+                        "new_path": {
+                          "type": "string"
+                        },
+                        "old_line": {
+                          "type": "integer"
+                        },
+                        "old_path": {
+                          "type": "string"
+                        },
+                        "position_type": {
+                          "type": "string"
+                        },
+                        "start_sha": {
+                          "type": "string"
+                        }
+                      },
+                      "type": [
+                        "null",
+                        "object"
+                      ]
                     },
                     "project_id": {
                       "type": "integer"
@@ -84202,8 +84993,49 @@
                     "resolved": {
                       "type": "boolean"
                     },
+                    "resolved_at": {
+                      "type": "string"
+                    },
+                    "resolved_by": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
                     "system": {
                       "type": "boolean"
+                    },
+                    "title": {
+                      "type": "string"
                     },
                     "type": {
                       "type": "string"
@@ -84215,14 +85047,17 @@
                   "required": [
                     "id",
                     "body",
-                    "author",
                     "created_at",
                     "resolved",
                     "resolvable",
                     "system",
-                    "internal"
+                    "internal",
+                    "confidential"
                   ],
-                  "type": "object"
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -84303,7 +85138,7 @@
   },
   {
     "name": "gitlab_mr_discussion_note_delete",
-    "description": "Delete a note from a merge request discussion thread. Only the note author or project maintainers can delete notes.\n\nReturns: JSON confirming note deletion. See also: gitlab_mr_discussion_get.",
+    "description": "Delete a note from a merge request discussion thread (destructive). Returns: a deletion confirmation message. See also: gitlab_mr_discussion_note_update, gitlab_mr_discussion_get, gitlab_mr_discussion_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84370,12 +85205,16 @@
   },
   {
     "name": "gitlab_mr_discussion_note_update",
-    "description": "Update the body or resolved status of a note within a merge request discussion thread. You can modify the text, change resolution status, or both.\n\nReturns: JSON with the updated note details. See also: gitlab_mr_discussion_get.",
+    "description": "Update the body or resolved state of a note in a merge request discussion thread. Returns: the updated note. See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_note_delete, gitlab_mr_discussion_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "body": {
           "description": "New body text (Markdown). Leave empty to keep current body.",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -84413,8 +85252,43 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "author": {
+        "attachment": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -84422,7 +85296,16 @@
         "commit_id": {
           "type": "string"
         },
+        "confidential": {
+          "type": "boolean"
+        },
         "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "file_name": {
           "type": "string"
         },
         "id": {
@@ -84440,11 +85323,98 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_iid": {
+        "noteable_iid": {
           "type": "integer"
+        },
+        "noteable_type": {
+          "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "project_id": {
           "type": "integer"
@@ -84455,8 +85425,49 @@
         "resolved": {
           "type": "boolean"
         },
+        "resolved_at": {
+          "type": "string"
+        },
+        "resolved_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "type": {
           "type": "string"
@@ -84468,12 +85479,12 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "resolved",
         "resolvable",
         "system",
-        "internal"
+        "internal",
+        "confidential"
       ],
       "type": "object"
     },
@@ -84485,12 +85496,16 @@
   },
   {
     "name": "gitlab_mr_discussion_reply",
-    "description": "Add a reply to an existing discussion thread on a GitLab merge request. The reply appears nested under the original discussion note.\n\nReturns: JSON with the created reply note. See also: gitlab_mr_discussion_get.",
+    "description": "Add a reply note to an existing merge request discussion thread. Returns: the created note (author, body, timestamps, resolvable state). See also: gitlab_mr_discussion_create, gitlab_mr_discussion_get, gitlab_mr_discussion_note_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "body": {
           "description": "Reply body",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -84517,8 +85532,43 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "author": {
+        "attachment": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -84526,7 +85576,16 @@
         "commit_id": {
           "type": "string"
         },
+        "confidential": {
+          "type": "boolean"
+        },
         "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "file_name": {
           "type": "string"
         },
         "id": {
@@ -84544,11 +85603,98 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_iid": {
+        "noteable_iid": {
           "type": "integer"
+        },
+        "noteable_type": {
+          "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "project_id": {
           "type": "integer"
@@ -84559,8 +85705,49 @@
         "resolved": {
           "type": "boolean"
         },
+        "resolved_at": {
+          "type": "string"
+        },
+        "resolved_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "type": {
           "type": "string"
@@ -84572,12 +85759,12 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "resolved",
         "resolvable",
         "system",
-        "internal"
+        "internal",
+        "confidential"
       ],
       "type": "object"
     },
@@ -84588,7 +85775,7 @@
   },
   {
     "name": "gitlab_mr_discussion_resolve",
-    "description": "Resolve or unresolve a discussion thread on a GitLab merge request. Resolved discussions are collapsed in the UI to reduce review noise.\n\nReturns: JSON with the updated discussion resolution status. See also: gitlab_mr_discussion_get.",
+    "description": "Resolve or unresolve a merge request discussion thread. Returns: the thread with its updated resolved state and notes. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_list, gitlab_mr_discussion_reply.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84639,8 +85826,43 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "author": {
+              "attachment": {
                 "type": "string"
+              },
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
@@ -84648,7 +85870,16 @@
               "commit_id": {
                 "type": "string"
               },
+              "confidential": {
+                "type": "boolean"
+              },
               "created_at": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "file_name": {
                 "type": "string"
               },
               "id": {
@@ -84666,11 +85897,98 @@
                   "array"
                 ]
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_iid": {
+              "noteable_iid": {
                 "type": "integer"
+              },
+              "noteable_type": {
+                "type": "string"
+              },
+              "position": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "new_line": {
+                    "type": "integer"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "old_line": {
+                    "type": "integer"
+                  },
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "project_id": {
                 "type": "integer"
@@ -84681,8 +85999,49 @@
               "resolved": {
                 "type": "boolean"
               },
+              "resolved_at": {
+                "type": "string"
+              },
+              "resolved_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "system": {
                 "type": "boolean"
+              },
+              "title": {
+                "type": "string"
               },
               "type": {
                 "type": "string"
@@ -84694,14 +86053,17 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "resolved",
               "resolvable",
               "system",
-              "internal"
+              "internal",
+              "confidential"
             ],
-            "type": "object"
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -84724,7 +86086,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_create",
-    "description": "Create a new draft note (pending review comment) on a GitLab merge request. Supports inline diff comments on specific lines via the position parameter. Draft notes stay private until published with draft_note_publish_all. Prefer this over discussion_create for code reviews to batch all comments into a single notification.\n\nReturns: JSON with the created draft note details. See also: gitlab_mr_get.",
+    "description": "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84756,6 +86118,72 @@
               "description": "HEAD commit SHA of the MR source branch",
               "type": "string"
             },
+            "height": {
+              "description": "Image height in pixels. Only for position_type 'image'.",
+              "type": "integer"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "description": "Line range for multi-line text comments. Set start and end line positions to span more than one line.",
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "description": "End line position of the range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying the diff line (sha_oldline_newline).",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type: 'new', 'old', or empty for unchanged context lines.",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "description": "Start line position of the range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying the diff line (sha_oldline_newline).",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type: 'new', 'old', or empty for unchanged context lines.",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "description": "Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines.",
               "type": "integer"
@@ -84772,9 +86200,25 @@
               "description": "File path before the change (for modified/deleted files)",
               "type": "string"
             },
+            "position_type": {
+              "description": "Position type: 'text' for code diffs (default) or 'image' for image diffs.",
+              "type": "string"
+            },
             "start_sha": {
               "description": "SHA of the first commit in the MR",
               "type": "string"
+            },
+            "width": {
+              "description": "Image width in pixels. Only for position_type 'image'.",
+              "type": "integer"
+            },
+            "x": {
+              "description": "X coordinate of the comment on an image diff. Only for position_type 'image'.",
+              "type": "number"
+            },
+            "y": {
+              "description": "Y coordinate of the comment on an image diff. Only for position_type 'image'.",
+              "type": "number"
             }
           },
           "required": [
@@ -84822,6 +86266,9 @@
         "id": {
           "type": "integer"
         },
+        "line_code": {
+          "type": "string"
+        },
         "merge_request_id": {
           "type": "integer"
         },
@@ -84846,6 +86293,57 @@
             "head_sha": {
               "type": "string"
             },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "type": "integer"
             },
@@ -84856,6 +86354,9 @@
               "type": "integer"
             },
             "old_path": {
+              "type": "string"
+            },
+            "position_type": {
               "type": "string"
             },
             "start_sha": {
@@ -84892,7 +86393,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_delete",
-    "description": "Permanently delete a draft note from a GitLab merge request. Only the draft author can delete it.\n\nReturns: confirmation message. See also: gitlab_mr_draft_note_list.",
+    "description": "Delete a pending draft note permanently. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84954,7 +86455,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_get",
-    "description": "Get a single draft note from a GitLab merge request by its ID. Returns the note body, author, and associated commit/discussion details.\n\nReturns: JSON with draft note details. See also: gitlab_mr_draft_note_list.",
+    "description": "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -84993,6 +86494,9 @@
         "id": {
           "type": "integer"
         },
+        "line_code": {
+          "type": "string"
+        },
         "merge_request_id": {
           "type": "integer"
         },
@@ -85017,6 +86521,57 @@
             "head_sha": {
               "type": "string"
             },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "type": "integer"
             },
@@ -85027,6 +86582,9 @@
               "type": "integer"
             },
             "old_path": {
+              "type": "string"
+            },
+            "position_type": {
               "type": "string"
             },
             "start_sha": {
@@ -85065,7 +86623,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_list",
-    "description": "List all draft notes (pending review comments) on a GitLab merge request. Draft notes are only visible to the author until published. Supports pagination and sorting.\n\nReturns: JSON array of draft notes. See also: gitlab_mr_get, gitlab_mr_discussion_list.",
+    "description": "List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_create, gitlab_mr_draft_note_publish_all.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85080,6 +86638,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -85119,6 +86685,9 @@
               "id": {
                 "type": "integer"
               },
+              "line_code": {
+                "type": "string"
+              },
               "merge_request_id": {
                 "type": "integer"
               },
@@ -85143,6 +86712,57 @@
                   "head_sha": {
                     "type": "string"
                   },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
                   "new_line": {
                     "type": "integer"
                   },
@@ -85153,6 +86773,9 @@
                     "type": "integer"
                   },
                   "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
                     "type": "string"
                   },
                   "start_sha": {
@@ -85248,7 +86871,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_publish",
-    "description": "Publish a single draft note on a GitLab merge request, making it visible to all participants. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_mr_draft_note_get.",
+    "description": "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85305,7 +86928,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_publish_all",
-    "description": "Publish all pending draft notes on a GitLab merge request at once, making them visible to all participants. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_mr_draft_note_list.",
+    "description": "Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85357,7 +86980,7 @@
   },
   {
     "name": "gitlab_mr_draft_note_update",
-    "description": "Update the body text of an existing draft note on a GitLab merge request. Only the draft author can update it.\n\nReturns: JSON with the updated draft note details. See also: gitlab_mr_draft_note_get.",
+    "description": "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85385,6 +87008,72 @@
               "description": "HEAD commit SHA of the MR source branch",
               "type": "string"
             },
+            "height": {
+              "description": "Image height in pixels. Only for position_type 'image'.",
+              "type": "integer"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "description": "Line range for multi-line text comments. Set start and end line positions to span more than one line.",
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "description": "End line position of the range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying the diff line (sha_oldline_newline).",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type: 'new', 'old', or empty for unchanged context lines.",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "description": "Start line position of the range.",
+                  "properties": {
+                    "line_code": {
+                      "description": "Line code identifying the diff line (sha_oldline_newline).",
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "description": "Line number in the new file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "description": "Line number in the old file for this range boundary.",
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Line type: 'new', 'old', or empty for unchanged context lines.",
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "description": "Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines.",
               "type": "integer"
@@ -85401,9 +87090,25 @@
               "description": "File path before the change (for modified/deleted files)",
               "type": "string"
             },
+            "position_type": {
+              "description": "Position type: 'text' for code diffs (default) or 'image' for image diffs.",
+              "type": "string"
+            },
             "start_sha": {
               "description": "SHA of the first commit in the MR",
               "type": "string"
+            },
+            "width": {
+              "description": "Image width in pixels. Only for position_type 'image'.",
+              "type": "integer"
+            },
+            "x": {
+              "description": "X coordinate of the comment on an image diff. Only for position_type 'image'.",
+              "type": "number"
+            },
+            "y": {
+              "description": "Y coordinate of the comment on an image diff. Only for position_type 'image'.",
+              "type": "number"
             }
           },
           "required": [
@@ -85444,6 +87149,9 @@
         "id": {
           "type": "integer"
         },
+        "line_code": {
+          "type": "string"
+        },
         "merge_request_id": {
           "type": "integer"
         },
@@ -85468,6 +87176,57 @@
             "head_sha": {
               "type": "string"
             },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "new_line": {
               "type": "integer"
             },
@@ -85478,6 +87237,9 @@
               "type": "integer"
             },
             "old_path": {
+              "type": "string"
+            },
+            "position_type": {
               "type": "string"
             },
             "start_sha": {
@@ -92524,12 +94286,27 @@
   },
   {
     "name": "gitlab_mr_note_create",
-    "description": "Add a comment (note) to a GitLab merge request. The comment appears in the merge request's activity timeline as a top-level note.\n\nReturns: JSON with the created note (ID, author, body, timestamps). See also: gitlab_mr_get.",
+    "description": "Add a general comment (note) to a merge request. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags. See also: gitlab_mr_notes_list, gitlab_mr_get, gitlab_mr_discussion_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "body": {
           "description": "Comment body (Markdown supported)",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.",
+          "type": "string"
+        },
+        "internal": {
+          "description": "Mark note as internal (visible only to project members)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "merge_request_diff_head_sha": {
+          "description": "Required for the deduplication of system notes: SHA referencing the most recent diff version of the merge request.",
           "type": "string"
         },
         "merge_request_iid": {
@@ -92555,7 +94332,39 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -92590,14 +94399,98 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_iid": {
+        "noteable_iid": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "project_id": {
           "type": "integer"
@@ -92612,10 +94505,45 @@
           "type": "string"
         },
         "resolved_by": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "type": {
           "type": "string"
@@ -92627,10 +94555,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
+        "internal",
         "confidential"
       ],
       "type": "object"
@@ -92642,7 +94570,7 @@
   },
   {
     "name": "gitlab_mr_note_delete",
-    "description": "Permanently delete a comment from a GitLab merge request. Only the note author or a project maintainer can delete a note.\n\nReturns: JSON confirmation of deletion. See also: gitlab_mr_note_get.",
+    "description": "Delete a merge request note permanently. Returns: a success confirmation naming the note, MR, and project. See also: gitlab_mr_note_get, gitlab_mr_notes_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93088,7 +95016,7 @@
   },
   {
     "name": "gitlab_mr_note_get",
-    "description": "Get a single comment (note) from a GitLab merge request by its note ID, including author, timestamps, resolution status, and body.\n\nReturns: JSON with note details (ID, author, body, timestamps, resolution status). See also: gitlab_mr_notes_list.",
+    "description": "Get a single merge request note by its ID. Returns: the note with author, body, timestamps, position, and resolvable/internal flags. See also: gitlab_mr_notes_list, gitlab_mr_note_update, gitlab_mr_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93119,7 +95047,39 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -93154,14 +95114,98 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_iid": {
+        "noteable_iid": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "project_id": {
           "type": "integer"
@@ -93176,10 +95220,45 @@
           "type": "string"
         },
         "resolved_by": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "type": {
           "type": "string"
@@ -93191,10 +95270,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
+        "internal",
         "confidential"
       ],
       "type": "object"
@@ -93208,7 +95287,7 @@
   },
   {
     "name": "gitlab_mr_note_update",
-    "description": "Edit the body text of an existing comment on a GitLab merge request. Only the note author or a project maintainer can update a note.\n\nReturns: JSON with the updated note details. See also: gitlab_mr_note_get.",
+    "description": "Update a merge request note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_mr_note_get, gitlab_mr_notes_list, gitlab_mr_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93244,7 +95323,39 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -93279,14 +95390,98 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_iid": {
+        "noteable_iid": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "project_id": {
           "type": "integer"
@@ -93301,10 +95496,45 @@
           "type": "string"
         },
         "resolved_by": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "type": {
           "type": "string"
@@ -93316,10 +95546,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
+        "internal",
         "confidential"
       ],
       "type": "object"
@@ -93332,7 +95562,7 @@
   },
   {
     "name": "gitlab_mr_notes_list",
-    "description": "List all comments (notes) on a GitLab merge request ordered by creation date. Includes both user comments and system-generated notes (status changes, label updates).\n\nReturns: JSON with array of notes and pagination info. See also: gitlab_mr_get, gitlab_mr_discussion_list.",
+    "description": "List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata. See also: gitlab_mr_note_get, gitlab_mr_note_create, gitlab_mr_discussion_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93347,6 +95577,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -93387,7 +95625,39 @@
                 "type": "string"
               },
               "author": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
@@ -93422,14 +95692,98 @@
                   "array"
                 ]
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_iid": {
+              "noteable_iid": {
                 "type": "integer"
               },
-              "notable_type": {
+              "noteable_type": {
                 "type": "string"
+              },
+              "position": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "new_line": {
+                    "type": "integer"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "old_line": {
+                    "type": "integer"
+                  },
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "project_id": {
                 "type": "integer"
@@ -93444,10 +95798,45 @@
                 "type": "string"
               },
               "resolved_by": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "system": {
                 "type": "boolean"
+              },
+              "title": {
+                "type": "string"
               },
               "type": {
                 "type": "string"
@@ -93459,10 +95848,10 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "updated_at",
               "system",
+              "internal",
               "confidential"
             ],
             "type": "object"
@@ -93719,7 +96108,7 @@
   },
   {
     "name": "gitlab_mr_raw_diffs",
-    "description": "Get the raw unified-diff output for a merge request in plain-text git-apply format. Use this for programmatic diff analysis or patch application. For human-readable structured diffs, use gitlab_mr_changes_get instead.\n\nReturns: plain-text unified diff output.\n\nSee also: gitlab_mr_changes_get.",
+    "description": "Get the raw unified-diff output for a merge request in plain-text git-apply format. Returns: raw_diff, a single plain-text unified diff for the MR head suitable for patch application or programmatic analysis. See also: gitlab_mr_changes_get, gitlab_mr_diff_versions_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
