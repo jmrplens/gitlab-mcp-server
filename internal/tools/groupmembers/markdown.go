@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -16,7 +18,10 @@ func FormatMemberMarkdown(out Output) string {
 	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
 	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&b, "| State | %s |\n", out.State)
-	fmt.Fprintf(&b, "| Access Level | %s (%d) |\n", out.AccessLevelDescription, out.AccessLevel)
+	fmt.Fprintf(&b, "| Access Level | %s (%d) |\n", toolutil.AccessLevelDescription(gl.AccessLevelValue(out.AccessLevel)), out.AccessLevel)
+	if out.MemberRole != nil {
+		fmt.Fprintf(&b, "| Member Role | %s |\n", toolutil.EscapeMdTableCell(out.MemberRole.Name))
+	}
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(out.ExpiresAt))
 	}

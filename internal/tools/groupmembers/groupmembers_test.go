@@ -5,6 +5,7 @@ package groupmembers
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,7 +13,14 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// descFor returns the canonical access-level label for an output's access
+// level, mirroring how markdown derives the human-readable role.
+func descFor(out Output) string {
+	return toolutil.AccessLevelDescription(gl.AccessLevelValue(out.AccessLevel))
+}
 
 // ----------------------------------------------
 // GetMember
@@ -38,8 +46,8 @@ func TestGetMember_Success(t *testing.T) {
 	if out.AccessLevel != 30 {
 		t.Errorf("access_level = %d, want 30", out.AccessLevel)
 	}
-	if out.AccessLevelDescription != "Developer" {
-		t.Errorf("access_level_description = %q, want Developer", out.AccessLevelDescription)
+	if descFor(out) != "Developer" {
+		t.Errorf("access level description = %q, want Developer", descFor(out))
 	}
 }
 
@@ -83,8 +91,8 @@ func TestGetInheritedMember_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.AccessLevelDescription != "Owner" {
-		t.Errorf("access_level_description = %q, want Owner", out.AccessLevelDescription)
+	if descFor(out) != "Owner" {
+		t.Errorf("access level description = %q, want Owner", descFor(out))
 	}
 }
 
@@ -113,8 +121,53 @@ func TestAddMember_Success(t *testing.T) {
 	if out.ID != 20 {
 		t.Errorf("id = %d, want 20", out.ID)
 	}
-	if out.AccessLevelDescription != "Reporter" {
-		t.Errorf("access_level_description = %q, want Reporter", out.AccessLevelDescription)
+	if descFor(out) != "Reporter" {
+		t.Errorf("access level description = %q, want Reporter", descFor(out))
+	}
+}
+
+// TestAddMember_MemberRoleID verifies that a non-zero member_role_id is sent
+// in the AddGroupMember request body (Premium/Ultimate custom-role path).
+func TestAddMember_MemberRoleID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"member_role_id":7`) {
+			t.Errorf("request body missing member_role_id: %s", body)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":20,"username":"u","name":"U","state":"active","access_level":30,"member_role":{"id":7,"name":"Custom"}}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := AddMember(context.Background(), client, AddInput{
+		GroupID: "5", UserID: 20, AccessLevel: 30, MemberRoleID: 7, Username: "u", ExpiresAt: "2026-12-31",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.MemberRole == nil || out.MemberRole.ID != 7 {
+		t.Errorf("member_role not mapped: %+v", out.MemberRole)
+	}
+}
+
+// TestEditMember_MemberRoleID verifies that a non-zero member_role_id is sent
+// in the EditGroupMember request body.
+func TestEditMember_MemberRoleID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"member_role_id":9`) {
+			t.Errorf("request body missing member_role_id: %s", body)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"dev","name":"Dev","state":"active","access_level":40}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := EditMember(context.Background(), client, EditInput{
+		GroupID: "5", UserID: 10, AccessLevel: 40, MemberRoleID: 9, ExpiresAt: "2026-12-31",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
@@ -162,8 +215,8 @@ func TestEditMember_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.AccessLevelDescription != "Maintainer" {
-		t.Errorf("access_level_description = %q, want Maintainer", out.AccessLevelDescription)
+	if descFor(out) != "Maintainer" {
+		t.Errorf("access level description = %q, want Maintainer", descFor(out))
 	}
 }
 
@@ -340,9 +393,18 @@ func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown(t *testing.T) {
-	md := FormatMemberMarkdown(Output{ID: 10, Username: "dev", Name: "Developer", AccessLevel: 30, AccessLevelDescription: "Developer"})
+	md := FormatMemberMarkdown(Output{
+		ID: 10, Username: "dev", Name: "Developer", AccessLevel: 30,
+		MemberRole: &MemberRoleOutput{ID: 7, Name: "Custom Role"},
+	})
 	if md == "" {
 		t.Error("expected non-empty markdown")
+	}
+	if !strings.Contains(md, "Developer") {
+		t.Errorf("markdown should contain derived access level label, got:\n%s", md)
+	}
+	if !strings.Contains(md, "Custom Role") {
+		t.Errorf("markdown should contain member role name, got:\n%s", md)
 	}
 }
 
@@ -561,8 +623,8 @@ func TestAddMember_WithExpiresAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.AccessLevelDescription != "Guest" {
-		t.Errorf("access_level_description = %q, want %q", out.AccessLevelDescription, "Guest")
+	if descFor(out) != "Guest" {
+		t.Errorf("access level description = %q, want %q", descFor(out), "Guest")
 	}
 }
 
@@ -847,9 +909,9 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			got := accessLevelDescription(gl.AccessLevelValue(tt.level))
+			got := toolutil.AccessLevelDescription(gl.AccessLevelValue(tt.level))
 			if got != tt.want {
-				t.Errorf("accessLevelDescription(%d) = %q, want %q", tt.level, got, tt.want)
+				t.Errorf("AccessLevelDescription(%d) = %q, want %q", tt.level, got, tt.want)
 			}
 		})
 	}
@@ -869,9 +931,11 @@ func TestConvertMember_FullFields(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id":10,"username":"dev","name":"Developer","state":"active",
 			"avatar_url":"https://gl/avatar.png","web_url":"https://gl/dev",
-			"access_level":30,"email":"dev@example.com",
+			"access_level":30,"email":"dev@example.com","public_email":"dev@public.example.com",
 			"created_at":"`+now+`","expires_at":"2026-12-31",
-			"member_role":{"name":"Custom Role"},
+			"created_by":{"id":99,"username":"owner","name":"Owner","state":"active","avatar_url":"https://gl/owner.png","web_url":"https://gl/owner"},
+			"group_saml_identity":{"extern_uid":"uid-123","provider":"okta","saml_provider_id":4},
+			"member_role":{"id":7,"name":"Custom Role","description":"role desc","group_id":5,"base_access_level":30,"read_code":true,"manage_deploy_tokens":true},
 			"is_using_seat":true
 		}`)
 	})
@@ -896,11 +960,37 @@ func TestConvertMember_FullFields(t *testing.T) {
 	if out.ExpiresAt == "" {
 		t.Error("expires_at should not be empty")
 	}
-	if out.MemberRoleName != "Custom Role" {
-		t.Errorf("member_role_name = %q, want %q", out.MemberRoleName, "Custom Role")
+	if out.PublicEmail != "dev@public.example.com" {
+		t.Errorf("public_email = %q, want %q", out.PublicEmail, "dev@public.example.com")
 	}
 	if !out.IsUsingSeat {
 		t.Error("is_using_seat should be true")
+	}
+	assertFullSubObjects(t, out)
+}
+
+// assertFullSubObjects verifies the created_by, group_saml_identity, and
+// member_role sub-objects mapped by convertMember in TestConvertMember_FullFields.
+func assertFullSubObjects(t *testing.T, out Output) {
+	t.Helper()
+	if out.CreatedBy == nil {
+		t.Fatal("created_by should not be nil")
+	}
+	if out.CreatedBy.ID != 99 || out.CreatedBy.Username != "owner" || out.CreatedBy.WebURL != "https://gl/owner" {
+		t.Errorf("created_by mismatch: %+v", out.CreatedBy)
+	}
+	if out.GroupSAMLIdentity == nil {
+		t.Fatal("group_saml_identity should not be nil")
+	}
+	if out.GroupSAMLIdentity.ExternUID != "uid-123" || out.GroupSAMLIdentity.Provider != "okta" || out.GroupSAMLIdentity.SAMLProviderID != 4 {
+		t.Errorf("group_saml_identity mismatch: %+v", out.GroupSAMLIdentity)
+	}
+	if out.MemberRole == nil {
+		t.Fatal("member_role should not be nil")
+	}
+	if out.MemberRole.ID != 7 || out.MemberRole.Name != "Custom Role" || out.MemberRole.GroupID != 5 ||
+		out.MemberRole.BaseAccessLevel != 30 || !out.MemberRole.ReadCode || !out.MemberRole.ManageDeployTokens {
+		t.Errorf("member_role mismatch: %+v", out.MemberRole)
 	}
 }
 
@@ -924,8 +1014,14 @@ func TestConvertMember_MinimalFields(t *testing.T) {
 	if out.ExpiresAt != "" {
 		t.Errorf("expires_at should be empty, got %q", out.ExpiresAt)
 	}
-	if out.MemberRoleName != "" {
-		t.Errorf("member_role_name should be empty, got %q", out.MemberRoleName)
+	if out.MemberRole != nil {
+		t.Errorf("member_role should be nil, got %+v", out.MemberRole)
+	}
+	if out.CreatedBy != nil {
+		t.Errorf("created_by should be nil, got %+v", out.CreatedBy)
+	}
+	if out.GroupSAMLIdentity != nil {
+		t.Errorf("group_saml_identity should be nil, got %+v", out.GroupSAMLIdentity)
 	}
 	if out.State != "blocked" {
 		t.Errorf("state = %q, want %q", out.State, "blocked")
@@ -941,14 +1037,14 @@ func TestConvertMember_MinimalFields(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
-		ID:                     10,
-		Username:               "dev",
-		Name:                   "Developer",
-		State:                  "active",
-		AccessLevel:            30,
-		AccessLevelDescription: "Developer",
-		ExpiresAt:              "2026-12-31",
-		WebURL:                 "https://gl/dev",
+		ID:          10,
+		Username:    "dev",
+		Name:        "Developer",
+		State:       "active",
+		AccessLevel: 30,
+		MemberRole:  &MemberRoleOutput{ID: 7, Name: "Custom Role"},
+		ExpiresAt:   "2026-12-31",
+		WebURL:      "https://gl/dev",
 	})
 
 	for _, want := range []string{
@@ -958,6 +1054,7 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 		"| Name | Developer |",
 		"| State | active |",
 		"| Access Level | Developer (30) |",
+		"| Member Role | Custom Role |",
 		"| Expires | 31 Dec 2026 |",
 		"| URL | [dev](https://gl/dev) |",
 	} {
@@ -988,13 +1085,18 @@ func TestFormatMemberMarkdown_Empty(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
-		ID:                     5,
-		Username:               "user",
-		Name:                   "User",
-		State:                  "active",
-		AccessLevel:            20,
-		AccessLevelDescription: "Reporter",
+		ID:          5,
+		Username:    "user",
+		Name:        "User",
+		State:       "active",
+		AccessLevel: 20,
 	})
+	if !strings.Contains(md, "| Access Level | Reporter (20) |") {
+		t.Errorf("expected derived Reporter access level:\n%s", md)
+	}
+	if strings.Contains(md, "| Member Role") {
+		t.Errorf("should not contain Member Role when nil:\n%s", md)
+	}
 	if strings.Contains(md, "| Expires") {
 		t.Errorf("should not contain Expires:\n%s", md)
 	}

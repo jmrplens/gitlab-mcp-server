@@ -17,21 +17,78 @@ import (
 // ──────────────────────────────────────────────.
 
 // Output represents a single group member.
+//
+// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects). The
+// created_by, group_saml_identity, and member_role sub-objects are surfaced as
+// full local mirrors on their canonical json keys (C-IMPORTS: replicated here
+// rather than imported from sibling packages to preserve the zero-import-cycle
+// constraint).
 type Output struct {
 	toolutil.HintableOutput
-	ID                     int64  `json:"id"`
-	Username               string `json:"username"`
-	Name                   string `json:"name"`
-	State                  string `json:"state"`
-	AvatarURL              string `json:"avatar_url,omitempty"`
-	WebURL                 string `json:"web_url"`
-	AccessLevel            int    `json:"access_level"`
-	AccessLevelDescription string `json:"access_level_description"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	ExpiresAt              string `json:"expires_at,omitempty"`
-	Email                  string `json:"email,omitempty"`
-	MemberRoleName         string `json:"member_role_name,omitempty"`
-	IsUsingSeat            bool   `json:"is_using_seat,omitempty"`
+	ID                int64               `json:"id"`
+	Username          string              `json:"username"`
+	Name              string              `json:"name"`
+	State             string              `json:"state"`
+	AvatarURL         string              `json:"avatar_url,omitempty"`
+	WebURL            string              `json:"web_url"`
+	AccessLevel       int                 `json:"access_level"`
+	CreatedAt         string              `json:"created_at,omitempty"`
+	CreatedBy         *MemberUserOutput   `json:"created_by,omitempty"`
+	ExpiresAt         string              `json:"expires_at,omitempty"`
+	Email             string              `json:"email,omitempty"`
+	PublicEmail       string              `json:"public_email,omitempty"`
+	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty"`
+	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty"`
+	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
+}
+
+// MemberUserOutput mirrors gl.MemberCreatedBy (the created_by object).
+type MemberUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+}
+
+// SAMLIdentityOutput mirrors gl.GroupMemberSAMLIdentity (the
+// group_saml_identity object).
+type SAMLIdentityOutput struct {
+	ExternUID      string `json:"extern_uid"`
+	Provider       string `json:"provider"`
+	SAMLProviderID int64  `json:"saml_provider_id"`
+}
+
+// MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom
+// member roles are an Enterprise (Premium/Ultimate) feature; the object is nil
+// on instances or members without a custom role.
+type MemberRoleOutput struct {
+	ID                         int64  `json:"id"`
+	Name                       string `json:"name"`
+	Description                string `json:"description,omitempty"`
+	GroupID                    int64  `json:"group_id"`
+	BaseAccessLevel            int    `json:"base_access_level"`
+	AdminCICDVariables         bool   `json:"admin_cicd_variables,omitempty"`
+	AdminComplianceFramework   bool   `json:"admin_compliance_framework,omitempty"`
+	AdminGroupMembers          bool   `json:"admin_group_member,omitempty"`
+	AdminMergeRequests         bool   `json:"admin_merge_request,omitempty"`
+	AdminPushRules             bool   `json:"admin_push_rules,omitempty"`
+	AdminTerraformState        bool   `json:"admin_terraform_state,omitempty"`
+	AdminVulnerability         bool   `json:"admin_vulnerability,omitempty"`
+	AdminWebHook               bool   `json:"admin_web_hook,omitempty"`
+	ArchiveProject             bool   `json:"archive_project,omitempty"`
+	ManageDeployTokens         bool   `json:"manage_deploy_tokens,omitempty"`
+	ManageGroupAccessTokens    bool   `json:"manage_group_access_tokens,omitempty"`
+	ManageMergeRequestSettings bool   `json:"manage_merge_request_settings,omitempty"`
+	ManageProjectAccessTokens  bool   `json:"manage_project_access_tokens,omitempty"`
+	ManageSecurityPolicyLink   bool   `json:"manage_security_policy_link,omitempty"`
+	ReadCode                   bool   `json:"read_code,omitempty"`
+	ReadRunners                bool   `json:"read_runners,omitempty"`
+	ReadDependency             bool   `json:"read_dependency,omitempty"`
+	ReadVulnerability          bool   `json:"read_vulnerability,omitempty"`
+	RemoveGroup                bool   `json:"remove_group,omitempty"`
+	RemoveProject              bool   `json:"remove_project,omitempty"`
 }
 
 // ShareOutput represents the result of sharing with a group.
@@ -56,19 +113,21 @@ type GetInput struct {
 
 // AddInput contains parameters for adding a group member.
 type AddInput struct {
-	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to add,required"`
-	Username    string               `json:"username,omitempty" jsonschema:"Username to add (alternative to user_id)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
-	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
+	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	UserID       int64                `json:"user_id,omitempty" jsonschema:"User ID to add,required"`
+	Username     string               `json:"username,omitempty" jsonschema:"Username to add (alternative to user_id)"`
+	AccessLevel  int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level"`
 }
 
 // EditInput contains parameters for editing a group member.
 type EditInput struct {
-	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	UserID      int64                `json:"user_id" jsonschema:"User ID,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
-	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
+	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	UserID       int64                `json:"user_id" jsonschema:"User ID,required"`
+	AccessLevel  int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
+	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level"`
 }
 
 // RemoveInput contains parameters for removing a group member.
@@ -156,6 +215,9 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 	if input.ExpiresAt != "" {
 		opts.ExpiresAt = new(input.ExpiresAt)
 	}
+	if input.MemberRoleID != 0 {
+		opts.MemberRoleID = new(input.MemberRoleID)
+	}
 	m, _, err := client.GL().GroupMembers.AddGroupMember(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
@@ -192,6 +254,9 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 	}
 	if input.ExpiresAt != "" {
 		opts.ExpiresAt = new(input.ExpiresAt)
+	}
+	if input.MemberRoleID != 0 {
+		opts.MemberRoleID = new(input.MemberRoleID)
 	}
 	m, _, err := client.GL().GroupMembers.EditGroupMember(
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
@@ -325,25 +390,21 @@ func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input 
 // Converters
 // ──────────────────────────────────────────────.
 
-// accessLevelDescription returns the GitLab role label for an access level.
-// Delegates to the canonical mapping in [toolutil.AccessLevelDescription] so
-// group and project members use a single source of truth.
-func accessLevelDescription(level gl.AccessLevelValue) string {
-	return toolutil.AccessLevelDescription(level)
-}
-
 // convertMember maps a GitLab group member into the MCP output shape.
 func convertMember(m *gl.GroupMember) Output {
 	out := Output{
-		ID:                     m.ID,
-		Username:               m.Username,
-		Name:                   m.Name,
-		State:                  m.State,
-		AvatarURL:              m.AvatarURL,
-		WebURL:                 m.WebURL,
-		AccessLevel:            int(m.AccessLevel),
-		AccessLevelDescription: accessLevelDescription(m.AccessLevel),
-		Email:                  m.Email,
+		ID:                m.ID,
+		Username:          m.Username,
+		Name:              m.Name,
+		State:             m.State,
+		AvatarURL:         m.AvatarURL,
+		WebURL:            m.WebURL,
+		AccessLevel:       int(m.AccessLevel),
+		Email:             m.Email,
+		PublicEmail:       m.PublicEmail,
+		CreatedBy:         memberUserOutput(m.CreatedBy),
+		GroupSAMLIdentity: samlIdentityOutput(m.GroupSAMLIdentity),
+		MemberRole:        memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
@@ -351,11 +412,70 @@ func convertMember(m *gl.GroupMember) Output {
 	if m.ExpiresAt != nil {
 		out.ExpiresAt = m.ExpiresAt.String()
 	}
-	if m.MemberRole != nil {
-		out.MemberRoleName = m.MemberRole.Name
-	}
 	out.IsUsingSeat = m.IsUsingSeat
 	return out
+}
+
+// memberUserOutput mirrors a gl.MemberCreatedBy into the local output shape.
+func memberUserOutput(u *gl.MemberCreatedBy) *MemberUserOutput {
+	if u == nil {
+		return nil
+	}
+	return &MemberUserOutput{
+		ID:        u.ID,
+		Username:  u.Username,
+		Name:      u.Name,
+		State:     u.State,
+		AvatarURL: u.AvatarURL,
+		WebURL:    u.WebURL,
+	}
+}
+
+// samlIdentityOutput mirrors a gl.GroupMemberSAMLIdentity into the local
+// output shape.
+func samlIdentityOutput(s *gl.GroupMemberSAMLIdentity) *SAMLIdentityOutput {
+	if s == nil {
+		return nil
+	}
+	return &SAMLIdentityOutput{
+		ExternUID:      s.ExternUID,
+		Provider:       s.Provider,
+		SAMLProviderID: s.SAMLProviderID,
+	}
+}
+
+// memberRoleOutput mirrors a gl.MemberRole into the local output shape.
+func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
+	if r == nil {
+		return nil
+	}
+	return &MemberRoleOutput{
+		ID:                         r.ID,
+		Name:                       r.Name,
+		Description:                r.Description,
+		GroupID:                    r.GroupID,
+		BaseAccessLevel:            int(r.BaseAccessLevel),
+		AdminCICDVariables:         r.AdminCICDVariables,
+		AdminComplianceFramework:   r.AdminComplianceFramework,
+		AdminGroupMembers:          r.AdminGroupMembers,
+		AdminMergeRequests:         r.AdminMergeRequests,
+		AdminPushRules:             r.AdminPushRules,
+		AdminTerraformState:        r.AdminTerraformState,
+		AdminVulnerability:         r.AdminVulnerability,
+		AdminWebHook:               r.AdminWebHook,
+		ArchiveProject:             r.ArchiveProject,
+		ManageDeployTokens:         r.ManageDeployTokens,
+		ManageGroupAccessTokens:    r.ManageGroupAccessTokens,
+		ManageMergeRequestSettings: r.ManageMergeRequestSettings,
+		ManageProjectAccessTokens:  r.ManageProjectAccessTokens,
+		ManageSecurityPolicyLink:   r.ManageSecurityPolicyLink,
+		ReadCode:                   r.ReadCode,
+		ReadRunners:                r.ReadRunners,
+		ReadDependency:             r.ReadDependency,
+		ReadVulnerability:          r.ReadVulnerability,
+		RemoveGroup:                r.RemoveGroup,
+		RemoveProject:              r.RemoveProject,
+	}
 }
 
 // ──────────────────────────────────────────────

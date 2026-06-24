@@ -4,6 +4,7 @@ package groupmembers
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -187,6 +188,61 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 				t.Fatal("expected non-nil result when confirmation is declined")
 			}
 		})
+	}
+}
+
+// TestActionSpecs_Metadata verifies that every group-member action carries
+// non-generic discovery metadata (Usage, natural-language aliases, canonical
+// related actions, parameter guidance, and an individual-tool description) per
+// the 1:1 audit R-META requirement.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := groupMemberSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	for tool := range groupMemberActionMeta {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("metadata declared for %q but no spec projects it", tool)
+		}
+		t.Run(tool, func(t *testing.T) {
+			assertGroupMemberMeta(t, tool, spec)
+		})
+	}
+}
+
+// assertGroupMemberMeta checks that one projected spec carries the required
+// R-META discovery metadata.
+func assertGroupMemberMeta(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || spec.Usage == "Use to execute groupmembers domain action." {
+		t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+	}
+	if spec.IndividualTool.Description == "" {
+		t.Errorf("%s: missing individual-tool Description", tool)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: missing RelatedActions", tool)
+	}
+	if _, ok := spec.ParameterGuidance["group_id"]; !ok {
+		t.Errorf("%s: ParameterGuidance missing group_id", tool)
+	}
+	// The canonical individual-tool alias must remain present alongside the
+	// natural-language aliases.
+	if !slices.Contains(spec.Aliases, tool) {
+		t.Errorf("%s: canonical alias %q dropped from aliases %v", tool, tool, spec.Aliases)
+	}
+}
+
+// TestDecorateGroupMemberMeta_UnknownTool verifies the no-op path of
+// decorateGroupMemberMeta for a tool name absent from the metadata map.
+func TestDecorateGroupMemberMeta_UnknownTool(t *testing.T) {
+	options := groupMemberOptions("gitlab_unknown_tool")
+	before := options.Usage
+	decorateGroupMemberMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before {
+		t.Errorf("expected Usage unchanged for unknown tool, got %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("expected empty Description for unknown tool, got %q", options.IndividualTool.Description)
 	}
 }
 
