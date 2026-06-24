@@ -4199,7 +4199,7 @@ func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	opts := buildUserProjectOpts(userProjectFilter{
 		Search: "query", Visibility: testPrivate, Archived: &archived,
 		OrderBy: "name", Sort: "desc", Simple: true,
-		Page: 2, PerPage: 25,
+		Pagination: toolutil.PaginationInput{Page: 2, PerPage: 25},
 	})
 
 	if opts.Search == nil || *opts.Search != "query" {
@@ -4510,10 +4510,14 @@ func TestListInvitedGroups_AllFilters(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListInvitedGroups(context.Background(), client, ListInvitedGroupsInput{
-		ProjectID:       "10",
-		Search:          "invited",
-		MinAccessLevel:  20,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		ProjectID:            "10",
+		Search:               "invited",
+		MinAccessLevel:       20,
+		Relation:             []string{"direct"},
+		WithCustomAttributes: new(true),
+		OrderBy:              "name",
+		Sort:                 testSortAsc,
+		PaginationInput:      toolutil.PaginationInput{Page: 1, PerPage: 20},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -4537,14 +4541,16 @@ func TestListUserProjects_AllFilters(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListUserProjects(context.Background(), client, ListUserProjectsInput{
-		UserID:          testUserJohn,
-		Search:          "proj",
-		Visibility:      testPublic,
-		Archived:        new(false),
-		OrderBy:         "name",
-		Sort:            testSortAsc,
-		Simple:          true,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		UserID: testUserJohn,
+		userProjectFilterInput: userProjectFilterInput{
+			Search:          "proj",
+			Visibility:      testPublic,
+			Archived:        new(false),
+			OrderBy:         "name",
+			Sort:            testSortAsc,
+			Simple:          true,
+			PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -4583,12 +4589,48 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		IncludeHidden:            new(true),
 		IDAfter:                  100,
 		IDBefore:                 500,
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-01",
+		WithCustomAttributes:     new(true),
 	}
 	input.Page = 2
 	input.PerPage = 50
+	input.Pagination = "keyset"
+	input.PageToken = "tok-1"
 
 	opts := buildListOpts(input)
 	assertListProjectOpts(t, opts)
+	assertListProjectAdminOpts(t, opts)
+}
+
+// assertListProjectAdminOpts checks the additive admin-scoped filters and
+// keyset wiring added for 1:1 SDK parity.
+func assertListProjectAdminOpts(t *testing.T, opts *gl.ListProjectsOptions) {
+	t.Helper()
+	if opts.Active == nil || !*opts.Active {
+		t.Error("Active not set")
+	}
+	if opts.Imported == nil || !*opts.Imported {
+		t.Error("Imported not set")
+	}
+	if opts.RepositoryChecksumFailed == nil || !*opts.RepositoryChecksumFailed {
+		t.Error("RepositoryChecksumFailed not set")
+	}
+	if opts.WikiChecksumFailed == nil || !*opts.WikiChecksumFailed {
+		t.Error("WikiChecksumFailed not set")
+	}
+	if opts.RepositoryStorage == nil || *opts.RepositoryStorage != "nfs-01" {
+		t.Error("RepositoryStorage not set")
+	}
+	if opts.WithCustomAttributes == nil || !*opts.WithCustomAttributes {
+		t.Error("WithCustomAttributes not set")
+	}
+	if opts.Pagination != "keyset" || opts.PageToken != "tok-1" {
+		t.Error("keyset pagination not wired")
+	}
 }
 
 // assertListProjectOpts checks list project opts invariants for tests.
@@ -6447,6 +6489,7 @@ func TestCreateApprovalRule_AllOptionalFields(t *testing.T) {
 		Name:                          "rule1",
 		ApprovalsRequired:             2,
 		RuleType:                      "regular",
+		ReportType:                    "code_coverage",
 		UserIDs:                       []int64{1, 2},
 		GroupIDs:                      []int64{3},
 		ProtectedBranchIDs:            []int64{10},
@@ -6716,6 +6759,7 @@ func TestFork_AllOptionalFields(t *testing.T) {
 		Path:                          "my-fork",
 		NamespaceID:                   5,
 		NamespacePath:                 "user",
+		Namespace:                     "user",
 		Description:                   "forked",
 		Visibility:                    "private",
 		Branches:                      "main",
@@ -7080,6 +7124,8 @@ func TestListApprovalRules_WithPagination(t *testing.T) {
 	}))
 	out, err := ListApprovalRules(context.Background(), client, ListApprovalRulesInput{
 		ProjectID:       "42",
+		OrderBy:         "id",
+		Sort:            testSortAsc,
 		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
 	})
 	if err != nil {
@@ -7648,5 +7694,197 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 	bridged := buildUpdateOpts(UpdateInput{ProjectID: "1", IssuesEnabled: new(false)})
 	if bridged.IssuesAccessLevel == nil || *bridged.IssuesAccessLevel != gl.DisabledAccessControl {
 		t.Error("IssuesEnabled bool did not bridge to IssuesAccessLevel")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit (P2/P3): fork + user-scoped + keyset filter coverage
+// ---------------------------------------------------------------------------.
+
+// TestBuildForkListOpts_AllBranches verifies buildForkListOpts wires every
+// additive ListProjectsOptions filter plus keyset pagination for the project
+// forks endpoint.
+func TestBuildForkListOpts_AllBranches(t *testing.T) {
+	input := ListForksInput{
+		ProjectID:                "1",
+		Owned:                    true,
+		Search:                   "fork",
+		Visibility:               testPrivate,
+		OrderBy:                  "name",
+		Sort:                     "desc",
+		Archived:                 new(true),
+		Topic:                    "go",
+		Simple:                   true,
+		MinAccessLevel:           30,
+		LastActivityAfter:        "2026-01-01T00:00:00Z",
+		LastActivityBefore:       "2026-12-31T00:00:00Z",
+		Starred:                  new(true),
+		Membership:               new(true),
+		WithIssuesEnabled:        new(true),
+		WithMergeRequestsEnabled: new(true),
+		SearchNamespaces:         new(true),
+		Statistics:               new(true),
+		WithProgrammingLanguage:  "Go",
+		IncludePendingDelete:     new(true),
+		IncludeHidden:            new(true),
+		IDAfter:                  100,
+		IDBefore:                 500,
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-01",
+		WithCustomAttributes:     new(true),
+	}
+	input.Page = 3
+	input.PerPage = 40
+	input.Pagination = "keyset"
+	input.PageToken = "tok-fork"
+
+	opts := buildForkListOpts(input)
+	assertAllListProjectFiltersSet(t, opts)
+	assertKeysetPagination(t, opts, 3, 40, "tok-fork")
+}
+
+// assertAllListProjectFiltersSet checks that every additive ListProjectsOptions
+// filter pointer/value is populated. Shared by the fork and user-scoped
+// full-filter tests to keep each test below the cyclomatic-complexity gate.
+func assertAllListProjectFiltersSet(t *testing.T, opts *gl.ListProjectsOptions) {
+	t.Helper()
+	scalars := []bool{
+		opts.Owned != nil, opts.Search != nil, opts.Visibility != nil,
+		opts.OrderBy != nil, opts.Sort != nil, opts.Topic != nil,
+		opts.Simple != nil, opts.MinAccessLevel != nil,
+		opts.LastActivityAfter != nil, opts.LastActivityBefore != nil,
+		opts.WithProgrammingLanguage != nil,
+	}
+	pointers := []bool{
+		opts.Archived != nil, opts.Starred != nil, opts.Membership != nil,
+		opts.WithIssuesEnabled != nil, opts.WithMergeRequestsEnabled != nil,
+		opts.SearchNamespaces != nil, opts.Statistics != nil,
+		opts.IncludePendingDelete != nil, opts.IncludeHidden != nil,
+		opts.IDAfter != nil, opts.IDBefore != nil,
+	}
+	admin := []bool{
+		opts.Active != nil, opts.Imported != nil, opts.RepositoryChecksumFailed != nil,
+		opts.WikiChecksumFailed != nil, opts.RepositoryStorage != nil,
+		opts.WithCustomAttributes != nil,
+	}
+	assertAllTrue(t, "scalar filters", scalars)
+	assertAllTrue(t, "pointer filters", pointers)
+	assertAllTrue(t, "admin filters", admin)
+}
+
+// assertAllTrue fails the test if any flag in the group is false.
+func assertAllTrue(t *testing.T, group string, flags []bool) {
+	t.Helper()
+	for i, ok := range flags {
+		if !ok {
+			t.Fatalf("%s: filter index %d not set", group, i)
+		}
+	}
+}
+
+// assertKeysetPagination verifies offset and keyset pagination were wired.
+func assertKeysetPagination(t *testing.T, opts *gl.ListProjectsOptions, page, perPage int64, token string) {
+	t.Helper()
+	if opts.Page != page || opts.PerPage != perPage || opts.Pagination != "keyset" || opts.PageToken != token {
+		t.Fatalf("keyset pagination not wired: page=%d per_page=%d pagination=%q token=%q",
+			opts.Page, opts.PerPage, opts.Pagination, opts.PageToken)
+	}
+}
+
+// TestBuildForkListOpts_NoFields verifies buildForkListOpts leaves unset filters nil.
+func TestBuildForkListOpts_NoFields(t *testing.T) {
+	opts := buildForkListOpts(ListForksInput{ProjectID: "1"})
+	if opts.Owned != nil || opts.Search != nil || opts.Archived != nil ||
+		opts.Active != nil || opts.RepositoryStorage != nil || opts.IDAfter != nil {
+		t.Error("unset fork filters should be nil")
+	}
+}
+
+// TestBuildUserProjectOpts_FullFilterSet verifies the user-scoped filter now
+// surfaces the full ListProjectsOptions filter set plus keyset pagination.
+func TestBuildUserProjectOpts_FullFilterSet(t *testing.T) {
+	f := userProjectFilterInput{
+		Search:                   "x",
+		Visibility:               testPublic,
+		Archived:                 new(true),
+		OrderBy:                  "id",
+		Sort:                     testSortAsc,
+		Simple:                   true,
+		Owned:                    true,
+		Topic:                    "go",
+		MinAccessLevel:           20,
+		Starred:                  new(true),
+		Membership:               new(true),
+		WithIssuesEnabled:        new(true),
+		WithMergeRequestsEnabled: new(true),
+		SearchNamespaces:         new(true),
+		Statistics:               new(true),
+		WithProgrammingLanguage:  "Go",
+		LastActivityAfter:        "2026-01-01T00:00:00Z",
+		LastActivityBefore:       "2026-12-31T00:00:00Z",
+		IDAfter:                  10,
+		IDBefore:                 99,
+		IncludePendingDelete:     new(true),
+		IncludeHidden:            new(true),
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-02",
+		WithCustomAttributes:     new(true),
+	}
+	f.Page = 2
+	f.PerPage = 25
+	f.Pagination = "keyset"
+	f.PageToken = "tok-user"
+
+	opts := buildUserProjectOpts(f.toFilter())
+	assertAllListProjectFiltersSet(t, opts)
+	assertKeysetPagination(t, opts, 2, 25, "tok-user")
+}
+
+// TestApplyKeysetOrder verifies the order/sort helper only sets supplied values.
+func TestApplyKeysetOrder(t *testing.T) {
+	opts := &gl.ListOptions{}
+	applyKeysetOrder(opts, "", "")
+	if opts.OrderBy != "" || opts.Sort != "" {
+		t.Error("empty values must not be set")
+	}
+	applyKeysetOrder(opts, "name", "desc")
+	if opts.OrderBy != "name" || opts.Sort != "desc" {
+		t.Error("order_by/sort not set")
+	}
+}
+
+// TestAddHook_CustomHeaders verifies custom headers reach the add-hook request body.
+func TestAddHook_CustomHeaders(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/hooks" {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"url":"https://e.x","project_id":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := AddHook(context.Background(), client, AddHookInput{
+		ProjectID: "1",
+		URL:       "https://e.x",
+		HookOptionsInput: HookOptionsInput{
+			CustomHeaders: []HookCustomHeaderInput{{Key: "X-Token", Value: "secret"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 7 {
+		t.Fatalf("hook ID = %d, want 7", out.ID)
+	}
+	if !strings.Contains(body, "custom_headers") || !strings.Contains(body, "X-Token") {
+		t.Errorf("custom_headers not in request body: %s", body)
 	}
 }

@@ -185,7 +185,9 @@ func projectPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 func projectGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := projectOptions("gitlab_project_get")
 	options.Usage = "Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup."
+	options.Aliases = []string{"gitlab_project_get", "get project", "show project", "fetch project metadata"}
 	options.RelatedActions = []string{"project.archive", "project.delete", "project.update"}
+	options.IndividualTool.Description = "Get a single project by ID or namespace path. Returns: project metadata including id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_update, gitlab_project_archive, gitlab_project_delete."
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole:     "scope_project",
@@ -256,6 +258,9 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 	}
 	if actionName == "list" && individualTool == "gitlab_project_list" {
 		options.Usage = "List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value."
+		options.Aliases = []string{"gitlab_project_list", "list projects", "show my projects", "browse repositories"}
+		options.RelatedActions = []string{"project.get", "project.list_user_projects", "search.projects"}
+		options.IndividualTool.Description = "List projects accessible to the user with filtering and pagination. Returns: projects with namespace, visibility, last_activity_at, and pagination metadata. See also: gitlab_project_get, gitlab_project_list_user_projects."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"order_by": {
 				SemanticRole: "project_list_sort_field",
@@ -273,5 +278,356 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
 		}
 	}
+	decorateProjectMeta(&options, individualTool)
 	return options
+}
+
+// projectActionMetaEntry is the discovery metadata for one project action.
+type projectActionMetaEntry struct {
+	usage       string
+	aliases     []string
+	related     []string
+	description string
+}
+
+// decorateProjectMeta fills non-generic Usage, natural-language Aliases,
+// RelatedActions, and the "Returns: … See also: …" individual-tool description
+// for every project action that would otherwise inherit the generic placeholder
+// metadata from projectOptions. Actions whose dedicated builders already set
+// rich metadata (get, list) are absent from the map and left untouched. For
+// actions that already carry a tailored Usage (push rules, delete) only the
+// missing aliases/related/description are filled, preserving the existing Usage.
+func decorateProjectMeta(options *toolutil.ActionSpecOptions, individualTool string) {
+	meta, ok := projectActionMeta[individualTool]
+	if !ok {
+		return
+	}
+	if meta.usage != "" {
+		options.Usage = meta.usage
+	}
+	if len(meta.aliases) > 0 {
+		options.Aliases = append([]string(nil), meta.aliases...)
+	}
+	if len(meta.related) > 0 {
+		options.RelatedActions = append([]string(nil), meta.related...)
+	}
+	if meta.description != "" {
+		options.IndividualTool.Description = meta.description
+	}
+}
+
+// projectActionMeta maps each individual project tool to its discovery metadata.
+// Entries omit the usage field when projectOptionsForAction already sets a
+// tailored Usage (push rules, delete) so that bespoke text is preserved while
+// aliases, related actions, and the individual-tool description are still added.
+//
+//nolint:funlen // A flat, reviewable lookup table; one entry per project action.
+var projectActionMeta = map[string]projectActionMetaEntry{
+	"gitlab_project_create": {
+		usage:       "Create a new project in a namespace you can write to. Provide name (and optionally path, namespace_id, visibility, description). Use create_for_user to create on behalf of another user as admin.",
+		aliases:     []string{"create project", "new project", "add project", "make a repository"},
+		related:     []string{"project.get", "project.update", "project.create_for_user"},
+		description: "Create a new GitLab project. Returns: the created project with id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_get, gitlab_project_update, gitlab_project_create_for_user.",
+	},
+	"gitlab_project_create_for_user": {
+		usage:       "Create a project owned by a specific user (admin only). Provide user_id and name; the project is created in that user's personal namespace.",
+		aliases:     []string{"create project for user", "create project as admin", "provision user project"},
+		related:     []string{"project.create", "project.get", "project.transfer"},
+		description: "Create a project on behalf of a user (admin). Returns: the created project with id, owner namespace, visibility, and web URL. See also: gitlab_project_create, gitlab_project_get.",
+	},
+	"gitlab_project_update": {
+		usage:       "Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change.",
+		aliases:     []string{"update project", "edit project settings", "change project configuration"},
+		related:     []string{"project.get", "project.archive", "project.transfer"},
+		description: "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.",
+	},
+	"gitlab_project_restore": {
+		usage:       "Restore a project previously marked for delayed deletion, before the retention period expires. Send the project_id of the pending-deletion project.",
+		aliases:     []string{"restore project", "undelete project", "recover deleted project"},
+		related:     []string{"project.delete", "project.get", "project.list"},
+		description: "Restore a project marked for deletion. Returns: the restored project. See also: gitlab_project_delete, gitlab_project_get.",
+	},
+	"gitlab_project_fork": {
+		usage:       "Fork a project into your namespace or a chosen namespace. Optionally set name, path, namespace_id/namespace_path, visibility, and branches to fork.",
+		aliases:     []string{"fork project", "fork repository", "create a fork"},
+		related:     []string{"project.list_forks", "project.create_fork_relation", "project.delete_fork_relation"},
+		description: "Fork a project. Returns: the new fork with id, path_with_namespace, forked_from_project, and web URL. See also: gitlab_project_list_forks, gitlab_project_create_fork_relation.",
+	},
+	"gitlab_project_star": {
+		usage:       "Star a project for the authenticated user. Send project_id; idempotent if already starred.",
+		aliases:     []string{"star project", "add star to project", "favorite project"},
+		related:     []string{"project.unstar", "project.list_starrers", "project.list_user_starred"},
+		description: "Star a project. Returns: the project with the updated star_count. See also: gitlab_project_unstar, gitlab_project_list_starrers.",
+	},
+	"gitlab_project_unstar": {
+		usage:       "Remove the authenticated user's star from a project. Send project_id; idempotent if not currently starred.",
+		aliases:     []string{"unstar project", "remove star from project", "unfavorite project"},
+		related:     []string{"project.star", "project.list_starrers", "project.list_user_starred"},
+		description: "Unstar a project. Returns: the project with the updated star_count. See also: gitlab_project_star, gitlab_project_list_starrers.",
+	},
+	"gitlab_project_archive": {
+		usage:       "Archive a project so it becomes read-only. Send project_id; requires Owner role. Use unarchive to reverse.",
+		aliases:     []string{"archive project", "make project read-only"},
+		related:     []string{"project.unarchive", "project.get", "project.delete"},
+		description: "Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
+	},
+	"gitlab_project_unarchive": {
+		usage:       "Unarchive a previously archived project to restore write access. Send project_id; requires Owner role.",
+		aliases:     []string{"unarchive project", "restore archived project", "make project writable"},
+		related:     []string{"project.archive", "project.get"},
+		description: "Unarchive a project. Returns: the project with archived set to false. See also: gitlab_project_archive, gitlab_project_get.",
+	},
+	"gitlab_project_transfer": {
+		usage:       "Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target.",
+		aliases:     []string{"transfer project", "move project to another namespace", "change project group"},
+		related:     []string{"project.get", "project.update", "group.get"},
+		description: "Transfer a project to another namespace. Returns: the project in its new namespace. See also: gitlab_project_get, gitlab_group_get.",
+	},
+	"gitlab_project_list_forks": {
+		usage:       "List the forks of a project with the same filters as the project list endpoint (visibility, owned, search, order_by, archived, and more). Send project_id.",
+		aliases:     []string{"list project forks", "show forks of a project", "forks of this repository"},
+		related:     []string{"project.fork", "project.get", "project.create_fork_relation"},
+		description: "List a project's forks. Returns: forked projects with namespace, visibility, and pagination metadata. See also: gitlab_project_fork, gitlab_project_get.",
+	},
+	"gitlab_project_languages": {
+		usage:       "Get the programming-language breakdown of a project's repository as language name and percentage. Send project_id; empty repositories return no languages.",
+		aliases:     []string{"project languages", "language breakdown", "repository languages"},
+		related:     []string{"project.get", "project.list"},
+		description: "Get a project's detected languages. Returns: language names with their percentage of the codebase. See also: gitlab_project_get.",
+	},
+	"gitlab_project_list_user_projects": {
+		usage:       "List projects owned by a specific user. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.",
+		aliases:     []string{"list a user's projects", "projects owned by user", "user's repositories"},
+		related:     []string{"project.list", "project.list_user_contributed", "project.list_user_starred"},
+		description: "List a user's owned projects. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_contributed, gitlab_project_list_user_starred.",
+	},
+	"gitlab_project_list_users": {
+		usage:       "List the users who are members of a project. Send project_id and optionally search by name or username.",
+		aliases:     []string{"list project users", "project members", "who has access to project"},
+		related:     []string{"project.get", "member.list", "project.list_groups"},
+		description: "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_member_list.",
+	},
+	"gitlab_project_list_groups": {
+		usage:       "List the ancestor and shared groups associated with a project. Send project_id; optionally filter by search, shared visibility, or minimum access level.",
+		aliases:     []string{"list project groups", "project ancestor groups", "groups linked to project"},
+		related:     []string{"project.get", "project.list_invited_groups", "group.get"},
+		description: "List a project's associated groups. Returns: groups with id, full_path, and full_name, plus pagination metadata. See also: gitlab_project_list_invited_groups, gitlab_group_get.",
+	},
+	"gitlab_project_list_starrers": {
+		usage:       "List the users who have starred a project, with the date each starred it. Send project_id and optionally search by name or username.",
+		aliases:     []string{"list project starrers", "who starred this project", "project stargazers"},
+		related:     []string{"project.star", "project.unstar", "project.list_user_starred"},
+		description: "List a project's starrers. Returns: users with their starred_since date, plus pagination metadata. See also: gitlab_project_star, gitlab_project_list_user_starred.",
+	},
+	"gitlab_project_share_with_group": {
+		usage:       "Share a project with a group at a chosen access level. Send project_id, group_id, and group_access (10 Guest, 20 Reporter, 30 Developer, 40 Maintainer); optionally expires_at (YYYY-MM-DD).",
+		aliases:     []string{"share project with group", "grant group access to project", "add group to project"},
+		related:     []string{"project.delete_shared_group", "project.list_invited_groups", "group.get"},
+		description: "Share a project with a group. Returns: a confirmation with the group ID and granted access role. See also: gitlab_project_delete_shared_group, gitlab_project_list_invited_groups.",
+	},
+	"gitlab_project_delete_shared_group": {
+		usage:       "Remove a group's share link from a project, revoking that group's inherited access. Send project_id and group_id.",
+		aliases:     []string{"unshare project from group", "remove group from project", "revoke group project access"},
+		related:     []string{"project.share_with_group", "project.list_invited_groups"},
+		description: "Remove a group share from a project. Returns: a success confirmation naming the group and project. See also: gitlab_project_share_with_group, gitlab_project_list_invited_groups.",
+	},
+	"gitlab_project_list_invited_groups": {
+		usage:       "List the groups invited to (shared with) a project. Send project_id; optionally filter by search, relation, or minimum access level.",
+		aliases:     []string{"list invited groups", "groups shared with project", "project group invitations"},
+		related:     []string{"project.share_with_group", "project.delete_shared_group", "project.list_groups"},
+		description: "List groups invited to a project. Returns: invited groups with id, full_path, and full_name, plus pagination metadata. See also: gitlab_project_share_with_group, gitlab_project_list_groups.",
+	},
+	"gitlab_project_list_user_contributed": {
+		usage:       "List projects a specific user has contributed to. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.",
+		aliases:     []string{"list user contributed projects", "projects a user contributed to", "user contribution repositories"},
+		related:     []string{"project.list_user_projects", "project.list_user_starred", "project.list"},
+		description: "List projects a user contributed to. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_user_starred.",
+	},
+	"gitlab_project_list_user_starred": {
+		usage:       "List projects a specific user has starred. Send user_id (numeric ID or username) plus optional filters such as visibility, archived, search, and order_by.",
+		aliases:     []string{"list user starred projects", "projects a user starred", "user's favorite repositories"},
+		related:     []string{"project.list_user_projects", "project.list_user_contributed", "project.list_starrers"},
+		description: "List projects a user starred. Returns: projects with namespace, visibility, and pagination metadata. See also: gitlab_project_list_user_projects, gitlab_project_list_starrers.",
+	},
+	"gitlab_project_create_fork_relation": {
+		usage:       "Create a fork relationship linking a project to an upstream source project. Send project_id and the upstream fork_id (or forked_from_id).",
+		aliases:     []string{"create fork relation", "link fork to upstream", "set forked-from project"},
+		related:     []string{"project.delete_fork_relation", "project.fork", "project.list_forks"},
+		description: "Create a fork relationship to an upstream project. Returns: a confirmation of the new relation. See also: gitlab_project_delete_fork_relation, gitlab_project_fork.",
+	},
+	"gitlab_project_delete_fork_relation": {
+		usage:       "Remove a project's fork relationship to its upstream source, detaching it from the original project. Send project_id.",
+		aliases:     []string{"delete fork relation", "unlink fork from upstream", "detach fork"},
+		related:     []string{"project.create_fork_relation", "project.fork", "project.list_forks"},
+		description: "Remove a project's fork relationship. Returns: a success confirmation naming the project. See also: gitlab_project_create_fork_relation, gitlab_project_fork.",
+	},
+	"gitlab_project_upload_avatar": {
+		usage:       "Upload an avatar image for a project. Send project_id and the image content/path; replaces any existing avatar.",
+		aliases:     []string{"upload project avatar", "set project avatar", "change project image"},
+		related:     []string{"project.download_avatar", "project.update", "project.get"},
+		description: "Upload a project avatar. Returns: the project with its new avatar_url. See also: gitlab_project_download_avatar, gitlab_project_update.",
+	},
+	"gitlab_project_download_avatar": {
+		usage:       "Download the avatar image for a project. Send project_id; returns the raw image bytes.",
+		aliases:     []string{"download project avatar", "get project avatar image"},
+		related:     []string{"project.upload_avatar", "project.get"},
+		description: "Download a project's avatar. Returns: the avatar image content. See also: gitlab_project_upload_avatar, gitlab_project_get.",
+	},
+	"gitlab_project_start_housekeeping": {
+		usage:       "Trigger Git housekeeping (garbage collection and repository optimization) for a project. Send project_id; requires Owner role.",
+		aliases:     []string{"start project housekeeping", "run repository garbage collection", "optimize project repository"},
+		related:     []string{"project.repository_storage_get", "project.get"},
+		description: "Start housekeeping for a project. Returns: a success confirmation naming the project. See also: gitlab_project_repository_storage_get, gitlab_project_get.",
+	},
+	"gitlab_project_repository_storage_get": {
+		usage:       "Get the repository storage shard a project is stored on (admin only). Send project_id.",
+		aliases:     []string{"get repository storage", "project storage shard", "where is project stored"},
+		related:     []string{"project.start_housekeeping", "project.get"},
+		description: "Get a project's repository storage shard. Returns: the storage shard name. See also: gitlab_project_start_housekeeping, gitlab_project_get.",
+	},
+	"gitlab_project_hook_list": {
+		usage:       "List the webhooks configured on a project. Send project_id; requires Maintainer or Owner role.",
+		aliases:     []string{"list project webhooks", "show project hooks", "project webhook list"},
+		related:     []string{"project.hook_get", "project.hook_add", "project.hook_edit"},
+		description: "List a project's webhooks. Returns: webhooks with URL, enabled events, and SSL settings, plus pagination metadata. See also: gitlab_project_hook_get, gitlab_project_hook_add.",
+	},
+	"gitlab_project_hook_get": {
+		usage:       "Get one project webhook by hook_id, including its enabled events and configuration. Send project_id and hook_id.",
+		aliases:     []string{"get project webhook", "show project hook", "inspect webhook"},
+		related:     []string{"project.hook_list", "project.hook_edit", "project.hook_delete"},
+		description: "Get a single project webhook. Returns: the webhook with URL, enabled events, and SSL settings. See also: gitlab_project_hook_list, gitlab_project_hook_edit.",
+	},
+	"gitlab_project_hook_add": {
+		usage:       "Add a webhook to a project. Send project_id and url plus the event flags to enable (push_events, merge_requests_events, etc.); production GitLab requires HTTPS. Requires Maintainer role.",
+		aliases:     []string{"add project webhook", "create project hook", "register webhook"},
+		related:     []string{"project.hook_list", "project.hook_edit", "project.hook_test"},
+		description: "Add a webhook to a project. Returns: the created webhook with id, URL, and enabled events. See also: gitlab_project_hook_list, gitlab_project_hook_test.",
+	},
+	"gitlab_project_hook_edit": {
+		usage:       "Edit an existing project webhook's URL, token, or enabled events. Send project_id, hook_id, and the fields to change.",
+		aliases:     []string{"edit project webhook", "update project hook", "change webhook settings"},
+		related:     []string{"project.hook_get", "project.hook_list", "project.hook_test"},
+		description: "Edit a project webhook. Returns: the updated webhook with URL and enabled events. See also: gitlab_project_hook_get, gitlab_project_hook_test.",
+	},
+	"gitlab_project_hook_delete": {
+		usage:       "Delete a project webhook by hook_id. Send project_id and hook_id; irreversible.",
+		aliases:     []string{"delete project webhook", "remove project hook", "unregister webhook"},
+		related:     []string{"project.hook_list", "project.hook_get", "project.hook_add"},
+		description: "Delete a project webhook. Returns: a success confirmation naming the webhook and project. See also: gitlab_project_hook_list, gitlab_project_hook_add.",
+	},
+	"gitlab_project_hook_test": {
+		usage:       "Trigger a test event for a project webhook to verify delivery. Send project_id, hook_id, and the event type to fire (e.g. push_events). The project must contain matching content.",
+		aliases:     []string{"test project webhook", "trigger webhook test", "send test hook event"},
+		related:     []string{"project.hook_get", "project.hook_list", "project.hook_edit"},
+		description: "Trigger a test event for a project webhook. Returns: a confirmation that the test event was fired. See also: gitlab_project_hook_get, gitlab_project_hook_edit.",
+	},
+	"gitlab_project_hook_set_custom_header": {
+		usage:       "Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value; the value is write-only.",
+		aliases:     []string{"set webhook custom header", "add webhook header"},
+		related:     []string{"project.hook_delete_custom_header", "project.hook_get", "project.hook_edit"},
+		description: "Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
+	},
+	"gitlab_project_hook_delete_custom_header": {
+		usage:       "Delete a custom HTTP header from a project webhook. Send project_id, hook_id, and key.",
+		aliases:     []string{"delete webhook custom header", "remove webhook header"},
+		related:     []string{"project.hook_set_custom_header", "project.hook_get"},
+		description: "Delete a custom header from a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_set_custom_header, gitlab_project_hook_get.",
+	},
+	"gitlab_project_hook_set_url_variable": {
+		usage:       "Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value; the value is write-only.",
+		aliases:     []string{"set webhook url variable", "add webhook url placeholder"},
+		related:     []string{"project.hook_delete_url_variable", "project.hook_get", "project.hook_edit"},
+		description: "Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
+	},
+	"gitlab_project_hook_delete_url_variable": {
+		usage:       "Delete a URL variable from a project webhook. Send project_id, hook_id, and key.",
+		aliases:     []string{"delete webhook url variable", "remove webhook url placeholder"},
+		related:     []string{"project.hook_set_url_variable", "project.hook_get"},
+		description: "Delete a URL variable from a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_set_url_variable, gitlab_project_hook_get.",
+	},
+	"gitlab_project_approval_config_get": {
+		usage:       "Get a project's merge-request approval configuration (approvals_before_merge, reset_approvals_on_push, author/committer approval rules). Send project_id. Premium/Ultimate.",
+		aliases:     []string{"get approval config", "project approval settings", "merge approval configuration"},
+		related:     []string{"project.approval_config_change", "project.approval_rule_list"},
+		description: "Get a project's approval configuration. Returns: the approval settings such as reset_approvals_on_push and author approval flags. See also: gitlab_project_approval_config_change, gitlab_project_approval_rule_list.",
+	},
+	"gitlab_project_approval_config_change": {
+		usage:       "Change a project's merge-request approval configuration (reset_approvals_on_push, author/committer approval, reauthentication). Send project_id plus the settings to change. Premium/Ultimate, Maintainer role.",
+		aliases:     []string{"change approval config", "update project approval settings", "configure merge approvals"},
+		related:     []string{"project.approval_config_get", "project.approval_rule_create"},
+		description: "Change a project's approval configuration. Returns: the updated approval settings. See also: gitlab_project_approval_config_get, gitlab_project_approval_rule_create.",
+	},
+	"gitlab_project_approval_rule_list": {
+		usage:       "List a project's merge-request approval rules. Send project_id. Premium/Ultimate.",
+		aliases:     []string{"list approval rules", "project approval rules", "show merge approval rules"},
+		related:     []string{"project.approval_rule_get", "project.approval_rule_create", "project.approval_config_get"},
+		description: "List a project's approval rules. Returns: rules with name, approvals_required, eligible approvers, and groups, plus pagination metadata. See also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_create.",
+	},
+	"gitlab_project_approval_rule_get": {
+		usage:       "Get one project approval rule by rule_id, including required approvals and eligible approvers. Send project_id and rule_id. Premium/Ultimate.",
+		aliases:     []string{"get approval rule", "show approval rule"},
+		related:     []string{"project.approval_rule_list", "project.approval_rule_update", "project.approval_rule_delete"},
+		description: "Get a single project approval rule. Returns: the rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
+	},
+	"gitlab_project_approval_rule_create": {
+		usage:       "Create a project approval rule. Send project_id, name, and approvals_required; optionally user_ids, group_ids, usernames, protected_branch_ids, or rule_type. Premium/Ultimate, Maintainer role.",
+		aliases:     []string{"create approval rule", "add merge approval rule", "new approval rule"},
+		related:     []string{"project.approval_rule_list", "project.approval_rule_update", "project.approval_config_change"},
+		description: "Create a project approval rule. Returns: the created rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
+	},
+	"gitlab_project_approval_rule_update": {
+		usage:       "Update a project approval rule by rule_id (name, approvals_required, approvers, protected branches). Send project_id and rule_id plus the fields to change. Premium/Ultimate, Maintainer role.",
+		aliases:     []string{"update approval rule", "edit merge approval rule", "change approval rule"},
+		related:     []string{"project.approval_rule_get", "project.approval_rule_list", "project.approval_rule_delete"},
+		description: "Update a project approval rule. Returns: the updated rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_get, gitlab_project_approval_rule_delete.",
+	},
+	"gitlab_project_approval_rule_delete": {
+		usage:       "Delete a project approval rule by rule_id. Send project_id and rule_id; irreversible. Premium/Ultimate, Maintainer role.",
+		aliases:     []string{"delete approval rule", "remove merge approval rule"},
+		related:     []string{"project.approval_rule_list", "project.approval_rule_get", "project.approval_config_get"},
+		description: "Delete a project approval rule. Returns: a success confirmation naming the rule and project. See also: gitlab_project_approval_rule_list, gitlab_project_approval_config_get.",
+	},
+	"gitlab_project_pull_mirror_get": {
+		usage:       "Get a project's pull-mirror configuration (the upstream URL it mirrors from and its sync status). Send project_id. Premium/Ultimate.",
+		aliases:     []string{"get pull mirror", "show mirror configuration", "project mirror status"},
+		related:     []string{"project.pull_mirror_configure", "project.start_mirroring"},
+		description: "Get a project's pull-mirror configuration. Returns: the mirror URL, enabled flag, and last sync status. See also: gitlab_project_pull_mirror_configure, gitlab_project_start_mirroring.",
+	},
+	"gitlab_project_pull_mirror_configure": {
+		usage:       "Configure a project's pull mirror (upstream URL, trigger builds, protected-branches-only, overwrite-diverged). Send project_id plus the mirror settings. Premium/Ultimate.",
+		aliases:     []string{"configure pull mirror", "set up project mirror", "edit mirror settings"},
+		related:     []string{"project.pull_mirror_get", "project.start_mirroring"},
+		description: "Configure a project's pull mirror. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+	},
+	"gitlab_project_start_mirroring": {
+		usage:       "Trigger an immediate pull-mirror sync for a project so it fetches from its configured upstream now. Send project_id. Premium/Ultimate.",
+		aliases:     []string{"start mirroring", "sync pull mirror now", "trigger pull mirror sync"},
+		related:     []string{"project.pull_mirror_get", "project.pull_mirror_configure"},
+		description: "Trigger a pull-mirror sync. Returns: a success confirmation naming the project. See also: gitlab_project_pull_mirror_get, gitlab_project_pull_mirror_configure.",
+	},
+	"gitlab_project_get_push_rules": {
+		aliases:     []string{"get push rules", "show project push rules", "project commit rules"},
+		related:     []string{"project.add_push_rule", "project.edit_push_rule", "project.delete_push_rule"},
+		description: "Get a project's push rules. Returns: the singleton push-rule configuration such as commit_message_regex and reject_unsigned_commits. See also: gitlab_project_add_push_rule, gitlab_project_edit_push_rule.",
+	},
+	"gitlab_project_add_push_rule": {
+		aliases:     []string{"add push rule", "create project push rule", "set commit rules"},
+		related:     []string{"project.get_push_rules", "project.edit_push_rule", "project.delete_push_rule"},
+		description: "Add push rules to a project. Returns: the created push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_edit_push_rule.",
+	},
+	"gitlab_project_edit_push_rule": {
+		aliases:     []string{"edit push rule", "update project push rule", "change commit rules"},
+		related:     []string{"project.get_push_rules", "project.add_push_rule", "project.delete_push_rule"},
+		description: "Edit a project's push rules. Returns: the updated push-rule configuration. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+	},
+	"gitlab_project_delete_push_rule": {
+		aliases:     []string{"delete push rule", "remove project push rule", "clear commit rules"},
+		related:     []string{"project.get_push_rules", "project.add_push_rule", "project.edit_push_rule"},
+		description: "Delete a project's push rules. Returns: a success confirmation naming the project. See also: gitlab_project_get_push_rules, gitlab_project_add_push_rule.",
+	},
+	"gitlab_project_delete": {
+		aliases:     []string{"delete project", "remove project", "destroy repository"},
+		related:     []string{"project.restore", "project.get", "project.archive"},
+		description: "Delete a project. Returns: a deletion status; on instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.",
+	},
 }

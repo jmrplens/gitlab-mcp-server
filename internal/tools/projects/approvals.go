@@ -66,6 +66,7 @@ type ChangeApprovalConfigInput struct {
 	MergeRequestsDisableCommittersApproval    *bool                `json:"merge_requests_disable_committers_approval,omitempty" jsonschema:"Prevent MR committers from approving"`
 	RequireReauthenticationToApprove          *bool                `json:"require_reauthentication_to_approve,omitempty" jsonschema:"Require reauthentication to approve"`
 	SelectiveCodeOwnerRemovals                *bool                `json:"selective_code_owner_removals,omitempty" jsonschema:"Only remove code owner approvals when relevant files change"`
+	RequirePasswordToApprove                  *bool                `json:"require_password_to_approve,omitempty" jsonschema:"Require the approver's password to approve (deprecated: use require_reauthentication_to_approve)"`
 }
 
 // ChangeApprovalConfig updates the project-level approval configuration.
@@ -84,6 +85,7 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 		MergeRequestsDisableCommittersApproval:    input.MergeRequestsDisableCommittersApproval,
 		RequireReauthenticationToApprove:          input.RequireReauthenticationToApprove,
 		SelectiveCodeOwnerRemovals:                input.SelectiveCodeOwnerRemovals,
+		RequirePasswordToApprove:                  input.RequirePasswordToApprove,
 	}
 	approvals, _, err := client.GL().Projects.ChangeApprovalConfiguration(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -96,7 +98,10 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 // ListApprovalRulesInput defines parameters for listing project approval rules.
 type ListApprovalRulesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ApprovalRuleOutput holds a single project approval rule.
@@ -152,11 +157,12 @@ func ListApprovalRules(ctx context.Context, client *gitlabclient.Client, input L
 		return ListApprovalRulesOutput{}, errors.New("projectListApprovalRules: project_id is required")
 	}
 	opts := &gl.GetProjectApprovalRulesListsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	rules, resp, err := client.GL().Projects.GetProjectApprovalRules(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -201,6 +207,7 @@ type CreateApprovalRuleInput struct {
 	Name                          string               `json:"name" jsonschema:"Rule name,required"`
 	ApprovalsRequired             int64                `json:"approvals_required" jsonschema:"Number of approvals required,required"`
 	RuleType                      string               `json:"rule_type,omitempty" jsonschema:"Rule type (regular, code_owner)"`
+	ReportType                    string               `json:"report_type,omitempty" jsonschema:"Report type for report-approver rules (e.g. code_coverage, license_scanning)"`
 	UserIDs                       []int64              `json:"user_ids,omitempty" jsonschema:"User IDs to assign as approvers"`
 	GroupIDs                      []int64              `json:"group_ids,omitempty" jsonschema:"Group IDs to assign as approvers"`
 	ProtectedBranchIDs            []int64              `json:"protected_branch_ids,omitempty" jsonschema:"Protected branch IDs to scope the rule to"`
@@ -225,6 +232,9 @@ func CreateApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	if input.RuleType != "" {
 		opts.RuleType = &input.RuleType
+	}
+	if input.ReportType != "" {
+		opts.ReportType = &input.ReportType
 	}
 	if len(input.UserIDs) > 0 {
 		opts.UserIDs = &input.UserIDs
