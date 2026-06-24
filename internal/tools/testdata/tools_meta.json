@@ -2598,9 +2598,85 @@
         "allow_collaboration": {
           "type": "boolean"
         },
+        "allow_maintainer_to_push": {
+          "type": "boolean"
+        },
+        "assignee": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "state",
+              "avatar_url",
+              "web_url"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -2608,7 +2684,42 @@
           ]
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "blocking_discussions_resolved": {
           "type": "boolean"
@@ -2620,12 +2731,50 @@
           "type": "string"
         },
         "closed_by": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "detailed_merge_status": {
           "type": "string"
         },
         "diff_refs": {
@@ -2666,17 +2815,234 @@
         "first_contribution": {
           "type": "boolean"
         },
+        "first_deployed_to_production_at": {
+          "type": "string"
+        },
         "force_remove_source_branch": {
           "type": "boolean"
         },
         "has_conflicts": {
           "type": "boolean"
         },
-        "head_pipeline_id": {
-          "type": "integer"
+        "head_pipeline": {
+          "additionalProperties": false,
+          "properties": {
+            "before_sha": {
+              "type": "string"
+            },
+            "committed_at": {
+              "type": "string"
+            },
+            "coverage": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "detailed_status": {
+              "additionalProperties": false,
+              "properties": {
+                "details_path": {
+                  "type": "string"
+                },
+                "favicon": {
+                  "type": "string"
+                },
+                "group": {
+                  "type": "string"
+                },
+                "has_details": {
+                  "type": "boolean"
+                },
+                "icon": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "tooltip": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "icon",
+                "text",
+                "label",
+                "group",
+                "tooltip",
+                "has_details",
+                "details_path",
+                "favicon"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "duration": {
+              "type": "integer"
+            },
+            "finished_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "queued_duration": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "boolean"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "web_url": {
+              "type": "string"
+            },
+            "yaml_errors": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "project_id",
+            "status",
+            "source",
+            "ref",
+            "name",
+            "sha",
+            "before_sha",
+            "tag",
+            "yaml_errors",
+            "duration",
+            "queued_duration",
+            "coverage",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "id": {
           "type": "integer"
+        },
+        "iid": {
+          "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -2702,11 +3068,43 @@
         "merge_error": {
           "type": "string"
         },
-        "merge_request_iid": {
-          "type": "integer"
-        },
-        "merge_status": {
-          "type": "string"
+        "merge_user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "merge_when_pipeline_succeeds": {
           "type": "boolean"
@@ -2715,10 +3113,103 @@
           "type": "string"
         },
         "merged_by": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "milestone": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "expired": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "group_id",
+            "project_id",
+            "title",
+            "description",
+            "state",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "next_steps": {
           "items": {
@@ -2729,14 +3220,58 @@
             "array"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
-        "pipeline_name": {
-          "type": "string"
-        },
-        "pipeline_web_url": {
-          "type": "string"
+        "pipeline": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "project_id",
+            "status",
+            "source",
+            "ref",
+            "sha",
+            "name",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "prepared_at": {
           "type": "string"
@@ -2744,18 +3279,70 @@
         "project_id": {
           "type": "integer"
         },
-        "project_path": {
-          "type": "string"
-        },
         "rebase_in_progress": {
           "type": "boolean"
         },
         "references": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "full": {
+              "type": "string"
+            },
+            "relative": {
+              "type": "string"
+            },
+            "short": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "short",
+            "relative",
+            "full"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "reviewers": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "state",
+              "avatar_url",
+              "web_url"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -2795,20 +3382,63 @@
         "target_project_id": {
           "type": "integer"
         },
-        "task_completion_count": {
-          "type": "integer"
+        "task_completion_status": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_count": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "completed_count"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
-        "task_completion_total": {
-          "type": "integer"
-        },
-        "time_estimate": {
-          "type": "integer"
+        "time_stats": {
+          "additionalProperties": false,
+          "properties": {
+            "human_time_estimate": {
+              "type": "string"
+            },
+            "human_total_time_spent": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "time_estimate": {
+              "type": "integer"
+            },
+            "total_time_spent": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "human_time_estimate",
+            "human_total_time_spent",
+            "time_estimate",
+            "total_time_spent"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "title": {
           "type": "string"
-        },
-        "total_time_spent": {
-          "type": "integer"
         },
         "updated_at": {
           "type": "string"
@@ -2816,16 +3446,34 @@
         "upvotes": {
           "type": "integer"
         },
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "can_merge": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "can_merge"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "user_notes_count": {
           "type": "integer"
         },
         "web_url": {
           "type": "string"
+        },
+        "work_in_progress": {
+          "type": "boolean"
         }
       },
       "required": [
         "id",
-        "merge_request_iid",
+        "iid",
         "project_id",
         "title",
         "description",
@@ -2833,7 +3481,6 @@
         "source_branch",
         "target_branch",
         "web_url",
-        "merge_status",
         "draft",
         "has_conflicts",
         "blocking_discussions_resolved",
