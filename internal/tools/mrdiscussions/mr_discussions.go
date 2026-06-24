@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -13,15 +12,39 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// DiffPosition defines the location of an inline diff comment.
+// DiffLineRangeInput mirrors gl.LineRangeOptions: the start/end endpoints of a
+// multi-line diff comment position.
+type DiffLineRangeInput struct {
+	Start *DiffLinePositionInput `json:"start,omitempty" jsonschema:"Start endpoint of a multi-line diff comment range."`
+	End   *DiffLinePositionInput `json:"end,omitempty"   jsonschema:"End endpoint of a multi-line diff comment range."`
+}
+
+// DiffLinePositionInput mirrors gl.LinePositionOptions: one endpoint of a
+// multi-line diff comment range.
+type DiffLinePositionInput struct {
+	LineCode string `json:"line_code,omitempty" jsonschema:"Line code identifying this line in the diff."`
+	Type     string `json:"type,omitempty"      jsonschema:"Line type (new, old, or expanded)."`
+	OldLine  int    `json:"old_line,omitempty"  jsonschema:"Line number in the old file for this endpoint."`
+	NewLine  int    `json:"new_line,omitempty"  jsonschema:"Line number in the new file for this endpoint."`
+}
+
+// DiffPosition defines the location of an inline diff comment. It mirrors
+// gl.PositionOptions in full, supporting both text (line) positions and image
+// (coordinate) positions.
 type DiffPosition struct {
-	BaseSHA  string `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
-	StartSHA string `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
-	HeadSHA  string `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
-	OldPath  string `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files)"`
-	NewPath  string `json:"new_path"            jsonschema:"File path after the change,required"`
-	OldLine  int    `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
-	NewLine  int    `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
+	BaseSHA      string              `json:"base_sha"  jsonschema:"Base commit SHA (merge-base),required"`
+	StartSHA     string              `json:"start_sha" jsonschema:"SHA of the first commit in the MR,required"`
+	HeadSHA      string              `json:"head_sha"  jsonschema:"HEAD commit SHA of the MR source branch,required"`
+	OldPath      string              `json:"old_path,omitempty"  jsonschema:"File path before the change (for modified/deleted files)"`
+	NewPath      string              `json:"new_path"            jsonschema:"File path after the change,required"`
+	OldLine      int                 `json:"old_line,omitempty" jsonschema:"Line in old file. Set ONLY for removed lines. For modified or added lines use new_line instead. Set both old_line and new_line only for unchanged context lines."`
+	NewLine      int                 `json:"new_line,omitempty" jsonschema:"Line in new file. Set ONLY for added or modified lines. For removed lines use old_line instead. Set both old_line and new_line only for unchanged context lines."`
+	PositionType string              `json:"position_type,omitempty" jsonschema:"Position type: 'text' for line comments (default) or 'image' for coordinate comments."`
+	LineRange    *DiffLineRangeInput `json:"line_range,omitempty"    jsonschema:"Start/end line range for a multi-line text diff comment."`
+	Width        int                 `json:"width,omitempty"  jsonschema:"Image width in pixels (position_type=image)."`
+	Height       int                 `json:"height,omitempty" jsonschema:"Image height in pixels (position_type=image)."`
+	X            float64             `json:"x,omitempty"      jsonschema:"X coordinate of the comment on the image (position_type=image)."`
+	Y            float64             `json:"y,omitempty"      jsonschema:"Y coordinate of the comment on the image (position_type=image)."`
 }
 
 // CreateInput defines parameters for creating a discussion (inline or general).
@@ -30,33 +53,52 @@ type CreateInput struct {
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	Body      string               `json:"body"       jsonschema:"Discussion body,required"`
 	Position  *DiffPosition        `json:"position,omitempty" jsonschema:"Diff position for inline comments. Omit for general MR discussions."`
+	// CommitID anchors the discussion to a specific commit within the MR.
+	CommitID string `json:"commit_id,omitempty" jsonschema:"SHA of the commit to anchor the discussion to (optional)."`
+	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
-// NoteOutput represents a single note within a discussion.
+// NoteOutput represents a single note within a discussion. Per the 1:1 audit
+// policy it mirrors every field of gl.Note, surfacing the full author /
+// resolved_by / position sub-objects. Per the locked canonical-key convention
+// the full *NoteUserOutput author object is surfaced on the canonical `author`
+// key.
 type NoteOutput struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Body        string `json:"body"`
-	Author      string `json:"author"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	Resolved    bool   `json:"resolved"`
-	Resolvable  bool   `json:"resolvable"`
-	System      bool   `json:"system"`
-	Internal    bool   `json:"internal"`
-	Type        string `json:"type,omitempty"`
-	NoteableID  int64  `json:"notable_id,omitempty"`
-	NoteableIID int64  `json:"notable_iid,omitempty"`
-	CommitID    string `json:"commit_id,omitempty"`
-	ProjectID   int64  `json:"project_id,omitempty"`
+	ID           int64               `json:"id"`
+	Body         string              `json:"body"`
+	Author       *NoteUserOutput     `json:"author,omitempty"`
+	Attachment   string              `json:"attachment,omitempty"`
+	Title        string              `json:"title,omitempty"`
+	FileName     string              `json:"file_name,omitempty"`
+	CreatedAt    string              `json:"created_at"`
+	UpdatedAt    string              `json:"updated_at,omitempty"`
+	ExpiresAt    string              `json:"expires_at,omitempty"`
+	Resolved     bool                `json:"resolved"`
+	Resolvable   bool                `json:"resolvable"`
+	ResolvedAt   string              `json:"resolved_at,omitempty"`
+	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
+	System       bool                `json:"system"`
+	Internal     bool                `json:"internal"`
+	Confidential bool                `json:"confidential"`
+	Type         string              `json:"type,omitempty"`
+	NoteableType string              `json:"noteable_type,omitempty"`
+	NoteableID   int64               `json:"noteable_id,omitempty"`
+	NoteableIID  int64               `json:"noteable_iid,omitempty"`
+	CommitID     string              `json:"commit_id,omitempty"`
+	Position     *NotePositionOutput `json:"position,omitempty"`
+	ProjectID    int64               `json:"project_id,omitempty"`
 }
 
-// Output represents a discussion thread.
+// Output represents a discussion thread. Its Notes field is a local
+// []*NoteOutput mirror of the SDK's []*gl.Note (C-IMPORTS replication; the
+// auditor flags the local-mirror type, which is the intended behavior).
 type Output struct {
 	toolutil.HintableOutput
-	ID             string       `json:"id"`
-	IndividualNote bool         `json:"individual_note"`
-	Notes          []NoteOutput `json:"notes"`
+	ID             string        `json:"id"`
+	IndividualNote bool          `json:"individual_note"`
+	Notes          []*NoteOutput `json:"notes"`
 }
 
 // ResolveInput defines parameters for resolving/unresolving a discussion.
@@ -73,13 +115,20 @@ type ReplyInput struct {
 	MRIID        int64                `json:"merge_request_iid"        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion to reply to,required"`
 	Body         string               `json:"body"          jsonschema:"Reply body,required"`
+	// CreatedAt backdates the reply note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // ListInput defines parameters for listing discussions.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	// OrderBy names the column used to order keyset-paginated results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// Sort selects the sort direction for ordered results.
+	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of discussions.
@@ -89,38 +138,46 @@ type ListOutput struct {
 	Pagination  toolutil.PaginationOutput `json:"pagination"`
 }
 
-// NoteToOutput converts a GitLab API [gl.Note] to a
-// [NoteOutput], formatting the creation timestamp as RFC 3339.
+// NoteToOutput converts a GitLab API [gl.Note] to a [NoteOutput]. Per the 1:1
+// audit policy it surfaces the full author object on the canonical `author`
+// key, additively surfaces the resolved_by / position sub-objects, and mirrors
+// every other gl.Note field. Timestamps are formatted as RFC 3339 strings.
 func NoteToOutput(n *gl.Note) NoteOutput {
 	out := NoteOutput{
-		ID:          n.ID,
-		Body:        n.Body,
-		Author:      n.Author.Username,
-		Resolved:    n.Resolved,
-		Resolvable:  n.Resolvable,
-		System:      n.System,
-		Internal:    n.Internal,
-		Type:        n.NoteableType,
-		NoteableID:  n.NoteableID,
-		NoteableIID: n.NoteableIID,
-		CommitID:    n.CommitID,
-		ProjectID:   n.ProjectID,
+		ID:           n.ID,
+		Body:         n.Body,
+		Author:       noteAuthorOutput(n.Author),
+		Attachment:   n.Attachment,
+		Title:        n.Title,
+		FileName:     n.FileName,
+		Resolved:     n.Resolved,
+		Resolvable:   n.Resolvable,
+		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
+		System:       n.System,
+		Internal:     n.Internal,
+		Confidential: n.Internal,
+		Type:         string(n.Type),
+		NoteableType: n.NoteableType,
+		NoteableID:   n.NoteableID,
+		NoteableIID:  n.NoteableIID,
+		CommitID:     n.CommitID,
+		Position:     notePositionOutput(n.Position),
+		ProjectID:    n.ProjectID,
 	}
-	if n.CreatedAt != nil {
-		out.CreatedAt = n.CreatedAt.Format(time.RFC3339)
-	}
-	if n.UpdatedAt != nil {
-		out.UpdatedAt = n.UpdatedAt.Format(time.RFC3339)
-	}
+	out.CreatedAt = formatTimePtr(n.CreatedAt)
+	out.UpdatedAt = formatTimePtr(n.UpdatedAt)
+	out.ExpiresAt = formatTimePtr(n.ExpiresAt)
+	out.ResolvedAt = formatTimePtr(n.ResolvedAt)
 	return out
 }
 
 // ToOutput converts a GitLab API [gl.Discussion] to an
 // [Output], including all notes within the thread.
 func ToOutput(d *gl.Discussion) Output {
-	notes := make([]NoteOutput, len(d.Notes))
+	notes := make([]*NoteOutput, len(d.Notes))
 	for i, n := range d.Notes {
-		notes[i] = NoteToOutput(n)
+		note := NoteToOutput(n)
+		notes[i] = &note
 	}
 	return Output{
 		ID:             d.ID,
@@ -148,29 +205,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 	}
 	opts := &gl.CreateMergeRequestDiscussionOptions{
-		Body: new(toolutil.NormalizeText(input.Body)),
+		Body:      new(toolutil.NormalizeText(input.Body)),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+	}
+	if input.CommitID != "" {
+		opts.CommitID = new(input.CommitID)
 	}
 	if input.Position != nil {
-		p := input.Position
-		pos := &gl.PositionOptions{
-			BaseSHA:      new(p.BaseSHA),
-			StartSHA:     new(p.StartSHA),
-			HeadSHA:      new(p.HeadSHA),
-			NewPath:      new(p.NewPath),
-			PositionType: new("text"),
-		}
-		if p.OldPath != "" {
-			pos.OldPath = new(p.OldPath)
-		}
-		if p.NewLine != 0 {
-			v := int64(p.NewLine)
-			pos.NewLine = &v
-		}
-		if p.OldLine != 0 {
-			v := int64(p.OldLine)
-			pos.OldLine = &v
-		}
-		opts.Position = pos
+		opts.Position = buildPositionOptions(input.Position)
 	}
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -215,7 +257,8 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionReply", "merge_request_iid")
 	}
 	n, _, err := client.GL().Discussions.AddMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.AddMergeRequestDiscussionNoteOptions{
-		Body: new(toolutil.NormalizeText(input.Body)),
+		Body:      new(toolutil.NormalizeText(input.Body)),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
@@ -236,13 +279,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.MRIID <= 0 {
 		return ListOutput{}, toolutil.ErrRequiredInt64("mrDiscussionList", "merge_request_iid")
 	}
-	opts := &gl.ListMergeRequestDiscussionsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	opts := &gl.ListMergeRequestDiscussionsOptions{
+		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
@@ -270,6 +310,8 @@ type UpdateNoteInput struct {
 	NoteID       int64                `json:"note_id"       jsonschema:"ID of the note to update,required"`
 	Body         string               `json:"body,omitempty"     jsonschema:"New body text (Markdown). Leave empty to keep current body."`
 	Resolved     *bool                `json:"resolved,omitempty" jsonschema:"Set to true to resolve, false to unresolve. Omit to leave unchanged."`
+	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // DeleteNoteInput defines parameters for deleting a discussion note.
@@ -313,7 +355,9 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionNoteUpdate", "note_id")
 	}
-	opts := &gl.UpdateMergeRequestDiscussionNoteOptions{}
+	opts := &gl.UpdateMergeRequestDiscussionNoteOptions{
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
+	}
 	if input.Body != "" {
 		opts.Body = new(toolutil.NormalizeText(input.Body))
 	}
@@ -352,6 +396,90 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 			"only the note author or a Maintainer can delete a discussion note")
 	}
 	return nil
+}
+
+// buildPositionOptions maps the full [DiffPosition] input onto the SDK's
+// gl.PositionOptions, mirroring every field (text line positions, multi-line
+// ranges, and image coordinate positions). When position_type is unset it
+// defaults to "text" to preserve the historical line-comment behavior.
+func buildPositionOptions(p *DiffPosition) *gl.PositionOptions {
+	positionType := p.PositionType
+	if positionType == "" {
+		positionType = "text"
+	}
+	pos := &gl.PositionOptions{
+		BaseSHA:      new(p.BaseSHA),
+		StartSHA:     new(p.StartSHA),
+		HeadSHA:      new(p.HeadSHA),
+		NewPath:      new(p.NewPath),
+		PositionType: new(positionType),
+	}
+	if p.OldPath != "" {
+		pos.OldPath = new(p.OldPath)
+	}
+	if p.NewLine != 0 {
+		v := int64(p.NewLine)
+		pos.NewLine = &v
+	}
+	if p.OldLine != 0 {
+		v := int64(p.OldLine)
+		pos.OldLine = &v
+	}
+	if p.LineRange != nil {
+		pos.LineRange = buildLineRangeOptions(p.LineRange)
+	}
+	if p.Width != 0 {
+		v := int64(p.Width)
+		pos.Width = &v
+	}
+	if p.Height != 0 {
+		v := int64(p.Height)
+		pos.Height = &v
+	}
+	if p.X != 0 {
+		v := p.X
+		pos.X = &v
+	}
+	if p.Y != 0 {
+		v := p.Y
+		pos.Y = &v
+	}
+	return pos
+}
+
+// buildLineRangeOptions maps a [DiffLineRangeInput] onto gl.LineRangeOptions,
+// returning nil when both endpoints are absent.
+func buildLineRangeOptions(lr *DiffLineRangeInput) *gl.LineRangeOptions {
+	start := buildLinePositionOptions(lr.Start)
+	end := buildLinePositionOptions(lr.End)
+	if start == nil && end == nil {
+		return nil
+	}
+	return &gl.LineRangeOptions{Start: start, End: end}
+}
+
+// buildLinePositionOptions maps a [DiffLinePositionInput] onto
+// gl.LinePositionOptions, returning nil when the endpoint is absent.
+func buildLinePositionOptions(p *DiffLinePositionInput) *gl.LinePositionOptions {
+	if p == nil {
+		return nil
+	}
+	out := &gl.LinePositionOptions{}
+	if p.LineCode != "" {
+		out.LineCode = new(p.LineCode)
+	}
+	if p.Type != "" {
+		out.Type = new(p.Type)
+	}
+	if p.OldLine != 0 {
+		v := int64(p.OldLine)
+		out.OldLine = &v
+	}
+	if p.NewLine != 0 {
+		v := int64(p.NewLine)
+		out.NewLine = &v
+	}
+	return out
 }
 
 // validatePosition fetches the MR diff and validates that the given position
