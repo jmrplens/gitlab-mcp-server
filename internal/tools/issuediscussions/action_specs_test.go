@@ -132,6 +132,65 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata guards the 1:1-audit R-META requirements:
+// every issue discussion action must carry action-specific Usage (not the
+// generic placeholder), natural-language aliases, canonical RelatedActions,
+// parameter guidance, and an IndividualTool.Description with "Returns:" and
+// "See also:" sections.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
+
+	tools := []string{
+		"gitlab_list_issue_discussions",
+		"gitlab_get_issue_discussion",
+		"gitlab_create_issue_discussion",
+		"gitlab_add_issue_discussion_note",
+		"gitlab_update_issue_discussion_note",
+		"gitlab_delete_issue_discussion_note",
+	}
+
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			spec := byTool[tool]
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute issuediscussions domain action.") {
+				t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+			}
+			if len(spec.Aliases) < 2 {
+				t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: expected RelatedActions, got none", tool)
+			}
+			for _, ra := range spec.RelatedActions {
+				if !strings.HasPrefix(ra, "issue.") {
+					t.Errorf("%s: RelatedAction %q is not a canonical issue.* id", tool, ra)
+				}
+			}
+			if len(spec.ParameterGuidance) == 0 {
+				t.Errorf("%s: expected ParameterGuidance, got none", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+			}
+		})
+	}
+}
+
+// TestDecorateIssueDiscussionMeta_DefaultFallback covers the defensive default
+// branch of decorateIssueDiscussionMeta, exercised when an unknown individual
+// tool name is passed.
+func TestDecorateIssueDiscussionMeta_DefaultFallback(t *testing.T) {
+	var options toolutil.ActionSpecOptions
+	decorateIssueDiscussionMeta(&options, "gitlab_unknown_tool")
+	if options.Usage == "" {
+		t.Error("expected fallback Usage to be set")
+	}
+	if len(options.RelatedActions) == 0 {
+		t.Error("expected fallback RelatedActions to be set")
+	}
+}
+
 func issueDiscussionsActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path

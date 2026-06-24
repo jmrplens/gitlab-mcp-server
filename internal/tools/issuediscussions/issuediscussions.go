@@ -17,8 +17,12 @@ import (
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	// OrderBy names the column used to order keyset-paginated results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// Sort selects the sort direction for ordered results.
+	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single issue discussion.
@@ -33,6 +37,8 @@ type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
 	Body      string               `json:"body" jsonschema:"Discussion body (Markdown supported),required"`
+	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // AddNoteInput defines parameters for adding a note to an issue discussion.
@@ -41,6 +47,8 @@ type AddNoteInput struct {
 	IssueIID     int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"Discussion ID to reply to,required"`
 	Body         string               `json:"body" jsonschema:"Note body (Markdown supported),required"`
+	// CreatedAt backdates the note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // UpdateNoteInput defines parameters for updating an issue discussion note.
@@ -50,6 +58,8 @@ type UpdateNoteInput struct {
 	DiscussionID string               `json:"discussion_id" jsonschema:"Discussion ID,required"`
 	NoteID       int64                `json:"note_id" jsonschema:"Note ID to update,required"`
 	Body         string               `json:"body" jsonschema:"Updated note body,required"`
+	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // DeleteNoteInput defines parameters for deleting an issue discussion note.
@@ -89,8 +99,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("issue_discussion_list", "issue_iid")
 	}
 	opts := &gl.ListIssueDiscussionsOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
+		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListIssueDiscussions(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_list", err, http.StatusNotFound,
@@ -133,7 +144,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.ErrRequiredInt64("issue_discussion_create", "issue_iid")
 	}
 	opts := &gl.CreateIssueDiscussionOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	d, _, err := client.GL().Discussions.CreateIssueDiscussion(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -158,7 +170,8 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, errors.New("issue_discussion_add_note: discussion_id is required")
 	}
 	opts := &gl.AddIssueDiscussionNoteOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	note, _, err := client.GL().Discussions.AddIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -186,7 +199,8 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, toolutil.ErrRequiredInt64("issue_discussion_update_note", "note_id")
 	}
 	opts := &gl.UpdateIssueDiscussionNoteOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	note, _, err := client.GL().Discussions.UpdateIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
