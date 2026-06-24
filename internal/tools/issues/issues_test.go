@@ -3591,3 +3591,208 @@ func TestDelete_Forbidden(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+// TestList_AdvancedFilters verifies that List forwards the full filter set
+// (negation filters, assignee/author IDs, iteration, reaction, search scope,
+// keyset pagination) to the GitLab project issues query.
+func TestList_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssues {
+			q := r.URL.Query()
+			checks := map[string]string{
+				"not[labels]":            "wontfix",
+				"with_labels_details":    "true",
+				"not[milestone]":         "v2",
+				"in":                     "title",
+				"not[in]":                "description",
+				"assignee_id":            "5",
+				"not[assignee_id]":       "6",
+				"not[assignee_username]": "mallory",
+				"author_id":              "7",
+				"not[author_id]":         "8",
+				"not[author_username]":   "carol",
+				"my_reaction_emoji":      "thumbsup",
+				"not[my_reaction_emoji]": "thumbsdown",
+				"issue_type":             "incident",
+				"iteration_id":           "3",
+				"due_date":               "week",
+				"order_by":               "due_date",
+				"sort":                   "asc",
+				"pagination":             "keyset",
+				"page_token":             "tok123",
+			}
+			for k, want := range checks {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %q = %q, want %q", k, got, want)
+				}
+			}
+			if got := q["iids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "11" {
+				t.Errorf("iids[] = %v, want [10 11]", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	five, six, seven, eight, iter := int64(5), int64(6), int64(7), int64(8), int64(3)
+	yes := true
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		NotLabels:             "wontfix",
+		WithLabelsDetails:     &yes,
+		NotMilestone:          "v2",
+		In:                    "title",
+		NotIn:                 "description",
+		AssigneeID:            &five,
+		NotAssigneeID:         &six,
+		NotAssigneeUsername:   "mallory",
+		AuthorID:              &seven,
+		NotAuthorID:           &eight,
+		NotAuthorUsername:     "carol",
+		MyReactionEmoji:       "thumbsup",
+		NotMyReactionEmoji:    "thumbsdown",
+		IssueType:             "incident",
+		IterationID:           &iter,
+		DueDate:               "week",
+		IIDs:                  []int64{10, 11},
+		OrderBy:               "due_date",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueListErr, err)
+	}
+}
+
+// TestListGroup_AdvancedFilters verifies the group issue list forwards the
+// negated search and assignee filters unique to the group endpoint.
+func TestListGroup_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/10/issues" {
+			q := r.URL.Query()
+			if q.Get("not[search]") != "spam" {
+				t.Errorf("not[search] = %q, want spam", q.Get("not[search]"))
+			}
+			if q.Get("assignee_username") != "alice" {
+				t.Errorf("assignee_username = %q, want alice", q.Get("assignee_username"))
+			}
+			if q.Get("iteration_id") != "4" {
+				t.Errorf("iteration_id = %q, want 4", q.Get("iteration_id"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	iter := int64(4)
+	_, err := ListGroup(context.Background(), client, ListGroupInput{
+		GroupID:          "10",
+		NotSearch:        "spam",
+		AssigneeUsername: "alice",
+		IterationID:      &iter,
+	})
+	if err != nil {
+		t.Fatalf("ListGroup() unexpected error: %v", err)
+	}
+}
+
+// TestListAll_AdvancedFilters verifies the global issue list forwards the
+// slice-typed negation filters (not[assignee_id], not[author_id],
+// not[my_reaction_emoji]) that are unique to the global endpoint.
+func TestListAll_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGlobalIssues {
+			q := r.URL.Query()
+			if got := q["not[assignee_id]"]; len(got) != 2 {
+				t.Errorf("not[assignee_id] = %v, want 2 values", got)
+			}
+			if got := q["not[author_id]"]; len(got) != 1 || got[0] != "9" {
+				t.Errorf("not[author_id] = %v, want [9]", got)
+			}
+			if got := q["not[my_reaction_emoji]"]; len(got) != 1 || got[0] != "thumbsdown" {
+				t.Errorf("not[my_reaction_emoji] = %v, want [thumbsdown]", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListAll(context.Background(), client, ListAllInput{
+		NotAssigneeID:      []int64{1, 2},
+		NotAuthorID:        []int64{9},
+		NotMyReactionEmoji: []string{"thumbsdown"},
+		NotLabels:          "spam",
+	})
+	if err != nil {
+		t.Fatalf("ListAll() unexpected error: %v", err)
+	}
+}
+
+// TestCreate_WithIID verifies that an explicit issue IID is sent in the create
+// request body.
+func TestCreate_WithIID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["iid"] != float64(900) {
+				t.Errorf("body iid = %v, want 900", body["iid"])
+			}
+			testutil.RespondJSON(w, http.StatusCreated, issueJSONMinimal)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, Title: "X", IID: 900})
+	if err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+}
+
+// TestUpdate_WithUpdatedAt verifies the updated_at override is sent in the
+// update request body.
+func TestUpdate_WithUpdatedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if _, ok := body["updated_at"]; !ok {
+				t.Error("expected updated_at in update body")
+			}
+			testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10, UpdatedAt: "2026-03-01T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+}
+
+// TestUpdate_InvalidUpdatedAt verifies a malformed updated_at is rejected before
+// any API call.
+func TestUpdate_InvalidUpdatedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("API should not be called when updated_at is invalid")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10, UpdatedAt: "not-a-timestamp",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid updated_at, got nil")
+	}
+}

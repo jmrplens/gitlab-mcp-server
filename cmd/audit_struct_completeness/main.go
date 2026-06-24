@@ -332,6 +332,13 @@ func diffPair(kind string, pair structPair) gap {
 		sdkType := sdkFields[tag]
 		mcpType, present := mcpFields[tag]
 		if !present {
+			// SDK url tags use array/negation notation (iids[], not[author_id])
+			// that maps to snake_case MCP json names (iids, not_author_id).
+			if alt, ok := mcpFields[normalizeSDKTag(tag)]; ok {
+				mcpType, present = alt, true
+			}
+		}
+		if !present {
 			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: sdkType})
 			continue
 		}
@@ -371,6 +378,16 @@ func flattenInto(st *types.Struct, tagKeys []string, out map[string]string, dept
 			out[tagName] = types.TypeString(field.Type(), shortQualifier)
 		}
 	}
+}
+
+// normalizeSDKTag maps a client-go url-tag name to the snake_case json name the
+// MCP inputs use: trailing array notation ("iids[]" → "iids") and bracket
+// negation notation ("not[author_id]" → "not_author_id").
+func normalizeSDKTag(tag string) string {
+	tag = strings.TrimSuffix(tag, "[]")
+	tag = strings.ReplaceAll(tag, "[", "_")
+	tag = strings.ReplaceAll(tag, "]", "")
+	return tag
 }
 
 func tagValue(raw reflect.StructTag, keys []string) string {

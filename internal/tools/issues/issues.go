@@ -31,6 +31,7 @@ type CreateInput struct {
 	// Basic metadata
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Title       string               `json:"title" jsonschema:"Issue title,required"`
+	IID         int64                `json:"iid,omitempty" jsonschema:"Explicit issue IID to assign (requires admin permissions; normally GitLab assigns the next IID automatically)"`
 	Description string               `json:"description,omitempty" jsonschema:"Issue description (Markdown supported)"`
 	IssueType   string               `json:"issue_type,omitempty" jsonschema:"Issue type (issue, incident, test_case, task)"`
 
@@ -98,24 +99,38 @@ type GetInput struct {
 
 // ListInput defines filters for listing project issues.
 type ListInput struct {
-	ProjectID        toolutil.StringOrInt `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
-	State            string               `json:"state,omitempty"             jsonschema:"Filter by state (opened, closed, all)"`
-	Labels           string               `json:"labels,omitempty"            jsonschema:"Comma-separated label names to filter by"`
-	NotLabels        string               `json:"not_labels,omitempty"        jsonschema:"Comma-separated label names to exclude"`
-	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string               `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search           string               `json:"search,omitempty"            jsonschema:"Search in title and description"`
-	AssigneeUsername string               `json:"assignee_username,omitempty" jsonschema:"Filter by assignee username"`
-	AuthorUsername   string               `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	IIDs             []int64              `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
-	IssueType        string               `json:"issue_type,omitempty"        jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
-	Confidential     *bool                `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
-	CreatedAfter     string               `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
-	CreatedBefore    string               `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
-	UpdatedAfter     string               `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
-	UpdatedBefore    string               `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
-	OrderBy          string               `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at, priority, due_date)"`
-	Sort             string               `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
+	ProjectID           toolutil.StringOrInt `json:"project_id"                     jsonschema:"Project ID or URL-encoded path,required"`
+	State               string               `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
+	Labels              string               `json:"labels,omitempty"               jsonschema:"Comma-separated label names to filter by"`
+	NotLabels           string               `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details (id, name, color, description) instead of just names"`
+	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
+	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
+	Scope               string               `json:"scope,omitempty"                jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search              string               `json:"search,omitempty"               jsonschema:"Search in title and description"`
+	In                  string               `json:"in,omitempty"                   jsonschema:"Fields the search query applies to (title, description, or title,description)"`
+	NotIn               string               `json:"not_in,omitempty"               jsonschema:"Fields the negated search query applies to (title, description)"`
+	AssigneeID          *int64               `json:"assignee_id,omitempty"          jsonschema:"Filter by assignee user ID"`
+	NotAssigneeID       *int64               `json:"not_assignee_id,omitempty"      jsonschema:"Exclude issues assigned to this user ID"`
+	AssigneeUsername    string               `json:"assignee_username,omitempty"    jsonschema:"Filter by assignee username"`
+	NotAssigneeUsername string               `json:"not_assignee_username,omitempty" jsonschema:"Exclude issues assigned to this username"`
+	AuthorID            *int64               `json:"author_id,omitempty"            jsonschema:"Filter by author user ID"`
+	NotAuthorID         *int64               `json:"not_author_id,omitempty"        jsonschema:"Exclude issues authored by this user ID"`
+	AuthorUsername      string               `json:"author_username,omitempty"      jsonschema:"Filter by author username"`
+	NotAuthorUsername   string               `json:"not_author_username,omitempty"  jsonschema:"Exclude issues authored by this username"`
+	MyReactionEmoji     string               `json:"my_reaction_emoji,omitempty"    jsonschema:"Filter by issues you reacted to with this emoji (e.g. thumbsup, or None/Any)"`
+	NotMyReactionEmoji  string               `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with this emoji"`
+	IIDs                []int64              `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
+	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
+	IterationID         *int64               `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
+	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0=no due date, overdue, week, month, next_month_and_previous_two_weeks)"`
+	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore       string               `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
+	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -146,6 +161,7 @@ type UpdateInput struct {
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
 	Weight           int64                `json:"weight,omitempty"        jsonschema:"Issue weight (0 or higher)"`
 	DiscussionLocked *bool                `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
+	UpdatedAt        string               `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
 }
 
 // DeleteInput defines parameters for deleting an issue.
@@ -156,17 +172,39 @@ type DeleteInput struct {
 
 // ListGroupInput defines parameters for listing issues across a group.
 type ListGroupInput struct {
-	GroupID        toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
-	State          string               `json:"state,omitempty"         jsonschema:"Filter by state (opened, closed, all)"`
-	Labels         string               `json:"labels,omitempty"        jsonschema:"Comma-separated list of labels to filter by"`
-	Milestone      string               `json:"milestone,omitempty"     jsonschema:"Milestone title to filter by"`
-	Search         string               `json:"search,omitempty"        jsonschema:"Search in title and description"`
-	Scope          string               `json:"scope,omitempty"         jsonschema:"Scope (created_by_me, assigned_to_me, all)"`
-	AuthorUsername string               `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	CreatedAfter   string               `json:"created_after,omitempty"  jsonschema:"Return issues created after date (ISO 8601)"`
-	CreatedBefore  string               `json:"created_before,omitempty" jsonschema:"Return issues created before date (ISO 8601)"`
-	UpdatedAfter   string               `json:"updated_after,omitempty"  jsonschema:"Return issues updated after date (ISO 8601)"`
-	UpdatedBefore  string               `json:"updated_before,omitempty" jsonschema:"Return issues updated before date (ISO 8601)"`
+	GroupID             toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
+	State               string               `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
+	Labels              string               `json:"labels,omitempty"               jsonschema:"Comma-separated list of labels to filter by"`
+	NotLabels           string               `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
+	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
+	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
+	Scope               string               `json:"scope,omitempty"                jsonschema:"Scope (created_by_me, assigned_to_me, all)"`
+	Search              string               `json:"search,omitempty"               jsonschema:"Search in title and description"`
+	NotSearch           string               `json:"not_search,omitempty"           jsonschema:"Exclude issues matching this search text"`
+	In                  string               `json:"in,omitempty"                   jsonschema:"Fields the search query applies to (title, description, or title,description)"`
+	NotIn               string               `json:"not_in,omitempty"               jsonschema:"Fields the negated search query applies to (title, description)"`
+	AssigneeID          *int64               `json:"assignee_id,omitempty"          jsonschema:"Filter by assignee user ID"`
+	NotAssigneeID       *int64               `json:"not_assignee_id,omitempty"      jsonschema:"Exclude issues assigned to this user ID"`
+	AssigneeUsername    string               `json:"assignee_username,omitempty"    jsonschema:"Filter by assignee username"`
+	NotAssigneeUsername string               `json:"not_assignee_username,omitempty" jsonschema:"Exclude issues assigned to this username"`
+	AuthorID            *int64               `json:"author_id,omitempty"            jsonschema:"Filter by author user ID"`
+	NotAuthorID         *int64               `json:"not_author_id,omitempty"        jsonschema:"Exclude issues authored by this user ID"`
+	AuthorUsername      string               `json:"author_username,omitempty"      jsonschema:"Filter by author username"`
+	NotAuthorUsername   string               `json:"not_author_username,omitempty"  jsonschema:"Exclude issues authored by this username"`
+	MyReactionEmoji     string               `json:"my_reaction_emoji,omitempty"    jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
+	NotMyReactionEmoji  string               `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with this emoji"`
+	IIDs                []int64              `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
+	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
+	IterationID         *int64               `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
+	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
+	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	Sort                string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
+	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore       string               `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter        string               `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore       string               `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -284,6 +322,9 @@ func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
 	opts := &gl.CreateIssueOptions{
 		Title: new(input.Title),
 	}
+	if input.IID != 0 {
+		opts.IID = new(input.IID)
+	}
 	if input.Description != "" {
 		opts.Description = new(toolutil.NormalizeText(input.Description))
 	}
@@ -363,9 +404,53 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return ToOutput(issue), nil
 }
 
+// optStr returns a pointer to s, or nil when s is empty, so optional string
+// filters are omitted from the query rather than sent as an empty value.
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// optLabels converts a comma-separated label string into a *gl.LabelOptions,
+// or nil when empty.
+func optLabels(s string) *gl.LabelOptions {
+	if s == "" {
+		return nil
+	}
+	labels := gl.LabelOptions(strings.Split(s, ","))
+	return &labels
+}
+
+// optIIDs returns a pointer to the IID slice, or nil when empty.
+func optIIDs(iids []int64) *[]int64 {
+	if len(iids) == 0 {
+		return nil
+	}
+	return &iids
+}
+
+// optStrings returns a pointer to a string slice, or nil when empty.
+func optStrings(values []string) *[]string {
+	if len(values) == 0 {
+		return nil
+	}
+	return &values
+}
+
+// optAssignee builds a *gl.AssigneeIDValue from an optional user ID, or nil.
+func optAssignee(id *int64) *gl.AssigneeIDValue {
+	if id == nil {
+		return nil
+	}
+	return gl.AssigneeID(*id)
+}
+
 // List retrieves a paginated list of issues for a GitLab project.
 // Supports filtering by state, labels, milestone, search text, assignee,
-// author, and sorting options. Returns the issues with pagination metadata.
+// author, negation filters, iteration, and sorting. Returns the issues with
+// pagination metadata.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -373,41 +458,38 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.ProjectID == "" {
 		return ListOutput{}, errors.New("issueList: project_id is required. Use gitlab_project_list to find the project ID first, then pass it as project_id")
 	}
-	opts := &gl.ListProjectIssuesOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
-	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.AssigneeUsername != "" {
-		opts.AssigneeUsername = new(input.AssigneeUsername)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Confidential != nil {
-		opts.Confidential = input.Confidential
+	opts := &gl.ListProjectIssuesOptions{
+		State:               optStr(input.State),
+		Labels:              optLabels(input.Labels),
+		NotLabels:           optLabels(input.NotLabels),
+		WithLabelDetails:    input.WithLabelsDetails,
+		Milestone:           optStr(input.Milestone),
+		NotMilestone:        optStr(input.NotMilestone),
+		Scope:               optStr(input.Scope),
+		Search:              optStr(input.Search),
+		In:                  optStr(input.In),
+		NotIn:               optStr(input.NotIn),
+		AssigneeID:          optAssignee(input.AssigneeID),
+		NotAssigneeID:       input.NotAssigneeID,
+		AssigneeUsername:    optStr(input.AssigneeUsername),
+		NotAssigneeUsername: optStr(input.NotAssigneeUsername),
+		AuthorID:            input.AuthorID,
+		NotAuthorID:         input.NotAuthorID,
+		AuthorUsername:      optStr(input.AuthorUsername),
+		NotAuthorUsername:   optStr(input.NotAuthorUsername),
+		MyReactionEmoji:     optStr(input.MyReactionEmoji),
+		NotMyReactionEmoji:  optStr(input.NotMyReactionEmoji),
+		IIDs:                optIIDs(input.IIDs),
+		IssueType:           optStr(input.IssueType),
+		IterationID:         input.IterationID,
+		Confidential:        input.Confidential,
+		DueDate:             optStr(input.DueDate),
+		OrderBy:             optStr(input.OrderBy),
+		Sort:                optStr(input.Sort),
+		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
+		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
+		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
+		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -477,6 +559,13 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	}
 	if input.DiscussionLocked != nil {
 		opts.DiscussionLocked = input.DiscussionLocked
+	}
+	if input.UpdatedAt != "" {
+		t, err := time.Parse(time.RFC3339, input.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("issueUpdate: invalid updated_at format (expected ISO 8601/RFC 3339): %w", err)
+		}
+		opts.UpdatedAt = &t
 	}
 	return opts, nil
 }
@@ -552,30 +641,40 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListGroupOutput{}, errors.New("issueListGroup: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
 	}
 
-	opts := &gl.ListGroupIssuesOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
+	opts := &gl.ListGroupIssuesOptions{
+		State:               optStr(input.State),
+		Labels:              optLabels(input.Labels),
+		NotLabels:           optLabels(input.NotLabels),
+		WithLabelDetails:    input.WithLabelsDetails,
+		Milestone:           optStr(input.Milestone),
+		NotMilestone:        optStr(input.NotMilestone),
+		Scope:               optStr(input.Scope),
+		Search:              optStr(input.Search),
+		NotSearch:           optStr(input.NotSearch),
+		In:                  optStr(input.In),
+		NotIn:               optStr(input.NotIn),
+		AssigneeID:          optAssignee(input.AssigneeID),
+		NotAssigneeID:       input.NotAssigneeID,
+		AssigneeUsername:    optStr(input.AssigneeUsername),
+		NotAssigneeUsername: optStr(input.NotAssigneeUsername),
+		AuthorID:            input.AuthorID,
+		NotAuthorID:         input.NotAuthorID,
+		AuthorUsername:      optStr(input.AuthorUsername),
+		NotAuthorUsername:   optStr(input.NotAuthorUsername),
+		MyReactionEmoji:     optStr(input.MyReactionEmoji),
+		NotMyReactionEmoji:  optStr(input.NotMyReactionEmoji),
+		IIDs:                optIIDs(input.IIDs),
+		IssueType:           optStr(input.IssueType),
+		IterationID:         input.IterationID,
+		Confidential:        input.Confidential,
+		DueDate:             optStr(input.DueDate),
+		OrderBy:             optStr(input.OrderBy),
+		Sort:                optStr(input.Sort),
+		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
+		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
+		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
+		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -593,20 +692,38 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 
 // ListAllInput defines parameters for the global ListIssues endpoint (no project scope).
 type ListAllInput struct {
-	State            string `json:"state,omitempty"             jsonschema:"Filter by state (opened, closed, all)"`
-	Labels           string `json:"labels,omitempty"            jsonschema:"Comma-separated label names to filter by"`
-	Milestone        string `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search           string `json:"search,omitempty"            jsonschema:"Search in title and description"`
-	AssigneeUsername string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee username"`
-	AuthorUsername   string `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	OrderBy          string `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at, priority, due_date)"`
-	Sort             string `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
-	CreatedAfter     string `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
-	CreatedBefore    string `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
-	UpdatedAfter     string `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
-	UpdatedBefore    string `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
-	Confidential     *bool  `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	State               string   `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
+	Labels              string   `json:"labels,omitempty"               jsonschema:"Comma-separated label names to filter by"`
+	NotLabels           string   `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	WithLabelsDetails   *bool    `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
+	Milestone           string   `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
+	NotMilestone        string   `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
+	Scope               string   `json:"scope,omitempty"                jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search              string   `json:"search,omitempty"               jsonschema:"Search in title and description"`
+	NotSearch           string   `json:"not_search,omitempty"           jsonschema:"Exclude issues matching this search text"`
+	In                  string   `json:"in,omitempty"                   jsonschema:"Fields the search query applies to (title, description, or title,description)"`
+	NotIn               string   `json:"not_in,omitempty"               jsonschema:"Fields the negated search query applies to (title, description)"`
+	AssigneeID          *int64   `json:"assignee_id,omitempty"          jsonschema:"Filter by assignee user ID"`
+	NotAssigneeID       []int64  `json:"not_assignee_id,omitempty"      jsonschema:"Exclude issues assigned to these user IDs"`
+	AssigneeUsername    string   `json:"assignee_username,omitempty"    jsonschema:"Filter by assignee username"`
+	NotAssigneeUsername string   `json:"not_assignee_username,omitempty" jsonschema:"Exclude issues assigned to this username"`
+	AuthorID            *int64   `json:"author_id,omitempty"            jsonschema:"Filter by author user ID"`
+	NotAuthorID         []int64  `json:"not_author_id,omitempty"        jsonschema:"Exclude issues authored by these user IDs"`
+	AuthorUsername      string   `json:"author_username,omitempty"      jsonschema:"Filter by author username"`
+	NotAuthorUsername   string   `json:"not_author_username,omitempty"  jsonschema:"Exclude issues authored by this username"`
+	MyReactionEmoji     string   `json:"my_reaction_emoji,omitempty"    jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
+	NotMyReactionEmoji  []string `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with these emoji"`
+	IIDs                []int64  `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
+	IssueType           string   `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
+	IterationID         *int64   `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	Confidential        *bool    `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
+	DueDate             string   `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
+	OrderBy             string   `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
+	Sort                string   `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
+	CreatedAfter        string   `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore       string   `json:"created_before,omitempty"       jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter        string   `json:"updated_after,omitempty"        jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore       string   `json:"updated_before,omitempty"       jsonschema:"Return issues updated before date (ISO 8601)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -618,42 +735,40 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 		return ListOutput{}, err
 	}
 
-	opts := &gl.ListIssuesOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
+	opts := &gl.ListIssuesOptions{
+		State:               optStr(input.State),
+		Labels:              optLabels(input.Labels),
+		NotLabels:           optLabels(input.NotLabels),
+		WithLabelDetails:    input.WithLabelsDetails,
+		Milestone:           optStr(input.Milestone),
+		NotMilestone:        optStr(input.NotMilestone),
+		Scope:               optStr(input.Scope),
+		Search:              optStr(input.Search),
+		NotSearch:           optStr(input.NotSearch),
+		In:                  optStr(input.In),
+		NotIn:               optStr(input.NotIn),
+		AssigneeID:          optAssignee(input.AssigneeID),
+		NotAssigneeID:       optIIDs(input.NotAssigneeID),
+		AssigneeUsername:    optStr(input.AssigneeUsername),
+		NotAssigneeUsername: optStr(input.NotAssigneeUsername),
+		AuthorID:            input.AuthorID,
+		NotAuthorID:         optIIDs(input.NotAuthorID),
+		AuthorUsername:      optStr(input.AuthorUsername),
+		NotAuthorUsername:   optStr(input.NotAuthorUsername),
+		MyReactionEmoji:     optStr(input.MyReactionEmoji),
+		NotMyReactionEmoji:  optStrings(input.NotMyReactionEmoji),
+		IIDs:                optIIDs(input.IIDs),
+		IssueType:           optStr(input.IssueType),
+		IterationID:         input.IterationID,
+		Confidential:        input.Confidential,
+		DueDate:             optStr(input.DueDate),
+		OrderBy:             optStr(input.OrderBy),
+		Sort:                optStr(input.Sort),
+		CreatedAfter:        toolutil.ParseOptionalTime(input.CreatedAfter),
+		CreatedBefore:       toolutil.ParseOptionalTime(input.CreatedBefore),
+		UpdatedAfter:        toolutil.ParseOptionalTime(input.UpdatedAfter),
+		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.AssigneeUsername != "" {
-		opts.AssigneeUsername = new(input.AssigneeUsername)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Confidential != nil {
-		opts.Confidential = input.Confidential
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
