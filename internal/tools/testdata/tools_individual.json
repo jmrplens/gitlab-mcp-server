@@ -44552,7 +44552,7 @@
   },
   {
     "name": "gitlab_issue_create_todo",
-    "description": "Create a to-do item for the authenticated user on the specified issue. The to-do will appear in the user's GitLab to-do list.\n\nReturns: JSON with the created to-do item.\n\nSee also: gitlab_issue_get, gitlab_todo_list.",
+    "description": "Create a to-do for an issue. Returns: the created to-do item with action, target, and state. See also: gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44625,7 +44625,7 @@
   },
   {
     "name": "gitlab_issue_delete",
-    "description": "Permanently delete a GitLab issue. This action cannot be undone. Requires at least Maintainer access level.\n\nReturns: confirmation message. See also: gitlab_issue_list.",
+    "description": "Delete an issue permanently. Returns: a success confirmation naming the issue and project. See also: gitlab_issue_get, gitlab_issue_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45407,7 +45407,7 @@
   },
   {
     "name": "gitlab_issue_get_by_id",
-    "description": "Retrieve a single GitLab issue by its global numeric ID (the 'id' field, NOT the '#N' IID shown in URLs). Use this only when you have a global ID from another API response. For the common case of looking up issue #N in a project, use gitlab_issue_get with the IID instead.\n\nReturns: JSON with issue details. See also: gitlab_issue_get.",
+    "description": "Get a single issue by its global ID. Returns: the issue with state, labels, assignees, author, and web URL. See also: gitlab_issue_get, gitlab_issue_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48656,7 +48656,7 @@
   },
   {
     "name": "gitlab_issue_move",
-    "description": "Move an issue from one project to another. Requires at least Reporter access on both the source and target projects.\n\nReturns: JSON with the moved issue details. See also: gitlab_issue_get, gitlab_project_list.",
+    "description": "Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49021,7 +49021,7 @@
   },
   {
     "name": "gitlab_issue_mrs_closing",
-    "description": "List merge requests that will close this issue when merged. Returns MR details including source/target branches. See also: gitlab_mr_get, gitlab_issue_mrs_related.",
+    "description": "List MRs that close this issue on merge. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_related.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49158,7 +49158,7 @@
   },
   {
     "name": "gitlab_issue_mrs_related",
-    "description": "List merge requests related to this issue. Returns MR details including source/target branches. See also: gitlab_issue_get, gitlab_mr_list.",
+    "description": "List MRs related to this issue. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_closing.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50246,7 +50246,7 @@
   },
   {
     "name": "gitlab_issue_participants",
-    "description": "List all participants (users who engaged) in an issue. Returns usernames, names, and profile URLs. See also: gitlab_issue_get, gitlab_project_members_list.",
+    "description": "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_notes_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50322,7 +50322,7 @@
   },
   {
     "name": "gitlab_issue_reorder",
-    "description": "Reorder an issue by specifying the issue to position it before or after. Use move_after_id and/or move_before_id to set the relative position.\n\nReturns: JSON with the reordered issue details. See also: gitlab_issue_list.",
+    "description": "Reorder an issue within its list. Returns: the updated issue. See also: gitlab_issue_get, gitlab_issue_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50696,7 +50696,7 @@
   },
   {
     "name": "gitlab_issue_spent_time_add",
-    "description": "Add spent time to an issue using a human-readable duration (e.g. 1h, 30m) with an optional summary.\n\nReturns: JSON with updated time tracking statistics. See also: gitlab_issue_get.",
+    "description": "Add spent time to an issue. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_reset, gitlab_issue_time_stats_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50765,7 +50765,7 @@
   },
   {
     "name": "gitlab_issue_spent_time_reset",
-    "description": "Reset the total spent time for an issue to zero.\n\nReturns: JSON with reset time tracking statistics. See also: gitlab_issue_get.",
+    "description": "Reset an issue's spent time. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_add, gitlab_issue_time_stats_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51045,7 +51045,7 @@
   },
   {
     "name": "gitlab_issue_subscribe",
-    "description": "Subscribe the authenticated user to an issue to receive notifications on updates.\n\nReturns: JSON with the issue details. See also: gitlab_issue_get.",
+    "description": "Subscribe to an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_unsubscribe.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51405,7 +51405,7 @@
   },
   {
     "name": "gitlab_issue_time_estimate_reset",
-    "description": "Reset the time estimate for an issue back to zero.\n\nReturns: JSON with reset time tracking statistics. See also: gitlab_issue_get.",
+    "description": "Clear an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_set, gitlab_issue_time_stats_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51465,7 +51465,7 @@
   },
   {
     "name": "gitlab_issue_time_estimate_set",
-    "description": "Set the time estimate for an issue using a human-readable duration (e.g. 3h30m, 1w2d).\n\nReturns: JSON with updated time tracking statistics. See also: gitlab_issue_get.",
+    "description": "Set an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_reset, gitlab_issue_time_stats_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51530,7 +51530,7 @@
   },
   {
     "name": "gitlab_issue_time_stats_get",
-    "description": "Get time tracking statistics for an issue (estimate and spent time).\n\nReturns: JSON with time tracking statistics including estimate and spent time. See also: gitlab_issue_get.",
+    "description": "Read an issue's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_issue_time_estimate_set, gitlab_issue_spent_time_add.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -51591,7 +51591,7 @@
   },
   {
     "name": "gitlab_issue_unsubscribe",
-    "description": "Unsubscribe the authenticated user from an issue to stop receiving notifications.\n\nReturns: JSON with the issue details. See also: gitlab_issue_get.",
+    "description": "Unsubscribe from an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_subscribe.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
