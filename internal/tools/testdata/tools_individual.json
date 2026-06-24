@@ -56313,9 +56313,6 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
-        },
-        "author_object": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
@@ -56349,6 +56346,9 @@
             "null",
             "object"
           ]
+        },
+        "author_username": {
+          "type": "string"
         },
         "body": {
           "type": "string"
@@ -56404,7 +56404,49 @@
             "line_range": {
               "additionalProperties": false,
               "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "end_range": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -56539,7 +56581,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
@@ -57032,9 +57073,6 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
-        },
-        "author_object": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
@@ -57068,6 +57106,9 @@
             "null",
             "object"
           ]
+        },
+        "author_username": {
+          "type": "string"
         },
         "body": {
           "type": "string"
@@ -57123,7 +57164,49 @@
             "line_range": {
               "additionalProperties": false,
               "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "end_range": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -57258,7 +57341,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
@@ -57339,9 +57421,6 @@
                 "type": "string"
               },
               "author": {
-                "type": "string"
-              },
-              "author_object": {
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
@@ -57375,6 +57454,9 @@
                   "null",
                   "object"
                 ]
+              },
+              "author_username": {
+                "type": "string"
               },
               "body": {
                 "type": "string"
@@ -57430,7 +57512,49 @@
                   "line_range": {
                     "additionalProperties": false,
                     "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
                       "end_range": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
                         "additionalProperties": false,
                         "properties": {
                           "line_code": {
@@ -57565,7 +57689,6 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "updated_at",
               "system",
@@ -57667,9 +57790,6 @@
           "type": "string"
         },
         "author": {
-          "type": "string"
-        },
-        "author_object": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
@@ -57703,6 +57823,9 @@
             "null",
             "object"
           ]
+        },
+        "author_username": {
+          "type": "string"
         },
         "body": {
           "type": "string"
@@ -57758,7 +57881,49 @@
             "line_range": {
               "additionalProperties": false,
               "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "end_range": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
                   "additionalProperties": false,
                   "properties": {
                     "line_code": {
@@ -57893,7 +58058,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "updated_at",
         "system",
