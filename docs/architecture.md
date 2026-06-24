@@ -70,18 +70,14 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1039 self-managed / 1045 GitLab.com Premium/Ultimate tools]
-        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>1028 self-managed / 1034 GitLab.com Premium/Ultimate tools]
+        META[meta projection<br/>32 base / 48 self-managed enterprise / 49 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
-        SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
-        RES[resources<br/>46 resource handlers]
+        RES[resources<br/>45 resource handlers]
         PROMPTS[prompts<br/>37 prompt handlers]
-        LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
-        ROOTS[roots<br/>Workspace root tracking]
         PROG[progress<br/>Progress notifications]
-        SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 SVG domain icons]
         SRV[MCP Server<br/>go-sdk/mcp v1.6.1]
@@ -100,15 +96,12 @@ graph TD
     CATALOG --> IND
     CATALOG --> META
     CATALOG --> DYN
-    CATALOG --> SAMP
     STANDALONE --> ELIC
     STANDALONE -.->|dynamic route injection| DYN
     IND --> GL
     META --> GL
     DYN --> GL
-    SAMP --> GL
     ELIC --> GL
-    SAMP --> SAMPLING
     ELIC --> ELICIT
     RES --> GL
     PROMPTS --> GL
@@ -122,9 +115,7 @@ graph TD
     CATALOG -.->|icons| ICN
     RES -.->|icons| ICN
     PROMPTS -.->|icons| ICN
-    MAIN -->|setup| LOG
     MAIN -->|setup| COMP
-    MAIN -->|setup| ROOTS
 ```
 
 ## Component Detail
@@ -209,7 +200,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | Groups            | `groups`                                                                                   |
 | Search & users    | `search`, `users`, `todos`                                                                 |
 | Infrastructure    | `environments`, `deployments`, `packages`, `wikis`, `health`                               |
-| LLM capabilities  | `samplingtools`, `elicitationtools`                                                        |
+| Interactive       | `elicitationtools`                                                                         |
 | Extended domains  | `snippets`, `snippetdiscussions`, `securefiles`, `terraformstates`, `resourcegroups`, etc. |
 
 ### Shared Tool Utilities (`internal/toolutil`)
@@ -360,7 +351,6 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 | ------------------------------ | -------------------------------------------- | ----------------------------------- |
 | Current User                   | `gitlab://user/current`                      | Authenticated user profile          |
 | Groups                         | `gitlab://groups`                            | Accessible groups list              |
-| Workspace Roots                | `gitlab://workspace/roots`                   | Client workspace root directories   |
 | Tool Manifest                  | `gitlab://tools`                             | Active surface tool/action manifest |
 | Tool Detail                    | `gitlab://tools/{id}`                        | Call shape and input schema by ID   |
 | Group                          | `gitlab://group/{id}`                        | Group details by ID                 |
@@ -430,11 +420,8 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 | Capability  | Package                | MCP Spec                | Description                                           |
 | ----------- | ---------------------- | ----------------------- | ----------------------------------------------------- |
-| Logging     | `internal/logging`     | Server → Client utility | Structured session logging (debug/info/warning/error) |
 | Completions | `internal/completions` | Server → Client utility | Autocomplete for 17 argument types plus resource URIs |
-| Roots       | `internal/roots`       | Client → Server         | Workspace root tracking with git heuristics           |
 | Progress    | `internal/progress`    | Bidirectional utility   | Progress notifications for multi-step operations      |
-| Sampling    | `internal/sampling`    | Client → Server (LLM)   | LLM-assisted analysis with credential sanitization    |
 | Elicitation | `internal/elicitation` | Client → Server (User)  | Interactive user prompts and confirmation dialogs     |
 
 See [Capabilities Overview](capabilities/README.md) for detailed documentation.
@@ -507,9 +494,7 @@ graph TB
     CALL["tools/call request"] --> TOOL["Tool Handler"]
 
     TOOL -->|"long operation"| PROG["Progress<br/>notifications/progress"]
-    TOOL -->|"needs LLM analysis"| SAMP["Sampling<br/>sampling/createMessage"]
     TOOL -->|"destructive action"| ELIC["Elicitation<br/>elicitation/create"]
-    TOOL -->|"debug info"| LOG["Logging<br/>notifications/message"]
     TOOL -->|"ID autocomplete"| COMP["Completions<br/>completion/complete"]
 ```
 

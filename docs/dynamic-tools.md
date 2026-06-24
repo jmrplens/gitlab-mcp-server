@@ -63,7 +63,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 

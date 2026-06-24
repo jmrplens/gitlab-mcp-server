@@ -87,26 +87,6 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## Análisis de issues con IA
 
-### Resumir un issue
-
-**Prompt**: "Resume el issue #234 y todos sus comentarios"
-
-```text
-gitlab_summarize_issue (sampling) → lee descripción del issue y todas las notas, produce resumen
-```
-
-Devuelve: declaración del problema, puntos clave de discusión, soluciones propuestas, estado actual y bloqueantes.
-
-### Encontrar deuda técnica
-
-**Prompt**: "Identifica la deuda técnica en los issues del proyecto backend"
-
-```text
-gitlab_find_technical_debt (sampling) → analiza patrones de issues, etiquetas y antigüedad
-```
-
-Devuelve: elementos de deuda categorizados (calidad de código, brechas de testing, infraestructura, documentación) con calificaciones de severidad.
-
 ---
 
 ## Vinculación de issues
@@ -161,16 +141,6 @@ gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 
 ```
 
 Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de inicio, fecha límite y días restantes.
-
-### Generar informe de milestone
-
-**Prompt**: "Genera un informe detallado para el milestone Q2"
-
-```text
-gitlab_generate_milestone_report (sampling) → analiza issues del milestone, MRs y velocidad
-```
-
-Devuelve: resumen ejecutivo, métricas de completado, tendencias de velocidad, elementos de riesgo y fecha estimada de finalización.
 
 ---
 

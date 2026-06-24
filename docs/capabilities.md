@@ -38,7 +38,7 @@ if capabilitySurface == config.CapabilitySurfaceFull {
 The `tools` and `resources` `ListChanged: true` flags are always advertised.
 The `prompts` capability is advertised only when `CAPABILITY_SURFACE=full`.
 `CAPABILITY_SURFACE=minimal` keeps tool execution, logging, completions, roots
-handling, progress handling, and the `gitlab://workspace/roots` resource, but
+handling, and progress handling, but
 omits optional prompts, static GitLab resources, and workflow guides. It also
 keeps `gitlab://tools` and `gitlab://tools/{id}` so callers can retrieve exact
 action call shapes without expanding `tools/list`.

@@ -115,7 +115,6 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 | `individual`       | Individual tools                          |
 | `meta`             | Meta-tools                                |
 | `dynamic`          | Default dynamic find/execute surface                 |
-| `sampling`         | Sampling tools with mock LLM handler      |
 | `elicitation`      | Elicitation tools with mock user handler  |
 | `safeMode`         | Mutating tools wrapped to return previews |
 
@@ -141,7 +140,6 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 | `external-network` | Reserved for tests that truly require public Internet access | Prefer Docker fixture endpoints or test-owned GitLab projects so CI can execute non-EE tests without skips |
 | `safe-mode` | Safe-mode session where mutating tools return previews instead of changing GitLab state | Parallel when assertions are read-only and no shared resources are mutated |
 | `dynamic` | Default two-tool dynamic surface over the canonical action catalog | Parallel when each test owns created resources and uses find/execute rather than direct meta-tool calls |
-| `sampling` | Sampling-enabled session with a mock LLM handler | Parallel when each test owns any GitLab resources it creates |
 | `elicitation` | Elicitation-enabled session with a mock user handler | Parallel when each test owns any GitLab resources it creates |
 
 ## Running Individual Workflows
@@ -179,4 +177,4 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/         # Windows
 
 **Docker-only domains**: pipeline create/get/cancel/retry/delete, job get/log/retry/cancel
 
-**MCP capability tests**: sampling (11 mock tests), elicitation (1 mock test)
+**MCP capability tests**: elicitation (1 mock test)

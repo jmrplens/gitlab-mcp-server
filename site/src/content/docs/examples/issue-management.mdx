@@ -87,26 +87,6 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## AI-powered issue analysis
 
-### Summarize an issue
-
-**Prompt**: "Summarize issue #234 and all its comments"
-
-```text
-gitlab_summarize_issue (sampling) → reads issue description and all notes, produces summary
-```
-
-Returns: problem statement, key discussion points, proposed solutions, current status, and blockers.
-
-### Find technical debt
-
-**Prompt**: "Identify technical debt across the backend project issues"
-
-```text
-gitlab_find_technical_debt (sampling) → analyzes issue patterns, labels, and staleness
-```
-
-Returns: categorized debt items (code quality, testing gaps, infrastructure, documentation) with severity ratings.
-
 ---
 
 ## Issue linking
@@ -161,16 +141,6 @@ gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 
 ```
 
 Returns: completion percentage, open/closed issue counts, start date, due date, and remaining days.
-
-### Generate milestone report
-
-**Prompt**: "Generate a detailed report for the Q2 milestone"
-
-```text
-gitlab_generate_milestone_report (sampling) → analyzes milestone issues, MRs, and velocity
-```
-
-Returns: executive summary, completion metrics, velocity trends, risk items, and projected completion date.
 
 ---
 

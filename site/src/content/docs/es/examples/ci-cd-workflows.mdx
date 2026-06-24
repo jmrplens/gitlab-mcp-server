@@ -82,16 +82,6 @@ gitlab_pipeline → action: job_log, project_id: "my-group/backend", job_id: 987
 
 Devuelve: salida completa del log del job. Útil para diagnosticar fallos en tests sin abrir la interfaz de GitLab.
 
-### Análisis de fallos con IA
-
-**Prompt**: "Analiza por qué falló el pipeline #45892 y sugiere correcciones"
-
-```text
-gitlab_analyze_pipeline_failure (sampling) → obtiene logs de jobs, identifica causa raíz, sugiere correcciones
-```
-
-El servidor usa sampling LLM para leer logs de jobs, correlacionar errores entre stages y proporcionar pasos de remediación accionables.
-
 ---
 
 ## Gestionar variables CI/CD
@@ -190,16 +180,6 @@ gitlab_template → action: ci_lint, project_id: "my-group/backend"
 ```
 
 Devuelve: estado de validación, YAML fusionado, advertencias y detalles de errores.
-
-### Revisión de CI con IA
-
-**Prompt**: "Revisa la configuración CI en my-group/backend buscando mejores prácticas"
-
-```text
-gitlab_analyze_ci_configuration (sampling) → lee .gitlab-ci.yml, analiza estructura, sugiere mejoras
-```
-
-Verifica: jobs redundantes, falta de caché, manejo ineficiente de artefactos, mejores prácticas de seguridad y oportunidades de paralelización.
 
 ---
 

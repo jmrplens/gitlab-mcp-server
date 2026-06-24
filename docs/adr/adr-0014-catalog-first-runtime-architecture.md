@@ -46,7 +46,7 @@ Package-local `RegisterTools` files have been removed from ordinary GitLab API d
 
 `META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, the `gitlab://tools` manifest, dynamic discovery output, or individual tool schemas.
 
-`CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, and workflow guides while preserving `gitlab://workspace/roots` plus the surface-aware `gitlab://tools` manifest. `gitlab_find_action` still returns schemas inline for dynamic minimal deployments.
+`CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, and workflow guides while preserving the surface-aware `gitlab://tools` manifest. `gitlab_find_action` still returns schemas inline for dynamic minimal deployments.
 
 Action-specific aliases and parameter aliases belong to the spec/catalog compatibility policy through `internal/tools/actioncompat`. Dynamic may own generic search, typo tolerance, ranking, and execution flow, but it must not become a second home for action-owned compatibility data.
 

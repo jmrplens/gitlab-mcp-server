@@ -37,7 +37,6 @@ gitlab-mcp-server/
 │   ├── completions/             # Autocomplete handler for 17 argument types
 │   ├── roots/                   # Client workspace root tracking
 │   ├── progress/                # Progress notification tracker
-│   ├── sampling/                # LLM-assisted analysis client with security
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
@@ -92,7 +91,6 @@ graph TD
     SRV -->|runs| HTTP[StreamableHTTPHandler]
     PROJECTION --> GL
     PROJECTION --> PROG[progress]
-    PROJECTION --> SAMP[sampling]
     STANDALONE --> ELIC[elicitation]
     ELIC --> GL
     RES --> GL
@@ -105,7 +103,7 @@ graph TD
 4. **Meta-tools** group catalog actions into 33 base tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
-7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation
+7. **Capabilities** provide completions, progress, and elicitation
 8. **Server** runs over stdio (default) or HTTP (`--http`)
 
 See [Architecture Overview](../architecture.md) for detailed diagrams and component descriptions.

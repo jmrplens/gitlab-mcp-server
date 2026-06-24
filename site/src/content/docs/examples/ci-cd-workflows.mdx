@@ -82,16 +82,6 @@ gitlab_pipeline → action: job_log, project_id: "my-group/backend", job_id: 987
 
 Returns: full job log output. Useful for diagnosing test failures without opening the GitLab UI.
 
-### AI-powered failure analysis
-
-**Prompt**: "Analyze why pipeline #45892 failed and suggest fixes"
-
-```text
-gitlab_analyze_pipeline_failure (sampling) → fetches job logs, identifies root cause, suggests fixes
-```
-
-The server uses LLM sampling to read job logs, correlate errors across stages, and provide actionable remediation steps.
-
 ---
 
 ## Manage CI/CD variables
@@ -190,16 +180,6 @@ gitlab_template → action: ci_lint, project_id: "my-group/backend"
 ```
 
 Returns: validation status, merged YAML, warnings, and error details.
-
-### AI-powered CI review
-
-**Prompt**: "Review the CI configuration in my-group/backend for best practices"
-
-```text
-gitlab_analyze_ci_configuration (sampling) → reads .gitlab-ci.yml, analyzes structure, suggests improvements
-```
-
-Checks for: redundant jobs, missing caching, inefficient artifact handling, security best practices, and parallelization opportunities.
 
 ---
 

@@ -313,7 +313,7 @@
 | cmd/format_md_tables                           |    92.7% |
 | cmd/gen_action_catalog_manifest                |    58.3% |
 | cmd/gen_docker_tools                           |    83.3% |
-| cmd/gen_llms                                   |    27.1% |
+| cmd/gen_llms                                   |    27.3% |
 | cmd/gen_readme                                 |    34.0% |
 | cmd/gen_testing_docs                           |    27.6% |
 | cmd/server                                     |    79.0% |
@@ -521,7 +521,7 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/gen_llms** (27.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_llms** (27.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (27.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (34.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (45.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -657,22 +657,21 @@ The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 | ------------- | -------------------------------------------- |
 | `individual`  | Individual GitLab tools                      |
 | `meta`        | Domain meta-tools and action dispatch        |
-| `sampling`    | Sampling tools with mock LLM handler         |
 | `elicitation` | Elicitation tools with mock user handler     |
 | `safeMode`    | Mutating tools wrapped as safe-mode previews |
 
 **Workflows:**
 
-| Area               | Description                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------ |
-| Individual tools   | Exercises domain tools directly against real GitLab                                  |
-| Meta-tools         | Exercises domain action dispatch through meta-tools                                  |
-| MCP capabilities   | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
-| Docker-only runner | Exercises CI pipeline and job behavior with a registered runner                      |
+| Area               | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| Individual tools   | Exercises domain tools directly against real GitLab             |
+| Meta-tools         | Exercises domain action dispatch through meta-tools             |
+| MCP capabilities   | Verifies progress, completions, elicitation, and safe mode      |
+| Docker-only runner | Exercises CI pipeline and job behavior with a registered runner |
 
 Docker validation snapshots are written under `dist/e2e-reports/` after `make test-e2e-docker` or `make test-e2e-docker-enterprise`. The generated metrics above count E2E `Test*` entry points statically; they do not replace the runtime report produced by gotestsum.
 
-**Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
+**Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → elicitation → cleanup
 
 **Domains added in Docker mode** (require CI runner):
 
@@ -880,23 +879,6 @@ internal/tools/{domain}/
 ├── action_specs.go      # Canonical ActionSpec route metadata
 ├── markdown.go          # Markdown formatters (if any)
 └── markdown_test.go     # Formatter tests (if any)
-```
-
-**Exception — `samplingtools/`** uses per-tool file organization (11 tools, shared routes, and per-tool tests):
-
-```text
-internal/tools/samplingtools/
-├── common.go                          # Shared helpers
-├── common_test.go                     # Shared test helpers and constants
-├── action_specs.go                    # Canonical ActionSpecs for sampling tools
-├── routes.go                          # Sampling-aware ActionRoute wrappers
-├── markdown.go                        # Shared Markdown dispatch
-├── analyze_mr_changes.go              # Per-tool handler
-├── analyze_mr_changes_test.go         # Per-tool tests
-├── summarize_issue.go
-├── summarize_issue_test.go
-├── ...                                # 9 more tool/test pairs
-└── doc.go                             # Package documentation
 ```
 
 ### E2E Test Structure

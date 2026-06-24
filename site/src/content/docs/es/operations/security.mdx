@@ -30,7 +30,7 @@ flowchart TB
 ### Principios clave
 
 - **Aislamiento del token**: En modo stdio, el token de GitLab nunca sale del proceso local del servidor. Se carga desde el entorno y se utiliza exclusivamente para llamadas a la API de GitLab.
-- **Sin reenvío de tokens**: El token nunca se envía al cliente MCP, nunca se incluye en las salidas de herramientas y nunca se pasa a través de solicitudes de sampling MCP.
+- **Sin reenvío de tokens**: El token nunca se envía al cliente MCP y nunca se incluye en las salidas de herramientas.
 - **Aislamiento a nivel de proceso**: El servidor se ejecuta como un proceso local comunicándose a través de stdin/stdout. No se abren puertos de red en modo stdio.
 - **Mínimo privilegio**: El servidor solo necesita un token de GitLab con los scopes requeridos para las operaciones que deseas utilizar.
 
@@ -108,30 +108,6 @@ O en modo HTTP:
 
 :::note
 Cuando la detección de scopes está desactivada, las herramientas se registran igualmente pero las llamadas a la API pueden fallar con `403 Forbidden` si el token no tiene los permisos necesarios.
-:::
-
-## Eliminación de credenciales en sampling
-
-Cuando las herramientas de análisis usan sampling MCP para enviar datos al LLM del cliente, el servidor aplica **eliminación automática de credenciales** antes de que cualquier dato salga del proceso. Esta es una medida crítica de defensa en profundidad que previene la fuga accidental de tokens a través del contexto del LLM.
-
-### Patrones eliminados
-
-El motor de eliminación de credenciales usa patrones regex para detectar y eliminar:
-
-| Patrón                      | Ejemplo                           | Reemplazo                  |
-| --------------------------- | --------------------------------- | -------------------------- |
-| PAT de GitLab               | `glpat-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
-| Token de Pipeline de GitLab | `glptt-aBcDeFgH12345678`          | `[REDACTED:GITLAB_TOKEN]`  |
-| Clave de Acceso AWS         | `AKIAIOSFODNN7EXAMPLE`            | `[REDACTED:AWS_KEY]`       |
-| Clave Secreta AWS           | `wJalrXUtnFEMI/K7MDENG/...`       | `[REDACTED:AWS_SECRET]`    |
-| Token de Slack              | `xoxb-...` / `xoxp-...`           | `[REDACTED:SLACK_TOKEN]`   |
-| Webhook de Slack            | `hooks.slack.com/services/...`    | `[REDACTED:SLACK_WEBHOOK]` |
-| JWT                         | `eyJhbGciOi...`                   | `[REDACTED:JWT]`           |
-| Clave API genérica          | `api_key=...`, `apikey: ...`      | `[REDACTED:API_KEY]`       |
-| Clave SSH privada           | `-----BEGIN RSA PRIVATE KEY-----` | `[REDACTED:PRIVATE_KEY]`   |
-
-:::note
-La eliminación de credenciales se aplica a todos los datos enviados a través de sampling MCP, incluyendo logs de jobs, contenido de archivos, descripciones de issues y diffs de MR.
 :::
 
 ## Verificación TLS

@@ -43,8 +43,6 @@ sequenceDiagram
     MCP->>GL: GET /projects/:id/merge_requests/:iid/changes
     GL-->>MCP: Diff data
     MCP-->>AI: File changes
-    AI->>MCP: gitlab_analyze_mr_changes (sampling)
-    MCP-->>AI: Review findings
     AI->>MCP: gitlab_merge_request (action: note_create)
     MCP->>GL: POST /projects/:id/merge_requests/:iid/notes
     AI->>MCP: gitlab_merge_request (action: approve)
@@ -96,36 +94,6 @@ gitlab_merge_request → action: approve, project_id: "my-group/backend",
 ---
 
 ## AI-powered code review
-
-### Full code review
-
-**Prompt**: "Review the code changes in MR !42 for bugs, security issues, and best practices"
-
-```text
-gitlab_analyze_mr_changes (sampling) → fetches diff, sends to LLM for comprehensive review
-```
-
-Returns: structured findings organized by severity (critical, warning, suggestion) with file locations and recommended fixes.
-
-### Security-focused review
-
-**Prompt**: "Do a security review of MR !78 in the backend project"
-
-```text
-gitlab_review_mr_security (sampling) → examines diff for security vulnerabilities
-```
-
-Checks for: SQL injection, XSS, hardcoded secrets, authentication bypasses, insecure deserialization, and OWASP Top 10 issues.
-
-### Review summary
-
-**Prompt**: "Summarize all review comments on MR !42"
-
-```text
-gitlab_summarize_mr_review (sampling) → consolidates review threads into summary
-```
-
-Returns: key discussion points, unresolved threads, action items, and overall review sentiment.
 
 ---
 

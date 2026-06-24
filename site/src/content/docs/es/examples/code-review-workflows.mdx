@@ -42,9 +42,7 @@ sequenceDiagram
     AI->>MCP: gitlab_merge_request (action: changes)
     MCP->>GL: GET /projects/:id/merge_requests/:iid/changes
     GL-->>MCP: Datos del diff
-    MCP-->>AI: Cambios en archivos
-    AI->>MCP: gitlab_analyze_mr_changes (sampling)
-    MCP-->>AI: Hallazgos de revisión
+    MCP-->>AI: Cambios de archivos
     AI->>MCP: gitlab_merge_request (action: note_create)
     MCP->>GL: POST /projects/:id/merge_requests/:iid/notes
     AI->>MCP: gitlab_merge_request (action: approve)
@@ -96,36 +94,6 @@ gitlab_merge_request → action: approve, project_id: "my-group/backend",
 ---
 
 ## Revisión de código con IA
-
-### Revisión completa de código
-
-**Prompt**: "Revisa los cambios de código en el MR !42 buscando bugs, problemas de seguridad y mejores prácticas"
-
-```text
-gitlab_analyze_mr_changes (sampling) → obtiene diff, envía al LLM para revisión completa
-```
-
-Devuelve: hallazgos estructurados organizados por severidad (crítico, advertencia, sugerencia) con ubicaciones de archivos y correcciones recomendadas.
-
-### Revisión enfocada en seguridad
-
-**Prompt**: "Haz una revisión de seguridad del MR !78 en el proyecto backend"
-
-```text
-gitlab_review_mr_security (sampling) → examina diff buscando vulnerabilidades de seguridad
-```
-
-Verifica: inyección SQL, XSS, secretos hardcodeados, bypasses de autenticación, deserialización insegura y problemas OWASP Top 10.
-
-### Resumen de revisión
-
-**Prompt**: "Resume todos los comentarios de revisión del MR !42"
-
-```text
-gitlab_summarize_mr_review (sampling) → consolida hilos de revisión en resumen
-```
-
-Devuelve: puntos clave de discusión, hilos sin resolver, elementos de acción y sentimiento general de la revisión.
 
 ---
 

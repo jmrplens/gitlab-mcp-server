@@ -166,10 +166,10 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 ### Search and Analytics
 
-| Preview                                                                | Name            | Packages                                                                    |
-| ---------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------- |
-| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                                      |
-| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata |
+| Preview                                                                | Name            | Packages                                                     |
+| ---------------------------------------------------------------------- | --------------- | ------------------------------------------------------------ |
+| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                       |
+| <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, usagedata |
 
 ### Security and Access
 
@@ -224,7 +224,7 @@ Alphabetical listing of all 50 icons and every sub-package that uses each one.
 | Icon          | Variable            | Packages                                                                                                                          |
 | ------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Alert         | `IconAlert`         | alertmanagement, errortracking                                                                                                    |
-| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata                                                       |
+| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, usagedata                                                                      |
 | Audit         | `IconAudit`         | auditevents                                                                                                                       |
 | Board         | `IconBoard`         | boards, groupboards                                                                                                               |
 | Bot           | `IconBot`           | groupserviceaccounts                                                                                                              |

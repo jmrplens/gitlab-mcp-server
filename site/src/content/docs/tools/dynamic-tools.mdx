@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
 ## The model workflow
 

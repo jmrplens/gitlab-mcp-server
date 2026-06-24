@@ -110,7 +110,7 @@ Use the package name as scope when applicable:
 ```text
 feat(tools): add gitlab_wiki_page_create tool
 fix(config): handle empty GITLAB_URL gracefully
-test(sampling): increase coverage to 90%
+test(branches): increase coverage to 90%
 docs(readme): update tool count after wiki tools
 ```
 

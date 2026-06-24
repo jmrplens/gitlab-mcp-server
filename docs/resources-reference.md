@@ -133,4 +133,4 @@ All URI template parameters support intelligent autocomplete via the completions
 
 ## Source
 
-Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/tool_manifest.go`](../internal/resources/tool_manifest.go) (surface-aware tool manifest), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).
+Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/tool_manifest.go`](../internal/resources/tool_manifest.go) (surface-aware tool manifest), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).

@@ -104,7 +104,6 @@ Analysis of production MCP servers reveals common patterns for managing large to
 ├── gitlab_search         # global/project/group search + code search
 ├── gitlab_storage_move   # project and group repository storage moves
 ├── gitlab_runner         # runners + runner controllers
-├── gitlab_analyze        # sampling-powered analysis actions including issue summaries
 ├── gitlab_discover_project # git remote URL to GitLab project resolution
 ├── gitlab_interactive_issue_create   # elicitation-powered issue creation
 ├── gitlab_interactive_mr_create      # elicitation-powered merge request creation

@@ -283,7 +283,7 @@ You can check which tools your server has registered by looking at the startup l
 | -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TOOL_SURFACE`       | `meta`   | Canonical selector for this mode: set `meta` to use meta-tools. Set `individual` only when you intentionally want one MCP tool per GitLab operation.                         |
 | `META_TOOLS`         | legacy   | Deprecated compatibility selector: `true` maps to `meta`, and `false` maps to `individual` when `TOOL_SURFACE` is absent.                                                    |
-| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps `gitlab://workspace/roots` and `gitlab://tools`, and omits optional resources, guides, and prompts. |
+| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps the `gitlab://tools` manifest, and omits optional resources, guides, and prompts. |
 | `META_PARAM_SCHEMA`  | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Exact action schemas are available through `gitlab://tools/{id}`.   |
 | `GITLAB_ENTERPRISE`  | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                                                 |
 | `--enterprise`       | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                                               |

@@ -39,7 +39,6 @@ This document explains when and how the GraphQL integration is used, the pattern
 | CI/CD Catalog              | `internal/tools/cicatalog/`          | GraphQL-only feature — no REST API exists                                                                                              |
 | Branch Rules               | `internal/tools/branchrules/`        | GraphQL-only aggregated view of branch protections, approval rules, and status checks                                                  |
 | Custom Emoji               | `internal/tools/customemoji/`        | GraphQL-only — no REST API for custom emoji management                                                                                 |
-| Sampling Tools             | `internal/tools/samplingtools/`      | GraphQL aggregation replaces 3-6 sequential REST calls with a single request                                                           |
 
 ## Architecture
 
@@ -70,7 +69,7 @@ graph TD
     H --> F
 ```
 
-## The Three GraphQL Patterns
+## The Two GraphQL Patterns
 
 ### Pattern 1: Raw `GraphQL.Do()` for tool handlers
 
@@ -108,33 +107,7 @@ _, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 }, &resp, gl.WithContext(ctx))
 ```
 
-### Pattern 2: GraphQL aggregation for sampling tools
-
-Used by `samplingtools` to fetch rich context in a single request, replacing multiple sequential REST calls. The aggregated data is passed to LLM sampling prompts.
-
-```go
-// Single query replaces 3+ REST calls
-const queryMRContext = `
-query($projectPath: ID!, $mrIID: String!) {
-  project(fullPath: $projectPath) {
-    mergeRequest(iid: $mrIID) {
-      title description state
-      diffStatsSummary { additions deletions fileCount }
-      approvedBy { nodes { username } }
-      discussions(first: 100) { nodes { ... } }
-    }
-  }
-}
-`
-
-// Build context — falls back to REST if GraphQL fails
-mrCtx, err := BuildMRContext(ctx, client, projectPath, mrIID)
-if err != nil {
-    // Fall back to REST calls
-}
-```
-
-### Pattern 3: client-go `WorkItems` service wrappers
+### Pattern 2: client-go `WorkItems` service wrappers
 
 Used by the `epics`, `epicnotes`, `epicdiscussions`, and `epicissues` packages after migrating from the deprecated Epics REST API. The client-go `WorkItems` service provides typed Go methods that execute GraphQL queries internally, so tool handlers don't write raw GraphQL.
 

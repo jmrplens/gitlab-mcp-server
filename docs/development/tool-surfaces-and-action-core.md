@@ -269,7 +269,7 @@ Historical names still handled as compatibility aliases:
 
 Package-level `RegisterMeta` functions are now treated as audit violations.
 Former delegated groups such as `gitlab_search`, `gitlab_runner`,
-`gitlab_analyze`, and `gitlab_orbit` are catalog-backed groups.
+`gitlab_orbit` are catalog-backed groups.
 
 ## Import Layering Rules
 
