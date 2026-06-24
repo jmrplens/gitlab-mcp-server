@@ -7,6 +7,7 @@ package suite
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,20 +70,21 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 	})
 
 	// Container registry TAG protection rules (separate REST surface from the
-	// repository-path rules above). The immutable-tags API requires GitLab
-	// 17.8+, so list/create tolerate a 404 on older instances and skip the
-	// rest; when available the full CRUD lifecycle is asserted.
+	// repository-path rules above). The feature requires the container registry
+	// to be enabled and GitLab 17.8+; when it is unavailable the API returns a
+	// 404 (older GitLab) or a 422 "GitLab container registry API not supported"
+	// (registry disabled — the case on the Docker CE fixture). Both mean the
+	// feature is unavailable, so list/create skip gracefully; when available the
+	// full CRUD lifecycle is asserted.
 	t.Run("RegistryTagRuleCRUD", func(t *testing.T) {
 		listOut, err := callToolOn[containerregistry.TagProtectionRuleListOutput](ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "registry_tag_rule_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		if err != nil {
-			if isHTTPStatus(err, 404) {
-				t.Skipf("container registry tag protection not available on this GitLab version: %v", err)
-			}
-			requireNoError(t, err, "registry_tag_rule_list")
+		if containerRegistryUnavailable(err) {
+			t.Skipf("container registry tag protection not available: %v", err)
 		}
+		requireNoError(t, err, "registry_tag_rule_list")
 		t.Logf("Registry tag protection rules: %d", len(listOut.Rules))
 
 		createOut, err := callToolOn[containerregistry.TagProtectionRuleOutput](ctx, sess.meta, "gitlab_package", map[string]any{
@@ -94,7 +96,7 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 				"minimum_access_level_for_delete": "maintainer",
 			},
 		})
-		if err != nil && isHTTPStatus(err, 404) {
+		if containerRegistryUnavailable(err) {
 			t.Skipf("container registry tag protection create not available: %v", err)
 		}
 		requireNoError(t, err, "registry_tag_rule_create")
@@ -124,6 +126,16 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 		})
 		requireNoError(t, err, "registry_tag_rule_delete")
 	})
+}
+
+// containerRegistryUnavailable reports whether err indicates the container
+// registry feature is not usable on the target instance: a 404 (GitLab without
+// the immutable-tags API, pre-17.8) or a 422 "GitLab container registry API not
+// supported" (registry disabled, as on the Docker CE fixture). Both warrant a
+// graceful test skip rather than a failure.
+func containerRegistryUnavailable(err error) bool {
+	return err != nil &&
+		(isHTTPStatus(err, 404) || strings.Contains(err.Error(), "container registry API not supported"))
 }
 
 // TestMeta_PackagesProtectionRules exercises package protection rules via gitlab_package.
