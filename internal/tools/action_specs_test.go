@@ -68,7 +68,7 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 		keys     []string
 	}{
 		{toolName: "gitlab_merge_request", action: "create", keys: []string{"source_branch", "target_branch"}},
-		{toolName: "gitlab_issue", action: "link_create", keys: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+		{toolName: "gitlab_issue", action: "link_create", keys: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid", "link_type"}},
 		{toolName: "gitlab_group", action: "epic_issue_assign", keys: []string{"full_path", "child_project_path", "child_iid"}},
 		{toolName: "gitlab_job", action: "token_scope_remove_project", keys: []string{"project_id", "target_project_id"}},
 		{toolName: "gitlab_access", action: "deploy_token_delete_project", keys: []string{"project_id", "deploy_token_id"}},
