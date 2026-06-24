@@ -422,6 +422,11 @@ func typesCompatible(mcpType, sdkType string) bool {
 	if sdkTimeLike(sdk) && (mcp == "string" || mcp == "int64") {
 		return true
 	}
+	// SDK label collections (LabelOptions/Labels, both defined as []string) are
+	// represented as []string on the MCP side.
+	if mcp == "[]string" && (strings.HasSuffix(sdk, "labeloptions") || strings.HasSuffix(sdk, "labels")) {
+		return true
+	}
 	return false
 }
 

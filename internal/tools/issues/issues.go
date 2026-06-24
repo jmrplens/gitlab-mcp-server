@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -36,13 +35,13 @@ type CreateInput struct {
 	IssueType   string               `json:"issue_type,omitempty" jsonschema:"Issue type (issue, incident, test_case, task)"`
 
 	// Assignment and tracking
-	AssigneeID  int64   `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs []int64 `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
-	Labels      string  `json:"labels,omitempty" jsonschema:"Comma-separated labels to apply"`
-	MilestoneID int64   `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
-	EpicID      int64   `json:"epic_id,omitempty" jsonschema:"Epic ID to associate the issue with"`
-	Weight      int64   `json:"weight,omitempty" jsonschema:"Issue weight (0 or higher)"`
-	DueDate     string  `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
+	AssigneeID  int64    `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
+	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
+	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
+	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
+	EpicID      int64    `json:"epic_id,omitempty" jsonschema:"Epic ID to associate the issue with"`
+	Weight      int64    `json:"weight,omitempty" jsonschema:"Issue weight (0 or higher)"`
+	DueDate     string   `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
 
 	// Behavior flags
 	Confidential *bool  `json:"confidential,omitempty" jsonschema:"Mark issue as confidential"`
@@ -112,8 +111,8 @@ type GetInput struct {
 type ListInput struct {
 	ProjectID           toolutil.StringOrInt `json:"project_id"                     jsonschema:"Project ID or URL-encoded path,required"`
 	State               string               `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
-	Labels              string               `json:"labels,omitempty"               jsonschema:"Comma-separated label names to filter by"`
-	NotLabels           string               `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	Labels              []string             `json:"labels,omitempty"               jsonschema:"Label names to filter by"`
+	NotLabels           []string             `json:"not_labels,omitempty"           jsonschema:"Label names to exclude"`
 	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details (id, name, color, description) instead of just names"`
 	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
 	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
@@ -162,9 +161,9 @@ type UpdateInput struct {
 	StateEvent       string               `json:"state_event,omitempty"   jsonschema:"State transition (close, reopen)"`
 	AssigneeID       int64                `json:"assignee_id,omitempty"       jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
 	AssigneeIDs      []int64              `json:"assignee_ids,omitempty"  jsonschema:"New assignee user IDs"`
-	Labels           string               `json:"labels,omitempty"        jsonschema:"Comma-separated labels to replace all existing"`
-	AddLabels        string               `json:"add_labels,omitempty"    jsonschema:"Comma-separated labels to add without removing existing"`
-	RemoveLabels     string               `json:"remove_labels,omitempty" jsonschema:"Comma-separated labels to remove"`
+	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names to replace all existing"`
+	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
+	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
 	EpicID           int64                `json:"epic_id,omitempty"       jsonschema:"Epic ID to associate (EE only)"`
 	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
@@ -185,8 +184,8 @@ type DeleteInput struct {
 type ListGroupInput struct {
 	GroupID             toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
 	State               string               `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
-	Labels              string               `json:"labels,omitempty"               jsonschema:"Comma-separated list of labels to filter by"`
-	NotLabels           string               `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	Labels              []string             `json:"labels,omitempty"               jsonschema:"Label names to filter by"`
+	NotLabels           []string             `json:"not_labels,omitempty"           jsonschema:"Label names to exclude"`
 	WithLabelsDetails   *bool                `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
 	Milestone           string               `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
 	NotMilestone        string               `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
@@ -353,10 +352,7 @@ func buildCreateOpts(input CreateInput) (*gl.CreateIssueOptions, error) {
 	if len(input.AssigneeIDs) > 0 {
 		opts.AssigneeIDs = &input.AssigneeIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
+	opts.Labels = labelOptions(input.Labels)
 	if input.MilestoneID > 0 {
 		opts.MilestoneID = new(input.MilestoneID)
 	}
@@ -432,13 +428,13 @@ func optStr(s string) *string {
 	return &s
 }
 
-// optLabels converts a comma-separated label string into a *gl.LabelOptions,
-// or nil when empty.
-func optLabels(s string) *gl.LabelOptions {
-	if s == "" {
+// labelOptions converts a label-name slice into a *gl.LabelOptions, or nil when
+// empty.
+func labelOptions(values []string) *gl.LabelOptions {
+	if len(values) == 0 {
 		return nil
 	}
-	labels := gl.LabelOptions(strings.Split(s, ","))
+	labels := gl.LabelOptions(values)
 	return &labels
 }
 
@@ -479,8 +475,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	opts := &gl.ListProjectIssuesOptions{
 		State:               optStr(input.State),
-		Labels:              optLabels(input.Labels),
-		NotLabels:           optLabels(input.NotLabels),
+		Labels:              labelOptions(input.Labels),
+		NotLabels:           labelOptions(input.NotLabels),
 		WithLabelDetails:    input.WithLabelsDetails,
 		Milestone:           optStr(input.Milestone),
 		NotMilestone:        optStr(input.NotMilestone),
@@ -542,18 +538,9 @@ func buildUpdateOpts(input UpdateInput) (*gl.UpdateIssueOptions, error) {
 	if len(input.AssigneeIDs) > 0 {
 		opts.AssigneeIDs = &input.AssigneeIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.AddLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.AddLabels, ","))
-		opts.AddLabels = &labels
-	}
-	if input.RemoveLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.RemoveLabels, ","))
-		opts.RemoveLabels = &labels
-	}
+	opts.Labels = labelOptions(input.Labels)
+	opts.AddLabels = labelOptions(input.AddLabels)
+	opts.RemoveLabels = labelOptions(input.RemoveLabels)
 	if input.MilestoneID != nil {
 		opts.MilestoneID = input.MilestoneID
 	}
@@ -662,8 +649,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 
 	opts := &gl.ListGroupIssuesOptions{
 		State:               optStr(input.State),
-		Labels:              optLabels(input.Labels),
-		NotLabels:           optLabels(input.NotLabels),
+		Labels:              labelOptions(input.Labels),
+		NotLabels:           labelOptions(input.NotLabels),
 		WithLabelDetails:    input.WithLabelsDetails,
 		Milestone:           optStr(input.Milestone),
 		NotMilestone:        optStr(input.NotMilestone),
@@ -712,8 +699,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 // ListAllInput defines parameters for the global ListIssues endpoint (no project scope).
 type ListAllInput struct {
 	State               string   `json:"state,omitempty"                jsonschema:"Filter by state (opened, closed, all)"`
-	Labels              string   `json:"labels,omitempty"               jsonschema:"Comma-separated label names to filter by"`
-	NotLabels           string   `json:"not_labels,omitempty"           jsonschema:"Comma-separated label names to exclude"`
+	Labels              []string `json:"labels,omitempty"               jsonschema:"Label names to filter by"`
+	NotLabels           []string `json:"not_labels,omitempty"           jsonschema:"Label names to exclude"`
 	WithLabelsDetails   *bool    `json:"with_labels_details,omitempty"  jsonschema:"Return label objects with full details instead of just names"`
 	Milestone           string   `json:"milestone,omitempty"            jsonschema:"Milestone title to filter by"`
 	NotMilestone        string   `json:"not_milestone,omitempty"        jsonschema:"Milestone title to exclude"`
@@ -756,8 +743,8 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 
 	opts := &gl.ListIssuesOptions{
 		State:               optStr(input.State),
-		Labels:              optLabels(input.Labels),
-		NotLabels:           optLabels(input.NotLabels),
+		Labels:              labelOptions(input.Labels),
+		NotLabels:           labelOptions(input.NotLabels),
 		WithLabelDetails:    input.WithLabelsDetails,
 		Milestone:           optStr(input.Milestone),
 		NotMilestone:        optStr(input.NotMilestone),

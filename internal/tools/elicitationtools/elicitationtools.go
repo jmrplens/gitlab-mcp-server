@@ -163,7 +163,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 		ProjectID:    input.ProjectID,
 		Title:        title,
 		Description:  description,
-		Labels:       strings.Join(labels, ","),
+		Labels:       labels,
 		Confidential: confidential,
 	})
 }

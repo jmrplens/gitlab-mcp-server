@@ -44182,8 +44182,14 @@
           "type": "string"
         },
         "labels": {
-          "description": "Comma-separated labels to apply",
-          "type": "string"
+          "description": "Label names to apply",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "merge_request_to_resolve_discussions_of": {
           "description": "MR IID whose unresolved discussions become issues",
@@ -46726,8 +46732,14 @@
           ]
         },
         "labels": {
-          "description": "Comma-separated label names to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -46764,8 +46776,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "not_milestone": {
           "description": "Milestone title to exclude",
@@ -47310,8 +47328,14 @@
           ]
         },
         "labels": {
-          "description": "Comma-separated label names to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -47354,8 +47378,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "not_milestone": {
           "description": "Milestone title to exclude",
@@ -47907,8 +47937,14 @@
           ]
         },
         "labels": {
-          "description": "Comma-separated list of labels to filter by",
-          "type": "string"
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone": {
           "description": "Milestone title to filter by",
@@ -47945,8 +47981,14 @@
           "type": "string"
         },
         "not_labels": {
-          "description": "Comma-separated label names to exclude",
-          "type": "string"
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "not_milestone": {
           "description": "Milestone title to exclude",
@@ -51956,8 +51998,14 @@
       "additionalProperties": false,
       "properties": {
         "add_labels": {
-          "description": "Comma-separated labels to add without removing existing",
-          "type": "string"
+          "description": "Label names to add without removing existing",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "assignee_id": {
           "description": "Single user ID to assign (use assignee_ids for multiple)",
@@ -52008,8 +52056,14 @@
           "type": "string"
         },
         "labels": {
-          "description": "Comma-separated labels to replace all existing",
-          "type": "string"
+          "description": "Label names to replace all existing",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "milestone_id": {
           "description": "New milestone ID (0 to unset; omit to leave unchanged)",
@@ -52023,8 +52077,14 @@
           "type": "string"
         },
         "remove_labels": {
-          "description": "Comma-separated labels to remove",
-          "type": "string"
+          "description": "Label names to remove",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "state_event": {
           "description": "State transition; set to close or reopen when changing issue state.",

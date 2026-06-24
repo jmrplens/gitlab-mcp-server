@@ -109,7 +109,7 @@ func TestCreate_Success(t *testing.T) {
 		ProjectID:   testProjectID,
 		Title:       "Bug: login fails",
 		Description: "Login page returns an error",
-		Labels:      "bug,critical",
+		Labels:      []string{"bug", "critical"},
 		AssigneeIDs: []int64{1, 2},
 		DueDate:     testDueDate,
 	})
@@ -297,7 +297,7 @@ func TestList_ByLabels(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: testProjectID,
-		Labels:    "bug,critical",
+		Labels:    []string{"bug", "critical"},
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueListErr, err)
@@ -403,7 +403,7 @@ func TestUpdate_Labels(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID,
 		IssueIID:  10,
-		AddLabels: "urgent",
+		AddLabels: []string{"urgent"},
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueUpdateErr, err)
@@ -1859,9 +1859,9 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Description:      "New Description",
 		StateEvent:       "close",
 		AssigneeIDs:      []int64{1, 2},
-		Labels:           "a",
-		AddLabels:        "b",
-		RemoveLabels:     "c",
+		Labels:           []string{"a"},
+		AddLabels:        []string{"b"},
+		RemoveLabels:     []string{"c"},
 		MilestoneID:      &milestoneID,
 		DueDate:          "2026-12-31",
 		Confidential:     &conf,
@@ -2511,7 +2511,7 @@ func TestCreate_SuccessCov(t *testing.T) {
 	conf := true
 	out, err := Create(context.Background(), client, CreateInput{
 		ProjectID: testProjectID, Title: "Test Issue",
-		Description: "desc", Labels: "bug",
+		Description: "desc", Labels: []string{"bug"},
 		AssigneeIDs: []int64{1}, MilestoneID: 5,
 		DueDate: testDueDateCov, Confidential: &conf,
 		IssueType: "issue", Weight: 3, EpicID: 10,
@@ -2842,7 +2842,7 @@ func TestListAll_FilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	conf := true
 	out, err := ListAll(context.Background(), client, ListAllInput{
-		State: "opened", Labels: "bug,feat", Milestone: "v1",
+		State: "opened", Labels: []string{"bug", "feat"}, Milestone: "v1",
 		Scope: "assigned_to_me", Search: "test",
 		AssigneeUsername: "alice", AuthorUsername: "bob",
 		OrderBy: "created_at", Sort: "desc",
@@ -2876,7 +2876,7 @@ func TestListAll_WithPagination(t *testing.T) {
 func TestListGroup_AllFilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID: "99", State: "opened", Labels: "bug",
+		GroupID: "99", State: "opened", Labels: []string{"bug"},
 		Milestone: "v1", Search: "test", Scope: "all",
 		AuthorUsername: "bob",
 		CreatedAfter:   testCreatedAfterCov, CreatedBefore: testCreatedBeforeCov,
@@ -3567,7 +3567,7 @@ func TestUpdate_ExtraBranches(t *testing.T) {
 	locked := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		AddLabels: "new-label", RemoveLabels: "old-label",
+		AddLabels: []string{"new-label"}, RemoveLabels: []string{"old-label"},
 		Confidential: &conf, IssueType: "incident", Weight: 5,
 		EpicID: 42, DiscussionLocked: &locked,
 	})
@@ -3639,7 +3639,7 @@ func TestList_AdvancedFilters(t *testing.T) {
 	yes := true
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:             testProjectID,
-		NotLabels:             "wontfix",
+		NotLabels:             []string{"wontfix"},
 		WithLabelsDetails:     &yes,
 		NotMilestone:          "v2",
 		In:                    "title",
@@ -3724,7 +3724,7 @@ func TestListAll_AdvancedFilters(t *testing.T) {
 		NotAssigneeID:      []int64{1, 2},
 		NotAuthorID:        []int64{9},
 		NotMyReactionEmoji: []string{"thumbsdown"},
-		NotLabels:          "spam",
+		NotLabels:          []string{"spam"},
 	})
 	if err != nil {
 		t.Fatalf("ListAll() unexpected error: %v", err)
