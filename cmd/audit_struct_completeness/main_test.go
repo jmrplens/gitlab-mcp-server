@@ -1,11 +1,39 @@
 package main
 
 import (
+	"go/token"
+	"go/types"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+)
+
+// structField is a synthetic (json-tag, Go scalar type) field used to build the
+// minimal *types.Struct values the union/disjoint helpers operate on, without
+// loading real packages.
+type structField struct {
+	name    string // exported Go field name
+	jsonTag string
+	goType  types.Type
+}
+
+// makeStruct builds a *types.Struct with the given json-tagged fields. Field Go
+// types are basic scalars so flattenFields records "string"/"int"/etc.
+func makeStruct(fields ...structField) *types.Struct {
+	vars := make([]*types.Var, 0, len(fields))
+	tags := make([]string, 0, len(fields))
+	for _, f := range fields {
+		vars = append(vars, types.NewField(token.NoPos, nil, f.name, f.goType, false))
+		tags = append(tags, `json:"`+f.jsonTag+`"`)
+	}
+	return types.NewStruct(vars, tags)
+}
+
+var (
+	tString = types.Typ[types.String]
+	tInt    = types.Typ[types.Int]
 )
 
 // TestNormalizeType_StripsPointerAndCase verifies normalizeType lowercases and
@@ -356,6 +384,238 @@ func TestBuildReport_NoFalsePositiveExtras(t *testing.T) {
 				}
 			}
 			t.Errorf("package %q has %d extra output fields, want 0 (tags: %v)", name, pr.ExtraOutputCount, tags)
+		}
+	}
+}
+
+// TestDiffOutputGroup_UnionMultiConverter verifies FIX A: an MCP output type
+// produced by two converters paired to a lean and a full SDK struct is diffed
+// against the UNION of their fields. A field present only on the full struct is
+// neither EXTRA (vs the lean struct) nor MISSING (vs the full struct), and a
+// field genuinely absent from BOTH SDK structs is still reported.
+func TestDiffOutputGroup_UnionMultiConverter(t *testing.T) {
+	// MCP output mirrors the FULL SDK struct plus one invented scalar.
+	mcp := makeStruct(
+		structField{"ID", "id", tInt},
+		structField{"Title", "title", tString},
+		structField{"Pipeline", "pipeline", tString}, // only on the full SDK struct
+		structField{"Invented", "invented_scalar", tString},
+	)
+	lean := makeStruct(
+		structField{"ID", "id", tInt},
+		structField{"Title", "title", tString},
+	)
+	full := makeStruct(
+		structField{"ID", "id", tInt},
+		structField{"Title", "title", tString},
+		structField{"Pipeline", "pipeline", tString},
+		structField{"Author", "author", tString}, // absent from MCP → genuine MISSING
+	)
+
+	group := outputGroup{
+		mcpName: "Output",
+		mcpType: mcp,
+		pairs: []structPair{
+			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Lean", sdkType: lean},
+			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Full", sdkType: full},
+		},
+	}
+	g := diffOutputGroup(group)
+
+	if g.SDKType != "v2.Full|v2.Lean" {
+		t.Errorf("group SDKType = %q, want joined union %q", g.SDKType, "v2.Full|v2.Lean")
+	}
+
+	// "pipeline" is present on the full struct, so it must NOT be extra even though
+	// the lean struct lacks it.
+	for _, e := range g.ExtraFields {
+		if e.Tag == "pipeline" {
+			t.Errorf("pipeline reported EXTRA despite being in the union: %v", g.ExtraFields)
+		}
+	}
+	// The only genuine invented scalar must be reported.
+	wantExtra := map[string]bool{"invented_scalar": true}
+	gotExtra := map[string]bool{}
+	for _, e := range g.ExtraFields {
+		gotExtra[e.Tag] = true
+	}
+	if !reflect.DeepEqual(gotExtra, wantExtra) {
+		t.Errorf("extra fields = %v, want only invented_scalar", g.ExtraFields)
+	}
+
+	// "pipeline" must NOT be missing (present on MCP and in the union); "author"
+	// (in the union but absent from MCP) is the only genuine missing field.
+	wantMissing := map[string]bool{"author": true}
+	gotMissing := map[string]bool{}
+	for _, m := range g.MissingFields {
+		gotMissing[m.Tag] = true
+	}
+	if !reflect.DeepEqual(gotMissing, wantMissing) {
+		t.Errorf("missing fields = %v, want only author", g.MissingFields)
+	}
+}
+
+// TestOutputGroups_BucketsByMCPType verifies output pairs sharing one MCP type
+// name collapse into a single group whose pairs carry both SDK structs.
+func TestOutputGroups_BucketsByMCPType(t *testing.T) {
+	a := makeStruct(structField{"ID", "id", tInt})
+	b := makeStruct(structField{"ID", "id", tInt})
+	mcp := makeStruct(structField{"ID", "id", tInt})
+	pairs := map[[2]string]structPair{
+		{"Output", "A"}:    {mcpName: "Output", mcpType: mcp, sdkName: "v2.A", sdkType: a},
+		{"Output", "B"}:    {mcpName: "Output", mcpType: mcp, sdkName: "v2.B", sdkType: b},
+		{"Listed", "List"}: {mcpName: "Listed", mcpType: mcp, sdkName: "v2.List", sdkType: a},
+	}
+	groups := outputGroups(pairs)
+	if len(groups) != 2 {
+		t.Fatalf("got %d groups, want 2 (Listed, Output)", len(groups))
+	}
+	// Deterministic order: Listed before Output.
+	if groups[0].mcpName != "Listed" || groups[1].mcpName != "Output" {
+		t.Fatalf("group order = [%s,%s], want [Listed,Output]", groups[0].mcpName, groups[1].mcpName)
+	}
+	if len(groups[1].pairs) != 2 {
+		t.Errorf("Output group has %d pairs, want 2", len(groups[1].pairs))
+	}
+}
+
+// TestAllIncompatible_RequiresEveryPairing verifies a tag is flagged as a
+// mismatch only when the MCP type is incompatible with EVERY SDK type carrying
+// that tag; a single compatible pairing suppresses the flag.
+func TestAllIncompatible_RequiresEveryPairing(t *testing.T) {
+	// Compatible in at least one pairing (string↔string) → not flagged.
+	if _, ok := allIncompatible("string", []string{"v2.Commit", "string"}); ok {
+		t.Errorf("allIncompatible flagged a tag compatible in one pairing")
+	}
+	// Incompatible in every pairing → flagged, representative SDK returned.
+	sdk, ok := allIncompatible("string", []string{"v2.Commit", "v2.Pipeline"})
+	if !ok || sdk != "v2.Commit" {
+		t.Errorf("allIncompatible = (%q,%v), want (v2.Commit,true)", sdk, ok)
+	}
+	// Empty pairing list → not flagged.
+	if _, emptyOK := allIncompatible("string", nil); emptyOK {
+		t.Errorf("allIncompatible flagged with no SDK types")
+	}
+}
+
+// TestDisjointPhantomInput_SkipsDisjointHelperOptions verifies FIX B: an input
+// struct paired against an Options struct with ZERO field overlap is skipped as
+// a phantom ONLY when the same input struct also has a genuinely-overlapping
+// Options pairing (the DiffPosition↔PositionOptions case). A disjoint pairing
+// that is the input struct's SOLE pairing (path-id-only input vs all-query
+// options) is kept as a genuine candidate gap.
+func TestDisjointPhantomInput_SkipsDisjointHelperOptions(t *testing.T) {
+	// DiffPosition mirrors PositionOptions (full overlap) but a helper also builds
+	// ListMergeRequestDiffsOptions (disjoint list options) inside the same func.
+	diffPosition := makeStruct(
+		structField{"BaseSHA", "base_sha", tString},
+		structField{"NewPath", "new_path", tString},
+		structField{"NewLine", "new_line", tInt},
+	)
+	positionOpts := makeStruct(
+		structField{"BaseSHA", "base_sha", tString}, // overlaps DiffPosition
+		structField{"NewPath", "new_path", tString},
+		structField{"NewLine", "new_line", tInt},
+	)
+	listDiffsOpts := makeStruct(
+		structField{"Page", "page", tInt}, // disjoint from DiffPosition
+		structField{"PerPage", "per_page", tInt},
+		structField{"Sort", "sort", tString},
+	)
+
+	genuinePair := structPair{mcpName: "DiffPosition", mcpType: diffPosition, sdkName: "v2.PositionOptions", sdkType: positionOpts, sdkURLTags: true}
+	phantomPair := structPair{mcpName: "DiffPosition", mcpType: diffPosition, sdkName: "v2.ListMergeRequestDiffsOptions", sdkType: listDiffsOpts, sdkURLTags: true}
+
+	all := map[[2]string]structPair{
+		{"DiffPosition", "PositionOptions"}:              genuinePair,
+		{"DiffPosition", "ListMergeRequestDiffsOptions"}: phantomPair,
+	}
+
+	if disjointPhantomInput(genuinePair, all) {
+		t.Errorf("genuine overlapping pairing (PositionOptions) wrongly flagged as phantom")
+	}
+	if !disjointPhantomInput(phantomPair, all) {
+		t.Errorf("disjoint helper pairing (ListMergeRequestDiffsOptions) not flagged as phantom")
+	}
+
+	// A path-id-only input whose ONLY pairing is disjoint must be KEPT (no other
+	// overlapping pairing exists), preserving genuine candidate gaps like
+	// groups GetInput vs GetGroupOptions.
+	getInput := makeStruct(structField{"GroupID", "group_id", tString})
+	getGroupOpts := makeStruct(
+		structField{"WithProjects", "with_projects", tString},
+		structField{"WithCustomAttributes", "with_custom_attributes", tString},
+	)
+	solePair := structPair{mcpName: "GetInput", mcpType: getInput, sdkName: "v2.GetGroupOptions", sdkType: getGroupOpts, sdkURLTags: true}
+	soleAll := map[[2]string]structPair{
+		{"GetInput", "GetGroupOptions"}: solePair,
+	}
+	if disjointPhantomInput(solePair, soleAll) {
+		t.Errorf("sole disjoint pairing (GetInput vs GetGroupOptions) wrongly flagged as phantom; genuine candidate gap lost")
+	}
+}
+
+// TestBuildReport_NoDiffPositionPhantomInput is the real-repo regression guard
+// for FIX B: the mrdiscussions/mrdraftnotes DiffPosition input struct must pair
+// only against gl.PositionOptions, never the list/diff options a helper builds.
+func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, false)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	for _, name := range []string{"mrdiscussions", "mrdraftnotes"} {
+		pr := findPackage(t, rep, name)
+		for _, g := range pr.Gaps {
+			if g.Kind != "input" || g.MCPType != "DiffPosition" {
+				continue
+			}
+			if g.SDKType != "v2.PositionOptions" {
+				t.Errorf("%s: DiffPosition paired against %q, want only v2.PositionOptions (phantom not suppressed): missing=%v",
+					name, g.SDKType, g.MissingFields)
+			}
+		}
+	}
+}
+
+// TestBuildReport_UnionsMultiConverterOutput is the real-repo regression guard
+// for FIX A: the mergerequests Output (produced from both BasicMergeRequest and
+// MergeRequest) must report a single joined-SDK output gap with no extras and
+// none of the MergeRequest-only fields reported as missing.
+func TestBuildReport_UnionsMultiConverterOutput(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, false)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+	mr := findPackage(t, rep, "mergerequests")
+	var outputs []gap
+	for _, g := range mr.Gaps {
+		if g.Kind == "output" && g.MCPType == "Output" {
+			outputs = append(outputs, g)
+		}
+	}
+	if len(outputs) != 1 {
+		t.Fatalf("mergerequests Output produced %d output gaps, want 1 unioned gap: %+v", len(outputs), outputs)
+	}
+	g := outputs[0]
+	if !strings.Contains(g.SDKType, "|") {
+		t.Errorf("unioned Output SDKType = %q, want joined names (A|B)", g.SDKType)
+	}
+	if len(g.ExtraFields) != 0 {
+		t.Errorf("mergerequests Output has %d extra fields after union, want 0: %v", len(g.ExtraFields), g.ExtraFields)
+	}
+	// MergeRequest-only fields must not surface as missing on the union.
+	for _, m := range g.MissingFields {
+		switch m.Tag {
+		case "head_pipeline", "pipeline", "user", "work_in_progress":
+			t.Errorf("MergeRequest-only field %q wrongly reported missing on union", m.Tag)
 		}
 	}
 }

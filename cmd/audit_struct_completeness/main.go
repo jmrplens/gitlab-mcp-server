@@ -253,19 +253,134 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 	}
 	pr := packageReport{Package: shortPackage(pkg.PkgPath)}
 	for _, pair := range sortedPairs(inputPairs) {
+		// FIX B: drop phantom input pairings where an Options composite-literal
+		// built inside a secondary helper lookup (e.g. validatePosition building
+		// ListMergeRequestDiffsOptions) is mis-attributed to an unrelated input
+		// struct. See disjointPhantomInput for the exact (disjoint-and-not-sole)
+		// rule that suppresses these without dropping genuine single-pairing gaps.
+		if disjointPhantomInput(pair, inputPairs) {
+			continue
+		}
 		pr.InputPairs++
 		g := diffPair("input", pair)
 		pr.MissingInputCount += len(g.MissingFields)
 		appendGapIfAny(&pr, g)
 	}
-	for _, pair := range sortedPairs(outputPairs) {
-		pr.OutputPairs++
-		g := diffPair("output", pair)
+	// FIX A: an MCP output type may be produced by MULTIPLE converters, each
+	// pairing it to a DIFFERENT SDK result struct (e.g. mergerequests Output is
+	// built from both BasicMergeRequest and the fuller MergeRequest). Diffing each
+	// pairing independently falsely reports MergeRequest-only fields as EXTRA when
+	// diffed vs the leaner BasicMergeRequest (and symmetrically MISSING). Group
+	// output pairs by MCP type and diff once against the UNION of all paired SDK
+	// structs so a field is MISSING/EXTRA only when absent from EVERY pairing.
+	for _, group := range outputGroups(outputPairs) {
+		pr.OutputPairs += len(group.pairs)
+		g := diffOutputGroup(group)
 		pr.MissingOutputCount += len(g.MissingFields)
 		pr.ExtraOutputCount += len(g.ExtraFields)
 		appendGapIfAny(&pr, g)
 	}
 	return pr, true
+}
+
+// outputGroup is the set of (MCP output, SDK result) pairs that share the same
+// MCP output type name. Diffing is done once per group against the union of the
+// SDK field maps (FIX A: union multi-converter pairings).
+type outputGroup struct {
+	mcpName string
+	mcpType *types.Struct
+	pairs   []structPair
+}
+
+// outputGroups buckets output pairs by their MCP type name and returns the
+// groups in deterministic (mcpName) order. The MCP struct is identical across a
+// group's pairs (same converter return type), so the first pair's struct is
+// used as the canonical MCP side.
+func outputGroups(pairs map[[2]string]structPair) []outputGroup {
+	byName := map[string]*outputGroup{}
+	for _, pair := range sortedPairs(pairs) {
+		grp, ok := byName[pair.mcpName]
+		if !ok {
+			grp = &outputGroup{mcpName: pair.mcpName, mcpType: pair.mcpType}
+			byName[pair.mcpName] = grp
+		}
+		grp.pairs = append(grp.pairs, pair)
+	}
+	out := make([]outputGroup, 0, len(byName))
+	for _, grp := range byName {
+		out = append(out, *grp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].mcpName < out[j].mcpName })
+	return out
+}
+
+// diffOutputGroup diffs one MCP output type against the UNION of every SDK
+// result struct paired to it. A json tag is MISSING only when absent from the
+// union of all paired SDK fields, and EXTRA only when absent from the union
+// (after normalizeSDKTag + envelope carve-out + accepted-rename allowlist). A
+// TypeMismatch is reported for a tag only when the MCP type is incompatible with
+// the SDK type in EVERY pairing that carries that tag, so a field that is
+// compatible in at least one pairing is not double-flagged.
+func diffOutputGroup(group outputGroup) gap {
+	mcpFields := flattenFields(group.mcpType, []string{"json"})
+
+	// unionSDK maps each SDK json tag to one representative SDK type string (used
+	// for the missing-field SDKType label). sdkTypesByTag collects every SDK type
+	// seen for a tag so a mismatch is reported only when ALL are incompatible.
+	unionSDK := map[string]string{}
+	sdkTypesByTag := map[string][]string{}
+	sdkNames := make([]string, 0, len(group.pairs))
+	for _, pair := range group.pairs {
+		sdkNames = append(sdkNames, pair.sdkName)
+		for tag, sdkType := range flattenFields(pair.sdkType, []string{"json"}) {
+			if _, ok := unionSDK[tag]; !ok {
+				unionSDK[tag] = sdkType
+			}
+			sdkTypesByTag[tag] = append(sdkTypesByTag[tag], sdkType)
+		}
+	}
+	sort.Strings(sdkNames)
+
+	g := gap{Kind: "output", MCPType: group.mcpName, SDKType: strings.Join(sdkNames, "|")}
+	tags := make([]string, 0, len(unionSDK))
+	for tag := range unionSDK {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	for _, tag := range tags {
+		mcpType, present := mcpFields[tag]
+		if !present {
+			if alt, ok := mcpFields[normalizeSDKTag(tag)]; ok {
+				mcpType, present = alt, true
+			}
+		}
+		if !present {
+			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: unionSDK[tag]})
+			continue
+		}
+		// Report a mismatch only when the MCP type is incompatible with the SDK
+		// type in EVERY pairing that carries this tag.
+		if sdk, ok := allIncompatible(mcpType, sdkTypesByTag[tag]); ok {
+			g.TypeMismatches = append(g.TypeMismatches, typeMismatch{Tag: tag, MCPType: mcpType, SDKType: sdk})
+		}
+	}
+	g.ExtraFields = extraOutputFields(group.mcpName, mcpFields, unionSDK)
+	return g
+}
+
+// allIncompatible reports whether mcpType is incompatible with EVERY SDK type in
+// sdkTypes, returning a representative incompatible SDK type for the report. If
+// the tag is compatible with at least one pairing it is not flagged (ok=false).
+func allIncompatible(mcpType string, sdkTypes []string) (string, bool) {
+	if len(sdkTypes) == 0 {
+		return "", false
+	}
+	for _, sdk := range sdkTypes {
+		if typesCompatible(mcpType, sdk) {
+			return "", false
+		}
+	}
+	return sdkTypes[0], true
 }
 
 func appendGapIfAny(pr *packageReport, g gap) {
@@ -387,6 +502,11 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 	return nil, nil, false
 }
 
+// diffPair diffs one input pair (the MCP handler input struct against the SDK
+// Options struct its handler constructs). Output pairs are diffed by
+// diffOutputGroup against the union of their SDK structs (FIX A); diffPair is
+// input-only. SDK fields absent from the MCP struct are MISSING (R-INPUT);
+// fields present but type-divergent are advisory TypeMismatches.
 func diffPair(kind string, pair structPair) gap {
 	mcpFields := flattenFields(pair.mcpType, []string{"json"})
 	sdkTagKeys := []string{"json"}
@@ -419,10 +539,81 @@ func diffPair(kind string, pair structPair) gap {
 			g.TypeMismatches = append(g.TypeMismatches, typeMismatch{Tag: tag, MCPType: mcpType, SDKType: sdkType})
 		}
 	}
-	if kind == "output" {
-		g.ExtraFields = extraOutputFields(pair.mcpName, mcpFields, sdkFields)
-	}
 	return g
+}
+
+// inputPairTags returns the comparable tag sets for an input pair: the MCP
+// struct's json tags and the SDK Options' tags (url-first, normalized to the
+// snake_case form the MCP side uses). Used by disjointPhantomInput to measure
+// field overlap.
+func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
+	mcp = map[string]struct{}{}
+	for tag := range flattenFields(pair.mcpType, []string{"json"}) {
+		if tag != "" && tag != "-" {
+			mcp[tag] = struct{}{}
+		}
+	}
+	sdk = map[string]struct{}{}
+	sdkKeys := []string{"json"}
+	if pair.sdkURLTags {
+		sdkKeys = []string{"url", "json"}
+	}
+	for tag := range flattenFields(pair.sdkType, sdkKeys) {
+		if tag != "" && tag != "-" {
+			sdk[normalizeSDKTag(tag)] = struct{}{}
+		}
+	}
+	return mcp, sdk
+}
+
+// inputPairsOverlap reports whether the MCP and SDK tag sets of an input pair
+// share at least one field name (after SDK-tag normalization).
+func inputPairsOverlap(pair structPair) bool {
+	mcp, sdk := inputPairTags(pair)
+	for tag := range sdk {
+		if _, ok := mcp[tag]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// disjointPhantomInput reports whether an input pairing is a phantom produced by
+// an Options composite-literal that some secondary helper builds for an
+// unrelated lookup, then mis-attributes to this MCP input struct.
+//
+// FIX B: the auditor attributes every &gl.XxxOptions{} literal in a function
+// body to that function's local input struct. A helper such as
+// mrdiscussions/mrdraftnotes validatePosition takes a *DiffPosition (which
+// mirrors gl.PositionOptions) yet internally builds gl.ListMergeRequestDiffsOptions
+// for a diff lookup, so DiffPosition is falsely diffed against the list options
+// (phantom missing order_by/page/per_page/sort/...).
+//
+// The rule is deliberately narrow — disjoint-AND-not-sole — so it never drops a
+// genuine single-pairing R-INPUT candidate (e.g. groups GetInput, whose only
+// pairing is the path-id-only input vs the all-query GetGroupOptions): an input
+// pairing is a phantom only when
+//
+//   - the MCP struct's tags share ZERO overlap with this SDK Options' tags, AND
+//   - the SAME MCP input struct has at least one OTHER Options pairing that DOES
+//     overlap (its genuine request options, e.g. DiffPosition↔PositionOptions).
+//
+// When the disjoint pairing is the input struct's only pairing it is kept, since
+// a path-id-only input legitimately pairs against an options struct it does not
+// surface and that remains a candidate gap a human adjudicates.
+func disjointPhantomInput(pair structPair, all map[[2]string]structPair) bool {
+	if inputPairsOverlap(pair) {
+		return false
+	}
+	for _, other := range all {
+		if other.mcpName != pair.mcpName || other.sdkName == pair.sdkName {
+			continue
+		}
+		if inputPairsOverlap(other) {
+			return true
+		}
+	}
+	return false
 }
 
 // extraOutputFields reports MCP output json tags with no SDK result counterpart:
