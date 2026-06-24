@@ -52,8 +52,11 @@ func TestIssueNoteCreate_Success(t *testing.T) {
 	if out.Body != testNoteLGTM {
 		t.Errorf(fmtBodyWant, out.Body, testNoteLGTM)
 	}
-	if out.Author != "alice" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "alice")
+	if out.AuthorUsername != "alice" {
+		t.Errorf("out.AuthorUsername = %q, want %q", out.AuthorUsername, "alice")
+	}
+	if out.Author == nil || out.Author.Username != "alice" {
+		t.Errorf("out.Author = %+v, want username alice", out.Author)
 	}
 	if out.Internal {
 		t.Error("out.Internal = true, want false")
@@ -462,7 +465,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
 		ID:         200,
 		Body:       "Full note body",
-		Author:     "fulluser",
+		Author:     &NoteUserOutput{Username: "fulluser"},
 		CreatedAt:  "2026-03-01T09:00:00Z",
 		System:     true,
 		Internal:   true,
@@ -493,12 +496,12 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 // TestFormatOutputMarkdown_ResolvableUnresolved verifies FormatOutputMarkdown when resolvable unresolved.
 func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	out := Output{
-		ID:         201,
-		Body:       "Unresolved note",
-		Author:     "reviewer",
-		CreatedAt:  "2026-03-02T09:00:00Z",
-		Resolvable: true,
-		Resolved:   false,
+		ID:             201,
+		Body:           "Unresolved note",
+		AuthorUsername: "reviewer",
+		CreatedAt:      "2026-03-02T09:00:00Z",
+		Resolvable:     true,
+		Resolved:       false,
 	}
 	md := FormatOutputMarkdown(out)
 
@@ -538,8 +541,8 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Notes: []Output{
-			{ID: 1, Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", System: false, Internal: false},
-			{ID: 2, Author: "bob", CreatedAt: "2026-01-02T00:00:00Z", System: true, Internal: true},
+			{ID: 1, Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z", System: false, Internal: false},
+			{ID: 2, AuthorUsername: "bob", CreatedAt: "2026-01-02T00:00:00Z", System: true, Internal: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -604,8 +607,11 @@ func TestToOutput_AllFields(t *testing.T) {
 	if out.Body != "Full note body" {
 		t.Errorf("Body = %q", out.Body)
 	}
-	if out.Author != "fulluser" {
-		t.Errorf("Author = %q", out.Author)
+	if out.AuthorUsername != "fulluser" {
+		t.Errorf("AuthorUsername = %q", out.AuthorUsername)
+	}
+	if out.Author == nil || out.Author.Username != "fulluser" {
+		t.Errorf("Author = %+v, want username fulluser", out.Author)
 	}
 	if !out.System {
 		t.Error("System = false, want true")
@@ -938,11 +944,11 @@ func TestToOutput_NestedObjects(t *testing.T) {
 
 	out := ToOutput(n)
 
-	if out.Author != "alice" {
-		t.Errorf("Author scalar = %q, want alice", out.Author)
+	if out.AuthorUsername != "alice" {
+		t.Errorf("AuthorUsername scalar = %q, want alice", out.AuthorUsername)
 	}
-	if out.AuthorObject == nil || out.AuthorObject.ID != 7 || out.AuthorObject.Email != "alice@example.com" {
-		t.Fatalf("AuthorObject = %+v", out.AuthorObject)
+	if out.Author == nil || out.Author.ID != 7 || out.Author.Email != "alice@example.com" {
+		t.Fatalf("Author = %+v", out.Author)
 	}
 	if out.Attachment != "attach.png" || out.Title != "note title" || out.FileName != "note.txt" {
 		t.Errorf("string fields = %q/%q/%q", out.Attachment, out.Title, out.FileName)
@@ -962,14 +968,31 @@ func TestToOutput_NestedObjects(t *testing.T) {
 	if out.Position.NewPath != "main.go" || out.Position.NewLine != 12 {
 		t.Errorf("Position = %+v", out.Position)
 	}
-	if out.Position.LineRange == nil || out.Position.LineRange.StartRange == nil || out.Position.LineRange.EndRange == nil {
-		t.Fatalf("LineRange = %+v", out.Position.LineRange)
+	assertFullLineRange(t, out.Position.LineRange)
+}
+
+// assertFullLineRange checks both the additive start_range/end_range and the
+// canonical start/end sub-objects of a fully populated line range.
+func assertFullLineRange(t *testing.T, lr *LineRangeOutput) {
+	t.Helper()
+	if lr == nil || lr.StartRange == nil || lr.EndRange == nil {
+		t.Fatalf("LineRange = %+v", lr)
 	}
-	if out.Position.LineRange.StartRange.LineCode != "abc_1_2" {
-		t.Errorf("StartRange.LineCode = %q", out.Position.LineRange.StartRange.LineCode)
+	if lr.StartRange.LineCode != "abc_1_2" {
+		t.Errorf("StartRange.LineCode = %q", lr.StartRange.LineCode)
 	}
-	if out.Position.LineRange.EndRange.NewLine != 14 {
-		t.Errorf("EndRange.NewLine = %d", out.Position.LineRange.EndRange.NewLine)
+	if lr.EndRange.NewLine != 14 {
+		t.Errorf("EndRange.NewLine = %d", lr.EndRange.NewLine)
+	}
+	// Canonical-key start/end objects mirror gl.LineRange.StartRange/EndRange.
+	if lr.Start == nil || lr.End == nil {
+		t.Fatalf("canonical start/end = %+v", lr)
+	}
+	if lr.Start.LineCode != "abc_1_2" || lr.Start.NewLine != 12 {
+		t.Errorf("Start = %+v", lr.Start)
+	}
+	if lr.End.LineCode != "abc_3_4" || lr.End.NewLine != 14 {
+		t.Errorf("End = %+v", lr.End)
 	}
 }
 
@@ -978,8 +1001,11 @@ func TestToOutput_NestedObjects(t *testing.T) {
 // author object is still populated.
 func TestToOutput_EmptyNestedObjects(t *testing.T) {
 	out := ToOutput(&gl.Note{ID: 1, Author: gl.NoteAuthor{Username: "u"}})
-	if out.AuthorObject == nil {
-		t.Error("AuthorObject = nil, want non-nil")
+	if out.Author == nil || out.Author.Username != "u" {
+		t.Errorf("Author = %+v, want non-nil with username u", out.Author)
+	}
+	if out.AuthorUsername != "u" {
+		t.Errorf("AuthorUsername = %q, want u", out.AuthorUsername)
 	}
 	if out.ResolvedBy != nil {
 		t.Errorf("ResolvedBy = %+v, want nil", out.ResolvedBy)
@@ -1016,6 +1042,14 @@ func TestNotePositionOutput_LineRangeStartOnly(t *testing.T) {
 	if out.LineRange.EndRange != nil {
 		t.Errorf("EndRange = %+v, want nil", out.LineRange.EndRange)
 	}
+	// Canonical-key Start mirrors the present sub-range; End is nil (nil-pointer
+	// branch of linePositionOutput).
+	if out.LineRange.Start == nil || out.LineRange.Start.LineCode != "x" || out.LineRange.Start.NewLine != 3 {
+		t.Errorf("Start = %+v", out.LineRange.Start)
+	}
+	if out.LineRange.End != nil {
+		t.Errorf("End = %+v, want nil", out.LineRange.End)
+	}
 }
 
 // TestNotePositionOutput_NoLineRange verifies a position with no line range
@@ -1041,6 +1075,14 @@ func TestNotePositionOutput_LineRangeEndOnly(t *testing.T) {
 	}
 	if out.LineRange.StartRange != nil {
 		t.Errorf("StartRange = %+v, want nil", out.LineRange.StartRange)
+	}
+	// Canonical-key End mirrors the present sub-range; Start is nil (nil-pointer
+	// branch of linePositionOutput).
+	if out.LineRange.End == nil || out.LineRange.End.LineCode != "y" || out.LineRange.End.NewLine != 5 {
+		t.Errorf("End = %+v", out.LineRange.End)
+	}
+	if out.LineRange.Start != nil {
+		t.Errorf("Start = %+v, want nil", out.LineRange.Start)
 	}
 }
 

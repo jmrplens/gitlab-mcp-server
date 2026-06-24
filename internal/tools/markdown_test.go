@@ -608,7 +608,7 @@ func TestFormatIssue_ListMarkdown(t *testing.T) {
 // markers in Markdown output.
 func TestFormatIssue_NoteMarkdown(t *testing.T) {
 	t.Run("regular note", func(t *testing.T) {
-		n := issuenotes.Output{ID: 1, Body: "Comment", Author: "user", CreatedAt: testDate20260101, System: false, Internal: false}
+		n := issuenotes.Output{ID: 1, Body: "Comment", Author: &issuenotes.NoteUserOutput{Username: "user"}, AuthorUsername: "user", CreatedAt: testDate20260101, System: false, Internal: false}
 		md := issuenotes.FormatOutputMarkdown(n)
 		if !strings.Contains(md, "## Issue Note #1") {
 			t.Error(errMissingHeader)
@@ -619,7 +619,7 @@ func TestFormatIssue_NoteMarkdown(t *testing.T) {
 	})
 
 	t.Run("system internal note", func(t *testing.T) {
-		n := issuenotes.Output{ID: 2, Body: "Label added", Author: "bot", CreatedAt: testDate20260101, System: true, Internal: true}
+		n := issuenotes.Output{ID: 2, Body: "Label added", Author: &issuenotes.NoteUserOutput{Username: "bot"}, AuthorUsername: "bot", CreatedAt: testDate20260101, System: true, Internal: true}
 		md := issuenotes.FormatOutputMarkdown(n)
 		if !strings.Contains(md, "**System note**") {
 			t.Error("missing system marker")

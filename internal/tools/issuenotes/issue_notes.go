@@ -22,34 +22,35 @@ type CreateInput struct {
 
 // Output represents a note (comment) on an issue. Per the 1:1 audit policy it
 // mirrors every field of gl.Note, surfacing the full author / resolved_by /
-// position sub-objects in addition to the ergonomic author_username scalar that
-// existing callers consume.
+// position sub-objects. Per the locked canonical-key convention the full
+// *NoteUserOutput author object is surfaced on the canonical `author` key, and
+// the ergonomic username is retained additively on `author_username`.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int64               `json:"id"`
-	Body         string              `json:"body"`
-	Author       string              `json:"author"`
-	AuthorObject *NoteUserOutput     `json:"author_object,omitempty"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Title        string              `json:"title,omitempty"`
-	FileName     string              `json:"file_name,omitempty"`
-	CreatedAt    string              `json:"created_at"`
-	UpdatedAt    string              `json:"updated_at"`
-	ExpiresAt    string              `json:"expires_at,omitempty"`
-	System       bool                `json:"system"`
-	Internal     bool                `json:"internal"`
-	Resolvable   bool                `json:"resolvable,omitempty"`
-	Resolved     bool                `json:"resolved,omitempty"`
-	ResolvedAt   string              `json:"resolved_at,omitempty"`
-	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
-	NoteableType string              `json:"noteable_type,omitempty"`
-	NoteableID   int64               `json:"noteable_id,omitempty"`
-	NoteableIID  int64               `json:"noteable_iid,omitempty"`
-	CommitID     string              `json:"commit_id,omitempty"`
-	Type         string              `json:"type,omitempty"`
-	Position     *NotePositionOutput `json:"position,omitempty"`
-	ProjectID    int64               `json:"project_id,omitempty"`
-	Confidential bool                `json:"confidential"`
+	ID             int64               `json:"id"`
+	Body           string              `json:"body"`
+	Author         *NoteUserOutput     `json:"author,omitempty"`
+	AuthorUsername string              `json:"author_username,omitempty"`
+	Attachment     string              `json:"attachment,omitempty"`
+	Title          string              `json:"title,omitempty"`
+	FileName       string              `json:"file_name,omitempty"`
+	CreatedAt      string              `json:"created_at"`
+	UpdatedAt      string              `json:"updated_at"`
+	ExpiresAt      string              `json:"expires_at,omitempty"`
+	System         bool                `json:"system"`
+	Internal       bool                `json:"internal"`
+	Resolvable     bool                `json:"resolvable,omitempty"`
+	Resolved       bool                `json:"resolved,omitempty"`
+	ResolvedAt     string              `json:"resolved_at,omitempty"`
+	ResolvedBy     *NoteUserOutput     `json:"resolved_by,omitempty"`
+	NoteableType   string              `json:"noteable_type,omitempty"`
+	NoteableID     int64               `json:"noteable_id,omitempty"`
+	NoteableIID    int64               `json:"noteable_iid,omitempty"`
+	CommitID       string              `json:"commit_id,omitempty"`
+	Type           string              `json:"type,omitempty"`
+	Position       *NotePositionOutput `json:"position,omitempty"`
+	ProjectID      int64               `json:"project_id,omitempty"`
+	Confidential   bool                `json:"confidential"`
 }
 
 // ListInput defines parameters for listing issue notes.
@@ -91,33 +92,34 @@ type DeleteInput struct {
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to delete,required"`
 }
 
-// ToOutput converts a GitLab API [gl.Note] to the MCP tool output format. It
-// keeps the ergonomic author username scalar on the `author` key while
-// additively surfacing the full author / resolved_by / position sub-objects and
-// every other gl.Note field (1:1 audit policy). Timestamps are formatted as
-// RFC 3339 strings.
+// ToOutput converts a GitLab API [gl.Note] to the MCP tool output format. Per
+// the locked canonical-key convention it surfaces the full author object on the
+// canonical `author` key and the ergonomic username on `author_username`, while
+// additively surfacing the resolved_by / position sub-objects and every other
+// gl.Note field (1:1 audit policy). Timestamps are formatted as RFC 3339
+// strings.
 func ToOutput(n *gl.Note) Output {
 	out := Output{
-		ID:           n.ID,
-		Body:         n.Body,
-		Author:       n.Author.Username,
-		AuthorObject: noteAuthorOutput(n.Author),
-		Attachment:   n.Attachment,
-		Title:        n.Title,
-		FileName:     n.FileName,
-		System:       n.System,
-		Internal:     n.Internal,
-		Resolvable:   n.Resolvable,
-		Resolved:     n.Resolved,
-		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
-		NoteableType: n.NoteableType,
-		NoteableID:   n.NoteableID,
-		NoteableIID:  n.NoteableIID,
-		CommitID:     n.CommitID,
-		Type:         string(n.Type),
-		Position:     notePositionOutput(n.Position),
-		ProjectID:    n.ProjectID,
-		Confidential: n.Internal,
+		ID:             n.ID,
+		Body:           n.Body,
+		Author:         noteAuthorOutput(n.Author),
+		AuthorUsername: n.Author.Username,
+		Attachment:     n.Attachment,
+		Title:          n.Title,
+		FileName:       n.FileName,
+		System:         n.System,
+		Internal:       n.Internal,
+		Resolvable:     n.Resolvable,
+		Resolved:       n.Resolved,
+		ResolvedBy:     noteResolvedByOutput(n.ResolvedBy),
+		NoteableType:   n.NoteableType,
+		NoteableID:     n.NoteableID,
+		NoteableIID:    n.NoteableIID,
+		CommitID:       n.CommitID,
+		Type:           string(n.Type),
+		Position:       notePositionOutput(n.Position),
+		ProjectID:      n.ProjectID,
+		Confidential:   n.Internal,
 	}
 	out.CreatedAt = formatTimePtr(n.CreatedAt)
 	out.UpdatedAt = formatTimePtr(n.UpdatedAt)
