@@ -3,11 +3,53 @@ package groupldap
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestLDAPSyncMetadata_Discoverability locks in the model-facing discovery
+// metadata for the gitlab_group_ldap_sync action added with client-go v2.41.0,
+// and verifies the sibling ldap_link_list cross-references it.
+func TestLDAPSyncMetadata_Discoverability(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(client))
+
+	sync, ok := byTool["gitlab_group_ldap_sync"]
+	if !ok {
+		t.Fatal("missing gitlab_group_ldap_sync spec")
+	}
+	if sync.Usage == "" || strings.Contains(sync.Usage, "Use to execute") {
+		t.Errorf("ldap_sync has generic/empty Usage: %q", sync.Usage)
+	}
+	if !aliasHas(sync.Aliases, "sync") {
+		t.Errorf("ldap_sync aliases %v missing a 'sync' phrase", sync.Aliases)
+	}
+	if !slices.Contains(sync.RelatedActions, "group.ldap_link_list") {
+		t.Errorf("ldap_sync related %v missing group.ldap_link_list", sync.RelatedActions)
+	}
+	if !strings.Contains(sync.IndividualTool.Description, "asynchronous") {
+		t.Errorf("ldap_sync description should warn it is asynchronous: %q", sync.IndividualTool.Description)
+	}
+
+	if list := byTool["gitlab_group_ldap_link_list"]; !slices.Contains(list.RelatedActions, "group.ldap_sync") {
+		t.Errorf("ldap_link_list should cross-reference group.ldap_sync, got %v", list.RelatedActions)
+	}
+}
+
+func aliasHas(aliases []string, sub string) bool {
+	for _, a := range aliases {
+		if strings.Contains(a, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 // TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -18,8 +60,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupldap" {

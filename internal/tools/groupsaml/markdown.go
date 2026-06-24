@@ -32,7 +32,6 @@ func FormatListMarkdown(out ListOutput) string {
 		return "No SAML group links found.\n"
 	}
 	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
 	fmt.Fprintf(&b, "**%d SAML link(s)**\n\n", len(out.Links))
 	b.WriteString("| Name | Access Level | Provider |\n| --- | --- | --- |\n")
 	for _, l := range out.Links {
@@ -43,10 +42,43 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(l.Provider),
 		)
 	}
+	toolutil.WriteHints(
+		&b,
+		"These map SAML group names to access levels; use action 'saml_users_list' to list the users provisioned via SAML SSO",
+	)
+	return b.String()
+}
+
+// FormatSAMLUsersListMarkdown renders the SAML-provisioned users of a group as Markdown.
+func FormatSAMLUsersListMarkdown(out SAMLUsersListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## SAML Users (%d)\n\n", len(out.Users))
+	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
+	if len(out.Users) == 0 {
+		b.WriteString("No SAML users found.\n")
+		toolutil.WritePagination(&b, out.Pagination)
+		return b.String()
+	}
+	b.WriteString("| ID | Username | Name | State |\n| --- | --- | --- | --- |\n")
+	for _, u := range out.Users {
+		username := toolutil.EscapeMdTableCell(u.Username)
+		if u.WebURL != "" {
+			username = fmt.Sprintf("[%s](%s)", username, u.WebURL)
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			u.ID, username, toolutil.EscapeMdTableCell(u.Name), u.State)
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"These are users provisioned through SAML SSO; use action 'saml_link_list' to see the SAML group-to-access-level link mappings",
+	)
 	return b.String()
 }
 
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatSAMLUsersListMarkdown)
 }

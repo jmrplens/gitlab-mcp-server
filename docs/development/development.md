@@ -486,7 +486,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
 | Dependency                               | Version | Purpose                         |
 | ---------------------------------------- | ------- | ------------------------------- |
 | `github.com/modelcontextprotocol/go-sdk` | v1.6.1  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v2` | v2.38.0 | Official GitLab REST API client |
+| `gitlab.com/gitlab-org/api/client-go/v2` | v2.41.0 | Official GitLab REST API client |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References

@@ -4,6 +4,8 @@ package containerregistry
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,6 +13,61 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestTagProtectionMetadata_Discoverability locks in the model-facing discovery
+// metadata for the container registry tag protection actions (client-go
+// v2.40.0) and verifies the repository-path protection list and the tag list
+// cross-reference them, so models can tell tag protection apart from
+// repository-path protection.
+func TestTagProtectionMetadata_Discoverability(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := registrySpecsByTool(t, ActionSpecs(client))
+
+	cases := []struct {
+		tool          string
+		aliasContains string
+		related       string
+	}{
+		{"gitlab_registry_tag_protection_list", "tag", "package.registry_tag_rule_create"},
+		{"gitlab_registry_tag_protection_create", "tag", "package.registry_tag_rule_list"},
+		{"gitlab_registry_tag_protection_update", "tag", "package.registry_tag_rule_delete"},
+		{"gitlab_registry_tag_protection_delete", "tag", "package.registry_tag_rule_list"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			spec, ok := byTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing spec for %s", tc.tool)
+			}
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Manage container registry repositories, tags, and protection rules") {
+				t.Errorf("%s has generic/empty Usage: %q", tc.tool, spec.Usage)
+			}
+			if !registryAliasHas(spec.Aliases, tc.aliasContains) {
+				t.Errorf("%s aliases %v missing phrase %q", tc.tool, spec.Aliases, tc.aliasContains)
+			}
+			if !slices.Contains(spec.RelatedActions, tc.related) {
+				t.Errorf("%s related %v missing %q", tc.tool, spec.RelatedActions, tc.related)
+			}
+		})
+	}
+
+	// Cross-references from the encompassing actions so models discover tag protection.
+	if list := byTool["gitlab_registry_protection_list"]; !slices.Contains(list.RelatedActions, "package.registry_tag_rule_list") {
+		t.Errorf("registry_protection_list should cross-reference tag protection, got %v", list.RelatedActions)
+	}
+	if tags := byTool["gitlab_registry_list_tags"]; !slices.Contains(tags.RelatedActions, "package.registry_tag_rule_list") {
+		t.Errorf("registry_list_tags should cross-reference tag protection, got %v", tags.RelatedActions)
+	}
+}
+
+func registryAliasHas(aliases []string, sub string) bool {
+	for _, a := range aliases {
+		if strings.Contains(a, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 // TestActionSpecs_DeleteErrors validates the DeleteErrors route through the catalog surface.
 // The test exercises the DELETE path of the underlying GitLab API call.

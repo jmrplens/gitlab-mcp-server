@@ -3,11 +3,54 @@ package groupsaml
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestSAMLUsersMetadata_Discoverability locks in the model-facing discovery
+// metadata for gitlab_group_saml_users_list (added with client-go v2.41.0) and
+// verifies the sibling saml_link_list cross-references it, so models can tell
+// SAML *users* apart from SAML group *links*.
+func TestSAMLUsersMetadata_Discoverability(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupSAMLSpecsByTool(t, ActionSpecs(client))
+
+	users, ok := byTool["gitlab_group_saml_users_list"]
+	if !ok {
+		t.Fatal("missing gitlab_group_saml_users_list spec")
+	}
+	if users.Usage == "" || strings.Contains(users.Usage, "Use to execute") {
+		t.Errorf("saml_users_list has generic/empty Usage: %q", users.Usage)
+	}
+	if !samlAliasHas(users.Aliases, "saml") {
+		t.Errorf("saml_users_list aliases %v missing a 'saml' phrase", users.Aliases)
+	}
+	if !slices.Contains(users.RelatedActions, "group.saml_link_list") {
+		t.Errorf("saml_users_list related %v missing group.saml_link_list", users.RelatedActions)
+	}
+	if !strings.Contains(users.IndividualTool.Description, "See also") {
+		t.Errorf("saml_users_list description missing cross-references: %q", users.IndividualTool.Description)
+	}
+
+	if link := byTool["gitlab_group_saml_link_list"]; !slices.Contains(link.RelatedActions, "group.saml_users_list") {
+		t.Errorf("saml_link_list should cross-reference group.saml_users_list, got %v", link.RelatedActions)
+	}
+}
+
+func samlAliasHas(aliases []string, sub string) bool {
+	for _, a := range aliases {
+		if strings.Contains(a, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 // TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -18,8 +61,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupsaml" {
@@ -31,7 +74,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 
 	byTool := groupSAMLSpecsByTool(t, specs)
-	for _, name := range []string{"gitlab_group_saml_link_list", "gitlab_group_saml_link_get"} {
+	for _, name := range []string{"gitlab_group_saml_link_list", "gitlab_group_saml_link_get", "gitlab_group_saml_users_list"} {
 		if !byTool[name].ReadOnly {
 			t.Errorf("%s should be read-only", name)
 		}

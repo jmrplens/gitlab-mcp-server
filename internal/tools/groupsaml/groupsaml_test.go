@@ -7,9 +7,44 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
+// standard user field, formats the three timestamp fields, and skips nil SCIM
+// identity pointers while mapping valid ones.
+func TestToSAMLUserOutput_AllFields(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	lastAct := gl.ISOTime(time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC))
+	signIn := time.Date(2026, 1, 4, 5, 6, 7, 0, time.UTC)
+	u := &gl.User{
+		ID: 7, Username: "jdoe", Email: "j@example.com", Name: "Jane Doe", State: "active",
+		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, Bot: false,
+		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
+		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
+		TwoFactorEnabled: true, External: false, Locked: false, PrivateProfile: true,
+		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true,
+		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
+		CreatedAt: &created, LastActivityOn: &lastAct, CurrentSignInAt: &signIn,
+		SCIMIdentities: []*gl.SCIMIdentity{nil, {ExternUID: "ext-1", GroupID: 9, Active: true}},
+	}
+	out := toSAMLUserOutput(u)
+
+	if out.ID != 7 || out.Username != "jdoe" || !out.IsAdmin || out.ProjectsLimit != 50 {
+		t.Errorf("scalar fields not mapped: %+v", out)
+	}
+	if out.CreatedAt == "" || out.LastActivityOn == "" || out.CurrentSignInAt == "" {
+		t.Errorf("timestamp fields not formatted: created=%q last=%q signin=%q", out.CreatedAt, out.LastActivityOn, out.CurrentSignInAt)
+	}
+	if len(out.SCIMIdentities) != 1 || out.SCIMIdentities[0].ExternUID != "ext-1" {
+		t.Errorf("expected one mapped SCIM identity (nil skipped), got %+v", out.SCIMIdentities)
+	}
+}
 
 const (
 	pathGroupSAML    = "/api/v4/groups/mygroup/saml_group_links"
@@ -39,6 +74,114 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Links[0].Name != "saml-devs" {
 		t.Errorf("Name = %q, want %q", out.Links[0].Name, "saml-devs")
+	}
+}
+
+// TestSAMLUsersList_Success verifies that SAMLUsersList returns the SAML-provisioned users of a group.
+// The test exercises the GET groups/:id/saml_users path.
+// It asserts the returned output contains the mocked user and a clickable markdown link.
+func TestSAMLUsersList_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id":42,"username":"jdoe","name":"Jane Doe","state":"active","web_url":"https://gitlab.example.com/jdoe"}]`,
+				testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup", Search: "jane"})
+	if err != nil {
+		t.Fatalf("SAMLUsersList() unexpected error: %v", err)
+	}
+	if len(out.Users) != 1 || out.Users[0].Username != "jdoe" {
+		t.Fatalf("expected user jdoe, got %+v", out.Users)
+	}
+
+	md := FormatSAMLUsersListMarkdown(out)
+	if !strings.Contains(md, "[jdoe](https://gitlab.example.com/jdoe)") {
+		t.Errorf("expected clickable username link in markdown, got: %s", md)
+	}
+}
+
+// TestSAMLUsersList_AllFilters verifies that every optional filter and created_at parsing are wired through.
+// The test sets pagination, search, username, active, and blocked, and returns a user with created_at.
+// It asserts the query carries each filter and created_at is formatted on the output.
+func TestSAMLUsersList_AllFilters(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			query = r.URL.RawQuery
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id":42,"username":"jdoe","name":"Jane Doe","state":"active","created_at":"2026-01-02T03:04:05Z"}]`,
+				testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "2", PerPage: "5"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	active, blocked := true, false
+	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{
+		GroupID:         "mygroup",
+		Search:          "jane",
+		Username:        "jdoe",
+		Active:          &active,
+		Blocked:         &blocked,
+		CreatedAfter:    "2026-01-01T00:00:00Z",
+		CreatedBefore:   "2026-12-31T23:59:59Z",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "created_after=", "created_before=", "page=2", "per_page=5"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
+	}
+	if out.Users[0].CreatedAt == "" {
+		t.Error("expected created_at to be formatted on the output")
+	}
+}
+
+// TestSAMLUsersList_APIError verifies that an upstream error is wrapped with the SAML hint.
+// The test makes the mock return 403.
+// It asserts a non-nil error is returned.
+func TestSAMLUsersList_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup"})
+	if err == nil {
+		t.Fatal("expected error from 403 response")
+	}
+}
+
+// TestSAMLUsersList_MissingGroupID verifies that SAMLUsersList validates group_id.
+// The test exercises the input guard before any API call.
+// It asserts an error is returned for the empty group_id.
+func TestSAMLUsersList_MissingGroupID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{})
+	if err == nil {
+		t.Fatal("SAMLUsersList() expected error for missing group_id, got nil")
+	}
+}
+
+// TestFormatSAMLUsersListMarkdown_Empty verifies the empty-state rendering for SAML users.
+// The test exercises rendering of an empty user list.
+// It asserts the empty-state message is present.
+func TestFormatSAMLUsersListMarkdown_Empty(t *testing.T) {
+	md := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{})
+	if !strings.Contains(md, "No SAML users found") {
+		t.Errorf("expected empty-state message, got: %s", md)
 	}
 }
 

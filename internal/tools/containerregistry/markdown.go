@@ -143,6 +143,56 @@ func FormatProtectionRuleListMarkdown(out ProtectionRuleListOutput) string {
 	return b.String()
 }
 
+// FormatTagProtectionRuleMarkdown formats a single tag protection rule as markdown.
+func FormatTagProtectionRuleMarkdown(out TagProtectionRuleOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Tag Protection Rule: %s\n\n", out.TagNamePattern)
+	fmt.Fprint(&b, toolutil.TblFieldValue)
+	fmt.Fprintf(&b, "| Tag Name Pattern | %s |\n", toolutil.EscapeMdTableCell(out.TagNamePattern))
+	fmt.Fprintf(&b, "| Min Access Level (Push) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForPush))
+	fmt.Fprintf(&b, "| Min Access Level (Delete) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForDelete))
+	toolutil.WriteHints(
+		&b,
+		"Use action 'registry_tag_rule_update' to modify access levels",
+		"Use action 'registry_tag_rule_delete' to remove this rule",
+	)
+	return b.String()
+}
+
+// FormatTagProtectionRuleListMarkdown formats a list of tag protection rules.
+func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Tag Protection Rules (%d)\n\n", len(out.Rules))
+	toolutil.WriteListSummary(&b, len(out.Rules), out.Pagination)
+	if len(out.Rules) == 0 {
+		b.WriteString("No tag protection rules found.\n")
+		toolutil.WritePagination(&b, out.Pagination)
+		return b.String()
+	}
+	b.WriteString(toolutil.MarkdownTableHeader("Tag Pattern", "Min Push", "Min Delete"))
+	for _, r := range out.Rules {
+		fmt.Fprintf(&b, "| %s | %s | %s |\n",
+			toolutil.EscapeMdTableCell(r.TagNamePattern), protectionAccessLabel(r.MinimumAccessLevelForPush), protectionAccessLabel(r.MinimumAccessLevelForDelete))
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		"Use action 'registry_tag_rule_create' to add a new rule",
+		"These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules",
+	)
+	return b.String()
+}
+
+// protectionAccessLabel renders an empty minimum access level as "immutable",
+// which is how the GitLab API expresses a rule that forbids push and delete
+// for everyone.
+func protectionAccessLabel(level string) string {
+	if level == "" {
+		return "immutable"
+	}
+	return level
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatRepositoryMarkdown)
 	toolutil.RegisterMarkdown(FormatRepositoryListMarkdown)
@@ -150,4 +200,6 @@ func init() {
 	toolutil.RegisterMarkdown(FormatTagListMarkdown)
 	toolutil.RegisterMarkdown(FormatProtectionRuleMarkdown)
 	toolutil.RegisterMarkdown(FormatProtectionRuleListMarkdown)
+	toolutil.RegisterMarkdown(FormatTagProtectionRuleMarkdown)
+	toolutil.RegisterMarkdown(FormatTagProtectionRuleListMarkdown)
 }

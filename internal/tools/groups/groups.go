@@ -39,6 +39,7 @@ type Output struct {
 	Visibility            string `json:"visibility"`
 	WebURL                string `json:"web_url"`
 	ParentID              int64  `json:"parent_id,omitempty"`
+	OrganizationID        int64  `json:"organization_id,omitempty"`
 	DefaultBranch         string `json:"default_branch,omitempty"`
 	RequestAccessEnabled  bool   `json:"request_access_enabled"`
 	CreatedAt             string `json:"created_at,omitempty"`
@@ -48,6 +49,16 @@ type Output struct {
 	SubGroupCreationLevel string `json:"subgroup_creation_level,omitempty"`
 	LFSEnabled            bool   `json:"lfs_enabled"`
 	SharedRunnersSetting  string `json:"shared_runners_setting,omitempty"`
+	// Fields added in client-go v2.41.0.
+	Archived                             bool   `json:"archived"`
+	PreventSharingGroupsOutsideHierarchy bool   `json:"prevent_sharing_groups_outside_hierarchy"`
+	EnabledGitAccessProtocol             string `json:"enabled_git_access_protocol,omitempty"`
+	MathRenderingLimitsEnabled           bool   `json:"math_rendering_limits_enabled"`
+	LockMathRenderingLimitsEnabled       bool   `json:"lock_math_rendering_limits_enabled"`
+	DuoAvailability                      string `json:"duo_availability,omitempty"`
+	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled"`
+	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled"`
+	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled"`
 }
 
 // ListOutput holds a paginated list of groups.
@@ -119,6 +130,7 @@ func ToOutput(g *gl.Group) Output {
 		Visibility:            string(g.Visibility),
 		WebURL:                g.WebURL,
 		ParentID:              g.ParentID,
+		OrganizationID:        g.OrganizationID,
 		DefaultBranch:         g.DefaultBranch,
 		RequestAccessEnabled:  g.RequestAccessEnabled,
 		AvatarURL:             g.AvatarURL,
@@ -133,6 +145,15 @@ func ToOutput(g *gl.Group) Output {
 	}
 	out.LFSEnabled = g.LFSEnabled
 	out.SharedRunnersSetting = string(g.SharedRunnersSetting)
+	out.Archived = g.Archived
+	out.PreventSharingGroupsOutsideHierarchy = g.PreventSharingGroupsOutsideHierarchy
+	out.EnabledGitAccessProtocol = string(g.EnabledGitAccessProtocol)
+	out.MathRenderingLimitsEnabled = g.MathRenderingLimitsEnabled
+	out.LockMathRenderingLimitsEnabled = g.LockMathRenderingLimitsEnabled
+	out.DuoAvailability = string(g.DuoAvailability)
+	out.DuoFeaturesEnabled = g.DuoFeaturesEnabled
+	out.LockDuoFeaturesEnabled = g.LockDuoFeaturesEnabled
+	out.ExperimentFeaturesEnabled = g.ExperimentFeaturesEnabled
 	return out
 }
 
@@ -345,26 +366,39 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 
 // CreateInput defines parameters for creating a group.
 type CreateInput struct {
-	Name                 string `json:"name"                          jsonschema:"Group name,required"`
-	Path                 string `json:"path,omitempty"                jsonschema:"Group URL path (defaults to kebab-case of name)"`
-	Description          string `json:"description,omitempty"         jsonschema:"Group description"`
-	Visibility           string `json:"visibility,omitempty"          jsonschema:"Visibility level (private, internal, public)"`
-	ParentID             int64  `json:"parent_id,omitempty"           jsonschema:"Parent group ID (creates a subgroup)"`
-	RequestAccessEnabled *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
-	LFSEnabled           *bool  `json:"lfs_enabled,omitempty"         jsonschema:"Enable Git LFS"`
-	DefaultBranch        string `json:"default_branch,omitempty"      jsonschema:"Default branch name"`
+	Name                         string `json:"name"                          jsonschema:"Group name,required"`
+	Path                         string `json:"path,omitempty"                jsonschema:"Group URL path (defaults to kebab-case of name)"`
+	Description                  string `json:"description,omitempty"         jsonschema:"Group description"`
+	Visibility                   string `json:"visibility,omitempty"          jsonschema:"Visibility level (private, internal, public)"`
+	ParentID                     int64  `json:"parent_id,omitempty"           jsonschema:"Parent group ID (creates a subgroup)"`
+	OrganizationID               *int64 `json:"organization_id,omitempty"     jsonschema:"Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)"`
+	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
+	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty"         jsonschema:"Enable Git LFS"`
+	DefaultBranch                string `json:"default_branch,omitempty"      jsonschema:"Default branch name"`
+	MathRenderingLimitsEnabled   *bool  `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
+	WebBasedCommitSigningEnabled *bool  `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
+	AllowPersonalSnippets        *bool  `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
+
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // UpdateInput defines parameters for updating a group.
 type UpdateInput struct {
-	GroupID              toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
-	Name                 string               `json:"name,omitempty"          jsonschema:"Group name"`
-	Path                 string               `json:"path,omitempty"          jsonschema:"Group URL path"`
-	Description          string               `json:"description,omitempty"   jsonschema:"Group description"`
-	Visibility           string               `json:"visibility,omitempty"    jsonschema:"Visibility level (private, internal, public)"`
-	RequestAccessEnabled *bool                `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
-	LFSEnabled           *bool                `json:"lfs_enabled,omitempty"   jsonschema:"Enable Git LFS"`
-	DefaultBranch        string               `json:"default_branch,omitempty" jsonschema:"Default branch name"`
+	GroupID                      toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
+	Name                         string               `json:"name,omitempty"          jsonschema:"Group name"`
+	Path                         string               `json:"path,omitempty"          jsonschema:"Group URL path"`
+	Description                  string               `json:"description,omitempty"   jsonschema:"Group description"`
+	Visibility                   string               `json:"visibility,omitempty"    jsonschema:"Visibility level (private, internal, public)"`
+	RequestAccessEnabled         *bool                `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
+	LFSEnabled                   *bool                `json:"lfs_enabled,omitempty"   jsonschema:"Enable Git LFS"`
+	DefaultBranch                string               `json:"default_branch,omitempty" jsonschema:"Default branch name"`
+	MathRenderingLimitsEnabled   *bool                `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
+	WebBasedCommitSigningEnabled *bool                `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
+	AllowPersonalSnippets        *bool                `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
 }
 
 // DeleteInput defines parameters for deleting a group.
@@ -456,6 +490,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ParentID != 0 {
 		opts.ParentID = new(input.ParentID)
 	}
+	if input.OrganizationID != nil {
+		opts.OrganizationID = input.OrganizationID
+	}
 	if input.RequestAccessEnabled != nil {
 		opts.RequestAccessEnabled = input.RequestAccessEnabled
 	}
@@ -464,6 +501,30 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.DefaultBranch != "" {
 		opts.DefaultBranch = new(input.DefaultBranch)
+	}
+	if input.MathRenderingLimitsEnabled != nil {
+		opts.MathRenderingLimitsEnabled = input.MathRenderingLimitsEnabled
+	}
+	if input.WebBasedCommitSigningEnabled != nil {
+		opts.WebBasedCommitSigningEnabled = input.WebBasedCommitSigningEnabled
+	}
+	if input.AllowPersonalSnippets != nil {
+		opts.AllowPersonalSnippets = input.AllowPersonalSnippets
+	}
+	if input.UniqueProjectDownloadLimit != nil {
+		opts.UniqueProjectDownloadLimit = input.UniqueProjectDownloadLimit
+	}
+	if input.UniqueProjectDownloadLimitIntervalInSeconds != nil {
+		opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
+	}
+	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
+		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
+	}
+	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
+	}
+	if input.AutoBanUserOnExcessiveProjectsDownload != nil {
+		opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
 	}
 
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))
@@ -503,6 +564,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.DefaultBranch != "" {
 		opts.DefaultBranch = new(input.DefaultBranch)
+	}
+	if input.MathRenderingLimitsEnabled != nil {
+		opts.MathRenderingLimitsEnabled = input.MathRenderingLimitsEnabled
+	}
+	if input.WebBasedCommitSigningEnabled != nil {
+		opts.WebBasedCommitSigningEnabled = input.WebBasedCommitSigningEnabled
+	}
+	if input.AllowPersonalSnippets != nil {
+		opts.AllowPersonalSnippets = input.AllowPersonalSnippets
 	}
 
 	g, _, err := client.GL().Groups.UpdateGroup(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -702,6 +772,207 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 		}
 	}
 	return ListProjectsOutput{Projects: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// ---------------------------------------------------------------------------
+// SharedWithList
+// ---------------------------------------------------------------------------.
+
+// SharedWithListInput defines parameters for listing groups shared with a group.
+type SharedWithListInput struct {
+	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"         jsonschema:"Filter shared groups by name or path"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	Visibility           string               `json:"visibility,omitempty"     jsonschema:"Filter by visibility (public, internal, private)"`
+	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order shared groups by field (name, path, id)"`
+	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
+	SkipGroups           []int64              `json:"skip_groups,omitempty"    jsonschema:"Group IDs to exclude from the results"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	toolutil.PaginationInput
+}
+
+// SharedWithList lists the groups that have been shared with the given group.
+func SharedWithList(ctx context.Context, client *gitlabclient.Client, input SharedWithListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return ListOutput{}, errors.New("SharedWithList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := &gl.ListGroupsSharedWithOptions{}
+	if input.Page > 0 {
+		opts.Page = int64(input.Page)
+	}
+	if input.PerPage > 0 {
+		opts.PerPage = int64(input.PerPage)
+	}
+	if input.Search != "" {
+		opts.Search = new(input.Search)
+	}
+	if input.MinAccessLevel > 0 {
+		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
+	}
+	if input.Visibility != "" {
+		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = new(input.OrderBy)
+	}
+	if input.Sort != "" {
+		opts.Sort = new(input.Sort)
+	}
+	if len(input.SkipGroups) > 0 {
+		opts.SkipGroups = new(input.SkipGroups)
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
+	}
+
+	groups, resp, err := client.GL().Groups.ListGroupsSharedWith(string(input.GroupID), opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("SharedWithList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; this lists groups shared *with* the target group (group-to-group shares)")
+	}
+
+	out := ListOutput{
+		Groups:     make([]Output, len(groups)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, g := range groups {
+		out.Groups[i] = ToOutput(g)
+	}
+	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// InvitedList
+// ---------------------------------------------------------------------------.
+
+// InvitedListInput defines parameters for listing groups invited to a group.
+type InvitedListInput struct {
+	GroupID              toolutil.StringOrInt `json:"group_id"                 jsonschema:"Group ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"         jsonschema:"Filter invited groups by name or path"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	Relation             []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	toolutil.PaginationInput
+}
+
+// InvitedList lists the groups invited to the given group.
+func InvitedList(ctx context.Context, client *gitlabclient.Client, input InvitedListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return ListOutput{}, errors.New("InvitedList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := &gl.ListInvitedGroupsOptions{}
+	if input.Page > 0 {
+		opts.Page = int64(input.Page)
+	}
+	if input.PerPage > 0 {
+		opts.PerPage = int64(input.PerPage)
+	}
+	if input.Search != "" {
+		opts.Search = new(input.Search)
+	}
+	if input.MinAccessLevel > 0 {
+		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
+	}
+	if len(input.Relation) > 0 {
+		opts.Relation = new(input.Relation)
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
+	}
+
+	groups, resp, err := client.GL().Groups.ListInvitedGroups(string(input.GroupID), opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("InvitedList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; this lists groups invited to the target group")
+	}
+
+	out := ListOutput{
+		Groups:     make([]Output, len(groups)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, g := range groups {
+		out.Groups[i] = ToOutput(g)
+	}
+	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// TransferLocationsList
+// ---------------------------------------------------------------------------.
+
+// TransferLocationsListInput defines parameters for listing possible transfer locations.
+type TransferLocationsListInput struct {
+	GroupID toolutil.StringOrInt `json:"group_id"         jsonschema:"Group ID or URL-encoded path,required"`
+	Search  string               `json:"search,omitempty" jsonschema:"Filter candidate parent groups by name or path"`
+	toolutil.PaginationInput
+}
+
+// TransferLocationOutput represents a candidate parent group for a transfer.
+type TransferLocationOutput struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	FullName  string `json:"full_name,omitempty"`
+	FullPath  string `json:"full_path,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+// TransferLocationsListOutput holds a paginated list of transfer locations.
+type TransferLocationsListOutput struct {
+	toolutil.HintableOutput
+	Locations  []TransferLocationOutput  `json:"locations"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// TransferLocationsList lists the parent groups available for transferring the given group.
+func TransferLocationsList(ctx context.Context, client *gitlabclient.Client, input TransferLocationsListInput) (TransferLocationsListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return TransferLocationsListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return TransferLocationsListOutput{}, errors.New("TransferLocationsList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := &gl.ListTransferLocationsOptions{}
+	if input.Page > 0 {
+		opts.Page = int64(input.Page)
+	}
+	if input.PerPage > 0 {
+		opts.PerPage = int64(input.PerPage)
+	}
+	if input.Search != "" {
+		opts.Search = new(input.Search)
+	}
+
+	locations, resp, err := client.GL().Groups.ListTransferLocations(string(input.GroupID), opts, gl.WithContext(ctx))
+	if err != nil {
+		return TransferLocationsListOutput{}, toolutil.WrapErrWithStatusHint("TransferLocationsList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; returns groups you can transfer this group into (requires Owner role on the target)")
+	}
+
+	out := TransferLocationsListOutput{
+		Locations:  make([]TransferLocationOutput, len(locations)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, l := range locations {
+		out.Locations[i] = TransferLocationOutput{
+			ID:        l.ID,
+			Name:      l.Name,
+			FullName:  l.FullName,
+			FullPath:  l.FullPath,
+			WebURL:    l.WebURL,
+			AvatarURL: l.AvatarURL,
+		}
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

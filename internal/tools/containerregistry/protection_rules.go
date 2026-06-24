@@ -1,4 +1,4 @@
-package containerregistry
+package containerregistry //nolint:dupl // parallel CRUD wrapper for a distinct GitLab REST surface; mirrors tag_protection_rules.go by design (different field names/types/endpoints, no shared SDK interface)
 
 import (
 	"context"

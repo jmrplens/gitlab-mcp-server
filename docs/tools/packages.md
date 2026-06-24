@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Packages, Container Registry & Package Protection Rules
-> **Individual tools**: 28
+> **Individual tools**: 32
 > **Meta-tool**: `gitlab_package` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -234,6 +234,42 @@ Delete a container registry protection rule. This action cannot be undone.
 
 ---
 
+## Container Registry — Tag Protection Rules
+
+Tag protection rules restrict who can push or delete container image **tags** that match a pattern, independent of the repository-path protection rules above. Omitting both minimum access levels makes matching tags immutable.
+
+### `gitlab_registry_tag_protection_list`
+
+List container registry tag protection rules for a GitLab project.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_registry_tag_protection_create`
+
+Create a container registry tag protection rule. The `tag_name_pattern` is an RE2 regular expression; omit both access levels to make matching tags immutable.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_registry_tag_protection_update`
+
+Update a container registry tag protection rule.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_registry_tag_protection_delete`
+
+Delete a container registry tag protection rule. This action cannot be undone.
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Deletion cannot be undone.
+
+---
+
 ## Project Dependencies
 
 ### `gitlab_list_project_dependencies`
@@ -290,14 +326,18 @@ Download a completed dependency list export (CycloneDX SBOM JSON). Returns raw S
 | 18 | `gitlab_registry_protection_create` | Registry Protection Rules | Create |
 | 19 | `gitlab_registry_protection_update` | Registry Protection Rules | Update |
 | 20 | `gitlab_registry_protection_delete` | Registry Protection Rules | Delete |
-| 21 | `gitlab_list_package_protection_rules` | Package Protection Rules | Read |
-| 22 | `gitlab_create_package_protection_rule` | Package Protection Rules | Create |
-| 23 | `gitlab_update_package_protection_rule` | Package Protection Rules | Update |
-| 24 | `gitlab_delete_package_protection_rule` | Package Protection Rules | Delete |
-| 25 | `gitlab_list_project_dependencies` | Dependencies | Read |
-| 26 | `gitlab_create_dependency_list_export` | Dependencies | Create |
-| 27 | `gitlab_get_dependency_list_export` | Dependencies | Read |
-| 28 | `gitlab_download_dependency_list_export` | Dependencies | Read |
+| 21 | `gitlab_registry_tag_protection_list` | Registry Tag Protection Rules | Read |
+| 22 | `gitlab_registry_tag_protection_create` | Registry Tag Protection Rules | Create |
+| 23 | `gitlab_registry_tag_protection_update` | Registry Tag Protection Rules | Update |
+| 24 | `gitlab_registry_tag_protection_delete` | Registry Tag Protection Rules | Delete |
+| 25 | `gitlab_list_package_protection_rules` | Package Protection Rules | Read |
+| 26 | `gitlab_create_package_protection_rule` | Package Protection Rules | Create |
+| 27 | `gitlab_update_package_protection_rule` | Package Protection Rules | Update |
+| 28 | `gitlab_delete_package_protection_rule` | Package Protection Rules | Delete |
+| 29 | `gitlab_list_project_dependencies` | Dependencies | Read |
+| 30 | `gitlab_create_dependency_list_export` | Dependencies | Create |
+| 31 | `gitlab_get_dependency_list_export` | Dependencies | Read |
+| 32 | `gitlab_download_dependency_list_export` | Dependencies | Read |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -309,6 +349,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_registry_delete_tag` — deletes a single container registry tag
 - `gitlab_registry_delete_tags_bulk` — bulk-deletes tags by regex pattern
 - `gitlab_registry_protection_delete` — deletes a registry protection rule
+- `gitlab_registry_tag_protection_delete` — deletes a registry tag protection rule
 - `gitlab_delete_package_protection_rule` — deletes a package protection rule
 
 ---

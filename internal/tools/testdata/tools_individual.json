@@ -31899,6 +31899,20 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "allow_personal_snippets": {
+          "description": "Allow members to create personal snippets",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "auto_ban_user_on_excessive_projects_download": {
+          "description": "Automatically ban users who exceed the unique project download limit (Ultimate)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -31914,9 +31928,23 @@
             "boolean"
           ]
         },
+        "math_rendering_limits_enabled": {
+          "description": "Enable math rendering limits",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "name": {
           "description": "Group name",
           "type": "string"
+        },
+        "organization_id": {
+          "description": "Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "parent_id": {
           "description": "Parent group ID (creates a subgroup)",
@@ -31933,9 +31961,50 @@
             "boolean"
           ]
         },
+        "unique_project_download_limit": {
+          "description": "Max number of unique projects a user can download before being banned (Ultimate)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "description": "User IDs notified when the unique project download limit is exceeded (Ultimate)",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "description": "Usernames excluded from the unique project download limit (Ultimate)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "description": "Time window in seconds for the unique project download limit (Ultimate)",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "description": "Enable web-based commit signing for projects in this group",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -31946,6 +32015,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -31957,6 +32029,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -31970,8 +32054,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -31985,11 +32078,17 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -32018,7 +32117,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -32350,6 +32456,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -32361,6 +32470,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -32374,8 +32495,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -32389,11 +32519,17 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -32422,7 +32558,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -33856,6 +33999,236 @@
     }
   },
   {
+    "name": "gitlab_group_invited_list",
+    "description": "List groups invited to a GitLab group. Returns: the invited groups with path and access metadata. See also: gitlab_group_shared_with_list, gitlab_group_members_list, gitlab_group_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "min_access_level": {
+          "description": "Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "relation": {
+          "description": "Filter by relation (direct, inherited)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "search": {
+          "description": "Filter invited groups by name or path",
+          "type": "string"
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "marked_for_deletion_on": {
+                "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "organization_id": {
+                "type": "integer"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
+              },
+              "project_creation_level": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "shared_runners_setting": {
+                "type": "string"
+              },
+              "subgroup_creation_level": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "full_path",
+              "visibility",
+              "web_url",
+              "request_access_enabled",
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "groups",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_label_create",
     "description": "Create a new label in a GitLab group with a name, color (hex), optional description, and optional priority.\n\nReturns: JSON with the created label details. See also: gitlab_group_label_list.",
     "inputSchema": {
@@ -34761,7 +35134,7 @@
   },
   {
     "name": "gitlab_group_ldap_link_list",
-    "description": "List all LDAP group links for a GitLab group.\n\nReturns: list of LDAP links with CN, filter, access level, and provider. See also: gitlab_group_ldap_link_add, gitlab_group_saml_link_list.",
+    "description": "List a GitLab group's LDAP group links. Returns: each link's CN/filter, provider, and access level. See also: gitlab_group_ldap_link_add, gitlab_group_ldap_sync, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34842,6 +35215,52 @@
     }
   },
   {
+    "name": "gitlab_group_ldap_sync",
+    "description": "Trigger an asynchronous LDAP sync for a GitLab group's LDAP links. Returns: a confirmation that the sync was queued. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_group_list",
     "description": "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create.",
     "inputSchema": {
@@ -34911,6 +35330,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -34922,6 +35344,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -34935,8 +35369,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -34950,11 +35393,17 @@
                   "array"
                 ]
               },
+              "organization_id": {
+                "type": "integer"
+              },
               "parent_id": {
                 "type": "integer"
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -34983,7 +35432,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -38962,6 +39418,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -38973,6 +39432,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -38986,8 +39457,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -39001,11 +39481,17 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -39034,7 +39520,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -39235,7 +39728,7 @@
   },
   {
     "name": "gitlab_group_saml_link_list",
-    "description": "List all SAML group links for a GitLab group.\n\nReturns: list of SAML links with name, access level, and provider. See also: gitlab_group_saml_link_get, gitlab_group_saml_link_add, gitlab_group_ldap_link_list.",
+    "description": "List a GitLab group's SAML group links. Returns: each link's SAML group name, access level, and provider. See also: gitlab_group_saml_users_list, gitlab_group_saml_link_add, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39312,6 +39805,266 @@
     }
   },
   {
+    "name": "gitlab_group_saml_users_list",
+    "description": "List SAML SSO-provisioned users of a top-level GitLab group. Returns: matching users with id, username, name, and state. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "description": "Limit to active users only",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "blocked": {
+          "description": "Limit to blocked users only",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "created_after": {
+          "description": "Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Top-level group ID or URL-encoded path",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter SAML users by name, username, or public email",
+          "type": "string"
+        },
+        "username": {
+          "description": "Filter by an exact username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
+        "users": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "bio": {
+                "type": "string"
+              },
+              "bot": {
+                "type": "boolean"
+              },
+              "can_create_group": {
+                "type": "boolean"
+              },
+              "can_create_project": {
+                "type": "boolean"
+              },
+              "color_scheme_id": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "current_sign_in_at": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "external": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "is_admin": {
+                "type": "boolean"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "last_activity_on": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "private_profile": {
+                "type": "boolean"
+              },
+              "projects_limit": {
+                "type": "integer"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "scim_identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "extern_uid",
+                    "group_id",
+                    "active"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "state": {
+                "type": "string"
+              },
+              "theme_id": {
+                "type": "integer"
+              },
+              "two_factor_enabled": {
+                "type": "boolean"
+              },
+              "username": {
+                "type": "string"
+              },
+              "using_license_seat": {
+                "type": "boolean"
+              },
+              "web_url": {
+                "type": "string"
+              },
+              "website_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "email",
+              "name",
+              "state",
+              "web_url",
+              "avatar_url",
+              "is_admin",
+              "bot",
+              "two_factor_enabled",
+              "external",
+              "locked",
+              "private_profile",
+              "projects_limit",
+              "can_create_project",
+              "can_create_group",
+              "using_license_seat"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "users",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_search",
     "description": "Search for GitLab groups by name. Returns matching groups with their details.\n\nReturns: paginated list of groups with id, name, path, full_path, visibility, and web_url. See also: gitlab_group_get, gitlab_group_list.",
     "inputSchema": {
@@ -39334,6 +40087,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -39345,6 +40101,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -39358,8 +40126,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -39373,11 +40150,17 @@
                   "array"
                 ]
               },
+              "organization_id": {
+                "type": "integer"
+              },
               "parent_id": {
                 "type": "integer"
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -39406,7 +40189,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },
@@ -40205,8 +40995,374 @@
     }
   },
   {
+    "name": "gitlab_group_shared_with_list",
+    "description": "List groups shared with a GitLab group (group-to-group shares). Returns: the shared groups with path, visibility, and access metadata. See also: gitlab_group_invited_list, gitlab_group_members_list, gitlab_subgroups_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "min_access_level": {
+          "description": "Minimum access level the share grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "type": "integer"
+        },
+        "order_by": {
+          "description": "Order shared groups by field (name, path, id)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter shared groups by name or path",
+          "type": "string"
+        },
+        "skip_groups": {
+          "description": "Group IDs to exclude from the results",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
+        },
+        "visibility": {
+          "description": "Filter by visibility (public, internal, private)",
+          "type": "string"
+        },
+        "with_custom_attributes": {
+          "description": "Include custom attributes in the response",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "lfs_enabled": {
+                "type": "boolean"
+              },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "marked_for_deletion_on": {
+                "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "organization_id": {
+                "type": "integer"
+              },
+              "parent_id": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
+              },
+              "project_creation_level": {
+                "type": "string"
+              },
+              "request_access_enabled": {
+                "type": "boolean"
+              },
+              "shared_runners_setting": {
+                "type": "string"
+              },
+              "subgroup_creation_level": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "full_path",
+              "visibility",
+              "web_url",
+              "request_access_enabled",
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "groups",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_group_transfer_locations",
+    "description": "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter candidate parent groups by name or path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "locations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "full_path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "locations",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_transfer_project",
-    "description": "Transfer a project into a group namespace. Moves the project to become a member of the specified group.\n\nReturns: transferred project details with id, name, path, and namespace. See also: gitlab_group_get, gitlab_project_transfer.",
+    "description": "Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -40228,6 +41384,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -40239,6 +41398,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -40252,8 +41423,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -40267,11 +41447,17 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -40300,7 +41486,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -40420,6 +41613,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "allow_personal_snippets": {
+          "description": "Allow members to create personal snippets",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -40434,6 +41634,13 @@
         },
         "lfs_enabled": {
           "description": "Enable Git LFS",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "math_rendering_limits_enabled": {
+          "description": "Enable math rendering limits",
           "type": [
             "null",
             "boolean"
@@ -40457,6 +41664,13 @@
         "visibility": {
           "description": "Visibility level (private, internal, public)",
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "description": "Enable web-based commit signing for projects in this group",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -40467,6 +41681,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "avatar_url": {
           "type": "string"
         },
@@ -40478,6 +41695,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
         },
         "full_name": {
           "type": "string"
@@ -40491,8 +41720,17 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
         "marked_for_deletion_on": {
           "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
         },
         "name": {
           "type": "string"
@@ -40506,11 +41744,17 @@
             "array"
           ]
         },
+        "organization_id": {
+          "type": "integer"
+        },
         "parent_id": {
           "type": "integer"
         },
         "path": {
           "type": "string"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
         },
         "project_creation_level": {
           "type": "string"
@@ -40539,7 +41783,14 @@
         "visibility",
         "web_url",
         "request_access_enabled",
-        "lfs_enabled"
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled"
       ],
       "type": "object"
     },
@@ -41445,8 +42696,16 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "bitbucket_api_token": {
+          "description": "Bitbucket Cloud API token (replaces app passwords). Treat as secret: do not log or store it, and redact it in telemetry/errors. Requires bitbucket_email",
+          "type": "string"
+        },
         "bitbucket_app_password": {
-          "description": "Bitbucket Cloud app password. Treat as secret: do not log or store it, and redact it in telemetry/errors",
+          "description": "Bitbucket Cloud app password (legacy auth). Treat as secret: do not log or store it, and redact it in telemetry/errors. Provide this OR bitbucket_api_token + bitbucket_email",
+          "type": "string"
+        },
+        "bitbucket_email": {
+          "description": "Atlassian account email associated with the API token (required when using bitbucket_api_token)",
           "type": "string"
         },
         "bitbucket_username": {
@@ -41468,7 +42727,6 @@
       },
       "required": [
         "bitbucket_username",
-        "bitbucket_app_password",
         "repo_path",
         "target_namespace"
       ],
@@ -97498,7 +98756,7 @@
   },
   {
     "name": "gitlab_registry_protection_list",
-    "description": "List container registry protection rules for a GitLab project.\n\nSee also: gitlab_registry_protection_create, gitlab_registry_list_project\n\nReturns: JSON array of protection rules.",
+    "description": "List container registry repository-path protection rules for a project. Returns: each rule's path pattern and minimum push/delete access levels. For tag-level protection use gitlab_registry_tag_protection_list. See also: gitlab_registry_protection_create, gitlab_registry_tag_protection_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -97682,6 +98940,331 @@
         "id",
         "project_id",
         "repository_path_pattern",
+        "minimum_access_level_for_push",
+        "minimum_access_level_for_delete"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_create",
+    "description": "Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "minimum_access_level_for_delete": {
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "tag_name_pattern": {
+          "description": "Tag name pattern as a RE2 regular expression (e.g. v.+)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "tag_name_pattern"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "minimum_access_level_for_delete": {
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "tag_name_pattern",
+        "minimum_access_level_for_push",
+        "minimum_access_level_for_delete"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_delete",
+    "description": "Delete a container registry tag protection rule (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_create.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Tag protection rule ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "rule_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_list",
+    "description": "List container registry tag protection rules for a project. Returns: each rule's tag name pattern and minimum push/delete access levels (empty = immutable). For repository-path protection use gitlab_registry_protection_list. See also: gitlab_registry_tag_protection_create, gitlab_registry_list_tags.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
+        "rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "minimum_access_level_for_delete": {
+                "type": "string"
+              },
+              "minimum_access_level_for_push": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              },
+              "tag_name_pattern": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project_id",
+              "tag_name_pattern",
+              "minimum_access_level_for_push",
+              "minimum_access_level_for_delete"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "rules",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_registry_tag_protection_update",
+    "description": "Update a container registry tag protection rule. Returns: the updated rule. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_delete.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "minimum_access_level_for_delete": {
+          "description": "Minimum access level to delete matching tags (maintainer, owner, admin)",
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "description": "Minimum access level to push matching tags (maintainer, owner, admin)",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Project ID or path",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Tag protection rule ID",
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "description": "Tag name pattern as a RE2 regular expression",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "rule_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "minimum_access_level_for_delete": {
+          "type": "string"
+        },
+        "minimum_access_level_for_push": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "tag_name_pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "project_id",
+        "tag_name_pattern",
         "minimum_access_level_for_push",
         "minimum_access_level_for_delete"
       ],
@@ -111478,6 +113061,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "avatar_url": {
                 "type": "string"
               },
@@ -111489,6 +113075,18 @@
               },
               "description": {
                 "type": "string"
+              },
+              "duo_availability": {
+                "type": "string"
+              },
+              "duo_features_enabled": {
+                "type": "boolean"
+              },
+              "enabled_git_access_protocol": {
+                "type": "string"
+              },
+              "experiment_features_enabled": {
+                "type": "boolean"
               },
               "full_name": {
                 "type": "string"
@@ -111502,8 +113100,17 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_duo_features_enabled": {
+                "type": "boolean"
+              },
+              "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
               "marked_for_deletion_on": {
                 "type": "string"
+              },
+              "math_rendering_limits_enabled": {
+                "type": "boolean"
               },
               "name": {
                 "type": "string"
@@ -111517,11 +113124,17 @@
                   "array"
                 ]
               },
+              "organization_id": {
+                "type": "integer"
+              },
               "parent_id": {
                 "type": "integer"
               },
               "path": {
                 "type": "string"
+              },
+              "prevent_sharing_groups_outside_hierarchy": {
+                "type": "boolean"
               },
               "project_creation_level": {
                 "type": "string"
@@ -111550,7 +113163,14 @@
               "visibility",
               "web_url",
               "request_access_enabled",
-              "lfs_enabled"
+              "lfs_enabled",
+              "archived",
+              "prevent_sharing_groups_outside_hierarchy",
+              "math_rendering_limits_enabled",
+              "lock_math_rendering_limits_enabled",
+              "duo_features_enabled",
+              "lock_duo_features_enabled",
+              "experiment_features_enabled"
             ],
             "type": "object"
           },

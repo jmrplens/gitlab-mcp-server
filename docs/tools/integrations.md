@@ -304,7 +304,7 @@ Import GitHub gists into GitLab snippets.
 
 ### `gitlab_import_from_bitbucket_cloud`
 
-Import a repository from Bitbucket Cloud into GitLab.
+Import a repository from Bitbucket Cloud into GitLab. Authenticate with either the legacy `bitbucket_app_password` or the newer `bitbucket_api_token` + `bitbucket_email` pair (Atlassian API tokens replace app passwords).
 
 | Annotation | **Create** |
 | ---------- | ---------- |

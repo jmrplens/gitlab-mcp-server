@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Groups
-> **Individual tools**: 61
+> **Individual tools**: 64
 > **Meta-tools**: `gitlab_group`, `gitlab_group_member`, `gitlab_group_label`, `gitlab_group_milestone`, `gitlab_group_variable`, `gitlab_group_import_export`, `gitlab_group_board`, `gitlab_group_relations_export`, `gitlab_group_markdown_upload` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -52,7 +52,7 @@ Retrieve detailed metadata for a GitLab group including name, path, full path, d
 
 ### `gitlab_group_create`
 
-Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), request_access_enabled, lfs_enabled, and default_branch.
+Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), organization_id (GitLab.com multi-organization), request_access_enabled, lfs_enabled, default_branch, math/Duo and web-based-commit-signing toggles, and the unique-project-download-limit controls (limit, interval, allowlist, alertlist, auto-ban — Ultimate).
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -111,6 +111,31 @@ Transfer a project into a group namespace. Moves the project to become a member 
 
 | Annotation | **Update** |
 | ---------- | ---------- |
+
+---
+
+## Group Relations
+
+### `gitlab_group_shared_with_list`
+
+List the groups that have been shared with a group (group-to-group shares). Supports filtering by search, minimum access level, and visibility with pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_group_invited_list`
+
+List the groups invited to a group. Supports filtering by search, minimum access level, and relation (direct, inherited) with pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_group_transfer_locations`
+
+List the candidate parent groups available for transferring a group (groups you can move this group into). Supports filtering by search with pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
 
 ---
 
@@ -547,57 +572,60 @@ Delete a group markdown upload by secret and filename.
 | 8 | `gitlab_subgroups_list` | Subgroups & Projects | Read |
 | 9 | `gitlab_group_projects` | Subgroups & Projects | Read |
 | 10 | `gitlab_group_transfer_project` | Subgroups & Projects | Update |
-| 11 | `gitlab_group_members_list` | Members (legacy) | Read |
-| 12 | `gitlab_group_hook_list` | Webhooks | Read |
-| 13 | `gitlab_group_hook_get` | Webhooks | Read |
-| 14 | `gitlab_group_hook_add` | Webhooks | Create |
-| 15 | `gitlab_group_hook_edit` | Webhooks | Update |
-| 16 | `gitlab_group_hook_delete` | Webhooks | Delete |
-| 17 | `gitlab_group_member_get` | Member Management | Read |
-| 18 | `gitlab_group_member_get_inherited` | Member Management | Read |
-| 19 | `gitlab_group_member_add` | Member Management | Create |
-| 20 | `gitlab_group_member_edit` | Member Management | Update |
-| 21 | `gitlab_group_member_remove` | Member Management | Delete |
-| 22 | `gitlab_group_share` | Member Management | Create |
-| 23 | `gitlab_group_unshare` | Member Management | Delete |
-| 24 | `gitlab_group_label_list` | Labels | Read |
-| 25 | `gitlab_group_label_get` | Labels | Read |
-| 26 | `gitlab_group_label_create` | Labels | Create |
-| 27 | `gitlab_group_label_update` | Labels | Update |
-| 28 | `gitlab_group_label_delete` | Labels | Delete |
-| 29 | `gitlab_group_label_subscribe` | Labels | Update |
-| 30 | `gitlab_group_label_unsubscribe` | Labels | Update |
-| 31 | `gitlab_group_milestone_list` | Milestones | Read |
-| 32 | `gitlab_group_milestone_get` | Milestones | Read |
-| 33 | `gitlab_group_milestone_create` | Milestones | Create |
-| 34 | `gitlab_group_milestone_update` | Milestones | Update |
-| 35 | `gitlab_group_milestone_delete` | Milestones | Delete |
-| 36 | `gitlab_group_milestone_issues` | Milestones | Read |
-| 37 | `gitlab_group_milestone_merge_requests` | Milestones | Read |
-| 38 | `gitlab_group_milestone_burndown_events` | Milestones | Read |
-| 39 | `gitlab_group_variable_list` | CI/CD Variables | Read |
-| 40 | `gitlab_group_variable_get` | CI/CD Variables | Read |
-| 41 | `gitlab_group_variable_create` | CI/CD Variables | Create |
-| 42 | `gitlab_group_variable_update` | CI/CD Variables | Update |
-| 43 | `gitlab_group_variable_delete` | CI/CD Variables | Delete |
-| 44 | `gitlab_schedule_group_export` | Import/Export | Create |
-| 45 | `gitlab_download_group_export` | Import/Export | Read |
-| 46 | `gitlab_import_group_from_file` | Import/Export | Create |
-| 47 | `gitlab_group_board_list` | Issue Boards | Read |
-| 48 | `gitlab_group_board_get` | Issue Boards | Read |
-| 49 | `gitlab_group_board_create` | Issue Boards | Create |
-| 50 | `gitlab_group_board_update` | Issue Boards | Update |
-| 51 | `gitlab_group_board_delete` | Issue Boards | Delete |
-| 52 | `gitlab_group_board_list_lists` | Issue Boards | Read |
-| 53 | `gitlab_group_board_list_get` | Issue Boards | Read |
-| 54 | `gitlab_group_board_list_create` | Issue Boards | Create |
-| 55 | `gitlab_group_board_list_update` | Issue Boards | Update |
-| 56 | `gitlab_group_board_list_delete` | Issue Boards | Delete |
-| 57 | `gitlab_schedule_group_relations_export` | Relations Export | Create |
-| 58 | `gitlab_list_group_relations_export_status` | Relations Export | Read |
-| 59 | `gitlab_list_group_markdown_uploads` | Markdown Uploads | Read |
-| 60 | `gitlab_delete_group_markdown_upload_by_id` | Markdown Uploads | Delete |
-| 61 | `gitlab_delete_group_markdown_upload_by_secret` | Markdown Uploads | Delete |
+| 11 | `gitlab_group_shared_with_list` | Group Relations | Read |
+| 12 | `gitlab_group_invited_list` | Group Relations | Read |
+| 13 | `gitlab_group_transfer_locations` | Group Relations | Read |
+| 14 | `gitlab_group_members_list` | Members (legacy) | Read |
+| 15 | `gitlab_group_hook_list` | Webhooks | Read |
+| 16 | `gitlab_group_hook_get` | Webhooks | Read |
+| 17 | `gitlab_group_hook_add` | Webhooks | Create |
+| 18 | `gitlab_group_hook_edit` | Webhooks | Update |
+| 19 | `gitlab_group_hook_delete` | Webhooks | Delete |
+| 20 | `gitlab_group_member_get` | Member Management | Read |
+| 21 | `gitlab_group_member_get_inherited` | Member Management | Read |
+| 22 | `gitlab_group_member_add` | Member Management | Create |
+| 23 | `gitlab_group_member_edit` | Member Management | Update |
+| 24 | `gitlab_group_member_remove` | Member Management | Delete |
+| 25 | `gitlab_group_share` | Member Management | Create |
+| 26 | `gitlab_group_unshare` | Member Management | Delete |
+| 27 | `gitlab_group_label_list` | Labels | Read |
+| 28 | `gitlab_group_label_get` | Labels | Read |
+| 29 | `gitlab_group_label_create` | Labels | Create |
+| 30 | `gitlab_group_label_update` | Labels | Update |
+| 31 | `gitlab_group_label_delete` | Labels | Delete |
+| 32 | `gitlab_group_label_subscribe` | Labels | Update |
+| 33 | `gitlab_group_label_unsubscribe` | Labels | Update |
+| 34 | `gitlab_group_milestone_list` | Milestones | Read |
+| 35 | `gitlab_group_milestone_get` | Milestones | Read |
+| 36 | `gitlab_group_milestone_create` | Milestones | Create |
+| 37 | `gitlab_group_milestone_update` | Milestones | Update |
+| 38 | `gitlab_group_milestone_delete` | Milestones | Delete |
+| 39 | `gitlab_group_milestone_issues` | Milestones | Read |
+| 40 | `gitlab_group_milestone_merge_requests` | Milestones | Read |
+| 41 | `gitlab_group_milestone_burndown_events` | Milestones | Read |
+| 42 | `gitlab_group_variable_list` | CI/CD Variables | Read |
+| 43 | `gitlab_group_variable_get` | CI/CD Variables | Read |
+| 44 | `gitlab_group_variable_create` | CI/CD Variables | Create |
+| 45 | `gitlab_group_variable_update` | CI/CD Variables | Update |
+| 46 | `gitlab_group_variable_delete` | CI/CD Variables | Delete |
+| 47 | `gitlab_schedule_group_export` | Import/Export | Create |
+| 48 | `gitlab_download_group_export` | Import/Export | Read |
+| 49 | `gitlab_import_group_from_file` | Import/Export | Create |
+| 50 | `gitlab_group_board_list` | Issue Boards | Read |
+| 51 | `gitlab_group_board_get` | Issue Boards | Read |
+| 52 | `gitlab_group_board_create` | Issue Boards | Create |
+| 53 | `gitlab_group_board_update` | Issue Boards | Update |
+| 54 | `gitlab_group_board_delete` | Issue Boards | Delete |
+| 55 | `gitlab_group_board_list_lists` | Issue Boards | Read |
+| 56 | `gitlab_group_board_list_get` | Issue Boards | Read |
+| 57 | `gitlab_group_board_list_create` | Issue Boards | Create |
+| 58 | `gitlab_group_board_list_update` | Issue Boards | Update |
+| 59 | `gitlab_group_board_list_delete` | Issue Boards | Delete |
+| 60 | `gitlab_schedule_group_relations_export` | Relations Export | Create |
+| 61 | `gitlab_list_group_relations_export_status` | Relations Export | Read |
+| 62 | `gitlab_list_group_markdown_uploads` | Markdown Uploads | Read |
+| 63 | `gitlab_delete_group_markdown_upload_by_id` | Markdown Uploads | Delete |
+| 64 | `gitlab_delete_group_markdown_upload_by_secret` | Markdown Uploads | Delete |
 
 ### Destructive Tools (Require Confirmation)
 

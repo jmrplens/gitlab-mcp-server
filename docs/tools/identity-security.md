@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Identity & Security
-> **Individual tools**: 28
+> **Individual tools**: 30
 > **Meta-tools**: `gitlab_group_scim`, `gitlab_member_role` (with `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled); `gitlab_group_ssh_certificate`, `gitlab_security_settings`, `gitlab_group_credential` are now enterprise-only routes inside `gitlab_group`/`gitlab_project`
 > **GitLab API**: [SCIM API](https://docs.gitlab.com/ee/api/scim.html) · [Group SSH Certificates API](https://docs.gitlab.com/ee/api/group_ssh_certificates.html) · [Security Settings API](https://docs.gitlab.com/ee/api/project_security_settings.html) · [Member Roles API](https://docs.gitlab.com/ee/api/member_roles.html) · [Group Credentials API](https://docs.gitlab.com/ee/api/group_credentials.html) · [LDAP Group Links API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html) · [SAML Group Links API](https://docs.gitlab.com/ee/api/groups.html#saml-group-links)
 > **Audience**: 👤 End users, AI assistant users
@@ -333,6 +333,16 @@ Delete a group LDAP link for a specific provider.
 
 **Annotation**: Delete
 
+### `gitlab_group_ldap_sync`
+
+Trigger a synchronization of the group's LDAP group links. The GitLab API accepts the request and runs the sync asynchronously in the background.
+
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+
+**Annotation**: Create (asynchronous action)
+
 ---
 
 ## Group SAML Links
@@ -382,6 +392,22 @@ Delete a SAML group link from a GitLab group.
 | `saml_group_name` | string     |   Yes    | Name of the SAML group to delete |
 
 **Annotation**: Delete
+
+### `gitlab_group_saml_users_list`
+
+List the users provisioned via SAML SSO for a top-level group. Supports filtering by search, exact username, active/blocked state, and creation-date window with pagination.
+
+| Parameter        | Type       | Required | Description                                        |
+| ---------------- | ---------- | :------: | -------------------------------------------------- |
+| `group_id`       | string/int |   Yes    | Top-level group ID or URL-encoded path             |
+| `search`         | string     |    No    | Filter by name, username, or public email          |
+| `username`       | string     |    No    | Filter by an exact username                        |
+| `active`         | bool       |    No    | Limit to active users only                         |
+| `blocked`        | bool       |    No    | Limit to blocked users only                        |
+| `created_after`  | string     |    No    | Return users created after this RFC3339 timestamp  |
+| `created_before` | string     |    No    | Return users created before this RFC3339 timestamp |
+
+**Annotation**: Read
 
 ---
 

@@ -397,6 +397,55 @@ func TestDeleteForProvider(t *testing.T) {
 	}
 }
 
+// TestSync verifies the Sync handler that triggers an LDAP synchronization.
+// The mock GitLab API at /api/v4/groups/mygroup/ldap_sync (POST) responds with HTTP 202.
+// It asserts success on the happy path and validation/API errors otherwise.
+func TestSync(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   SyncInput
+		handler http.HandlerFunc
+		wantErr bool
+	}{
+		{
+			name:  "triggers sync successfully",
+			input: SyncInput{GroupID: "mygroup"},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, "/api/v4/groups/mygroup/ldap_sync")
+				w.WriteHeader(http.StatusAccepted)
+			}),
+		},
+		{
+			name:    "returns error when group_id is empty",
+			input:   SyncInput{},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
+			wantErr: true,
+		},
+		{
+			name:  "returns error on 404 API response",
+			input: SyncInput{GroupID: "missing"},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			}),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			out, err := Sync(context.Background(), client, tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Sync() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && out.Status != "success" {
+				t.Errorf("Sync() status = %q, want success", out.Status)
+			}
+		})
+	}
+}
+
 // TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.

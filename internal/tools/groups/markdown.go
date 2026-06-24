@@ -206,6 +206,34 @@ func FormatHookListMarkdown(out HookListOutput) string {
 	return b.String()
 }
 
+// FormatTransferLocationsListMarkdown renders the candidate parent groups for a group transfer.
+func FormatTransferLocationsListMarkdown(out TransferLocationsListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Transfer Locations (%d)\n\n", len(out.Locations))
+	toolutil.WriteListSummary(&b, len(out.Locations), out.Pagination)
+	if len(out.Locations) == 0 {
+		b.WriteString("No transfer locations available.\n")
+		toolutil.WritePagination(&b, out.Pagination)
+		return b.String()
+	}
+	b.WriteString("| ID | Name | Full Path |\n")
+	b.WriteString("| --- | --- | --- |\n")
+	for _, l := range out.Locations {
+		name := toolutil.EscapeMdTableCell(l.Name)
+		if l.WebURL != "" {
+			name = fmt.Sprintf("[%s](%s)", name, l.WebURL)
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s |\n", l.ID, name, toolutil.EscapeMdTableCell(l.FullPath))
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"Use `gitlab_group_update` or the group transfer endpoint to move the group into one of these parents",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatGroupNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
@@ -214,4 +242,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListProjectsMarkdown)
 	toolutil.RegisterMarkdown(FormatHookMarkdown)
 	toolutil.RegisterMarkdown(FormatHookListMarkdown)
+	toolutil.RegisterMarkdown(FormatTransferLocationsListMarkdown)
 }
