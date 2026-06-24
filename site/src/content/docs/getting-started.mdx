@@ -470,7 +470,7 @@ If you get connection errors, check:
 
 ## Understanding meta-tools
 
-By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **33 domain-level meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
+By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **32 domain-level meta-tools** (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
 
 For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 

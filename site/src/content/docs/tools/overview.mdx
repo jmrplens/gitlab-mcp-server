@@ -15,7 +15,7 @@ In individual mode, the server registers one tool per GitLab operation: **866 to
 
 ### Meta-tool mode
 
-In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools**, **49 on self-managed Enterprise/Premium**, or **49 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
+In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools**, **48 on self-managed Enterprise/Premium**, or **49 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
 
 ```json
 {

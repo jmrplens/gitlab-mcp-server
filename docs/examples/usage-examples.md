@@ -210,7 +210,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `TOOL_SURFACE=meta`, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
+With `TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
 
 ```text
 Call: gitlab_project(action="help")

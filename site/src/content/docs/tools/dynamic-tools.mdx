@@ -18,7 +18,7 @@ Dynamic find/execute is the default tool surface. Meta-tools remain available wi
 
 ## Why dynamic mode exists
 
-Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1034 individual operations on GitLab.com Enterprise/Premium with Orbit, and the optional meta-tool catalog advertises 33 to 50 domain tools.
+Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1034 individual operations on GitLab.com Enterprise/Premium with Orbit, and the optional meta-tool catalog advertises 32 to 49 domain tools.
 
 Dynamic mode exposes that catalog through find and execute tools. The model discovers only what it needs for the current task.
 
@@ -223,7 +223,7 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 | Question                         | Meta-tools                           | Dynamic toolset                               |
 | -------------------------------- | ------------------------------------ | --------------------------------------------- |
-| What is visible in `tools/list`? | 33 to 50 domain tools                | 2 public discovery/execution tools            |
+| What is visible in `tools/list`? | 32 to 49 domain tools                | 2 public discovery/execution tools            |
 | How does the model choose?       | Pick a domain tool and action        | Find an action with schema, then execute it   |
 | Where are schemas found?         | Tool schema or `gitlab://tools/{id}` | `gitlab_find_action` or `gitlab://tools/{id}` |
 | Best current use                 | Explicit compatibility mode          | Default low-token action discovery            |
