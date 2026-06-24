@@ -15,3 +15,7 @@ allowBuilds:
   esbuild: true
   puppeteer: true
   sharp: true
+
+# Disable the supply-chain release-age gate so dependencies always resolve to
+# the latest published versions (pnpm 11.8 applies a non-zero default otherwise).
+minimumReleaseAge: 0

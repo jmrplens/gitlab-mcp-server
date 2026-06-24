@@ -2,7 +2,7 @@
   "name": "gitlab-mcp-server-docs",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.1.2",
+  "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": ">=22.22.0"
   },
@@ -24,19 +24,19 @@
   },
   "type": "module",
   "dependencies": {
-    "@astrojs/starlight": "^0.40.0",
-    "astro": "^6.4.8",
-    "astro-mermaid": "^2.0.2",
+    "@astrojs/starlight": "^0.41.0",
+    "astro": "^7.0.2",
+    "astro-mermaid": "^2.0.4",
     "mermaid": "^11.15.0",
-    "sharp": "^0.35.1"
+    "sharp": "^0.35.2"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
-    "@typescript-eslint/eslint-plugin": "^8.61.1",
-    "@typescript-eslint/parser": "^8.61.1",
+    "@typescript-eslint/eslint-plugin": "^8.62.0",
+    "@typescript-eslint/parser": "^8.62.0",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-astro": "^1.7.0",
+    "eslint-plugin-astro": "^2.0.0",
     "html-validate": "^11.5.3",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",

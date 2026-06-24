@@ -368,7 +368,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.41.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source

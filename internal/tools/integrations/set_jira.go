@@ -27,8 +27,18 @@ type SetJiraInput struct {
 	MergeRequestsEvents          *bool                `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
 	CommentOnEventEnabled        *bool                `json:"comment_on_event_enabled,omitempty" jsonschema:"Add comments on Jira issues for events"`
 	IssuesEnabled                *bool                `json:"issues_enabled,omitempty" jsonschema:"Enable Jira issues integration"`
-	ProjectKeys                  []string             `json:"project_keys,omitempty" jsonschema:"Jira project keys to restrict"`
+	ProjectKeys                  []string             `json:"project_keys,omitempty" jsonschema:"Jira project keys to restrict (used when issues_enabled is true)"`
 	UseInheritedSettings         *bool                `json:"use_inherited_settings,omitempty" jsonschema:"Use inherited settings from group"`
+	// Fields added in client-go v2.42.0.
+	VulnerabilitiesEnabled      *bool  `json:"vulnerabilities_enabled,omitempty" jsonschema:"Create Jira issues for vulnerabilities"`
+	VulnerabilitiesIssueType    *int64 `json:"vulnerabilities_issuetype,omitempty" jsonschema:"Jira issue type ID used for vulnerability tickets (when vulnerabilities_enabled is true)"`
+	ProjectKey                  string `json:"project_key,omitempty" jsonschema:"Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)"`
+	CustomizeJiraIssueEnabled   *bool  `json:"customize_jira_issue_enabled,omitempty" jsonschema:"Customize the Jira issue created for vulnerabilities"`
+	JiraCheckEnabled            *bool  `json:"jira_check_enabled,omitempty" jsonschema:"Require commits/MRs to reference a Jira issue"`
+	JiraExistsCheckEnabled      *bool  `json:"jira_exists_check_enabled,omitempty" jsonschema:"Require that the referenced Jira issue exists"`
+	JiraAssigneeCheckEnabled    *bool  `json:"jira_assignee_check_enabled,omitempty" jsonschema:"Require the referenced Jira issue to have an assignee"`
+	JiraStatusCheckEnabled      *bool  `json:"jira_status_check_enabled,omitempty" jsonschema:"Require the referenced Jira issue to be in an allowed status"`
+	JiraAllowedStatusesAsString string `json:"jira_allowed_statuses_as_string,omitempty" jsonschema:"Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled)"`
 }
 
 // SetJiraOutput is the output after configuring Jira.
@@ -39,23 +49,35 @@ type SetJiraOutput struct {
 
 // SetJira configures the Jira integration for a project.
 func SetJira(ctx context.Context, client *gitlabclient.Client, input SetJiraInput) (SetJiraOutput, error) {
+	// Pointer fields are assigned directly: a nil input pointer leaves the
+	// option unset, so a per-field nil check would be redundant.
 	opts := &gl.SetJiraServiceOptions{
-		URL: new(input.URL),
+		URL:                          new(input.URL),
+		Active:                       input.Active,
+		JiraAuthType:                 input.JiraAuthType,
+		JiraIssueTransitionAutomatic: input.JiraIssueTransitionAutomatic,
+		CommitEvents:                 input.CommitEvents,
+		MergeRequestsEvents:          input.MergeRequestsEvents,
+		CommentOnEventEnabled:        input.CommentOnEventEnabled,
+		IssuesEnabled:                input.IssuesEnabled,
+		UseInheritedSettings:         input.UseInheritedSettings,
+		VulnerabilitiesEnabled:       input.VulnerabilitiesEnabled,
+		VulnerabilitiesIssueType:     input.VulnerabilitiesIssueType,
+		CustomizeJiraIssueEnabled:    input.CustomizeJiraIssueEnabled,
+		JiraCheckEnabled:             input.JiraCheckEnabled,
+		JiraExistsCheckEnabled:       input.JiraExistsCheckEnabled,
+		JiraAssigneeCheckEnabled:     input.JiraAssigneeCheckEnabled,
+		JiraStatusCheckEnabled:       input.JiraStatusCheckEnabled,
 	}
+	// String/slice fields only set when non-empty so blank values are not sent.
 	if input.Username != "" {
 		opts.Username = new(input.Username)
 	}
 	if input.Password != "" {
 		opts.Password = new(input.Password)
 	}
-	if input.Active != nil {
-		opts.Active = input.Active
-	}
 	if input.APIURL != "" {
 		opts.APIURL = new(input.APIURL)
-	}
-	if input.JiraAuthType != nil {
-		opts.JiraAuthType = input.JiraAuthType
 	}
 	if input.JiraIssuePrefix != "" {
 		opts.JiraIssuePrefix = new(input.JiraIssuePrefix)
@@ -63,29 +85,17 @@ func SetJira(ctx context.Context, client *gitlabclient.Client, input SetJiraInpu
 	if input.JiraIssueRegex != "" {
 		opts.JiraIssueRegex = new(input.JiraIssueRegex)
 	}
-	if input.JiraIssueTransitionAutomatic != nil {
-		opts.JiraIssueTransitionAutomatic = input.JiraIssueTransitionAutomatic
-	}
 	if input.JiraIssueTransitionID != "" {
 		opts.JiraIssueTransitionID = new(input.JiraIssueTransitionID)
-	}
-	if input.CommitEvents != nil {
-		opts.CommitEvents = input.CommitEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.CommentOnEventEnabled != nil {
-		opts.CommentOnEventEnabled = input.CommentOnEventEnabled
-	}
-	if input.IssuesEnabled != nil {
-		opts.IssuesEnabled = input.IssuesEnabled
 	}
 	if len(input.ProjectKeys) > 0 {
 		opts.ProjectKeys = new(input.ProjectKeys)
 	}
-	if input.UseInheritedSettings != nil {
-		opts.UseInheritedSettings = input.UseInheritedSettings
+	if input.ProjectKey != "" {
+		opts.ProjectKey = new(input.ProjectKey)
+	}
+	if input.JiraAllowedStatusesAsString != "" {
+		opts.JiraAllowedStatusesAsString = new(input.JiraAllowedStatusesAsString)
 	}
 
 	svc, _, err := client.GL().Services.SetJiraService(string(input.ProjectID), opts, gl.WithContext(ctx))

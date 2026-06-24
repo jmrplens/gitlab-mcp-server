@@ -110033,8 +110033,26 @@
             "boolean"
           ]
         },
+        "customize_jira_issue_enabled": {
+          "description": "Customize the Jira issue created for vulnerabilities",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "issues_enabled": {
           "description": "Enable Jira issues integration",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "jira_allowed_statuses_as_string": {
+          "description": "Comma-separated list of allowed Jira statuses (used with jira_status_check_enabled)",
+          "type": "string"
+        },
+        "jira_assignee_check_enabled": {
+          "description": "Require the referenced Jira issue to have an assignee",
           "type": [
             "null",
             "boolean"
@@ -110045,6 +110063,20 @@
           "type": [
             "null",
             "integer"
+          ]
+        },
+        "jira_check_enabled": {
+          "description": "Require commits/MRs to reference a Jira issue",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "jira_exists_check_enabled": {
+          "description": "Require that the referenced Jira issue exists",
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "jira_issue_prefix": {
@@ -110066,6 +110098,13 @@
           "description": "Jira transition ID",
           "type": "string"
         },
+        "jira_status_check_enabled": {
+          "description": "Require the referenced Jira issue to be in an allowed status",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "merge_requests_events": {
           "description": "Trigger on merge request events",
           "type": [
@@ -110081,8 +110120,12 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "project_key": {
+          "description": "Jira project key where vulnerability tickets are created (when vulnerabilities_enabled is true)",
+          "type": "string"
+        },
         "project_keys": {
-          "description": "Jira project keys to restrict",
+          "description": "Jira project keys to restrict (used when issues_enabled is true)",
           "items": {
             "type": "string"
           },
@@ -110105,6 +110148,20 @@
         "username": {
           "description": "Jira username",
           "type": "string"
+        },
+        "vulnerabilities_enabled": {
+          "description": "Create Jira issues for vulnerabilities",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "vulnerabilities_issuetype": {
+          "description": "Jira issue type ID used for vulnerability tickets (when vulnerabilities_enabled is true)",
+          "type": [
+            "null",
+            "integer"
+          ]
         }
       },
       "required": [

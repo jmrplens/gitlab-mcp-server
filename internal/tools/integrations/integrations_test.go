@@ -494,6 +494,14 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	issuesEnabled := true
 	useInherited := false
 	authType := int64(1)
+	// v2.42.0 fields.
+	vulnEnabled := true
+	vulnIssueType := int64(10001)
+	customizeJira := true
+	jiraCheck := true
+	jiraExists := true
+	jiraAssignee := true
+	jiraStatus := true
 	out, err := SetJira(t.Context(), client, SetJiraInput{
 		ProjectID:                    "1",
 		URL:                          "https://jira.example.com",
@@ -512,6 +520,15 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 		IssuesEnabled:                &issuesEnabled,
 		ProjectKeys:                  []string{"PROJ", "DEV"},
 		UseInheritedSettings:         &useInherited,
+		VulnerabilitiesEnabled:       &vulnEnabled,
+		VulnerabilitiesIssueType:     &vulnIssueType,
+		ProjectKey:                   "SEC",
+		CustomizeJiraIssueEnabled:    &customizeJira,
+		JiraCheckEnabled:             &jiraCheck,
+		JiraExistsCheckEnabled:       &jiraExists,
+		JiraAssigneeCheckEnabled:     &jiraAssignee,
+		JiraStatusCheckEnabled:       &jiraStatus,
+		JiraAllowedStatusesAsString:  "In Progress,Done",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -519,7 +536,12 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 	if out.Integration.Slug != "jira" {
 		t.Errorf("expected slug 'jira', got %q", out.Integration.Slug)
 	}
-	for _, want := range []string{"api_url", "jira_issue_prefix", "jira_issue_regex", "project_keys", "comment_on_event_enabled", "jira_issue_transition_automatic"} {
+	for _, want := range []string{
+		"api_url", "jira_issue_prefix", "jira_issue_regex", "project_keys", "comment_on_event_enabled", "jira_issue_transition_automatic",
+		"vulnerabilities_enabled", "vulnerabilities_issuetype", "project_key", "customize_jira_issue_enabled",
+		"jira_check_enabled", "jira_exists_check_enabled", "jira_assignee_check_enabled", "jira_status_check_enabled",
+		"jira_allowed_statuses_as_string",
+	} {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing field %q", want)
 		}

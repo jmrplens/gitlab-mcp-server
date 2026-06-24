@@ -60,7 +60,7 @@ Delete (disable) a project integration by slug. Supports the same slugs as get, 
 
 ### `gitlab_set_jira_integration`
 
-Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.
+Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers, plus issue-key checks (require/exist/assignee/status with allowed statuses) and vulnerability ticket creation (project key, issue type, customization).
 
 | Annotation | **Create** |
 | ---------- | ---------- |
