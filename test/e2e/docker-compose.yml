@@ -4,6 +4,7 @@ services:
     hostname: gitlab-e2e
     ports:
       - "8929:80"
+      - "5050:5050"
     environment:
       GITLAB_ACTIVATION_CODE: ${GITLAB_ACTIVATION_CODE:-}
       GITLAB_OMNIBUS_CONFIG: |
@@ -27,7 +28,16 @@ services:
         # Disable unnecessary services
         gitlab_kas['enable'] = false
         sentinel['enable'] = false
-        registry['enable'] = false
+        # Container registry (a CE/Free feature) enabled over plain HTTP on a
+        # dedicated port so the registry tag protection rules API
+        # (gitlab_registry_tag_protection_*) can be exercised end-to-end instead
+        # of skipped. The protection-rules API is DB-backed and does not require
+        # pushing images, so no TLS or client access to :5050 is needed.
+        registry_external_url 'http://localhost:5050'
+        registry['enable'] = true
+        gitlab_rails['registry_enabled'] = true
+        registry_nginx['listen_port'] = 5050
+        registry_nginx['listen_https'] = false
     volumes:
       - gitlab-config:/etc/gitlab
       - gitlab-logs:/var/log/gitlab

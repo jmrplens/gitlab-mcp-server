@@ -70,12 +70,12 @@ func TestMeta_PackagesRegistry(t *testing.T) {
 	})
 
 	// Container registry TAG protection rules (separate REST surface from the
-	// repository-path rules above). The feature requires the container registry
-	// to be enabled and GitLab 17.8+; when it is unavailable the API returns a
-	// 404 (older GitLab) or a 422 "GitLab container registry API not supported"
-	// (registry disabled — the case on the Docker CE fixture). Both mean the
-	// feature is unavailable, so list/create skip gracefully; when available the
-	// full CRUD lifecycle is asserted.
+	// repository-path rules above). The Docker CE fixture enables the container
+	// registry (see test/e2e/docker-compose.yml), so this CRUD runs for real —
+	// pass or fail — in `make test-e2e-docker`. The graceful skip below is only a
+	// fallback for self-hosted instances that have the registry disabled (422
+	// "container registry API not supported") or predate the immutable-tags API
+	// (404, GitLab < 17.8).
 	t.Run("RegistryTagRuleCRUD", func(t *testing.T) {
 		listOut, err := callToolOn[containerregistry.TagProtectionRuleListOutput](ctx, sess.meta, "gitlab_package", map[string]any{
 			"action": "registry_tag_rule_list",
