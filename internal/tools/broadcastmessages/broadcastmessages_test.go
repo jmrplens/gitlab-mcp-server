@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -75,6 +76,49 @@ func TestList_Error(t *testing.T) {
 	_, err := List(t.Context(), client, ListInput{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestList_PaginationAndOrdering verifies that List forwards offset pagination,
+// keyset pagination, and order_by/sort parameters to the GitLab API as query
+// string values. It exercises the applyOrderSort and ApplyListOptions wiring.
+func TestList_PaginationAndOrdering(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathBroadcastMessages && r.Method == http.MethodGet {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[`+messageJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	input := ListInput{OrderBy: "created_at", Sort: "desc"}
+	input.Page = 2
+	input.PerPage = 50
+	input.Pagination = "keyset"
+	input.PageToken = "100"
+
+	_, err := List(t.Context(), client, input)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=100"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("expected query to contain %q, got %q", want, gotQuery)
+		}
+	}
+}
+
+// TestApplyOrderSort_NilAndEmpty verifies that applyOrderSort is a no-op for a
+// nil options pointer and leaves opts untouched when order_by/sort are empty.
+func TestApplyOrderSort_NilAndEmpty(t *testing.T) {
+	applyOrderSort(nil, "id", "asc") // must not panic
+
+	opts := &gl.ListOptions{}
+	applyOrderSort(opts, "", "")
+	if opts.OrderBy != "" || opts.Sort != "" {
+		t.Errorf("expected no mutation, got order_by=%q sort=%q", opts.OrderBy, opts.Sort)
 	}
 }
 
