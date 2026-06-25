@@ -248,7 +248,50 @@ func TestList_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	client := testutil.NewTestClient(t, handler)
-	out, err := List(t.Context(), client, ListInput{Page: 2, PerPage: 10})
+	out, err := List(t.Context(), client, ListInput{
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Applications) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(out.Applications))
+	}
+}
+
+// TestList_WithKeysetAndSort verifies that List forwards keyset pagination
+// parameters (pagination, page_token) and order_by/sort to the GitLab API.
+// The mock GitLab API at /api/v4/applications (GET) asserts each query value
+// and responds with HTTP OK.
+func TestList_WithKeysetAndSort(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
+			q := r.URL.Query()
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok-9" {
+				t.Errorf("expected page_token=tok-9, got %s", q.Get("page_token"))
+			}
+			if q.Get("order_by") != "id" {
+				t.Errorf("expected order_by=id, got %s", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("expected sort=desc, got %s", q.Get("sort"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": 7, "application_id": "app-7", "application_name": "Keyset", "secret": "s", "callback_url": "http://cb", "confidential": false, "scopes": ["api"]}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-9"},
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

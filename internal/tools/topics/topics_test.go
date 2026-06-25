@@ -6,6 +6,7 @@ package topics
 import (
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -86,6 +87,45 @@ func TestList_WithSearch(t *testing.T) {
 	}
 	if len(out.Topics) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(out.Topics))
+	}
+}
+
+// TestList_KeysetPagination verifies List forwards keyset, page_token,
+// order_by, and sort query parameters to the GitLab API.
+func TestList_KeysetPagination(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathTopics && r.Method == http.MethodGet {
+			q = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[`+topicJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		OrderBy:               "name",
+		Sort:                  "desc",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Topics) != 1 {
+		t.Fatalf("expected 1 topic, got %d", len(out.Topics))
+	}
+	checks := map[string]string{
+		"pagination": "keyset",
+		"page_token": "tok123",
+		"order_by":   "name",
+		"sort":       "desc",
+		"per_page":   "50",
+	}
+	for key, want := range checks {
+		if got := q.Get(key); got != want {
+			t.Errorf("query %q = %q, want %q", key, got, want)
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -44,6 +45,46 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.FreezePeriods[0].FreezeStart != testCronFreezeStart {
 		t.Errorf("freeze_start = %q, want %q", out.FreezePeriods[0].FreezeStart, testCronFreezeStart)
+	}
+}
+
+// TestList_KeysetAndOrdering verifies that List propagates order_by, sort,
+// pagination, and page_token query parameters to the GitLab API.
+// The mock GitLab API at /api/v4/projects/1/freeze_periods (GET) inspects the
+// query string and responds with HTTP OK.
+// It asserts each supplied parameter appears in the outgoing request.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" {
+			t.Errorf("order_by = %q, want id", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort = %q, want desc", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "42" {
+			t.Errorf("page_token = %q, want 42", q.Get("page_token"))
+		}
+		if q.Get("per_page") != "50" {
+			t.Errorf("per_page = %q, want 50", q.Get("per_page"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", TotalPages: "1", Total: "0", PerPage: "50"})
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := List(t.Context(), client, ListInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
