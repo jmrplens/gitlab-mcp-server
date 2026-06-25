@@ -1125,7 +1125,7 @@
   },
   {
     "name": "gitlab_add_epic_discussion_note",
-    "description": "Add a reply note to an existing epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with created note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_update_epic_discussion_note",
+    "description": "Add a reply note to an existing epic discussion thread. Returns: the created note (id, author username, body, timestamps). See also: gitlab_create_epic_discussion, gitlab_get_epic_discussion, gitlab_update_epic_discussion_note.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12025,7 +12025,7 @@
   },
   {
     "name": "gitlab_create_epic_discussion",
-    "description": "Create a new discussion thread on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with created discussion thread including ID and initial note.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+    "description": "Create a new discussion thread on a group epic with an initial note. Returns: the created thread (discussion id) with its first note. See also: gitlab_add_epic_discussion_note, gitlab_list_epic_discussions, gitlab_epic_note_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16255,7 +16255,7 @@
   },
   {
     "name": "gitlab_delete_epic_discussion_note",
-    "description": "Delete a note from an epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+    "description": "Delete a note from an epic discussion thread (destructive). Returns: a deletion confirmation message. See also: gitlab_update_epic_discussion_note, gitlab_get_epic_discussion, gitlab_list_epic_discussions.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26079,7 +26079,7 @@
   },
   {
     "name": "gitlab_epic_issue_assign",
-    "description": "Assign an existing issue to a GitLab group epic via the Work Items GraphQL API. The issue is identified by its project path and IID.\n\nReturns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.",
+    "description": "Assign an existing project issue as a child of a group epic. Returns: the resolved epic and issue work item GIDs confirming the link. See also: gitlab_epic_issue_list, gitlab_epic_issue_remove, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26140,7 +26140,7 @@
   },
   {
     "name": "gitlab_epic_issue_list",
-    "description": "List all child issues of a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.\n\nReturns: JSON with issues array and pagination metadata. See also: gitlab_epic_get.",
+    "description": "List the issues linked to a group epic via the Work Items hierarchy. Returns: child issues with IID, title, state, author, labels, web URL, timestamps, and cursor pagination metadata. See also: gitlab_epic_issue_assign, gitlab_epic_issue_remove, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26282,7 +26282,7 @@
   },
   {
     "name": "gitlab_epic_issue_remove",
-    "description": "Remove an issue from a GitLab group epic via the Work Items GraphQL API. Clears the child's parent reference.\n\nReturns: JSON with the epic and child work item GIDs. See also: gitlab_epic_issue_list.",
+    "description": "Unlink a child issue from a group epic (destructive; requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26349,7 +26349,7 @@
   },
   {
     "name": "gitlab_epic_issue_update",
-    "description": "Reorder an issue within a GitLab group epic via the Work Items GraphQL API. Moves the issue before or after a reference issue.\n\nReturns: JSON with the updated issues list. See also: gitlab_epic_issue_list.",
+    "description": "Reorder an issue within a group epic by moving it before or after another linked issue. Returns: the epic's child issues in their updated order. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_issue_remove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26851,7 +26851,7 @@
   },
   {
     "name": "gitlab_epic_note_create",
-    "description": "Add a comment (note) to a GitLab group epic via the Work Items GraphQL API. Supports Markdown formatting.\n\nReturns: JSON with created note including ID, body, author, and timestamps. See also: gitlab_epic_get.",
+    "description": "Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_get_epic, gitlab_create_epic_discussion.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26879,7 +26879,32 @@
       "additionalProperties": false,
       "properties": {
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -26909,7 +26934,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "system"
       ],
@@ -26922,7 +26946,7 @@
   },
   {
     "name": "gitlab_epic_note_delete",
-    "description": "Permanently delete a comment from a GitLab group epic via the Work Items GraphQL API. Only the note author or a group maintainer can delete a note.\n\nReturns: JSON with deletion confirmation. See also: gitlab_epic_note_get.",
+    "description": "Delete an epic note permanently. Returns: a success confirmation naming the note, epic, and group. See also: gitlab_epic_note_get, gitlab_epic_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26984,7 +27008,7 @@
   },
   {
     "name": "gitlab_epic_note_get",
-    "description": "Get a single comment (note) from a GitLab group epic by its note ID via the Work Items GraphQL API, including author, timestamps, body, and system flag.\n\nReturns: JSON with note details including ID, body, author, and timestamps. See also: gitlab_epic_note_list.",
+    "description": "Get a single epic note by its ID. Returns: the note with author, body, timestamps, and system flag. See also: gitlab_epic_note_list, gitlab_epic_note_update, gitlab_epic_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27012,7 +27036,32 @@
       "additionalProperties": false,
       "properties": {
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -27042,7 +27091,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "system"
       ],
@@ -27057,7 +27105,7 @@
   },
   {
     "name": "gitlab_epic_note_list",
-    "description": "List all comments (notes) on a GitLab group epic via the Work Items GraphQL API. Supports cursor-based pagination.\n\nReturns: JSON with notes array including body, author, timestamps, and system flags. See also: gitlab_epic_get.",
+    "description": "List all notes (comments) on an epic. Returns: notes with author, body, system flag, timestamps, and keyset pagination metadata. See also: gitlab_epic_note_get, gitlab_epic_note_create, gitlab_get_epic_discussion.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27115,7 +27163,32 @@
             "additionalProperties": false,
             "properties": {
               "author": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
@@ -27145,7 +27218,6 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
               "system"
             ],
@@ -27194,7 +27266,7 @@
   },
   {
     "name": "gitlab_epic_note_update",
-    "description": "Edit the body text of an existing comment on a GitLab group epic via the Work Items GraphQL API. Only the note author or a group maintainer can update a note.\n\nReturns: JSON with updated note including ID, body, author, and timestamps. See also: gitlab_epic_note_get.",
+    "description": "Update an epic note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27227,7 +27299,32 @@
       "additionalProperties": false,
       "properties": {
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
@@ -27257,7 +27354,6 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
         "system"
       ],
@@ -31664,7 +31760,7 @@
   },
   {
     "name": "gitlab_get_epic_discussion",
-    "description": "Get a single discussion thread on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion thread details including all notes.\n\nSee also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note",
+    "description": "Get a single epic discussion thread by its discussion id. Returns: the thread with every note (id, author username, body, system flag, timestamps). See also: gitlab_list_epic_discussions, gitlab_add_epic_discussion_note, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -59867,7 +59963,7 @@
   },
   {
     "name": "gitlab_group_wiki_create",
-    "description": "Create a new wiki page in a GitLab group.\n\nReturns: created wiki page with title, slug, format, and content. See also: gitlab_group_wiki_list, gitlab_group_wiki_edit.",
+    "description": "Create a new group wiki page. Returns: the created page with title, slug, format, content, and encoding. See also: gitlab_group_wiki_get, gitlab_group_wiki_edit, gitlab_group_wiki_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -59937,7 +60033,7 @@
   },
   {
     "name": "gitlab_group_wiki_delete",
-    "description": "Delete a wiki page from a GitLab group.\n\nReturns: confirmation of deletion. See also: gitlab_group_wiki_list, gitlab_group_wiki_get.",
+    "description": "Delete a group wiki page permanently. Returns: a success confirmation for the removed page. See also: gitlab_group_wiki_get, gitlab_group_wiki_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -59994,7 +60090,7 @@
   },
   {
     "name": "gitlab_group_wiki_edit",
-    "description": "Edit an existing wiki page in a GitLab group.\n\nReturns: updated wiki page with title, slug, format, and content. See also: gitlab_group_wiki_get, gitlab_group_wiki_create.",
+    "description": "Update an existing group wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. See also: gitlab_group_wiki_get, gitlab_group_wiki_delete, gitlab_group_wiki_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -60068,7 +60164,7 @@
   },
   {
     "name": "gitlab_group_wiki_get",
-    "description": "Get a single wiki page from a GitLab group by slug.\n\nReturns: wiki page with title, slug, format, content, and encoding. See also: gitlab_group_wiki_list, gitlab_group_wiki_edit.",
+    "description": "Get a single group wiki page by slug. Returns: the page title, slug, format, content, and encoding. See also: gitlab_group_wiki_list, gitlab_group_wiki_edit, gitlab_group_wiki_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -60139,7 +60235,7 @@
   },
   {
     "name": "gitlab_group_wiki_list",
-    "description": "List all wiki pages in a GitLab group. Optionally include page content.\n\nReturns: list of wiki pages with title, slug, format, and encoding. See also: gitlab_group_wiki_get, gitlab_wiki_list.",
+    "description": "List a group's wiki pages (GitLab Premium). Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. See also: gitlab_group_wiki_get, gitlab_group_wiki_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91315,7 +91411,7 @@
   },
   {
     "name": "gitlab_list_epic_discussions",
-    "description": "List discussion threads on a group epic via the Work Items GraphQL API.\n\nReturns: JSON with discussion threads including notes and authors.\n\nSee also: gitlab_create_epic_discussion, gitlab_group_list",
+    "description": "List discussion threads on a group epic with cursor-based keyset pagination. Returns: discussion threads with their notes (id, author username, body, system flag, timestamps) and pagination metadata. See also: gitlab_get_epic_discussion, gitlab_create_epic_discussion, gitlab_epic_get, gitlab_epic_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164695,7 +164791,7 @@
   },
   {
     "name": "gitlab_project_upload",
-    "description": "Upload a file to a GitLab project's markdown uploads area. Provide either file_path (absolute path to a local file) or content_base64 (base64-encoded content), not both. Returns a Markdown embed string (e.g. '![alt](/uploads/hash/filename)') that can be inserted into MR descriptions, note bodies, or discussion bodies.\n\nReturns: JSON with the upload URL and Markdown embed string.\n\nSee also: gitlab_project_upload_list, gitlab_project_upload_delete",
+    "description": "Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -165707,7 +165803,7 @@
   },
   {
     "name": "gitlab_project_upload_delete",
-    "description": "Delete a file upload (markdown attachment) from a GitLab project by upload ID. This action cannot be undone.\n\nReturns: confirmation message.\n\nSee also: gitlab_project_upload_list",
+    "description": "Delete a project Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_project_upload_list, gitlab_project_upload, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -165764,12 +165860,36 @@
   },
   {
     "name": "gitlab_project_upload_list",
-    "description": "List all file uploads (markdown attachments) for a GitLab project. Returns upload ID, filename, size, and creation date for each upload.\n\nReturns: JSON array of uploads with pagination.\n\nSee also: gitlab_project_upload",
+    "description": "List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
           "type": "string"
         }
       },
@@ -165790,6 +165910,42 @@
             "array"
           ]
         },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
         "uploads": {
           "items": {
             "additionalProperties": false,
@@ -165807,7 +165963,39 @@
                 "type": "integer"
               },
               "uploaded_by": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
@@ -165824,7 +166012,8 @@
         }
       },
       "required": [
-        "uploads"
+        "uploads",
+        "pagination"
       ],
       "type": "object"
     },
@@ -192581,7 +192770,7 @@
   },
   {
     "name": "gitlab_update_epic_discussion_note",
-    "description": "Update an existing note in an epic discussion thread via the Work Items GraphQL API.\n\nReturns: JSON with updated note including ID, body, and author.\n\nSee also: gitlab_get_epic_discussion, gitlab_delete_epic_discussion_note",
+    "description": "Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps). See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
