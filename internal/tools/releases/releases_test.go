@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -188,17 +189,17 @@ func TestReleaseGet_SuccessEnrichedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	if out.Author != "releaser" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "releaser")
+	if out.Author == nil || out.Author.Username != "releaser" {
+		t.Errorf("out.Author = %+v, want username %q", out.Author, "releaser")
 	}
-	if out.CommitSHA != "abc123def456" {
-		t.Errorf("out.CommitSHA = %q, want %q", out.CommitSHA, "abc123def456")
+	if out.Commit == nil || out.Commit.ID != "abc123def456" {
+		t.Errorf("out.Commit = %+v, want id %q", out.Commit, "abc123def456")
 	}
 	if !out.UpcomingRelease {
 		t.Error("out.UpcomingRelease = false, want true")
 	}
-	if len(out.Milestones) != 2 || out.Milestones[0] != "v1.0" || out.Milestones[1] != "v1.1" {
-		t.Errorf("out.Milestones = %v, want [v1.0 v1.1]", out.Milestones)
+	if len(out.Milestones) != 2 || out.Milestones[0].Title != "v1.0" || out.Milestones[1].Title != "v1.1" {
+		t.Errorf("out.Milestones = %+v, want titles [v1.0 v1.1]", out.Milestones)
 	}
 }
 
@@ -282,23 +283,29 @@ func TestReleaseGet_SuccessAssetsAndEvidences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	if len(out.AssetsSources) != 1 {
-		t.Fatalf("len(out.AssetsSources) = %d, want 1", len(out.AssetsSources))
+	if out.Assets == nil {
+		t.Fatal("out.Assets = nil, want non-nil")
 	}
-	if out.AssetsSources[0].Format != "zip" {
-		t.Errorf("out.AssetsSources[0].Format = %q, want %q", out.AssetsSources[0].Format, "zip")
+	if out.Assets.Count != 2 {
+		t.Errorf("out.Assets.Count = %d, want 2", out.Assets.Count)
 	}
-	if len(out.AssetsLinks) != 1 {
-		t.Fatalf("len(out.AssetsLinks) = %d, want 1", len(out.AssetsLinks))
+	if len(out.Assets.Sources) != 1 {
+		t.Fatalf("len(out.Assets.Sources) = %d, want 1", len(out.Assets.Sources))
 	}
-	if out.AssetsLinks[0].Name != "binary" {
-		t.Errorf("out.AssetsLinks[0].Name = %q, want %q", out.AssetsLinks[0].Name, "binary")
+	if out.Assets.Sources[0].Format != "zip" {
+		t.Errorf("out.Assets.Sources[0].Format = %q, want %q", out.Assets.Sources[0].Format, "zip")
 	}
-	if !out.AssetsLinks[0].External {
-		t.Error("out.AssetsLinks[0].External = false, want true")
+	if len(out.Assets.Links) != 1 {
+		t.Fatalf("len(out.Assets.Links) = %d, want 1", len(out.Assets.Links))
 	}
-	if out.AssetsLinks[0].LinkType != "other" {
-		t.Errorf("out.AssetsLinks[0].LinkType = %q, want %q", out.AssetsLinks[0].LinkType, "other")
+	if out.Assets.Links[0].Name != "binary" {
+		t.Errorf("out.Assets.Links[0].Name = %q, want %q", out.Assets.Links[0].Name, "binary")
+	}
+	if !out.Assets.Links[0].External {
+		t.Error("out.Assets.Links[0].External = false, want true")
+	}
+	if out.Assets.Links[0].LinkType != "other" {
+		t.Errorf("out.Assets.Links[0].LinkType = %q, want %q", out.Assets.Links[0].LinkType, "other")
 	}
 	if len(out.Evidences) != 1 {
 		t.Fatalf("len(out.Evidences) = %d, want 1", len(out.Evidences))
@@ -647,12 +654,12 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		TagName:         "v2.0.0",
 		Name:            "Release v2.0.0",
 		Description:     "## Changes\n- Feature X",
-		Author:          "admin",
+		Author:          &AuthorOutput{Username: "admin"},
 		CreatedAt:       "2026-03-02T10:00:00Z",
 		ReleasedAt:      "2026-03-02T10:00:00Z",
-		CommitSHA:       "abc123",
+		Commit:          &CommitOutput{ID: "abc123"},
 		UpcomingRelease: true,
-		Milestones:      []string{"m1", "m2"},
+		Milestones:      []*MilestoneOutput{{Title: "m1"}, {Title: "m2"}},
 	})
 	for _, want := range []string{
 		"## Release: Release v2.0.0",
@@ -729,8 +736,8 @@ func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
-			{TagName: "v2.0.0", Name: "Major", Author: "admin", ReleasedAt: "2026-06-01T10:00:00Z"},
-			{TagName: "v1.0.0", Name: "First", Author: "dev", CreatedAt: "2026-01-01T10:00:00Z"},
+			{TagName: "v2.0.0", Name: "Major", Author: &AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z"},
+			{TagName: "v1.0.0", Name: "First", Author: &AuthorOutput{Username: "dev"}, CreatedAt: "2026-01-01T10:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -795,11 +802,19 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoAssetsSources verifies ToOutput when no assets sources.
+// TestToOutput_NoAssetsSources verifies ToOutput leaves the nested assets
+// sources slice nil (with a present assets object) when the release carries no
+// asset sources.
 func TestToOutput_NoAssetsSources(t *testing.T) {
 	out := ToOutput(&gl.Release{})
-	if out.AssetsSources != nil {
-		t.Errorf("out.AssetsSources should be nil, got %v", out.AssetsSources)
+	if out.Assets == nil {
+		t.Fatal("out.Assets = nil, want non-nil mirror of gl.ReleaseAssets")
+	}
+	if out.Assets.Sources != nil {
+		t.Errorf("out.Assets.Sources should be nil, got %v", out.Assets.Sources)
+	}
+	if out.Assets.Links != nil {
+		t.Errorf("out.Assets.Links should be nil, got %v", out.Assets.Links)
 	}
 }
 
@@ -819,16 +834,18 @@ func TestToOutput_NoMilestones(t *testing.T) {
 	}
 }
 
-// TestToOutput_EmptyCommitID verifies ToOutput when empty commit ID.
+// TestToOutput_EmptyCommitID verifies ToOutput leaves Commit nil when the
+// release carries an empty (zero-value) commit.
 func TestToOutput_EmptyCommitID(t *testing.T) {
 	out := ToOutput(&gl.Release{})
-	if out.CommitSHA != "" {
-		t.Errorf("out.CommitSHA = %q, want empty", out.CommitSHA)
+	if out.Commit != nil {
+		t.Errorf("out.Commit = %+v, want nil", out.Commit)
 	}
 }
 
-// TestToOutput_WebURL_DerivedFromEditURL verifies that ToOutput derives
-// WebURL by stripping the /edit suffix from Links.EditURL.
+// TestToOutput_WebURL_DerivedFromEditURL verifies that the detail Markdown
+// derives the release page URL by stripping the /edit suffix from
+// _links.edit_url.
 func TestToOutput_WebURL_DerivedFromEditURL(t *testing.T) {
 	r := &gl.Release{
 		Links: gl.ReleaseLinks{
@@ -836,29 +853,35 @@ func TestToOutput_WebURL_DerivedFromEditURL(t *testing.T) {
 		},
 	}
 	out := ToOutput(r)
+	if out.Links == nil || out.Links.EditURL == "" {
+		t.Fatalf("out.Links = %+v, want populated _links", out.Links)
+	}
 	want := "https://gitlab.example.com/group/project/-/releases/v1.0.0"
-	if out.WebURL != want {
-		t.Errorf("WebURL = %q, want %q", out.WebURL, want)
+	if got := releaseWebURL(out); got != want {
+		t.Errorf("releaseWebURL = %q, want %q", got, want)
 	}
 }
 
-// TestToOutput_WebURL_EmptyEditURL verifies that WebURL is empty when
-// Links.EditURL is not provided.
+// TestToOutput_WebURL_EmptyEditURL verifies that the derived web URL is empty
+// and _links is nil when no link fields are provided.
 func TestToOutput_WebURL_EmptyEditURL(t *testing.T) {
 	out := ToOutput(&gl.Release{})
-	if out.WebURL != "" {
-		t.Errorf("WebURL = %q, want empty", out.WebURL)
+	if out.Links != nil {
+		t.Errorf("out.Links = %+v, want nil", out.Links)
+	}
+	if got := releaseWebURL(out); got != "" {
+		t.Errorf("releaseWebURL = %q, want empty", got)
 	}
 }
 
 // TestFormatMarkdown_WithWebURL verifies that the detail Markdown includes
-// a clickable URL link when WebURL is populated.
+// a clickable URL link when a web URL is derivable from _links.edit_url.
 func TestFormatMarkdown_WithWebURL(t *testing.T) {
 	md := FormatMarkdown(Output{
 		TagName:   "v1.0.0",
 		Name:      "Release v1.0.0",
 		CreatedAt: "2026-03-01T10:00:00Z",
-		WebURL:    "https://gitlab.example.com/-/releases/v1.0.0",
+		Links:     &LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v1.0.0/edit"},
 	})
 	want := "[https://gitlab.example.com/-/releases/v1.0.0](https://gitlab.example.com/-/releases/v1.0.0)"
 	if !strings.Contains(md, want) {
@@ -904,7 +927,7 @@ func TestFormatMarkdown_ContainsHints(t *testing.T) {
 func TestFormatListMarkdown_ClickableTagLink(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
-			{TagName: "v2.0.0", Name: "Major", Author: "admin", ReleasedAt: "2026-06-01T10:00:00Z", WebURL: "https://gitlab.example.com/-/releases/v2.0.0"},
+			{TagName: "v2.0.0", Name: "Major", Author: &AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z", Links: &LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v2.0.0/edit"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1231,4 +1254,208 @@ func releaseSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]to
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit coverage: assets input wiring, list options, nested converters
+// ---------------------------------------------------------------------------.
+
+// TestReleaseCreate_AssetsLinks verifies that Create marshals the nested
+// assets.links input (name, url, filepath, direct_asset_path, link_type) into
+// the request body sent to the GitLab API.
+func TestReleaseCreate_AssetsLinks(t *testing.T) {
+	var capturedBody []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjectReleases {
+			capturedBody, _ = io.ReadAll(r.Body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"tag_name":"v3.0.0","name":"v3","description":"","created_at":"2026-06-01T10:00:00Z","released_at":"2026-06-01T10:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		TagName:   "v3.0.0",
+		Assets: &AssetsInput{Links: []AssetLinkInput{{
+			Name:            "binary",
+			URL:             "https://example.com/bin",
+			FilePath:        "/old/path",
+			DirectAssetPath: "/binaries/app.zip",
+			LinkType:        "package",
+		}}},
+	}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+
+	var payload struct {
+		Assets struct {
+			Links []struct {
+				Name            string `json:"name"`
+				URL             string `json:"url"`
+				FilePath        string `json:"filepath"`
+				DirectAssetPath string `json:"direct_asset_path"`
+				LinkType        string `json:"link_type"`
+			} `json:"links"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal(capturedBody, &payload); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(capturedBody))
+	}
+	if len(payload.Assets.Links) != 1 {
+		t.Fatalf("assets.links len = %d, want 1; body=%q", len(payload.Assets.Links), string(capturedBody))
+	}
+	got := payload.Assets.Links[0]
+	if got.Name != "binary" || got.URL != "https://example.com/bin" ||
+		got.FilePath != "/old/path" || got.DirectAssetPath != "/binaries/app.zip" || got.LinkType != "package" {
+		t.Errorf("assets.links[0] = %+v, want all fields populated", got)
+	}
+}
+
+// TestReleaseCreate_EmptyAssetsLinks verifies that Create omits the assets
+// object when an assets value with no links is provided.
+func TestReleaseCreate_EmptyAssetsLinks(t *testing.T) {
+	var capturedBody []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjectReleases {
+			capturedBody, _ = io.ReadAll(r.Body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"tag_name":"v3.1.0","name":"v3.1","description":"","created_at":"2026-06-01T10:00:00Z","released_at":"2026-06-01T10:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		TagName:   "v3.1.0",
+		Assets:    &AssetsInput{},
+	}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if strings.Contains(string(capturedBody), "\"assets\"") {
+		t.Errorf("request body should omit assets when no links, got %q", string(capturedBody))
+	}
+}
+
+// TestReleaseList_IncludeHTMLDescriptionAndKeyset verifies that List forwards
+// include_html_description and keyset pagination (pagination, page_token)
+// query parameters to the GitLab API.
+func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectReleases {
+			q := r.URL.Query()
+			for k, want := range map[string]string{
+				"include_html_description": "true",
+				"pagination":               "keyset",
+				"page_token":               "99",
+				"order_by":                 "created_at",
+				"sort":                     "asc",
+			} {
+				if got := q.Get(k); got != want {
+					t.Errorf("query param %s = %q, want %q", k, got, want)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := List(context.Background(), client, ListInput{
+		ProjectID:              "42",
+		OrderBy:                "created_at",
+		Sort:                   "asc",
+		IncludeHTMLDescription: true,
+		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+	}); err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+}
+
+// TestToOutput_FullNestedObjects verifies that ToOutput mirrors every nested
+// sub-object field: commit (with stats and status), assets (sources + links),
+// _links, milestones (with issue_stats and dates), and evidences.
+func TestToOutput_FullNestedObjects(t *testing.T) {
+	zip := "zip"
+	r := &gl.Release{
+		TagName: "v1.0.0",
+		Author:  gl.BasicUser{ID: 7, Username: "alice", Name: "Alice", State: "active"},
+		Commit: gl.Commit{
+			ID: "abc", ShortID: "abc1", Title: "t", AuthorName: "Bob",
+			Stats:  &gl.CommitStats{Additions: 3, Deletions: 1, Total: 4},
+			Status: func() *gl.BuildStateValue { s := gl.BuildStateValue("success"); return &s }(),
+		},
+		Assets: gl.ReleaseAssets{
+			Count:            1,
+			EvidenceFilePath: "/ev/file",
+			Sources:          []gl.ReleaseAssetsSource{{Format: zip, URL: "u"}},
+			Links: []*gl.ReleaseLink{
+				nil,
+				{ID: 5, Name: "n", URL: "u2", LinkType: gl.PackageLinkType},
+			},
+		},
+		Links: gl.ReleaseLinks{Self: "self-url", EditURL: "edit-url"},
+		Milestones: []*gl.ReleaseMilestone{
+			nil,
+			{
+				ID: 1, Title: "M", State: "active", WebURL: "w",
+				IssueStats: &gl.ReleaseMilestoneIssueStats{Total: 10, Closed: 4},
+			},
+		},
+		Evidences: []*gl.ReleaseEvidence{nil, {SHA: "s", Filepath: "/f"}},
+	}
+	out := ToOutput(r)
+
+	if out.Author == nil || out.Author.ID != 7 {
+		t.Fatalf("author = %+v", out.Author)
+	}
+	if out.Commit == nil || out.Commit.Stats == nil || out.Commit.Stats.Total != 4 {
+		t.Fatalf("commit stats = %+v", out.Commit)
+	}
+	if out.Commit.Status != "success" {
+		t.Errorf("commit status = %q, want success", out.Commit.Status)
+	}
+	if out.Assets == nil || out.Assets.EvidenceFilePath != "/ev/file" {
+		t.Fatalf("assets = %+v", out.Assets)
+	}
+	if len(out.Assets.Links) != 1 || out.Assets.Links[0].LinkType != "package" {
+		t.Fatalf("assets links = %+v (nil should be skipped)", out.Assets.Links)
+	}
+	if out.Links == nil || out.Links.Self != "self-url" {
+		t.Fatalf("_links = %+v", out.Links)
+	}
+	if len(out.Milestones) != 1 || out.Milestones[0].IssueStats == nil || out.Milestones[0].IssueStats.Closed != 4 {
+		t.Fatalf("milestones = %+v (nil should be skipped)", out.Milestones)
+	}
+	if len(out.Evidences) != 1 || out.Evidences[0].SHA != "s" {
+		t.Fatalf("evidences = %+v (nil should be skipped)", out.Evidences)
+	}
+}
+
+// TestToOutput_MilestoneISODates verifies that release milestone ISO dates
+// (start_date, due_date) are rendered as YYYY-MM-DD.
+func TestToOutput_MilestoneISODates(t *testing.T) {
+	start := gl.ISOTime(mustParseDay(t, "2026-01-02"))
+	due := gl.ISOTime(mustParseDay(t, "2026-02-03"))
+	r := &gl.Release{Milestones: []*gl.ReleaseMilestone{
+		{ID: 1, Title: "M", StartDate: &start, DueDate: &due},
+	}}
+	out := ToOutput(r)
+	if len(out.Milestones) != 1 {
+		t.Fatalf("milestones len = %d, want 1", len(out.Milestones))
+	}
+	if out.Milestones[0].StartDate != "2026-01-02" || out.Milestones[0].DueDate != "2026-02-03" {
+		t.Errorf("milestone dates = %q/%q, want 2026-01-02/2026-02-03",
+			out.Milestones[0].StartDate, out.Milestones[0].DueDate)
+	}
+}
+
+// mustParseDay parses a YYYY-MM-DD string into a time.Time for ISOTime tests.
+func mustParseDay(t *testing.T, s string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		t.Fatalf("parse day %q: %v", s, err)
+	}
+	return parsed
 }
