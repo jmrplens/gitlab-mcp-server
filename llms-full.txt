@@ -2051,11 +2051,6 @@ Action guidance:
 - freeze_update: Update an existing deploy freeze period.
 - get: Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment.
 - list: List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations.
-- protected_get: Fetch a single project protected environment by name (including wildcard tiers such as production). Use after a list result or when the prompt names a concrete environment and you need its deploy access levels and approval rules.
-- protected_list: List the protected environments configured on a project, including their deploy access levels and approval rules. Use this when the prompt asks which project environments are gated or who can deploy to them.
-- protected_protect: Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be an array of objects such as [{"access_level":40}]; require approvals via approval_rules with required_approvals.
-- protected_unprotect: Remove protection from a project environment (or wildcard tier), deleting its deployment gates and approval rules. Destructive; confirm project_id and the environment name before calling.
-- protected_update: Change the deploy access levels or approval rules on an already-protected project environment. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy or how many approvals a gated environment needs.
 - stop: Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
 - update: Update an existing environment by environment_id. Use to change its name, description, external URL, tier, cluster agent, Kubernetes namespace, Flux resource path, or auto-stop setting.
 Parameter guidance:
@@ -2453,10 +2448,6 @@ Action guidance:
 - create: Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested.
 - delete: Delete a group (marks it for deletion, or permanently removes it with permanently_remove=true). Destructive: this removes the group and all its projects. Confirm before calling.
 - get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
-- group_billable_member_memberships_list: List the memberships through which a single billable member counts toward a group's seats — the source groups/projects and their access levels. Use this to understand why a user is billable before removing them (Premium/Ultimate). Supply group_id plus the billable member's user_id.
-- group_billable_member_remove: Remove a billable member from a group to free a seat (Premium/Ultimate). Destructive: requires confirmation. Only members whose 'removable' flag is true can be removed here; the last owner cannot be removed. Supply group_id plus the billable member's user_id.
-- group_billable_members_list: List the billable members of a group — the users who count toward the group's seat usage, including members inherited from subgroups and shared projects. Use this to audit license/seat consumption (Premium/Ultimate). Filter with search and order with sort.
-- group_board_create: Set up a new issue board for a group so the team can plan work across its projects.
 - group_board_create_list: Add a new column backed by a group label to a group issue board's workflow.
 - group_board_delete: Permanently remove an issue board from a group when the team no longer needs it.
 - group_board_delete_list: Remove a column from a group issue board when that workflow stage is no longer used.
@@ -2510,16 +2501,19 @@ Action guidance:
 - invited_groups: List the groups invited to this group. Use when the user asks which groups were invited (directly or by inheritance) to collaborate on a group.
 - issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
 - list: List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups.
-- list_provisioned_users: List the users provisioned for a group through SAML/SCIM (Premium/Ultimate). Use username, search, active, blocked, created_after, created_before, and pagination to filter. Requires Owner role on a SAML/SCIM-enabled group.
 - members: List the direct and inherited members of a group. Use query, user_ids, show_seat_info, and pagination when the user asks who belongs to a group or at what access level.
 - projects: List the projects that belong to a group. Use include_subgroups, archived, visibility, topic, and ordering when the user asks which projects live under a group.
-- push_rule_add: Add push rules to a group. Include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with group_id alone. Premium/Ultimate, Owner role.
-- push_rule_delete: Delete a group's push rules. Destructive. Send group_id. Premium/Ultimate, Owner role.
-- push_rule_edit: Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role.
-- push_rule_get: Get a group's push rules. Returns the singleton push-rule configuration such as commit_message_regex and reject_unsigned_commits. Premium/Ultimate, Owner role.
 - release_list: List releases across all projects in a group. Use this when the task asks for group-wide release history or the latest releases of every project in a group.
 - restore: Restore a group that was marked for deletion (within the retention window, before permanent removal). Use after an accidental delete to recover the group.
 - search: Search for groups by name or path keywords. Use when the user wants to find groups matching a term without already knowing an ID or path.
+- service_account_create: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
+- service_account_delete: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_list: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_create: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_pat_list: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_revoke: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_rotate: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Rotating revokes the supplied token_id and returns a brand-new token value; capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_update: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
 - share_with_group: Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)
 - shared_projects: List the projects shared *into* this group from elsewhere (not the group's own projects). Use when the user asks which external projects a group can access via sharing.
 - shared_with: List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups.
@@ -2544,13 +2538,6 @@ Parameter guidance:
 - create.path: group_path_segment; source: URL-safe group path segment.; avoid: path is a slug segment, not a full URL or namespace with slashes unless creating nested groups via parent_id.
 - delete.group_id: scope_group; source: Group numeric ID or full path to delete.; avoid: permanently_remove=true requires full_path and bypasses the retention window.
 - get.group_id: scope_group; source: Group numeric ID or full path from the prompt or prior discovery step.; avoid: Use group_id for path or ID; do not send project_id for group lookups.
-- group_billable_member_memberships_list.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
-- group_billable_member_memberships_list.user_id: user_id; source: Numeric user ID of the billable member whose memberships to list; from gitlab_list_billable_group_members.; avoid: Use the numeric user ID, not the username; resolve usernames with gitlab_list_users first.
-- group_billable_member_remove.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
-- group_billable_member_remove.user_id: user_id; source: Numeric user ID of the removable billable member; check the 'removable' flag from gitlab_list_billable_group_members first.; avoid: Use the numeric user ID, not the username; resolve usernames with gitlab_list_users first.
-- group_billable_members_list.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
-- group_billable_members_list.search: search_query; source: Substring of a member's name or username to filter the billable list.; avoid: search filters by name/username, not by email or user ID.
-- group_billable_members_list.sort: sort_order; source: Sort key for the billable list (e.g. name_asc, last_activity_on_desc).; avoid: sort is a combined field_direction token, not a separate order_by/direction pair.
 - group_member_add.access_level: access_level; source: Numeric role level for the membership.; avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
 - group_member_add.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
 - group_member_add.member_role_id: member_role_id; source: ID of a custom member role to assign (Premium/Ultimate); its base access level must match access_level.; avoid: member_role_id references a custom role definition, not access_level; it is only available on Premium/Ultimate.
@@ -2585,17 +2572,13 @@ Parameter guidance:
 - invited_groups.relation; source: Inheritance filter: direct, inherited, or both.; avoid: relation filters by how the invitation reaches the group; it is not an access level.
 - issues.group_id: scope_group; source: Group ID or full group path from the user's request.; avoid: Use group_id for group paths or IDs; use project_id only with issue.list for a single project.
 - list.search; source: Group name/path keywords from the user query.; avoid: search filters visible groups; it does not accept project paths.
-- list_provisioned_users.group_id: scope_group; source: Group numeric ID or full path whose provisioned users are listed.; avoid: Lists users provisioned via the group's SAML/SCIM provider, not all members; use gitlab_group_members_list for membership.
-- list_provisioned_users.search; source: Name, username, or email keywords to filter provisioned users.
 - members.group_id: scope_group; source: Group numeric ID or full path whose members are listed.
 - projects.group_id: scope_group; source: Group numeric ID or full path whose projects are listed.; avoid: Set include_subgroups=true to also include projects in descendant groups.
-- push_rule_add.group_id: scope_group; source: Group that owns the singleton push rule.; avoid: Group push rules are a group-scoped singleton; there is no push_rule_id parameter.
-- push_rule_delete.group_id: scope_group; source: Group that owns the singleton push rule.; avoid: Group push rules are a group-scoped singleton; there is no push_rule_id parameter.
-- push_rule_edit.group_id: scope_group; source: Group that owns the singleton push rule.; avoid: Group push rules are a group-scoped singleton; there is no push_rule_id parameter.
-- push_rule_get.group_id: scope_group; source: Group that owns the singleton push rule.; avoid: Group push rules are a group-scoped singleton; there is no push_rule_id parameter.
 - release_list.group_id: scope_group; source: Group ID or full path whose projects' releases are listed.
 - restore.group_id: scope_group; source: Group numeric ID or full path that was marked for deletion.
 - search.query; source: Group name/path keywords from the user query.
+- service_account_pat_revoke.token_id: access_token; source: Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_pat_rotate.token_id: access_token; source: Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
 - share_with_group.group_access; source: Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).
 - share_with_group.shared_group_id; source: Numeric ID of the group to grant access to.; avoid: group_id is the group being shared; shared_group_id is the group receiving access.
 - shared_projects.group_id: scope_group; source: Group numeric ID or full path whose shared projects are listed.; avoid: Lists projects shared *into* the group; use gitlab_group_projects for the group's own projects.
@@ -4185,15 +4168,12 @@ Action guidance:
 - emoji_issue_note_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_note_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_note_list: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
-- event_issue_iteration_get: Fetch one issue iteration-change event by id (a single iteration assignment or removal). Requires GitLab Premium/Ultimate.
-- event_issue_iteration_list: List the iteration-change audit events for one issue (when the iteration was assigned or removed and by whom). Requires GitLab Premium/Ultimate.
 - event_issue_label_get: Fetch one issue label-change event by id (a single add/remove of a label).
 - event_issue_label_list: List the label-change audit events for one issue (when each label was added or removed and by whom).
 - event_issue_milestone_get: Fetch one issue milestone-change event by id (a single milestone assignment or removal).
 - event_issue_milestone_list: List the milestone-change audit events for one issue (when the milestone was assigned or removed and by whom).
 - event_issue_state_get: Fetch one issue state-change event by id (a single close or reopen transition).
 - event_issue_state_list: List the state-change audit events for one issue (close and reopen transitions and who made them).
-- event_issue_weight_list: List the weight-change audit events for one issue (each weight value set and by whom). Requires GitLab Premium/Ultimate.
 - get: Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known.
 - get_by_id: Fetch one issue by its global database ID rather than a project IID. Use when the prompt or prior output gives a numeric issue id with no project context.
 - link_create: Create a relationship from a source issue to a target issue, optionally across projects. Pick link_type relates_to (default), blocks, or is_blocked_by. Use issue.link_list afterward to confirm.
@@ -5234,15 +5214,6 @@ Action params schema: gitlab://tools/gitlab_merge_request.<action>.
 Action guidance:
 - approval_config: Read the approval configuration of a merge request: approvals required and left, current approvers, suggested approvers, and approver groups. Use for a configuration overview rather than the per-rule state.
 - approval_reset: Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user); personal access tokens are rejected. Use when approvals must be re-collected after changes.
-- approval_rule_create: Create a new approval rule on a merge request, naming the rule and the number of approvals required, optionally scoping it to specific users or groups. Requires Maintainer and Premium/Ultimate.
-- approval_rule_delete: Delete an approval rule from a merge request. Destructive and irreversible; confirm the approval_rule_id with gitlab_mr_approval_rules before calling.
-- approval_rule_update: Update an existing approval rule on a merge request: change its name, required approval count, or assigned users and groups. The rule_type cannot be changed after creation.
-- approval_rules: List the approval rules configured on a merge request, including eligible approvers, assigned users, and groups. Use when inspecting or before editing the rules that gate an MR.
-- approval_settings_group_get: Read the merge request approval settings for a group. Use this to inspect inherited and locked approval policy before updating a group or any of its projects.
-- approval_settings_group_update: Update the merge request approval settings for a group. Set only the fields you want to change; omitted fields are left unchanged. Group-level changes can lock the corresponding setting for projects in the group.
-- approval_settings_project_get: Read the merge request approval settings for a project. Use this to inspect the effective approval policy, including which settings are locked by the parent group.
-- approval_settings_project_update: Update the merge request approval settings for a project. Set only the fields you want to change; omitted fields are left unchanged. Settings locked by the parent group cannot be overridden here.
-- approval_state: Read the overall approval state of a merge request, including whether the project rules were overridden and the per-rule approval status. Use when checking whether an MR has met its approval requirements before merge.
 - approve: Add the caller's approval to a merge request; pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).
 - cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
 - commits: List the commits contained in a merge request, ordered and paginated (offset or keyset).
@@ -5295,20 +5266,6 @@ Parameter guidance:
 - approval_config.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
 - approval_reset.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
 - approval_reset.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
-- approval_rule_create.approvals_required: approvals_required; source: Number of approvals the rule requires before the MR can merge.; avoid: This is the count for this single rule, not the project-wide minimum.
-- approval_rule_create.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
-- approval_rule_create.name: approval_rule_name; source: Short descriptive name for the new approval rule.
-- approval_rule_create.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
-- approval_rule_delete.approval_rule_id: approval_rule_id; source: Approval rule ID from a prior gitlab_mr_approval_rules listing.; avoid: This is the MR-level approval rule ID, not the project-level approval rule ID or the merge request IID.
-- approval_rule_delete.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
-- approval_rule_delete.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
-- approval_rule_update.approval_rule_id: approval_rule_id; source: Approval rule ID from a prior gitlab_mr_approval_rules listing.; avoid: This is the MR-level approval rule ID, not the project-level approval rule ID or the merge request IID.
-- approval_rule_update.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
-- approval_rule_update.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
-- approval_rules.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
-- approval_rules.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
-- approval_state.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
-- approval_state.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
 - emoji_mr_create.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
@@ -6991,13 +6948,6 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_project.<action>.
 Action guidance:
-- approval_config_change: Change a project's merge-request approval configuration (reset_approvals_on_push, author/committer approval, reauthentication). Send project_id plus the settings to change. Premium/Ultimate, Maintainer role.
-- approval_config_get: Get a project's merge-request approval configuration (approvals_before_merge, reset_approvals_on_push, author/committer approval rules). Send project_id. Premium/Ultimate.
-- approval_rule_create: Create a project approval rule. Send project_id, name, and approvals_required; optionally user_ids, group_ids, usernames, protected_branch_ids, or rule_type. Premium/Ultimate, Maintainer role.
-- approval_rule_delete: Delete a project approval rule by rule_id. Send project_id and rule_id; irreversible. Premium/Ultimate, Maintainer role.
-- approval_rule_get: Get one project approval rule by rule_id, including required approvals and eligible approvers. Send project_id and rule_id. Premium/Ultimate.
-- approval_rule_list: List a project's merge-request approval rules. Send project_id. Premium/Ultimate.
-- approval_rule_update: Update a project approval rule by rule_id (name, approvals_required, approvers, protected branches). Send project_id and rule_id plus the fields to change. Premium/Ultimate, Maintainer role.
 - archive: Archive a project so it becomes read-only. Send project_id; requires Owner role. Use unarchive to reverse.
 - badge_add: Add a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_delete: Delete a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
@@ -7098,14 +7048,19 @@ Action guidance:
 - pages_get: Read the GitLab Pages settings for a project, including the published URL and HTTPS configuration.
 - pages_unpublish: Unpublish and tear down a project's GitLab Pages site, removing the deployed content.
 - pages_update: Update a project's GitLab Pages settings such as force-HTTPS, unique-domain, and the primary domain.
-- pull_mirror_configure: Configure a project's pull mirror (upstream URL, trigger builds, protected-branches-only, overwrite-diverged). Send project_id plus the mirror settings. Premium/Ultimate.
-- pull_mirror_get: Get a project's pull-mirror configuration (the upstream URL it mirrors from and its sync status). Send project_id. Premium/Ultimate.
 - repository_storage_get: Get the repository storage shard a project is stored on (admin only). Send project_id.
 - restore: Restore a project previously marked for delayed deletion, before the retention period expires. Send the project_id of the pending-deletion project.
+- service_account_create: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions. Omit email unless the task gives an explicit valid email address.
+- service_account_delete: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.
+- service_account_list: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.
+- service_account_pat_create: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_pat_list: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.
+- service_account_pat_revoke: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.
+- service_account_pat_rotate: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_update: Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions. Omit email unless the task gives an explicit valid email address.
 - share_with_group: Share a project with a group at a chosen access level. Send project_id, group_id, and group_access (10 Guest, 20 Reporter, 30 Developer, 40 Maintainer); optionally expires_at (YYYY-MM-DD).
 - star: Star a project for the authenticated user. Send project_id; idempotent if already starred.
 - start_housekeeping: Trigger Git housekeeping (garbage collection and repository optimization) for a project. Send project_id; requires Owner role.
-- start_mirroring: Trigger an immediate pull-mirror sync for a project so it fetches from its configured upstream now. Send project_id. Premium/Ultimate.
 - statistics_get: Get the last 30 days of repository fetch statistics (git clone/pull counts) for a project, broken down by day. Use this when the prompt asks how often a project is being cloned or pulled, or for recent fetch activity. The caller must have at least Reporter access to the project. This returns fetch counts only — it is not the project-size/storage statistics that gitlab_project_get exposes via with_statistics.
 - transfer: Transfer a project to a different namespace (group or user). Send project_id and the target namespace ID or full path. Requires Owner on the source and create-project rights on the target.
 - unarchive: Unarchive a previously archived project to restore write access. Send project_id; requires Owner role.
@@ -7180,6 +7135,8 @@ Parameter guidance:
 - pages_get.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_unpublish.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_update.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- service_account_pat_revoke.token_id: access_token; source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_pat_rotate.token_id: access_token; source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
 - statistics_get.project_id: scope_project; source: Project ID or URL-encoded path whose fetch statistics should be retrieved.; avoid: This returns git fetch (clone/pull) counts, not storage/size statistics; for repository or storage size use gitlab_project_get with statistics enabled.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
@@ -9147,21 +9104,6 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_runner.<action>.
 Action guidance:
-- controller_create: Register a new runner controller with an optional description and initial state (enabled, disabled, or dry_run); admin-only, experimental API. Use to onboard a controller into the agentic runner control plane before it connects.
-- controller_delete: Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane; verify the controller_id with gitlab_runner_controller_list first.
-- controller_get: Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after gitlab_runner_controller_list to inspect a specific controller before updating or deleting it.
-- controller_list: List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one; supports offset and keyset pagination for large fleets.
-- controller_scope_add_instance: Grant a runner controller the instance-level scope so it may operate the entire shared instance runner fleet.
-- controller_scope_add_runner: Scope a runner controller to one specific instance runner by runner ID so it may operate only that runner.
-- controller_scope_list: List the instance-level and runner-level scopes assigned to a runner controller to see which runners it may operate.
-- controller_scope_remove_instance: Revoke a runner controller's instance-level scope so it can no longer operate the shared instance runner fleet.
-- controller_scope_remove_runner: Remove a specific runner from a runner controller's scope by runner ID so the controller can no longer operate that runner.
-- controller_token_create: Create a new authentication token for a runner controller (admin-only). Use when provisioning a runner controller or adding an additional credential; the secret token value is returned only once at creation.
-- controller_token_get: Retrieve a single runner controller token by its id (admin-only). Use after a list result or when the prompt already names a concrete runner controller token id.
-- controller_token_list: List every authentication token issued for a runner controller (admin-only). Use when the prompt asks to audit, enumerate, or review the tokens belonging to a known runner controller before rotating or revoking one.
-- controller_token_revoke: Permanently revoke a runner controller token (admin-only). Destructive and irreversible; confirm controller_id and token_id before calling, as any runner controller using the token will lose access.
-- controller_token_rotate: Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Use to roll a credential without changing the token id; the new secret value is returned only once.
-- controller_update: Update an existing runner controller's description or state (enabled, disabled, or dry_run) by controller_id; admin-only, experimental API. Use to pause (disabled), resume (enabled), or stage (dry_run) a controller in the runner control plane.
 - delete_by_token: Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not; prefer runner.delete_registered when you have the runner_id.
 - delete_registered: Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id; prefer runner.delete_by_token when only the authentication token is known.
 - disable_project: Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign; this detaches the runner without unregistering it (use runner.remove to delete the runner itself).
@@ -18269,7 +18211,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_group_service_account_pat_rotate
 
-Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (Premium/Ultimate, Owner role).
+Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).
 Returns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value — capture it immediately, it is not retrievable later).
 See also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.
 

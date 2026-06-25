@@ -20,8 +20,9 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 893 CE; 1061 self-managed Enterprise/Premium; 1067 on GitLab.com Enterprise/Premium with Orbit             |
-| Meta-mode tools           | 32 base / 48 self-managed enterprise / 49 GitLab.com Enterprise (Orbit)                                    |
+| MCP Tools (individual)    | By instance tier: ~858 Free/CE; ~998 Premium; ~1061 Ultimate (self-managed) / ~1067 on GitLab.com Ultimate with Orbit |
+| Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 44 Ultimate                                                       |
+| Meta-mode tools           | 32 base (Free/CE) / 48 self-managed Ultimate / 49 GitLab.com Ultimate (Orbit)                              |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
@@ -484,7 +485,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages, 1061 self-managed tools / 1067 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~858 Free/CE, ~998 Premium, ~1061 Ultimate self-managed, ~1067 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
