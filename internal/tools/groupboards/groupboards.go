@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -16,32 +15,32 @@ import (
 // Shared output types
 // ---------------------------------------------------------------------------.
 
-// GroupBoardOutput represents a GitLab group issue board.
+// GroupBoardOutput represents a GitLab group issue board. Nested objects
+// (group, milestone, labels, lists) mirror the full client-go gl.GroupIssueBoard
+// sub-objects per the 1:1 audit policy.
 type GroupBoardOutput struct {
 	toolutil.HintableOutput
-	ID             int64             `json:"id"`
-	Name           string            `json:"name"`
-	GroupID        int64             `json:"group_id,omitempty"`
-	GroupName      string            `json:"group_name,omitempty"`
-	MilestoneID    int64             `json:"milestone_id,omitempty"`
-	MilestoneTitle string            `json:"milestone_title,omitempty"`
-	Labels         []string          `json:"labels,omitempty"`
-	Lists          []BoardListOutput `json:"lists,omitempty"`
+	ID        int64             `json:"id"`
+	Name      string            `json:"name"`
+	Group     *GroupRefOutput   `json:"group,omitempty"`
+	Milestone *MilestoneOutput  `json:"milestone,omitempty"`
+	Labels    []*LabelOutput    `json:"labels,omitempty"`
+	Lists     []BoardListOutput `json:"lists,omitempty"`
 }
 
-// BoardListOutput represents a single list within a group board.
+// BoardListOutput represents a single list within a group board. Nested objects
+// (assignee, label, iteration, milestone) mirror the full client-go gl.BoardList
+// sub-objects per the 1:1 audit policy.
 type BoardListOutput struct {
 	toolutil.HintableOutput
-	ID             int64  `json:"id"`
-	LabelID        int64  `json:"label_id,omitempty"`
-	LabelName      string `json:"label_name,omitempty"`
-	Position       int64  `json:"position"`
-	MaxIssueCount  int64  `json:"max_issue_count,omitempty"`
-	MaxIssueWeight int64  `json:"max_issue_weight,omitempty"`
-	AssigneeID     int64  `json:"assignee_id,omitempty"`
-	AssigneeUser   string `json:"assignee_username,omitempty"`
-	MilestoneID    int64  `json:"milestone_id,omitempty"`
-	MilestoneTitle string `json:"milestone_title,omitempty"`
+	ID             int64                    `json:"id"`
+	Assignee       *BoardListAssigneeOutput `json:"assignee,omitempty"`
+	Iteration      *IterationOutput         `json:"iteration,omitempty"`
+	Label          *LabelOutput             `json:"label,omitempty"`
+	MaxIssueCount  int64                    `json:"max_issue_count,omitempty"`
+	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty"`
+	Milestone      *MilestoneOutput         `json:"milestone,omitempty"`
+	Position       int64                    `json:"position"`
 }
 
 // ListGroupBoardsOutput represents a paginated list of group boards.
@@ -65,21 +64,11 @@ type ListBoardListsOutput struct {
 // convertGroupBoard maps a GitLab group issue board into MCP output.
 func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
 	out := GroupBoardOutput{
-		ID:   b.ID,
-		Name: b.Name,
-	}
-	if b.Group != nil {
-		out.GroupID = b.Group.ID
-		out.GroupName = b.Group.Name
-	}
-	if b.Milestone != nil {
-		out.MilestoneID = b.Milestone.ID
-		out.MilestoneTitle = b.Milestone.Title
-	}
-	for _, lbl := range b.Labels {
-		if lbl != nil {
-			out.Labels = append(out.Labels, lbl.Name)
-		}
+		ID:        b.ID,
+		Name:      b.Name,
+		Group:     groupRefOutput(b.Group),
+		Milestone: milestoneOutput(b.Milestone),
+		Labels:    groupLabelOutputs(b.Labels),
 	}
 	for _, l := range b.Lists {
 		out.Lists = append(out.Lists, convertBoardList(l))
@@ -89,25 +78,16 @@ func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
 
 // convertBoardList maps a GitLab board list into group board MCP output.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
-	out := BoardListOutput{
+	return BoardListOutput{
 		ID:             l.ID,
-		Position:       l.Position,
+		Assignee:       boardListAssigneeOutput(l.Assignee),
+		Iteration:      iterationOutput(l.Iteration),
+		Label:          labelOutput(l.Label),
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,
+		Milestone:      milestoneOutput(l.Milestone),
+		Position:       l.Position,
 	}
-	if l.Label != nil {
-		out.LabelID = l.Label.ID
-		out.LabelName = l.Label.Name
-	}
-	if l.Assignee != nil {
-		out.AssigneeID = l.Assignee.ID
-		out.AssigneeUser = l.Assignee.Username
-	}
-	if l.Milestone != nil {
-		out.MilestoneID = l.Milestone.ID
-		out.MilestoneTitle = l.Milestone.Title
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +101,10 @@ func convertBoardList(l *gl.BoardList) BoardListOutput {
 // ListGroupBoardsInput represents input for listing group issue boards.
 type ListGroupBoardsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupBoards lists all issue boards for a group.
@@ -129,11 +112,13 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 	if input.GroupID == "" {
 		return ListGroupBoardsOutput{}, toolutil.WrapErrWithMessage("group_board_list", toolutil.ErrFieldRequired("group_id"))
 	}
-	opts := &gl.ListGroupIssueBoardsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupIssueBoardsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	boards, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoards(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -213,7 +198,7 @@ type UpdateGroupBoardInput struct {
 	Name        string               `json:"name,omitempty" jsonschema:"Board name"`
 	AssigneeID  int64                `json:"assignee_id,omitempty" jsonschema:"Assignee user ID"`
 	MilestoneID int64                `json:"milestone_id,omitempty" jsonschema:"Milestone ID"`
-	Labels      string               `json:"labels,omitempty" jsonschema:"Comma-separated board scope labels"`
+	Labels      []string             `json:"labels,omitempty" jsonschema:"Board scope labels"`
 	Weight      int64                `json:"weight,omitempty" jsonschema:"Board scope weight"`
 }
 
@@ -235,8 +220,8 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.MilestoneID != 0 {
 		opts.MilestoneID = new(input.MilestoneID)
 	}
-	if input.Labels != "" {
-		lbls := gl.LabelOptions(strings.Split(input.Labels, ","))
+	if len(input.Labels) > 0 {
+		lbls := gl.LabelOptions(input.Labels)
 		opts.Labels = &lbls
 	}
 	if input.Weight != 0 {
@@ -292,7 +277,10 @@ func DeleteGroupBoard(ctx context.Context, client *gitlabclient.Client, input De
 type ListGroupBoardListsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID int64                `json:"board_id" jsonschema:"Board ID,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupBoardLists lists all lists in a group board.
@@ -303,11 +291,13 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	if input.BoardID == 0 {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithMessage("group_board_list_list", toolutil.ErrFieldRequired("board_id"))
 	}
-	opts := &gl.ListGroupIssueBoardListsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupIssueBoardListsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
