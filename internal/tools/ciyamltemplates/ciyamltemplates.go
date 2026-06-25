@@ -15,10 +15,30 @@ import (
 // List
 // ---------------------------------------------------------------------------.
 
-// ListInput is the input for listing CI YAML templates.
+// ListInput is the input for listing CI YAML templates. It mirrors
+// gl.ListCIYMLTemplatesOptions, whose only field is the embedded gl.ListOptions.
+// OrderBy and Sort map onto gl.ListOptions.OrderBy/Sort, while offset
+// (page/per_page) and keyset (pagination/page_token) parameters map onto the
+// embedded gl.ListOptions via toolutil.ApplyListOptions.
 type ListInput struct {
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Items per page"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name, created_at, updated_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
+// leaving unset fields untouched so GitLab applies its defaults.
+func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
+	if opts == nil {
+		return
+	}
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
 }
 
 // TemplateListItem represents a CI YAML template in a list.
@@ -33,9 +53,9 @@ type ListOutput struct {
 
 // List lists all available CI YAML templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListCIYMLTemplatesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.ListCIYMLTemplatesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	items, resp, err := client.GL().CIYMLTemplate.ListAllTemplates(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_ci_yml_templates", err, http.StatusForbidden, "verify your token has read_api scope")

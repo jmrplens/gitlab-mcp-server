@@ -83,6 +83,11 @@ type UpdateInput struct {
 	PWAName                     string `json:"pwa_name,omitempty" jsonschema:"Progressive Web App name"`
 	PWAShortName                string `json:"pwa_short_name,omitempty" jsonschema:"PWA short name"`
 	PWADescription              string `json:"pwa_description,omitempty" jsonschema:"PWA description"`
+	PWAIcon                     string `json:"pwa_icon,omitempty" jsonschema:"Path to the PWA icon image asset"`
+	Logo                        string `json:"logo,omitempty" jsonschema:"Path to the instance logo image asset"`
+	HeaderLogo                  string `json:"header_logo,omitempty" jsonschema:"Path to the header logo image asset"`
+	Favicon                     string `json:"favicon,omitempty" jsonschema:"Path to the favicon image asset"`
+	URL                         string `json:"url,omitempty" jsonschema:"Redirect URL for the system header/footer logo image"`
 	HeaderMessage               string `json:"header_message,omitempty" jsonschema:"Message in header bar"`
 	FooterMessage               string `json:"footer_message,omitempty" jsonschema:"Message in footer bar"`
 	MessageBackgroundColor      string `json:"message_background_color,omitempty" jsonschema:"Background color for header/footer messages (hex)"`
@@ -116,6 +121,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.PWADescription != "" {
 		opts.PWADescription = new(input.PWADescription)
+	}
+	if input.PWAIcon != "" {
+		opts.PWAIcon = new(input.PWAIcon)
+	}
+	if input.Logo != "" {
+		opts.Logo = new(input.Logo)
+	}
+	if input.HeaderLogo != "" {
+		opts.HeaderLogo = new(input.HeaderLogo)
+	}
+	if input.Favicon != "" {
+		opts.Favicon = new(input.Favicon)
+	}
+	if input.URL != "" {
+		opts.URL = new(input.URL)
 	}
 	if input.HeaderMessage != "" {
 		opts.HeaderMessage = new(input.HeaderMessage)

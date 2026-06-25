@@ -157,7 +157,7 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 2})
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -170,6 +170,45 @@ func TestList_WithPagination(t *testing.T) {
 	if out.Pagination.NextPage != 2 {
 		t.Errorf("NextPage = %d, want 2", out.Pagination.NextPage)
 	}
+}
+
+// TestList_OrderSortKeyset verifies that List forwards order_by, sort, and
+// keyset pagination parameters (pagination, page_token) onto the GitLab API
+// query string.
+func TestList_OrderSortKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if got := q.Get("order_by"); got != "name" {
+			t.Errorf("order_by = %q, want name", got)
+		}
+		if got := q.Get("sort"); got != "desc" {
+			t.Errorf("sort = %q, want desc", got)
+		}
+		if got := q.Get("pagination"); got != "keyset" {
+			t.Errorf("pagination = %q, want keyset", got)
+		}
+		if got := q.Get("page_token"); got != "Go" {
+			t.Errorf("page_token = %q, want Go", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Python","name":"Python"}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "Go"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Templates) != 1 {
+		t.Fatalf("len(Templates) = %d, want 1", len(out.Templates))
+	}
+}
+
+// TestApplyOrderSort_NilGuard verifies applyOrderSort tolerates a nil opts
+// argument without panicking.
+func TestApplyOrderSort_NilGuard(t *testing.T) {
+	applyOrderSort(nil, "name", "asc")
 }
 
 // TestList_EmptyResult verifies the List_EmptyResult handler.
