@@ -1014,7 +1014,7 @@
   },
   {
     "name": "gitlab_add_email",
-    "description": "Add an email address to the currently authenticated GitLab user.\n\nSee also: gitlab_list_emails, gitlab_delete_email\n\nReturns: JSON with the created email details.",
+    "description": "Add an email address to the authenticated user's account. Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_get_email, gitlab_delete_email, gitlab_add_email_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1067,7 +1067,7 @@
   },
   {
     "name": "gitlab_add_email_for_user",
-    "description": "Add an email address to a specific GitLab user (admin only). Requires user ID and email address.\n\nSee also: gitlab_list_emails_for_user, gitlab_delete_email_for_user\n\nReturns: JSON with the created email details.",
+    "description": "Add an email address to a specific user's account (admin only). Returns: the created email's ID, address, and confirmation timestamp. See also: gitlab_list_emails_for_user, gitlab_delete_email_for_user, gitlab_add_email.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15635,7 +15635,7 @@
   },
   {
     "name": "gitlab_delete_email",
-    "description": "Delete an email address from the currently authenticated GitLab user.\n\nSee also: gitlab_list_emails, gitlab_add_email\n\nReturns: JSON with deletion confirmation.",
+    "description": "Delete an email address from the authenticated user's account. Returns: a confirmation naming the deleted email ID. See also: gitlab_get_email, gitlab_add_email, gitlab_delete_email_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15678,7 +15678,7 @@
   },
   {
     "name": "gitlab_delete_email_for_user",
-    "description": "Delete an email address from a specific GitLab user (admin only).\n\nSee also: gitlab_list_emails_for_user, gitlab_add_email_for_user\n\nReturns: JSON with deletion confirmation.",
+    "description": "Delete an email address from a specific user's account (admin only). Returns: a confirmation naming the deleted email ID. See also: gitlab_list_emails_for_user, gitlab_add_email_for_user, gitlab_delete_email.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16270,7 +16270,7 @@
   },
   {
     "name": "gitlab_delete_group_markdown_upload_by_id",
-    "description": "Delete a group markdown upload by ID.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_secret",
+    "description": "Delete a group Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_secret.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16327,7 +16327,7 @@
   },
   {
     "name": "gitlab_delete_group_markdown_upload_by_secret",
-    "description": "Delete a group markdown upload by secret and filename.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_id",
+    "description": "Delete a group Markdown upload by its 32-character secret and filename. Returns: a success confirmation. See also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_id.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27527,7 +27527,7 @@
   },
   {
     "name": "gitlab_ff_user_list_create",
-    "description": "Create a new feature flag user list.\n\nReturns: JSON with created user list including name, IID, and user_xids.\n\nSee also: gitlab_ff_user_list_list, gitlab_feature_flag_create",
+    "description": "Create a feature flag user list in a project. Returns: the created list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_list, gitlab_ff_user_list_get, gitlab_ff_user_list_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27601,7 +27601,7 @@
   },
   {
     "name": "gitlab_ff_user_list_delete",
-    "description": "Delete a feature flag user list.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_ff_user_list_list, gitlab_feature_flag_list",
+    "description": "Delete a feature flag user list by its user_list_iid. Returns: a success confirmation naming the deleted list. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27658,7 +27658,7 @@
   },
   {
     "name": "gitlab_ff_user_list_get",
-    "description": "Get a single feature flag user list by IID.\n\nReturns: JSON with user list details including name, IID, and user_xids.\n\nSee also: gitlab_ff_user_list_list, gitlab_feature_flag_get",
+    "description": "Get a single feature flag user list by its user_list_iid. Returns: the list's id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_list, gitlab_ff_user_list_update, gitlab_ff_user_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27729,13 +27729,25 @@
   },
   {
     "name": "gitlab_ff_user_list_list",
-    "description": "List feature flag user lists for a project.\n\nReturns: JSON with user lists array including name, IID, and user_xids.\n\nSee also: gitlab_ff_user_list_get, gitlab_feature_flag_list",
+    "description": "List feature flag user lists for a project with search, ordering, and offset or keyset pagination. Returns: each list's id, iid, project_id, name, user_xids, created_at, updated_at, plus pagination metadata. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at, name)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -27747,6 +27759,10 @@
         },
         "search": {
           "description": "Search by name",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -27868,7 +27884,7 @@
   },
   {
     "name": "gitlab_ff_user_list_update",
-    "description": "Update a feature flag user list.\n\nReturns: JSON with updated user list including name, IID, and user_xids.\n\nSee also: gitlab_ff_user_list_get, gitlab_ff_user_list_delete",
+    "description": "Update a feature flag user list's name or user_xids by its user_list_iid. Returns: the updated list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_list, gitlab_ff_user_list_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30302,7 +30318,7 @@
   },
   {
     "name": "gitlab_get_email",
-    "description": "Retrieve a specific email address by its ID.\n\nSee also: gitlab_list_emails_for_user, gitlab_add_email\n\nReturns: JSON with email details.",
+    "description": "Get one email address from the authenticated user's account by ID. Returns: the email's ID, address, and confirmation timestamp. See also: gitlab_add_email, gitlab_delete_email, gitlab_list_emails_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -47231,7 +47247,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_get",
-    "description": "Get a single group-level protected branch rule by name.\n\nReturns: protected branch with access levels and settings. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update.",
+    "description": "Get a single group-level protected branch by name or wildcard. Returns: the protected branch with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id) and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -47400,7 +47416,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_list",
-    "description": "List all protected branches for a GitLab group.\n\nReturns: paginated list of protected branch rules with access levels. See also: gitlab_group_protected_branch_get, gitlab_branch_protect, gitlab_list_branch_rules.",
+    "description": "List group-level protected branches with search and offset or keyset pagination. Returns: protected branches with push, merge, and unprotect access levels (access_level, access_level_description, user_id, group_id), force-push and code-owner-approval flags, plus pagination metadata. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -47408,9 +47424,21 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. name)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -47418,6 +47446,10 @@
         },
         "search": {
           "description": "Search by branch name",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -47637,7 +47669,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_protect",
-    "description": "Protect a branch at the group level.\n\nReturns: created protected branch rule with access levels. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_unprotect.",
+    "description": "Protect a group-level branch or wildcard, optionally with per-user/per-group allowed-to-push, merge, and unprotect entries. Returns: the created protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_update, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48004,7 +48036,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_unprotect",
-    "description": "Remove a group-level protected branch rule.\n\nReturns: confirmation of removal. See also: gitlab_group_protected_branch_list, gitlab_group_protected_branch_protect.",
+    "description": "Unprotect a group-level branch, cascading the removal to all subgroup projects. Returns: a success confirmation naming the unprotected branch. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_list, gitlab_group_protected_branch_protect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48061,7 +48093,7 @@
   },
   {
     "name": "gitlab_group_protected_branch_update",
-    "description": "Update a group-level protected branch rule.\n\nReturns: updated protected branch with access levels. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_protect.",
+    "description": "Update a group-level protected branch, adding or removing (_destroy) allowed-to-push, merge, and unprotect entries. Returns: the updated protected branch with its push, merge, and unprotect access levels and force-push and code-owner-approval flags. See also: gitlab_group_protected_branch_get, gitlab_group_protected_branch_list, gitlab_group_protected_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48412,7 +48444,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_get",
-    "description": "Get a single group-level protected environment by name.\n\nReturns: protected environment with deploy access levels and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update.",
+    "description": "Get a single group-level protected environment by tier name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48541,7 +48573,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_list",
-    "description": "List all protected environments for a GitLab group.\n\nReturns: paginated list of protected environments with deploy access levels and approval rules. See also: gitlab_group_protected_environment_get, gitlab_protected_environment_list, gitlab_environment_list.",
+    "description": "List group-level protected environments with order_by/sort and offset or keyset pagination. Returns: group protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48549,13 +48581,29 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -48734,7 +48782,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_protect",
-    "description": "Protect an environment at the group level.\n\nReturns: created protected environment with access levels and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_unprotect.",
+    "description": "Protect a group-level environment tier with deploy access levels and approval rules; protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -48748,6 +48796,13 @@
                 "type": [
                   "null",
                   "integer"
+                ]
+              },
+              "access_level_description": {
+                "description": "Human-readable description of the access level",
+                "type": [
+                  "null",
+                  "string"
                 ]
               },
               "group_id": {
@@ -48957,7 +49012,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_unprotect",
-    "description": "Remove protection from a group-level environment.\n\nReturns: confirmation of removal. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_protect.",
+    "description": "Unprotect a group-level environment tier, removing its deployment gates from the group and its subgroup projects. Returns: a success confirmation. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_protect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49014,7 +49069,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_update",
-    "description": "Update a group-level protected environment.\n\nReturns: updated protected environment with access levels and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect.",
+    "description": "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49035,6 +49090,13 @@
                 "type": [
                   "null",
                   "integer"
+                ]
+              },
+              "access_level_description": {
+                "description": "Human-readable description of the access level",
+                "type": [
+                  "null",
+                  "string"
                 ]
               },
               "group_id": {
@@ -83691,17 +83753,33 @@
   },
   {
     "name": "gitlab_list_emails_for_user",
-    "description": "List email addresses for a specific GitLab user by user ID.\n\nSee also: gitlab_get_email, gitlab_add_email_for_user\n\nReturns: JSON array of emails.",
+    "description": "List all email addresses registered to a specific user account. Returns: each email's ID, address, and confirmation timestamp, with offset/keyset pagination support. See also: gitlab_get_email, gitlab_add_email_for_user, gitlab_delete_email_for_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Items per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction for ordered results: asc or desc",
+          "type": "string"
         },
         "user_id": {
           "description": "GitLab user ID",
@@ -85481,7 +85559,7 @@
   },
   {
     "name": "gitlab_list_group_markdown_uploads",
-    "description": "List markdown uploads for a group.\n\nReturns: JSON array of uploads with pagination.\n\nSee also: gitlab_delete_group_markdown_upload_by_id, gitlab_upload_project_file",
+    "description": "List all Markdown uploads in a group. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_delete_group_markdown_upload_by_id, gitlab_delete_group_markdown_upload_by_secret, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85489,13 +85567,29 @@
           "description": "The ID or URL-encoded path of the group",
           "type": "string"
         },
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "type": "string"
         }
       },
       "required": [
@@ -85557,6 +85651,41 @@
               },
               "size": {
                 "type": "integer"
+              },
+              "uploaded_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
