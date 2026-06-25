@@ -76,11 +76,16 @@ type BranchPermissionInput struct {
 	Destroy     *bool  `json:"_destroy,omitempty"     jsonschema:"Set true to remove this permission"`
 }
 
-// ListInput defines parameters for the List action which retrieves group-level protected branches.
+// ListInput defines parameters for the List action which retrieves group-level
+// protected branches. It supports offset pagination plus keyset pagination via
+// the embedded gl.ListOptions (order_by, sort, pagination, page_token).
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Search  string               `json:"search,omitempty" jsonschema:"Search by branch name"`
+	Search  string               `json:"search,omitempty"   jsonschema:"Search by branch name"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for the Get action which retrieves a single group-level protected branch.
@@ -151,11 +156,16 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := &gl.ListGroupProtectedBranchesOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListGroupProtectedBranchesOptions{}
 	if input.Search != "" {
 		opts.Search = new(input.Search)
+	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	branches, resp, err := client.GL().GroupProtectedBranches.ListProtectedBranches(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
