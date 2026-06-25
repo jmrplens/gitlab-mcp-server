@@ -7781,7 +7781,7 @@
   },
   {
     "name": "gitlab_ci_lint",
-    "description": "Validate arbitrary CI/CD YAML content within a project's namespace context. Useful for testing CI configuration changes before committing. Returns validation status, errors, warnings, and merged YAML.\n\nReturns: JSON with validation status, errors, warnings, and merged YAML.\n\nSee also: gitlab_ci_lint_project, gitlab_list_ci_yml_templates",
+    "description": "Validate inline .gitlab-ci.yml content within a project namespace. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: gitlab_ci_lint_project, gitlab_pipeline_create, gitlab_list_catalog_resources.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -7897,7 +7897,7 @@
   },
   {
     "name": "gitlab_ci_lint_project",
-    "description": "Validate a project's CI/CD configuration (.gitlab-ci.yml) from the repository. Returns validation status, errors, warnings, merged YAML, and includes.\n\nReturns: JSON with validation status, errors, warnings, and merged YAML.\n\nSee also: gitlab_ci_lint, gitlab_list_ci_yml_templates",
+    "description": "Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: gitlab_ci_lint, gitlab_pipeline_create, gitlab_file_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30452,7 +30452,7 @@
   },
   {
     "name": "gitlab_get_catalog_resource",
-    "description": "Get a CI/CD Catalog resource by GID or project full path. Returns: full resource details including README, released versions, components with their input parameters and include paths. See also: gitlab_list_catalog_resources, gitlab_template.",
+    "description": "Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_get_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32655,7 +32655,7 @@
   },
   {
     "name": "gitlab_get_group_dora_metrics",
-    "description": "Get DORA metrics for a GitLab group. Requires metric type (deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate). Supports date range and interval filtering. Returns: list of date/value data points. See also: gitlab_get_project_dora_metrics, gitlab_environment_list.",
+    "description": "Get the four DORA DevOps performance metrics aggregated across a group over a date window. Returns: one time series of date/value data points for the requested metric (deployment frequency, lead time for changes, time to restore service, or change failure rate), bucketed by interval. See also: gitlab_get_project_dora_metrics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33959,7 +33959,7 @@
   },
   {
     "name": "gitlab_get_key_by_fingerprint",
-    "description": "Get an SSH key and its user by SSH key fingerprint (SHA256: or MD5:).\n\nReturns: JSON with SSH key and user details.\n\nSee also: gitlab_get_key_with_user.",
+    "description": "Look up an SSH key or deploy key by fingerprint and return the owning user. Returns: the key ID, title, public key, creation time, and the owning user (ID, username, name). See also: gitlab_get_ssh_key, gitlab_list_ssh_keys, gitlab_list_ssh_keys_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34035,7 +34035,7 @@
   },
   {
     "name": "gitlab_get_key_with_user",
-    "description": "Get an SSH key and its associated user by key ID.\n\nReturns: JSON with SSH key and user details.\n\nSee also: gitlab_get_key_by_fingerprint.",
+    "description": "Look up an SSH key by its global ID and return the owning user. Returns: the key ID, title, public key, creation time, and the owning user (ID, username, name). See also: gitlab_get_ssh_key, gitlab_list_ssh_keys, gitlab_list_ssh_keys_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -35249,7 +35249,7 @@
   },
   {
     "name": "gitlab_get_project_dora_metrics",
-    "description": "Get DORA metrics for a GitLab project. Requires metric type (deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate). Supports date range and interval filtering. Returns: list of date/value data points. See also: gitlab_get_group_dora_metrics, gitlab_environment_list.",
+    "description": "Get the four DORA DevOps performance metrics for a project over a date window. Returns: one time series of date/value data points for the requested metric (deployment frequency, lead time for changes, time to restore service, or change failure rate), bucketed by interval. See also: gitlab_get_group_dora_metrics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -88157,7 +88157,7 @@
   },
   {
     "name": "gitlab_list_branch_rules",
-    "description": "List branch rules for a project via GraphQL API. Provides an aggregated read-only view of branch protections, approval rules, and external status checks. Returns: paginated list with name, protection status, force push, code owner approval, approval rules, and external status checks. See also: gitlab_branch_protect, gitlab_branch_list.",
+    "description": "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_get_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -89042,7 +89042,7 @@
   },
   {
     "name": "gitlab_list_catalog_resources",
-    "description": "List CI/CD Catalog resources. Search the catalog of reusable CI/CD components. Supports filtering by search text, scope (ALL or NAMESPACED), and sorting. Returns: paginated list with name, stars, forks, and latest version. See also: gitlab_get_catalog_resource, gitlab_template.",
+    "description": "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_create_pipeline.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
