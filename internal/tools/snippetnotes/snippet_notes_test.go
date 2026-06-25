@@ -4,6 +4,7 @@ package snippetnotes
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"testing"
 
@@ -65,8 +66,8 @@ func TestList_Success(t *testing.T) {
 	if out.Notes[0].Body != "Good snippet!" {
 		t.Errorf("Notes[0].Body = %q, want %q", out.Notes[0].Body, "Good snippet!")
 	}
-	if out.Notes[0].Author != "alice" {
-		t.Errorf("Notes[0].Author = %q, want %q", out.Notes[0].Author, "alice")
+	if out.Notes[0].Author == nil || out.Notes[0].Author.Username != "alice" {
+		t.Errorf("Notes[0].Author = %+v, want username alice", out.Notes[0].Author)
 	}
 	if out.Notes[1].System != true {
 		t.Error("Notes[1].System = false, want true")
@@ -183,8 +184,14 @@ func TestGet_Success(t *testing.T) {
 	if out.ID != 100 {
 		t.Errorf("out.ID = %d, want 100", out.ID)
 	}
-	if out.Author != "alice" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "alice")
+	if out.Author == nil || out.Author.Username != "alice" {
+		t.Errorf("out.Author = %+v, want username alice", out.Author)
+	}
+	if out.NoteableType != "Snippet" {
+		t.Errorf("out.NoteableType = %q, want Snippet", out.NoteableType)
+	}
+	if out.NoteableID != 1 {
+		t.Errorf("out.NoteableID = %d, want 1", out.NoteableID)
 	}
 }
 
@@ -488,7 +495,7 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     100,
 		Body:   "Great snippet",
-		Author: "alice",
+		Author: &NoteUserOutput{Username: "alice"},
 		System: false,
 	})
 	if !contains(md, "## Snippet Note #100") {
@@ -499,12 +506,21 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_NilAuthor verifies the markdown formatter renders
+// without panicking when the author object is nil.
+func TestFormatOutputMarkdown_NilAuthor(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 100, Body: "no author"})
+	if !contains(md, "## Snippet Note #100") {
+		t.Error("missing header")
+	}
+}
+
 // TestFormatOutputMarkdown_SystemNote verifies the OutputMarkdown_SystemNote markdown formatter output.
 func TestFormatOutputMarkdown_SystemNote(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     101,
 		Body:   "changed the title",
-		Author: "admin",
+		Author: &NoteUserOutput{Username: "admin"},
 		System: true,
 	})
 	if !contains(md, "System note") {
@@ -524,8 +540,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Notes: []Output{
-			{ID: 100, Author: "alice", System: false},
-			{ID: 101, Author: "admin", System: true},
+			{ID: 100, Author: &NoteUserOutput{Username: "alice"}, System: false},
+			{ID: 101, Author: &NoteUserOutput{Username: "admin"}, System: true},
 		},
 	})
 	if !contains(md, "| 100 |") {
@@ -579,8 +595,174 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	if out.UpdatedAt != "" {
 		t.Errorf("UpdatedAt = %q, want empty", out.UpdatedAt)
 	}
-	if out.Author != "" {
-		t.Errorf("Author = %q, want empty", out.Author)
+	if out.Author == nil || out.Author.Username != "" {
+		t.Errorf("Author = %+v, want non-nil empty username", out.Author)
+	}
+}
+
+// TestToOutput_FullFields verifies that Get maps every additive gl.Note field,
+// including the author object and the nested position / line_range sub-objects.
+func TestToOutput_FullFields(t *testing.T) {
+	const richNoteJSON = `{
+		"id": 100,
+		"type": "DiffNote",
+		"body": "rich note",
+		"attachment": "file.txt",
+		"title": "t",
+		"file_name": "snippet.rb",
+		"author": {"id": 7, "username": "alice", "email": "a@x.io", "name": "Alice", "state": "active", "avatar_url": "http://a/x.png", "web_url": "http://a/alice"},
+		"system": false,
+		"internal": true,
+		"resolvable": true,
+		"commit_id": "abc123",
+		"expires_at": "2027-01-01T00:00:00Z",
+		"created_at": "2026-03-10T09:00:00Z",
+		"updated_at": "2026-03-10T09:30:00Z",
+		"noteable_type": "Snippet",
+		"noteable_id": 1,
+		"noteable_iid": 2,
+		"project_id": 42,
+		"confidential": true,
+		"position": {
+			"base_sha": "b", "start_sha": "s", "head_sha": "h",
+			"position_type": "text", "new_path": "np", "new_line": 5,
+			"old_path": "op", "old_line": 4,
+			"line_range": {
+				"start": {"line_code": "lc1", "type": "new", "old_line": 1, "new_line": 2},
+				"end": {"line_code": "lc2", "type": "old", "old_line": 3, "new_line": 4}
+			}
+		}
+	}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSnippetNote100 {
+			testutil.RespondJSON(w, http.StatusOK, richNoteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 100})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	assertFullNoteScalars(t, out)
+	assertFullNotePosition(t, out.Position)
+}
+
+// assertFullNoteScalars checks the additive scalar fields and author object.
+func assertFullNoteScalars(t *testing.T, out Output) {
+	t.Helper()
+	if out.Author == nil || out.Author.ID != 7 || out.Author.Email != "a@x.io" || out.Author.WebURL != "http://a/alice" {
+		t.Errorf("Author = %+v, want fully populated", out.Author)
+	}
+	if out.Attachment != "file.txt" || out.Title != "t" || out.FileName != "snippet.rb" {
+		t.Errorf("scalar fields not mapped: %+v", out)
+	}
+	if !out.Internal || !out.Resolvable || !out.Confidential {
+		t.Errorf("flags not mapped: internal=%v resolvable=%v confidential=%v", out.Internal, out.Resolvable, out.Confidential)
+	}
+	if out.CommitID != "abc123" || out.ExpiresAt != "2027-01-01T00:00:00Z" {
+		t.Errorf("commit_id/expires_at not mapped: %q %q", out.CommitID, out.ExpiresAt)
+	}
+	if out.NoteableIID != 2 || out.ProjectID != 42 {
+		t.Errorf("noteable_iid/project_id not mapped: %d %d", out.NoteableIID, out.ProjectID)
+	}
+}
+
+// assertFullNotePosition checks the nested position / line_range sub-objects.
+func assertFullNotePosition(t *testing.T, pos *NotePositionOutput) {
+	t.Helper()
+	if pos == nil {
+		t.Fatal("Position = nil, want populated")
+	}
+	if pos.BaseSHA != "b" || pos.NewLine != 5 || pos.OldLine != 4 {
+		t.Errorf("Position fields not mapped: %+v", pos)
+	}
+	if pos.LineRange == nil || pos.LineRange.Start == nil || pos.LineRange.End == nil {
+		t.Fatalf("LineRange not mapped: %+v", pos.LineRange)
+	}
+	if pos.LineRange.Start.LineCode != "lc1" || pos.LineRange.End.NewLine != 4 {
+		t.Errorf("LineRange endpoints not mapped: %+v", pos.LineRange)
+	}
+}
+
+// TestToOutput_PositionNilLineRange verifies position mapping when line_range is
+// absent and when its endpoints are null (covers the nil branches of
+// lineRangeOutput and linePositionOutput).
+func TestToOutput_PositionNilLineRange(t *testing.T) {
+	cases := map[string]string{
+		"no_line_range":  `{"id":100,"position":{"base_sha":"b"}}`,
+		"null_endpoints": `{"id":100,"position":{"base_sha":"b","line_range":{"start":null,"end":null}}}`,
+	}
+	for name, noteBody := range cases {
+		t.Run(name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathSnippetNote100 {
+					testutil.RespondJSON(w, http.StatusOK, noteBody)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 100})
+			if err != nil {
+				t.Fatalf("Get() error: %v", err)
+			}
+			if out.Position == nil || out.Position.BaseSHA != "b" {
+				t.Fatalf("Position not mapped: %+v", out.Position)
+			}
+			if out.Position.LineRange != nil {
+				t.Errorf("LineRange = %+v, want nil", out.Position.LineRange)
+			}
+		})
+	}
+}
+
+// TestList_KeysetPagination verifies that List forwards keyset pagination
+// parameters (pagination=keyset, page_token) to the GitLab API.
+func TestList_KeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", r.URL.Query().Get("pagination"))
+		}
+		if r.URL.Query().Get("page_token") != "tok123" {
+			t.Errorf("page_token = %q, want tok123", r.URL.Query().Get("page_token"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, "["+noteJSON+"]")
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		SnippetID:             1,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+}
+
+// TestCreate_CreatedAt verifies that Create forwards the created_at backdating
+// timestamp to the GitLab API.
+func TestCreate_CreatedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathSnippetNotes {
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if !contains(string(raw), "2026-01-15T10:00:00Z") {
+				t.Errorf("request body missing created_at: %s", raw)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, noteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		SnippetID: 1,
+		Body:      "hi",
+		CreatedAt: "2026-01-15T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
 	}
 }
 
@@ -603,7 +785,7 @@ func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:        100,
 		Body:      "test note",
-		Author:    "bob",
+		Author:    &NoteUserOutput{Username: "bob"},
 		CreatedAt: "2026-03-10T09:00:00Z",
 		UpdatedAt: "2026-03-10T10:00:00Z",
 	})
