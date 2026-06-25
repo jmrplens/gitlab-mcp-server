@@ -643,6 +643,31 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 			t.Errorf("Ultimate: action %s must be present", lm.id)
 		}
 	}
+
+	// Field-level (Phase 3): issue.create exists in all tiers, but its Premium
+	// input fields (weight, epic_id) must be pruned from the Free schema and
+	// present on Premium/Ultimate.
+	for _, field := range []string{"weight", "epic_id"} {
+		if issueCreateHasInputProp(t, free, field) {
+			t.Errorf("Free issue.create schema must not advertise Premium field %q", field)
+		}
+		if !issueCreateHasInputProp(t, premium, field) {
+			t.Errorf("Premium issue.create schema must include field %q", field)
+		}
+	}
+}
+
+// issueCreateHasInputProp reports whether the issue.create action's input schema
+// in the catalog advertises the named property.
+func issueCreateHasInputProp(t *testing.T, catalog *actioncatalog.Catalog, prop string) bool {
+	t.Helper()
+	action, ok := catalog.Action("issue.create")
+	if !ok {
+		t.Fatal("issue.create missing from catalog")
+	}
+	props, _ := action.Route.InputSchema["properties"].(map[string]any)
+	_, has := props[prop]
+	return has
 }
 
 // TestActionSpecCoverage_AllCatalogRoutesClassified verifies ActionSpecCoverage when all catalog routes classified.

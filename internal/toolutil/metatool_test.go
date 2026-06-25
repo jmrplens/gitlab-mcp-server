@@ -3157,6 +3157,44 @@ func TestInputSchemaForType_PointerInputCacheHit(t *testing.T) {
 //
 // The test passes a primitive schema and expects no writeOnly flag to be added,
 // preserving non-object schemas generated for unusual inputs.
+// TestFieldTiers_ReadsTierTag verifies FieldTiers extracts the per-field
+// `tier:` struct tag (keyed by JSON name, lowercased), flattens anonymous
+// embeds, and returns nil when no field declares a tier.
+func TestFieldTiers_ReadsTierTag(t *testing.T) {
+	type embedded struct {
+		Weight int `json:"weight,omitempty" tier:"Premium"`
+	}
+	type input struct {
+		embedded
+		Title  string `json:"title"`
+		Health string `json:"health_status,omitempty" tier:"ultimate"`
+		Hidden string `json:"-" tier:"premium"`
+	}
+	got := FieldTiers(reflect.TypeFor[input]())
+	want := map[string]string{"weight": "premium", "health_status": "ultimate"}
+	if len(got) != len(want) {
+		t.Fatalf("FieldTiers = %v, want %v", got, want)
+	}
+	for name, tier := range want {
+		if got[name] != tier {
+			t.Errorf("FieldTiers[%q] = %q, want %q", name, got[name], tier)
+		}
+	}
+	if _, ok := got["title"]; ok {
+		t.Error("untagged field title must not appear")
+	}
+	if _, ok := got["-"]; ok {
+		t.Error("json:\"-\" field must be skipped")
+	}
+
+	type plain struct {
+		Name string `json:"name"`
+	}
+	if FieldTiers(reflect.TypeFor[plain]()) != nil {
+		t.Error("FieldTiers should be nil when no field declares a tier")
+	}
+}
+
 func TestMarkWriteOnlySecretFields_IgnoresMissingProperties(t *testing.T) {
 	schema := map[string]any{"type": "string"}
 	markWriteOnlySecretFields(schema, reflect.TypeFor[string]())

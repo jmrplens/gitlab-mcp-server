@@ -67643,7 +67643,7 @@
           "type": "string"
         },
         "epic_id": {
-          "description": "Epic ID to associate the issue with",
+          "description": "Epic ID to associate the issue with (Premium/Ultimate)",
           "type": "integer"
         },
         "iid": {
@@ -67681,7 +67681,7 @@
           "type": "string"
         },
         "weight": {
-          "description": "Issue weight (0 or higher)",
+          "description": "Issue weight, 0 or higher (Premium/Ultimate)",
           "type": "integer"
         }
       },
@@ -84137,7 +84137,7 @@
           "type": "string"
         },
         "epic_id": {
-          "description": "Epic ID to associate (EE only)",
+          "description": "Epic ID to associate (Premium/Ultimate)",
           "type": "integer"
         },
         "issue_iid": {
@@ -84196,7 +84196,7 @@
           "type": "string"
         },
         "weight": {
-          "description": "Issue weight (0 or higher)",
+          "description": "Issue weight, 0 or higher (Premium/Ultimate)",
           "type": "integer"
         }
       },

@@ -39,8 +39,8 @@ type CreateInput struct {
 	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
 	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
-	EpicID      int64    `json:"epic_id,omitempty" jsonschema:"Epic ID to associate the issue with"`
-	Weight      int64    `json:"weight,omitempty" jsonschema:"Issue weight (0 or higher)"`
+	EpicID      int64    `json:"epic_id,omitempty" tier:"premium" jsonschema:"Epic ID to associate the issue with (Premium/Ultimate)"`
+	Weight      int64    `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher (Premium/Ultimate)"`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
 
 	// Behavior flags
@@ -168,12 +168,12 @@ type UpdateInput struct {
 	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names to replace all existing"`
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
-	EpicID           int64                `json:"epic_id,omitempty"       jsonschema:"Epic ID to associate (EE only)"`
+	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate (Premium/Ultimate)"`
 	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
-	Weight           int64                `json:"weight,omitempty"        jsonschema:"Issue weight (0 or higher)"`
+	Weight           int64                `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher (Premium/Ultimate)"`
 	DiscussionLocked *bool                `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
 	UpdatedAt        string               `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
 }

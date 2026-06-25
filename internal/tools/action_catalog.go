@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -107,7 +108,7 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 		kept := make([]toolutil.ActionSpec, 0, len(group.Actions))
 		for _, spec := range group.Actions {
 			if edition.TierFromEdition(spec.Edition) <= tier {
-				kept = append(kept, spec)
+				kept = append(kept, pruneSpecFieldsByTier(spec, tier))
 			}
 		}
 		if len(kept) == 0 {
@@ -118,6 +119,66 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 		out = append(out, group)
 	}
 	return out
+}
+
+// pruneSpecFieldsByTier returns spec with its input-schema properties that
+// require a higher tier than the instance tier removed. Field tiers come from
+// the input type's `tier:"premium|ultimate"` struct tags via
+// [toolutil.FieldTiers]. The cached shared input schema is never mutated: a
+// clone is produced only when at least one field must be dropped, so a Free
+// instance never advertises Premium/Ultimate-only parameters.
+func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil.ActionSpec {
+	fieldTiers := toolutil.FieldTiers(spec.Route.InputType)
+	if len(fieldTiers) == 0 || spec.Route.InputSchema == nil {
+		return spec
+	}
+	drop := make(map[string]bool, len(fieldTiers))
+	for name, fieldTier := range fieldTiers {
+		if edition.TierFromEdition(fieldTier) > tier {
+			drop[name] = true
+		}
+	}
+	if len(drop) == 0 {
+		return spec
+	}
+	spec.Route.InputSchema = pruneSchemaProperties(spec.Route.InputSchema, drop)
+	return spec
+}
+
+// pruneSchemaProperties returns a shallow clone of a JSON Schema object with the
+// named properties removed from "properties" and "required". The input map is
+// not mutated.
+func pruneSchemaProperties(schema map[string]any, drop map[string]bool) map[string]any {
+	cloned := make(map[string]any, len(schema))
+	maps.Copy(cloned, schema)
+	if props, ok := schema["properties"].(map[string]any); ok {
+		newProps := make(map[string]any, len(props))
+		for name, value := range props {
+			if !drop[name] {
+				newProps[name] = value
+			}
+		}
+		cloned["properties"] = newProps
+	}
+	switch req := schema["required"].(type) {
+	case []any:
+		newReq := make([]any, 0, len(req))
+		for _, item := range req {
+			if name, _ := item.(string); !drop[name] {
+				newReq = append(newReq, item)
+			}
+		}
+		cloned["required"] = newReq
+	case []string:
+		newReq := make([]string, 0, len(req))
+		for _, name := range req {
+			if !drop[name] {
+				newReq = append(newReq, name)
+			}
+		}
+		cloned["required"] = newReq
+	}
+	return cloned
 }
 
 // mergeActionSpecGroupOverrides folds overrideGroups into baseGroups by tool
