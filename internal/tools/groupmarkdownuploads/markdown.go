@@ -20,14 +20,15 @@ func FormatListMarkdownString(o ListOutput) string {
 		b.WriteString("No uploads found.\n")
 	} else {
 		toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-		b.WriteString("| ID | Filename | Size | Created |\n")
-		b.WriteString("|---|---|---|---|\n")
+		b.WriteString("| ID | Filename | Size | Created | Uploaded By |\n")
+		b.WriteString("|---|---|---|---|---|\n")
 		for _, u := range o.Uploads {
-			fmt.Fprintf(&b, "| %d | %s | %d | %s |\n",
+			fmt.Fprintf(&b, "| %d | %s | %d | %s | %s |\n",
 				u.ID,
 				toolutil.EscapeMdTableCell(u.Filename),
 				u.Size,
-				u.CreatedAt)
+				toolutil.EscapeMdTableCell(u.CreatedAt),
+				toolutil.EscapeMdTableCell(uploadedByLabel(u.UploadedBy)))
 		}
 	}
 	return b.String()

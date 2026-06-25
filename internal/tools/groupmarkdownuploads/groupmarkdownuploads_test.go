@@ -275,7 +275,10 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := List(context.Background(), client, ListInput{GroupID: "5", Page: 2, PerPage: 1})
+	out, err := List(context.Background(), client, ListInput{
+		GroupID:         "5",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -470,6 +473,132 @@ func TestFormatList_MultipleRows(t *testing.T) {
 	for _, want := range []string{"a.txt", "b.txt", "c.txt", "| 1 |", "| 2 |", "| 3 |"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// List — uploaded_by mapping and keyset/order_by/sort forwarding (1:1 audit)
+// ---------------------------------------------------------------------------.
+
+// TestList_UploadedBy verifies that the uploaded_by user embed in the GitLab
+// response is mapped onto the full UploadedByOutput short-user shape.
+func TestList_UploadedBy(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z","uploaded_by":{"id":42,"username":"alice","name":"Alice Example","state":"active","avatar_url":"https://gitlab.example.com/avatar/42.png","web_url":"https://gitlab.example.com/alice"}}]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Uploads) != 1 {
+		t.Fatalf("expected 1 upload, got %d", len(out.Uploads))
+	}
+	ub := out.Uploads[0].UploadedBy
+	if ub == nil {
+		t.Fatal("expected uploaded_by to be populated")
+	}
+	if ub.ID != 42 || ub.Username != "alice" || ub.Name != "Alice Example" ||
+		ub.State != "active" || ub.AvatarURL == "" || ub.WebURL == "" {
+		t.Errorf("uploaded_by mapped incorrectly: %+v", ub)
+	}
+}
+
+// TestList_UploadedByAbsent verifies that a missing uploaded_by field maps to a
+// nil UploadedByOutput pointer.
+func TestList_UploadedByAbsent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1024,"filename":"image.png"}]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Uploads[0].UploadedBy != nil {
+		t.Errorf("expected nil uploaded_by, got %+v", out.Uploads[0].UploadedBy)
+	}
+}
+
+// TestList_KeysetAndOrdering verifies that order_by, sort, and keyset
+// pagination parameters are forwarded to the GitLab API query string.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := List(t.Context(), client, ListInput{
+		GroupID:               "5",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok123"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Markdown registry formatter + uploadedByLabel helper
+// ---------------------------------------------------------------------------.
+
+// TestFormatListMarkdownString_UploadedBy verifies the registry-registered
+// formatter renders the uploaded-by column and rows.
+func TestFormatListMarkdownString_UploadedBy(t *testing.T) {
+	out := ListOutput{
+		Uploads: []UploadItem{
+			{ID: 1, Size: 1024, Filename: "image.png", CreatedAt: "2026-01-01", UploadedBy: &UploadedByOutput{Username: "bob", Name: "Bob"}},
+		},
+	}
+	md := FormatListMarkdownString(out)
+	for _, want := range []string{"Group Markdown Uploads (1)", "Uploaded By", "Bob (@bob)", "image.png"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatListMarkdownString_Empty verifies the empty path of the registry formatter.
+func TestFormatListMarkdownString_Empty(t *testing.T) {
+	md := FormatListMarkdownString(ListOutput{})
+	if !strings.Contains(md, "No uploads found.") {
+		t.Errorf("expected empty message:\n%s", md)
+	}
+}
+
+// TestUploadedByLabel verifies every branch of the uploadedByLabel helper.
+func TestUploadedByLabel(t *testing.T) {
+	cases := []struct {
+		name string
+		in   *UploadedByOutput
+		want string
+	}{
+		{"nil", nil, ""},
+		{"both", &UploadedByOutput{Name: "Alice", Username: "alice"}, "Alice (@alice)"},
+		{"username_only", &UploadedByOutput{Username: "alice"}, "@alice"},
+		{"name_only", &UploadedByOutput{Name: "Alice"}, "Alice"},
+		{"empty", &UploadedByOutput{}, ""},
+	}
+	for _, tc := range cases {
+		if got := uploadedByLabel(tc.in); got != tc.want {
+			t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }
