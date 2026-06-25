@@ -139,6 +139,53 @@ func TestResolveAttachmentReader_ValidFile(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_RichMetadata verifies that every wiki action carries
+// non-generic discovery metadata (Usage, Aliases, RelatedActions) and a
+// "Returns: … See also: …" individual-tool description (1:1 audit R-META),
+// and that decorateWikiMeta is a no-op for an unknown tool.
+func TestActionSpecs_RichMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
+
+	wantTools := []string{
+		"gitlab_wiki_list",
+		"gitlab_wiki_get",
+		"gitlab_wiki_create",
+		"gitlab_wiki_update",
+		"gitlab_wiki_delete",
+		"gitlab_wiki_upload_attachment",
+	}
+	for _, name := range wantTools {
+		spec, ok := byTool[name]
+		if !ok {
+			t.Fatalf("missing spec for %s", name)
+		}
+		if spec.Usage == "" || spec.Usage == "Use to execute wikis domain action." {
+			t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
+		}
+		if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
+			t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty RelatedActions", name)
+		}
+		desc := spec.IndividualTool.Description
+		if !contains(desc, "Returns:") || !contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
+		}
+	}
+
+	// decorateWikiMeta must be a no-op for a tool with no metadata entry.
+	opts := wikiOptions("gitlab_wiki_unknown")
+	decorateWikiMeta(&opts, "gitlab_wiki_unknown")
+	if opts.Usage != "Use to execute wikis domain action." {
+		t.Errorf("unknown tool Usage mutated: %q", opts.Usage)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("unknown tool Description mutated: %q", opts.IndividualTool.Description)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsImpl(s, substr))
 }
