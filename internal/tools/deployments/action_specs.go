@@ -66,6 +66,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions."
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
 		options.RelatedActions = []string{"deployment.get", "environment.list", "pipeline.get"}
+		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
 	case "deployment_get":
 		options.Usage = "Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata."
 		options.Aliases = []string{"get deployment", "show deployment details", "lookup deployment"}
@@ -85,6 +86,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "Approve or reject a blocked deployment. Use only when approval workflows require explicit deployment approvals/rejections."
 		options.Aliases = []string{"approve deployment", "reject deployment", "deployment approval"}
 		options.RelatedActions = []string{"deployment.get", actionDeploymentUpdate}
+		options.IndividualTool.Description = "Approve or reject a blocked deployment awaiting protected-environment approval, optionally with a comment and an approval rule to represent. Returns: a confirmation message naming the deployment and the applied status. See also: gitlab_deployment_get, gitlab_deployment_update."
 	}
 
 	return options

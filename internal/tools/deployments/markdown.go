@@ -34,11 +34,11 @@ func FormatOutputMarkdown(d Output) string {
 	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(d.Ref))
 	fmt.Fprintf(&b, "| SHA | %s |\n", d.SHA)
 	fmt.Fprintf(&b, "| Status | %s |\n", d.Status)
-	if d.UserName != "" {
-		fmt.Fprintf(&b, "| User | %s |\n", toolutil.EscapeMdTableCell(d.UserName))
+	if d.User != nil && d.User.Username != "" {
+		fmt.Fprintf(&b, "| User | %s |\n", toolutil.EscapeMdTableCell(d.User.Username))
 	}
-	if d.EnvironmentName != "" {
-		fmt.Fprintf(&b, "| Environment | %s |\n", toolutil.EscapeMdTableCell(d.EnvironmentName))
+	if d.Environment != nil && d.Environment.Name != "" {
+		fmt.Fprintf(&b, "| Environment | %s |\n", toolutil.EscapeMdTableCell(d.Environment.Name))
 	}
 	if d.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(d.CreatedAt))
@@ -46,8 +46,8 @@ func FormatOutputMarkdown(d Output) string {
 	if d.UpdatedAt != "" {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(d.UpdatedAt))
 	}
-	if d.PipelineWebURL != "" {
-		fmt.Fprintf(&b, "| Pipeline | [#%d](%s) |\n", d.ID, d.PipelineWebURL)
+	if d.Deployable != nil && d.Deployable.Pipeline != nil && d.Deployable.Pipeline.WebURL != "" {
+		fmt.Fprintf(&b, "| Pipeline | [#%d](%s) |\n", d.Deployable.Pipeline.ID, d.Deployable.Pipeline.WebURL)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -68,8 +68,15 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | IID | Ref | Status | Environment | User |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, d := range out.Deployments {
+		var envName, userName string
+		if d.Environment != nil {
+			envName = d.Environment.Name
+		}
+		if d.User != nil {
+			userName = d.User.Username
+		}
 		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %s |\n",
-			d.ID, d.IID, toolutil.EscapeMdTableCell(d.Ref), d.Status, toolutil.EscapeMdTableCell(d.EnvironmentName), toolutil.EscapeMdTableCell(d.UserName))
+			d.ID, d.IID, toolutil.EscapeMdTableCell(d.Ref), d.Status, toolutil.EscapeMdTableCell(envName), toolutil.EscapeMdTableCell(userName))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

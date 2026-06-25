@@ -5,6 +5,7 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -44,10 +45,10 @@ func TestDeploymentList_Success(t *testing.T) {
 	if len(out.Deployments) != 2 {
 		t.Fatalf("expected 2 deployments, got %d", len(out.Deployments))
 	}
-	if out.Deployments[0].Status != "success" || out.Deployments[0].UserName != "admin" {
+	if out.Deployments[0].Status != "success" || out.Deployments[0].User == nil || out.Deployments[0].User.Username != "admin" {
 		t.Errorf("first deployment mismatch: %+v", out.Deployments[0])
 	}
-	if out.Deployments[1].EnvironmentName != "staging" {
+	if out.Deployments[1].Environment == nil || out.Deployments[1].Environment.Name != "staging" {
 		t.Errorf("second deployment env mismatch: %+v", out.Deployments[1])
 	}
 }
@@ -142,8 +143,70 @@ func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineWebURL != pipelineURL {
-		t.Errorf("PipelineWebURL = %q, want %q", out.PipelineWebURL, pipelineURL)
+	if out.Deployable == nil || out.Deployable.Pipeline == nil || out.Deployable.Pipeline.WebURL != pipelineURL {
+		t.Errorf("deployable pipeline web_url mismatch: %+v", out.Deployable)
+	}
+}
+
+// TestDeploymentGet_FullDeployable verifies that the Get handler maps a fully
+// populated deployable (user, commit, pipeline, runner sub-objects) into the
+// nested output shapes mirrored from client-go.
+func TestDeploymentGet_FullDeployable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success",
+				"user":{"id":7,"username":"admin","name":"Admin","state":"active","web_url":"https://gl/admin"},
+				"environment":{"id":3,"name":"production","slug":"prod","state":"available","tier":"production","external_url":"https://app","auto_stop_setting":"always"},
+				"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z",
+				"deployable":{
+					"id":10,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,"coverage":92.5,
+					"created_at":"2026-01-01T00:00:00Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
+					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru"},
+					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","web_url":"https://gl/c/abc"},
+					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:05:00Z"},
+					"runner":{"id":99,"description":"shared","name":"runner-1","runner_type":"instance_type","status":"online","online":true,"paused":false,"is_shared":true}
+				}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.User == nil || out.User.ID != 7 || out.User.WebURL != "https://gl/admin" {
+		t.Errorf("user mismatch: %+v", out.User)
+	}
+	if out.Environment == nil || out.Environment.Slug != "prod" || out.Environment.Tier != "production" {
+		t.Errorf("environment mismatch: %+v", out.Environment)
+	}
+	assertDeployable(t, out.Deployable)
+}
+
+// assertDeployable verifies a fully populated deployable and its nested
+// user, commit, pipeline, and runner objects.
+func assertDeployable(t *testing.T, d *DeployableOutput) {
+	t.Helper()
+	if d == nil {
+		t.Fatalf("deployable is nil")
+	}
+	if d.ID != 10 || d.Name != "deploy-prod" || d.Coverage != 92.5 || d.Duration != 240.0 {
+		t.Errorf("deployable scalar mismatch: %+v", d)
+	}
+	if d.User == nil || d.User.Username != "runner-user" {
+		t.Errorf("deployable user mismatch: %+v", d.User)
+	}
+	if d.Commit == nil || d.Commit.ShortID != "abc" || d.Commit.AuthorEmail != "dev@x" {
+		t.Errorf("deployable commit mismatch: %+v", d.Commit)
+	}
+	if d.Pipeline == nil || d.Pipeline.ID != 55 || d.Pipeline.WebURL != "https://gl/p/55" {
+		t.Errorf("deployable pipeline mismatch: %+v", d.Pipeline)
+	}
+	if d.Runner == nil || d.Runner.ID != 99 || d.Runner.RunnerType != "instance_type" || !d.Runner.Online || !d.Runner.IsShared {
+		t.Errorf("deployable runner mismatch: %+v", d.Runner)
 	}
 }
 
@@ -185,8 +248,8 @@ func TestDeploymentGet_NilDeployable(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineWebURL != "" {
-		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	if out.Deployable != nil {
+		t.Errorf("Deployable = %+v, want nil", out.Deployable)
 	}
 }
 
@@ -206,8 +269,11 @@ func TestDeploymentGet_NilPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineWebURL != "" {
-		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	if out.Deployable == nil || out.Deployable.ID != 10 {
+		t.Fatalf("expected deployable with id 10, got %+v", out.Deployable)
+	}
+	if out.Deployable.Pipeline != nil {
+		t.Errorf("Deployable.Pipeline = %+v, want nil", out.Deployable.Pipeline)
 	}
 }
 
@@ -227,8 +293,8 @@ func TestDeploymentGet_EmptyWebURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineWebURL != "" {
-		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	if out.Deployable != nil {
+		t.Errorf("Deployable = %+v, want nil (empty pipeline web_url, no other fields)", out.Deployable)
 	}
 }
 
@@ -287,7 +353,7 @@ func TestDeploymentCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ID != 3 || out.Status != "created" || out.EnvironmentName != "staging" {
+	if out.ID != 3 || out.Status != "created" || out.Environment == nil || out.Environment.Name != "staging" {
 		t.Errorf("unexpected output: %+v", out)
 	}
 }
@@ -469,6 +535,23 @@ func TestDeploymentDelete_CancelledContext(t *testing.T) {
 func TestDeploymentApprove_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
+			var body struct {
+				Status        string `json:"status"`
+				Comment       string `json:"comment"`
+				RepresentedAs string `json:"represented_as"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body.RepresentedAs != "security" {
+				t.Errorf("represented_as = %q, want %q", body.RepresentedAs, "security")
+			}
+			if body.Comment != "LGTM" {
+				t.Errorf("comment = %q, want %q", body.Comment, "LGTM")
+			}
+			if body.Status != "approved" {
+				t.Errorf("status = %q, want %q", body.Status, "approved")
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -476,10 +559,11 @@ func TestDeploymentApprove_Success(t *testing.T) {
 	}))
 
 	out, err := ApproveOrReject(context.Background(), client, ApproveOrRejectInput{
-		ProjectID:    "42",
-		DeploymentID: 10,
-		Status:       "approved",
-		Comment:      "LGTM",
+		ProjectID:     "42",
+		DeploymentID:  10,
+		Status:        "approved",
+		Comment:       "LGTM",
+		RepresentedAs: "security",
 	})
 	if err != nil {
 		t.Fatalf("ApproveOrReject() unexpected error: %v", err)
@@ -717,11 +801,11 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 	if out.Status != "running" {
 		t.Errorf("Status = %q, want %q", out.Status, "running")
 	}
-	if out.UserName != "deployer" {
-		t.Errorf("UserName = %q, want %q", out.UserName, "deployer")
+	if out.User == nil || out.User.Username != "deployer" {
+		t.Errorf("User.Username mismatch: %+v", out.User)
 	}
-	if out.EnvironmentName != "production" {
-		t.Errorf("EnvironmentName = %q, want %q", out.EnvironmentName, "production")
+	if out.Environment == nil || out.Environment.Name != "production" {
+		t.Errorf("Environment.Name mismatch: %+v", out.Environment)
 	}
 }
 
@@ -841,15 +925,15 @@ func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
-		ID:              1,
-		IID:             10,
-		Ref:             "main",
-		SHA:             "abc123",
-		Status:          "success",
-		UserName:        "admin",
-		EnvironmentName: "production",
-		CreatedAt:       "2026-06-01T00:00:00Z",
-		UpdatedAt:       "2026-06-01T01:00:00Z",
+		ID:          1,
+		IID:         10,
+		Ref:         "main",
+		SHA:         "abc123",
+		Status:      "success",
+		User:        &UserOutput{Username: "admin"},
+		Environment: &EnvironmentOutput{Name: "production"},
+		CreatedAt:   "2026-06-01T00:00:00Z",
+		UpdatedAt:   "2026-06-01T01:00:00Z",
 	})
 
 	for _, want := range []string{
@@ -911,12 +995,18 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
-		ID:             5,
-		IID:            5,
-		Ref:            "main",
-		SHA:            "abc123",
-		Status:         "success",
-		PipelineWebURL: "https://gitlab.example.com/my-org/project/-/pipelines/123",
+		ID:     5,
+		IID:    5,
+		Ref:    "main",
+		SHA:    "abc123",
+		Status: "success",
+		Deployable: &DeployableOutput{
+			ID: 99,
+			Pipeline: &DeployablePipelineOutput{
+				ID:     123,
+				WebURL: "https://gitlab.example.com/my-org/project/-/pipelines/123",
+			},
+		},
 	})
 
 	if !strings.Contains(md, "| Pipeline |") {
@@ -937,8 +1027,8 @@ func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 	out := ListOutput{
 		Deployments: []Output{
-			{ID: 1, IID: 1, Ref: "main", SHA: "abc", Status: "success", EnvironmentName: "production", UserName: "admin"},
-			{ID: 2, IID: 2, Ref: "develop", SHA: "def", Status: "running", EnvironmentName: "staging", UserName: "dev"},
+			{ID: 1, IID: 1, Ref: "main", SHA: "abc", Status: "success", Environment: &EnvironmentOutput{Name: "production"}, User: &UserOutput{Username: "admin"}},
+			{ID: 2, IID: 2, Ref: "develop", SHA: "def", Status: "running", Environment: &EnvironmentOutput{Name: "staging"}, User: &UserOutput{Username: "dev"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1041,15 +1131,15 @@ func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestToOutput_AllOptionalFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
-		ID:              100,
-		IID:             50,
-		Ref:             "v2.0.0",
-		SHA:             "deadbeef",
-		Status:          "failed",
-		UserName:        "deployer",
-		EnvironmentName: "canary",
-		CreatedAt:       "2026-12-01T00:00:00Z",
-		UpdatedAt:       "2026-12-01T12:00:00Z",
+		ID:          100,
+		IID:         50,
+		Ref:         "v2.0.0",
+		SHA:         "deadbeef",
+		Status:      "failed",
+		User:        &UserOutput{Username: "deployer"},
+		Environment: &EnvironmentOutput{Name: "canary"},
+		CreatedAt:   "2026-12-01T00:00:00Z",
+		UpdatedAt:   "2026-12-01T12:00:00Z",
 	})
 
 	for _, want := range []string{
@@ -1235,7 +1325,7 @@ func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want Output", result)
 	}
-	if out.ID != 17 || out.EnvironmentName != "prod" {
+	if out.ID != 17 || out.Environment == nil || out.Environment.Name != "prod" {
 		t.Fatalf("deployment output = %#v, want ID 17 environment prod", out)
 	}
 }

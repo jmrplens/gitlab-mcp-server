@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -24,12 +23,17 @@ const (
 
 // ListInput contains parameters for listing project deployments.
 type ListInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy     string               `json:"order_by,omitempty"     jsonschema:"Order by id or iid or created_at or updated_at or finished_at or ref (default: id)"`
-	Sort        string               `json:"sort,omitempty"         jsonschema:"Sort order: asc or desc (default: asc)"`
-	Environment string               `json:"environment,omitempty"  jsonschema:"Filter by environment name"`
-	Status      string               `json:"status,omitempty"       jsonschema:"Filter by status: created or running or success or failed or canceled"`
+	ProjectID      toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Order by id or iid or created_at or updated_at or finished_at or ref (default: id)"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc (default: asc)"`
+	Environment    string               `json:"environment,omitempty"     jsonschema:"Filter by environment name"`
+	Status         string               `json:"status,omitempty"          jsonschema:"Filter by status: created or running or success or failed or canceled"`
+	UpdatedAfter   string               `json:"updated_after,omitempty"   jsonschema:"Return deployments updated after this RFC3339 timestamp (GitLab < 14 only)"`
+	UpdatedBefore  string               `json:"updated_before,omitempty"  jsonschema:"Return deployments updated before this RFC3339 timestamp (GitLab < 14 only)"`
+	FinishedAfter  string               `json:"finished_after,omitempty"  jsonschema:"Return deployments finished after this RFC3339 timestamp (GitLab 14+ only)"`
+	FinishedBefore string               `json:"finished_before,omitempty" jsonschema:"Return deployments finished before this RFC3339 timestamp (GitLab 14+ only)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for retrieving a single deployment.
@@ -65,19 +69,21 @@ type DeleteInput struct {
 // Output types
 // ---------------------------------------------------------------------------.
 
-// Output represents a single deployment in MCP responses.
+// Output represents a single deployment in MCP responses. The nested user,
+// environment, and deployable objects mirror the client-go gl.Deployment
+// sub-objects 1:1 (full nested objects per the 1:1 audit policy).
 type Output struct {
 	toolutil.HintableOutput
-	ID              int    `json:"id"`
-	IID             int    `json:"iid"`
-	Ref             string `json:"ref"`
-	SHA             string `json:"sha"`
-	Status          string `json:"status"`
-	UserName        string `json:"user_name,omitempty"`
-	EnvironmentName string `json:"environment_name,omitempty"`
-	CreatedAt       string `json:"created_at,omitempty"`
-	UpdatedAt       string `json:"updated_at,omitempty"`
-	PipelineWebURL  string `json:"pipeline_web_url,omitempty"`
+	ID          int                `json:"id"`
+	IID         int                `json:"iid"`
+	Ref         string             `json:"ref"`
+	SHA         string             `json:"sha"`
+	Status      string             `json:"status"`
+	CreatedAt   string             `json:"created_at,omitempty"`
+	UpdatedAt   string             `json:"updated_at,omitempty"`
+	User        *UserOutput        `json:"user,omitempty"`
+	Environment *EnvironmentOutput `json:"environment,omitempty"`
+	Deployable  *DeployableOutput  `json:"deployable,omitempty"`
 }
 
 // ListOutput represents a paginated list of deployments.
@@ -93,29 +99,18 @@ type ListOutput struct {
 
 // toOutput converts the GitLab API response to the tool output format.
 func toOutput(d *gitlab.Deployment) Output {
-	out := Output{
-		ID:     int(d.ID),
-		IID:    int(d.IID),
-		Ref:    d.Ref,
-		SHA:    d.SHA,
-		Status: d.Status,
+	return Output{
+		ID:          int(d.ID),
+		IID:         int(d.IID),
+		Ref:         d.Ref,
+		SHA:         d.SHA,
+		Status:      d.Status,
+		CreatedAt:   formatTimePtr(d.CreatedAt),
+		UpdatedAt:   formatTimePtr(d.UpdatedAt),
+		User:        projectUserOutput(d.User),
+		Environment: environmentOutput(d.Environment),
+		Deployable:  deployableOutput(d.Deployable),
 	}
-	if d.User != nil {
-		out.UserName = d.User.Username
-	}
-	if d.Environment != nil {
-		out.EnvironmentName = d.Environment.Name
-	}
-	if d.CreatedAt != nil {
-		out.CreatedAt = d.CreatedAt.Format(time.RFC3339)
-	}
-	if d.UpdatedAt != nil {
-		out.UpdatedAt = d.UpdatedAt.Format(time.RFC3339)
-	}
-	if d.Deployable.Pipeline.WebURL != "" {
-		out.PipelineWebURL = d.Deployable.Pipeline.WebURL
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +126,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gitlab.ListProjectDeploymentsOptions{
-		ListOptions: gitlab.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gitlab.ListProjectDeploymentsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
 		opts.OrderBy = &input.OrderBy
 	}
@@ -149,6 +140,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Status != "" {
 		opts.Status = &input.Status
 	}
+	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
+	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
+	opts.FinishedAfter = toolutil.ParseOptionalTime(input.FinishedAfter)
+	opts.FinishedBefore = toolutil.ParseOptionalTime(input.FinishedBefore)
 
 	deployments, resp, err := client.GL().Deployments.ListProjectDeployments(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
@@ -296,10 +291,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 
 // ApproveOrRejectInput defines parameters for approving or rejecting a blocked deployment.
 type ApproveOrRejectInput struct {
-	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	DeploymentID int                  `json:"deployment_id" jsonschema:"Deployment ID,required"`
-	Status       string               `json:"status" jsonschema:"Approval status: approved or rejected,required"`
-	Comment      string               `json:"comment,omitempty" jsonschema:"Optional comment for the approval or rejection"`
+	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	DeploymentID  int                  `json:"deployment_id" jsonschema:"Deployment ID,required"`
+	Status        string               `json:"status" jsonschema:"Approval status: approved or rejected,required"`
+	Comment       string               `json:"comment,omitempty" jsonschema:"Optional comment for the approval or rejection"`
+	RepresentedAs string               `json:"represented_as,omitempty" jsonschema:"Name of the approval rule to act as, when the user belongs to multiple approval rules"`
 }
 
 // ApproveOrRejectOutput represents the result of approving or rejecting a deployment.
@@ -325,6 +321,9 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 	}
 	if input.Comment != "" {
 		opts.Comment = new(input.Comment)
+	}
+	if input.RepresentedAs != "" {
+		opts.RepresentedAs = new(input.RepresentedAs)
 	}
 
 	_, err := client.GL().Deployments.ApproveOrRejectProjectDeployment(
