@@ -23564,6 +23564,7 @@
               },
               "required": [
                 "id",
+                "description",
                 "name"
               ],
               "type": [
@@ -23620,6 +23621,60 @@
             "deployable": {
               "additionalProperties": false,
               "properties": {
+                "commit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author_email": {
+                      "type": "string"
+                    },
+                    "author_name": {
+                      "type": "string"
+                    },
+                    "authored_date": {
+                      "type": "string"
+                    },
+                    "committed_date": {
+                      "type": "string"
+                    },
+                    "committer_email": {
+                      "type": "string"
+                    },
+                    "committer_name": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "parent_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "short_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "coverage": {
                   "type": "number"
                 },
@@ -23641,9 +23696,6 @@
                 "pipeline": {
                   "additionalProperties": false,
                   "properties": {
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -23654,9 +23706,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
                       "type": "string"
                     },
                     "web_url": {
@@ -23674,6 +23723,39 @@
                 "ref": {
                   "type": "string"
                 },
+                "runner": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "is_shared": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "online": {
+                      "type": "boolean"
+                    },
+                    "runner_type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "stage": {
                   "type": "string"
                 },
@@ -23685,6 +23767,61 @@
                 },
                 "tag": {
                   "type": "boolean"
+                },
+                "user": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "linkedin": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "public_email": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "twitter": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    },
+                    "website_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 }
               },
               "required": [
@@ -23708,9 +23845,6 @@
               "type": "string"
             },
             "status": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             },
             "user": {
@@ -23763,34 +23897,6 @@
           "type": [
             "null",
             "array"
-          ]
-        },
-        "project": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "name"
-          ],
-          "type": [
-            "null",
-            "object"
           ]
         },
         "slug": {
@@ -23936,6 +24042,7 @@
               },
               "required": [
                 "id",
+                "description",
                 "name"
               ],
               "type": [
@@ -23992,6 +24099,60 @@
             "deployable": {
               "additionalProperties": false,
               "properties": {
+                "commit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author_email": {
+                      "type": "string"
+                    },
+                    "author_name": {
+                      "type": "string"
+                    },
+                    "authored_date": {
+                      "type": "string"
+                    },
+                    "committed_date": {
+                      "type": "string"
+                    },
+                    "committer_email": {
+                      "type": "string"
+                    },
+                    "committer_name": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "parent_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "short_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "coverage": {
                   "type": "number"
                 },
@@ -24013,9 +24174,6 @@
                 "pipeline": {
                   "additionalProperties": false,
                   "properties": {
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -24026,9 +24184,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
                       "type": "string"
                     },
                     "web_url": {
@@ -24046,6 +24201,39 @@
                 "ref": {
                   "type": "string"
                 },
+                "runner": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "is_shared": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "online": {
+                      "type": "boolean"
+                    },
+                    "runner_type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "stage": {
                   "type": "string"
                 },
@@ -24057,6 +24245,61 @@
                 },
                 "tag": {
                   "type": "boolean"
+                },
+                "user": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "linkedin": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "public_email": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "twitter": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    },
+                    "website_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 }
               },
               "required": [
@@ -24080,9 +24323,6 @@
               "type": "string"
             },
             "status": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             },
             "user": {
@@ -24135,34 +24375,6 @@
           "type": [
             "null",
             "array"
-          ]
-        },
-        "project": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "name"
-          ],
-          "type": [
-            "null",
-            "object"
           ]
         },
         "slug": {
@@ -24288,6 +24500,7 @@
                     },
                     "required": [
                       "id",
+                      "description",
                       "name"
                     ],
                     "type": [
@@ -24344,6 +24557,60 @@
                   "deployable": {
                     "additionalProperties": false,
                     "properties": {
+                      "commit": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "author_email": {
+                            "type": "string"
+                          },
+                          "author_name": {
+                            "type": "string"
+                          },
+                          "authored_date": {
+                            "type": "string"
+                          },
+                          "committed_date": {
+                            "type": "string"
+                          },
+                          "committer_email": {
+                            "type": "string"
+                          },
+                          "committer_name": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "parent_ids": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": [
+                              "null",
+                              "array"
+                            ]
+                          },
+                          "short_id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
                       "coverage": {
                         "type": "number"
                       },
@@ -24365,9 +24632,6 @@
                       "pipeline": {
                         "additionalProperties": false,
                         "properties": {
-                          "created_at": {
-                            "type": "string"
-                          },
                           "id": {
                             "type": "integer"
                           },
@@ -24378,9 +24642,6 @@
                             "type": "string"
                           },
                           "status": {
-                            "type": "string"
-                          },
-                          "updated_at": {
                             "type": "string"
                           },
                           "web_url": {
@@ -24398,6 +24659,39 @@
                       "ref": {
                         "type": "string"
                       },
+                      "runner": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "description": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "is_shared": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "online": {
+                            "type": "boolean"
+                          },
+                          "runner_type": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
                       "stage": {
                         "type": "string"
                       },
@@ -24409,6 +24703,61 @@
                       },
                       "tag": {
                         "type": "boolean"
+                      },
+                      "user": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "avatar_url": {
+                            "type": "string"
+                          },
+                          "bio": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "linkedin": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "organization": {
+                            "type": "string"
+                          },
+                          "public_email": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "twitter": {
+                            "type": "string"
+                          },
+                          "username": {
+                            "type": "string"
+                          },
+                          "web_url": {
+                            "type": "string"
+                          },
+                          "website_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
                       }
                     },
                     "required": [
@@ -24432,9 +24781,6 @@
                     "type": "string"
                   },
                   "status": {
-                    "type": "string"
-                  },
-                  "updated_at": {
                     "type": "string"
                   },
                   "user": {
@@ -24487,34 +24833,6 @@
                 "type": [
                   "null",
                   "array"
-                ]
-              },
-              "project": {
-                "additionalProperties": false,
-                "properties": {
-                  "id": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "path_with_namespace": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "name"
-                ],
-                "type": [
-                  "null",
-                  "object"
                 ]
               },
               "slug": {
@@ -24674,6 +24992,7 @@
               },
               "required": [
                 "id",
+                "description",
                 "name"
               ],
               "type": [
@@ -24730,6 +25049,60 @@
             "deployable": {
               "additionalProperties": false,
               "properties": {
+                "commit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author_email": {
+                      "type": "string"
+                    },
+                    "author_name": {
+                      "type": "string"
+                    },
+                    "authored_date": {
+                      "type": "string"
+                    },
+                    "committed_date": {
+                      "type": "string"
+                    },
+                    "committer_email": {
+                      "type": "string"
+                    },
+                    "committer_name": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "parent_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "short_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "coverage": {
                   "type": "number"
                 },
@@ -24751,9 +25124,6 @@
                 "pipeline": {
                   "additionalProperties": false,
                   "properties": {
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -24764,9 +25134,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
                       "type": "string"
                     },
                     "web_url": {
@@ -24784,6 +25151,39 @@
                 "ref": {
                   "type": "string"
                 },
+                "runner": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "is_shared": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "online": {
+                      "type": "boolean"
+                    },
+                    "runner_type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "stage": {
                   "type": "string"
                 },
@@ -24795,6 +25195,61 @@
                 },
                 "tag": {
                   "type": "boolean"
+                },
+                "user": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "linkedin": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "public_email": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "twitter": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    },
+                    "website_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 }
               },
               "required": [
@@ -24818,9 +25273,6 @@
               "type": "string"
             },
             "status": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             },
             "user": {
@@ -24873,34 +25325,6 @@
           "type": [
             "null",
             "array"
-          ]
-        },
-        "project": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "name"
-          ],
-          "type": [
-            "null",
-            "object"
           ]
         },
         "slug": {
@@ -25025,6 +25449,7 @@
               },
               "required": [
                 "id",
+                "description",
                 "name"
               ],
               "type": [
@@ -25081,6 +25506,60 @@
             "deployable": {
               "additionalProperties": false,
               "properties": {
+                "commit": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author_email": {
+                      "type": "string"
+                    },
+                    "author_name": {
+                      "type": "string"
+                    },
+                    "authored_date": {
+                      "type": "string"
+                    },
+                    "committed_date": {
+                      "type": "string"
+                    },
+                    "committer_email": {
+                      "type": "string"
+                    },
+                    "committer_name": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "parent_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "short_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "coverage": {
                   "type": "number"
                 },
@@ -25102,9 +25581,6 @@
                 "pipeline": {
                   "additionalProperties": false,
                   "properties": {
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -25115,9 +25591,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "type": "string"
-                    },
-                    "updated_at": {
                       "type": "string"
                     },
                     "web_url": {
@@ -25135,6 +25608,39 @@
                 "ref": {
                   "type": "string"
                 },
+                "runner": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "is_shared": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "online": {
+                      "type": "boolean"
+                    },
+                    "runner_type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "stage": {
                   "type": "string"
                 },
@@ -25146,6 +25652,61 @@
                 },
                 "tag": {
                   "type": "boolean"
+                },
+                "user": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "linkedin": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "public_email": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "twitter": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    },
+                    "website_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 }
               },
               "required": [
@@ -25169,9 +25730,6 @@
               "type": "string"
             },
             "status": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             },
             "user": {
@@ -25224,34 +25782,6 @@
           "type": [
             "null",
             "array"
-          ]
-        },
-        "project": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "name"
-          ],
-          "type": [
-            "null",
-            "object"
           ]
         },
         "slug": {

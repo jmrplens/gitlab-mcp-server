@@ -82,6 +82,63 @@ func isAcceptedRename(mcpType, tag string) bool {
 	return acceptedOutputRenames[tag]
 }
 
+// curatedRefSubsets marks MCP output types that are DOCUMENTED REFERENCE SUBSETS
+// of a larger SDK struct: a nested object the GitLab REST API documents as
+// returning only an identity subset for a given endpoint (e.g. a board's nested
+// `group` returns id/name/web_url, not the full ~60-field Group). For these types
+// the SDK-struct comparison would falsely count every omitted deep field as
+// "missing output"; the official API doc is the 1:1 ground truth, so MissingFields
+// is suppressed. ExtraFields (invented scalars) and TypeMismatches are STILL
+// reported — we still forbid inventing fields and still type-check kept fields.
+//
+// Each entry cites the doc/api/<file> that justifies the subset, so the curation
+// is criterion-based (what the endpoint documents) rather than arbitrary. The
+// type also carries a `// Documented reference subset per doc/api/<file>` comment
+// at its definition for inline traceability. Key = "<package>.<MCP output type>".
+var curatedRefSubsets = map[string]string{
+	// Populated per package as outputs are reconciled to the official API docs
+	// (https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/<file>).
+	//
+	// environments — nested objects of the "Retrieve an environment" response
+	// (doc/api/environments.md#retrieve-an-environment).
+	"environments.ClusterAgentOutput":       "environments.md#retrieve-an-environment",
+	"environments.ConfigProjectOutput":      "environments.md#retrieve-an-environment",
+	"environments.DeploymentOutput":         "environments.md#retrieve-an-environment",
+	"environments.DeploymentUserOutput":     "environments.md#retrieve-an-environment",
+	"environments.DeployableOutput":         "environments.md#retrieve-an-environment",
+	"environments.DeployableUserOutput":     "environments.md#retrieve-an-environment",
+	"environments.DeployableCommitOutput":   "environments.md#retrieve-an-environment",
+	"environments.DeployablePipelineOutput": "environments.md#retrieve-an-environment",
+	"environments.DeployableRunnerOutput":   "environments.md#retrieve-an-environment",
+}
+
+// isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
+// doc-justified reference subset whose omitted-vs-full-SDK fields are not flagged.
+func isCuratedRefSubset(pkg, mcpType string) bool {
+	_, ok := curatedRefSubsets[pkg+"."+mcpType]
+	return ok
+}
+
+// docOmittedFields lists individual top-level SDK result fields the official API
+// doc does NOT include in the documented response for that endpoint, so the MCP
+// output intentionally omits them: the doc is the 1:1 ground truth (we expose what
+// the endpoint returns, not every field of the SDK struct). Unlike
+// curatedRefSubsets (a whole nested reference type), this is per-field on a primary
+// output type. Each entry cites the doc/api/<file>. Key = "<pkg>.<MCP type>.<tag>".
+var docOmittedFields = map[string]string{
+	// environments: the environment response documents no nested `project` object
+	// (environments are queried within a project, so it would be redundant);
+	// gl.Environment.Project is never populated in the documented response.
+	"environments.Output.project": "environments.md (list/get/create/update response)",
+}
+
+// isDocOmittedField reports whether an SDK field is a doc-justified intentional
+// omission on a primary MCP output type.
+func isDocOmittedField(pkg, mcpType, tag string) bool {
+	_, ok := docOmittedFields[pkg+"."+mcpType+"."+tag]
+	return ok
+}
+
 // gap is one diffed MCP↔SDK struct pair under a package.
 type gap struct {
 	Kind           string         `json:"kind"` // "input" or "output"
@@ -275,7 +332,7 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 	// structs so a field is MISSING/EXTRA only when absent from EVERY pairing.
 	for _, group := range outputGroups(outputPairs) {
 		pr.OutputPairs += len(group.pairs)
-		g := diffOutputGroup(group)
+		g := diffOutputGroup(pr.Package, group)
 		pr.MissingOutputCount += len(g.MissingFields)
 		pr.ExtraOutputCount += len(g.ExtraFields)
 		appendGapIfAny(&pr, g)
@@ -321,7 +378,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 // TypeMismatch is reported for a tag only when the MCP type is incompatible with
 // the SDK type in EVERY pairing that carries that tag, so a field that is
 // compatible in at least one pairing is not double-flagged.
-func diffOutputGroup(group outputGroup) gap {
+func diffOutputGroup(pkg string, group outputGroup) gap {
 	mcpFields := flattenFields(group.mcpType, []string{"json"})
 
 	// unionSDK maps each SDK json tag to one representative SDK type string (used
@@ -355,7 +412,12 @@ func diffOutputGroup(group outputGroup) gap {
 			}
 		}
 		if !present {
-			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: unionSDK[tag]})
+			// Doc-grounded omissions intentionally drop SDK fields the endpoint does
+			// not return (the cited API doc is the 1:1 ground truth): whole nested
+			// reference subsets, and individual top-level fields.
+			if !isCuratedRefSubset(pkg, group.mcpName) && !isDocOmittedField(pkg, group.mcpName, tag) {
+				g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: unionSDK[tag]})
+			}
 			continue
 		}
 		// Report a mismatch only when the MCP type is incompatible with the SDK

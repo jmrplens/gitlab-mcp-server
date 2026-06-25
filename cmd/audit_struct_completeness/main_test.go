@@ -135,9 +135,9 @@ func TestPathHelpers(t *testing.T) {
 }
 
 // TestBuildReport_DetectsKnownBranchGaps runs the auditor against the real
-// repository and asserts that the known, verified branches gaps are reported.
-// This doubles as the methodology regression guard: if the resolver stops
-// attributing SDK structs to MCP structs, these assertions fail.
+// repository as a methodology regression guard: it verifies the resolver still
+// attributes a healthy number of SDK↔MCP input/output pairs across the tools tree
+// (a broken resolver would collapse these toward zero).
 func TestBuildReport_DetectsKnownBranchGaps(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
@@ -155,12 +155,16 @@ func TestBuildReport_DetectsKnownBranchGaps(t *testing.T) {
 	if branches.InputPairs == 0 || branches.OutputPairs == 0 {
 		t.Fatalf("branches has no resolved pairs: %+v", branches)
 	}
-	// ProtectRepositoryBranchesOptions exposes granular access arrays the MCP
-	// ProtectInput does not surface — a real R-INPUT gap.
-	assertMissingField(t, branches, "input", "ProtectInput", "allowed_to_push")
-	// The Branch result exposes the full commit object; the MCP Output flattens
-	// it to commit_id, so `commit` is reported missing — a real R-OUTPUT note.
-	assertMissingField(t, branches, "output", "Output", "commit")
+	// Methodology regression guard: the resolver must keep attributing many
+	// input/output pairs across the tools tree. A broken resolver (e.g. the
+	// converter/handler detection stops matching SDK structs to MCP structs) would
+	// collapse these counts toward zero. The original "known branches gaps"
+	// assertions were removed because branches was migrated to 1:1 in the audit
+	// (ProtectInput.allowed_to_push added, Output.commit migrated to an object), so
+	// those specific gaps no longer exist.
+	if rep.Summary.InputPairs < 50 || rep.Summary.OutputPairs < 50 {
+		t.Fatalf("resolver attributed too few pairs (resolver regression?): %+v", rep.Summary)
+	}
 }
 
 // TestBuildReport_Deterministic verifies two runs produce identical output, a
@@ -420,7 +424,7 @@ func TestDiffOutputGroup_UnionMultiConverter(t *testing.T) {
 			{mcpName: "Output", mcpType: mcp, sdkName: "v2.Full", sdkType: full},
 		},
 	}
-	g := diffOutputGroup(group)
+	g := diffOutputGroup("testpkg", group)
 
 	if g.SDKType != "v2.Full|v2.Lean" {
 		t.Errorf("group SDKType = %q, want joined union %q", g.SDKType, "v2.Full|v2.Lean")
@@ -640,17 +644,21 @@ func findPackage(t *testing.T, rep report, name string) packageReport {
 	return packageReport{}
 }
 
-func assertMissingField(t *testing.T, pr packageReport, kind, mcpType, tag string) {
-	t.Helper()
-	for _, g := range pr.Gaps {
-		if g.Kind != kind || g.MCPType != mcpType {
-			continue
-		}
-		for _, mf := range g.MissingFields {
-			if mf.Tag == tag {
-				return
-			}
-		}
+// TestDocGroundedSuppression verifies the doc-grounded carve-outs: a curated
+// reference subset suppresses missing-field reporting for the whole nested type,
+// and a doc-omitted field suppresses a single top-level SDK field — both keyed by
+// "<package>.<type>" / "<package>.<type>.<tag>" so they never leak across packages.
+func TestDocGroundedSuppression(t *testing.T) {
+	if !isCuratedRefSubset("environments", "DeployableOutput") {
+		t.Error("DeployableOutput should be a curated ref subset in environments")
 	}
-	t.Errorf("expected %s gap %s missing field %q in package %q, not found", kind, mcpType, tag, pr.Package)
+	if isCuratedRefSubset("otherpkg", "DeployableOutput") {
+		t.Error("curated ref subset must be package-scoped, not global")
+	}
+	if !isDocOmittedField("environments", "Output", "project") {
+		t.Error("environments.Output.project should be a doc-omitted field")
+	}
+	if isDocOmittedField("environments", "Output", "name") {
+		t.Error("name is documented and must not be treated as doc-omitted")
+	}
 }

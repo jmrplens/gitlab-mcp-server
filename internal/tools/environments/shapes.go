@@ -1,8 +1,9 @@
-// shapes.go defines the additive nested output sub-objects surfaced on an
-// environment (cluster_agent, last_deployment, project) and their converters
-// from the client-go SDK shapes. Each mirror tracks the canonical, identifying
-// fields of the corresponding gl.* type rather than its full shape, keeping the
-// MCP output focused while remaining faithful to the API response.
+// shapes.go defines the nested output sub-objects surfaced on an environment
+// (cluster_agent, last_deployment and its deployable job) and their converters
+// from the client-go SDK shapes. Each mirror reproduces exactly the field set
+// the official environments API documents for that nested object
+// (doc/api/environments.md), trimming SDK fields the API never returns for an
+// environment and shaping nested references to their documented subsets.
 package environments
 
 import (
@@ -19,22 +20,28 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// ClusterAgentOutput mirrors gl.Agent (the cluster agent associated with an
-// environment via the `cluster_agent` key). It surfaces the agent identity and
-// a compact reference to its configuration project.
+// ClusterAgentOutput mirrors the environment `cluster_agent` object documented in
+// the "Retrieve an environment" response (doc/api/environments.md): id, name,
+// config_project, created_at, created_by_user_id.
+//
+// Documented reference subset per doc/api/environments.md
 type ClusterAgentOutput struct {
 	ID              int64                `json:"id"`
 	Name            string               `json:"name"`
+	ConfigProject   *ConfigProjectOutput `json:"config_project,omitempty"`
 	CreatedAt       string               `json:"created_at,omitempty"`
 	CreatedByUserID int64                `json:"created_by_user_id,omitempty"`
-	ConfigProject   *ConfigProjectOutput `json:"config_project,omitempty"`
 }
 
-// ConfigProjectOutput mirrors gl.ConfigProject (the cluster agent's
-// configuration project reference).
+// ConfigProjectOutput mirrors the `cluster_agent.config_project` object
+// documented in the "Retrieve an environment" response
+// (doc/api/environments.md): id, description, name, name_with_namespace, path,
+// path_with_namespace, created_at.
+//
+// Documented reference subset per doc/api/environments.md
 type ConfigProjectOutput struct {
 	ID                int64  `json:"id"`
-	Description       string `json:"description,omitempty"`
+	Description       string `json:"description"`
 	Name              string `json:"name"`
 	NameWithNamespace string `json:"name_with_namespace,omitempty"`
 	Path              string `json:"path,omitempty"`
@@ -65,75 +72,62 @@ func clusterAgentOutput(a *gl.Agent) *ClusterAgentOutput {
 	return out
 }
 
-// ProjectObject mirrors gl.Project (the project object embedded on an
-// environment's `project` key). It surfaces the identifying fields of the
-// owning project without importing the full gl.Project shape, which carries
-// ~160 fields (statistics, permissions, settings, links) not relevant to an
-// environment's project reference.
-type ProjectObject struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	Path              string `json:"path,omitempty"`
-	PathWithNamespace string `json:"path_with_namespace,omitempty"`
-	WebURL            string `json:"web_url,omitempty"`
+// DeploymentOutput mirrors the environment `last_deployment` object documented
+// in the "Retrieve an environment" response (doc/api/environments.md): id, iid,
+// ref, sha, created_at, status, user, deployable. The deployment's
+// back-reference to its environment is intentionally omitted to avoid the
+// recursive Environment -> last_deployment -> environment cycle, and `updated_at`
+// is omitted because the documented last_deployment object does not include it.
+//
+// Documented reference subset per doc/api/environments.md
+type DeploymentOutput struct {
+	ID         int64                 `json:"id"`
+	IID        int64                 `json:"iid,omitempty"`
+	Ref        string                `json:"ref,omitempty"`
+	SHA        string                `json:"sha,omitempty"`
+	CreatedAt  string                `json:"created_at,omitempty"`
+	Status     string                `json:"status,omitempty"`
+	User       *DeploymentUserOutput `json:"user,omitempty"`
+	Deployable *DeployableOutput     `json:"deployable,omitempty"`
 }
 
-func projectObject(p *gl.Project) *ProjectObject {
-	if p == nil {
-		return nil
-	}
-	return &ProjectObject{
-		ID:                p.ID,
-		Name:              p.Name,
-		Path:              p.Path,
-		PathWithNamespace: p.PathWithNamespace,
-		WebURL:            p.WebURL,
-	}
-}
-
-// UserOutput mirrors gl.ProjectUser (the user that triggered a deployment).
-type UserOutput struct {
+// DeploymentUserOutput mirrors the `last_deployment.user` object documented in
+// the "Retrieve an environment" response (doc/api/environments.md): id, name,
+// state, username, avatar_url, web_url.
+//
+// Documented reference subset per doc/api/environments.md
+type DeploymentUserOutput struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
-	Username  string `json:"username,omitempty"`
 	State     string `json:"state,omitempty"`
+	Username  string `json:"username,omitempty"`
 	AvatarURL string `json:"avatar_url,omitempty"`
 	WebURL    string `json:"web_url,omitempty"`
 }
 
-func projectUserOutput(u *gl.ProjectUser) *UserOutput {
+func deploymentUserOutput(u *gl.ProjectUser) *DeploymentUserOutput {
 	if u == nil {
 		return nil
 	}
-	return &UserOutput{
+	return &DeploymentUserOutput{
 		ID:        u.ID,
 		Name:      u.Name,
-		Username:  u.Username,
 		State:     u.State,
+		Username:  u.Username,
 		AvatarURL: u.AvatarURL,
 		WebURL:    u.WebURL,
 	}
 }
 
-// DeploymentOutput mirrors gl.Deployment (the environment's `last_deployment`).
-// It surfaces the deployment identity, ref/sha/status, timestamps, the
-// triggering user, and a compact view of the deployable job and its pipeline.
-// The deployment's back-reference to its environment is intentionally omitted
-// to avoid the recursive Environment -> last_deployment -> environment cycle.
-type DeploymentOutput struct {
-	ID         int64             `json:"id"`
-	IID        int64             `json:"iid,omitempty"`
-	Ref        string            `json:"ref,omitempty"`
-	SHA        string            `json:"sha,omitempty"`
-	Status     string            `json:"status,omitempty"`
-	CreatedAt  string            `json:"created_at,omitempty"`
-	UpdatedAt  string            `json:"updated_at,omitempty"`
-	User       *UserOutput       `json:"user,omitempty"`
-	Deployable *DeployableOutput `json:"deployable,omitempty"`
-}
-
-// DeployableOutput mirrors gl.DeploymentDeployable (the job that performed the
-// deployment) with its canonical scalars and a compact pipeline reference.
+// DeployableOutput mirrors the `last_deployment.deployable` job object documented
+// in the "Retrieve an environment" response (doc/api/environments.md): id,
+// status, stage, name, ref, tag, coverage, created_at, started_at, finished_at,
+// duration, user, commit, pipeline, runner. The documented `project`
+// (ci_job_token_scope_enabled), `web_url`, `artifacts`, and `artifacts_expire_at`
+// fields are not present on the client-go DeploymentDeployable struct (v2.42.0)
+// and therefore cannot be surfaced.
+//
+// Documented reference subset per doc/api/environments.md
 type DeployableOutput struct {
 	ID         int64                     `json:"id"`
 	Status     string                    `json:"status,omitempty"`
@@ -146,19 +140,140 @@ type DeployableOutput struct {
 	StartedAt  string                    `json:"started_at,omitempty"`
 	FinishedAt string                    `json:"finished_at,omitempty"`
 	Duration   float64                   `json:"duration,omitempty"`
+	User       *DeployableUserOutput     `json:"user,omitempty"`
+	Commit     *DeployableCommitOutput   `json:"commit,omitempty"`
 	Pipeline   *DeployablePipelineOutput `json:"pipeline,omitempty"`
+	Runner     *DeployableRunnerOutput   `json:"runner,omitempty"`
 }
 
-// DeployablePipelineOutput mirrors gl.DeploymentDeployablePipeline (the
-// pipeline reference embedded on a deployable).
+// DeployableUserOutput mirrors the `deployable.user` object documented in the
+// "Retrieve an environment" response (doc/api/environments.md): id, name,
+// username, state, avatar_url, web_url, created_at, bio, location, public_email,
+// linkedin, twitter, website_url, organization.
+//
+// Documented reference subset per doc/api/environments.md
+type DeployableUserOutput struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Username     string `json:"username,omitempty"`
+	State        string `json:"state,omitempty"`
+	AvatarURL    string `json:"avatar_url,omitempty"`
+	WebURL       string `json:"web_url,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	Bio          string `json:"bio,omitempty"`
+	Location     string `json:"location,omitempty"`
+	PublicEmail  string `json:"public_email,omitempty"`
+	Linkedin     string `json:"linkedin,omitempty"`
+	Twitter      string `json:"twitter,omitempty"`
+	WebsiteURL   string `json:"website_url,omitempty"`
+	Organization string `json:"organization,omitempty"`
+}
+
+func deployableUserOutput(u *gl.User) *DeployableUserOutput {
+	if u == nil {
+		return nil
+	}
+	return &DeployableUserOutput{
+		ID:           u.ID,
+		Name:         u.Name,
+		Username:     u.Username,
+		State:        u.State,
+		AvatarURL:    u.AvatarURL,
+		WebURL:       u.WebURL,
+		CreatedAt:    formatTimePtr(u.CreatedAt),
+		Bio:          u.Bio,
+		Location:     u.Location,
+		PublicEmail:  u.PublicEmail,
+		Linkedin:     u.Linkedin,
+		Twitter:      u.Twitter,
+		WebsiteURL:   u.WebsiteURL,
+		Organization: u.Organization,
+	}
+}
+
+// DeployableCommitOutput mirrors the `deployable.commit` object documented in
+// the "Retrieve an environment" response (doc/api/environments.md): id,
+// short_id, created_at, parent_ids, title, message, author_name, author_email,
+// authored_date, committer_name, committer_email, committed_date.
+//
+// Documented reference subset per doc/api/environments.md
+type DeployableCommitOutput struct {
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
+	Title          string   `json:"title,omitempty"`
+	Message        string   `json:"message,omitempty"`
+	AuthorName     string   `json:"author_name,omitempty"`
+	AuthorEmail    string   `json:"author_email,omitempty"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name,omitempty"`
+	CommitterEmail string   `json:"committer_email,omitempty"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+}
+
+func deployableCommitOutput(c *gl.Commit) *DeployableCommitOutput {
+	if c == nil {
+		return nil
+	}
+	return &DeployableCommitOutput{
+		ID:             c.ID,
+		ShortID:        c.ShortID,
+		CreatedAt:      formatTimePtr(c.CreatedAt),
+		ParentIDs:      c.ParentIDs,
+		Title:          c.Title,
+		Message:        c.Message,
+		AuthorName:     c.AuthorName,
+		AuthorEmail:    c.AuthorEmail,
+		AuthoredDate:   formatTimePtr(c.AuthoredDate),
+		CommitterName:  c.CommitterName,
+		CommitterEmail: c.CommitterEmail,
+		CommittedDate:  formatTimePtr(c.CommittedDate),
+	}
+}
+
+// DeployablePipelineOutput mirrors the `deployable.pipeline` object documented in
+// the "Retrieve an environment" response (doc/api/environments.md): id, sha,
+// ref, status, web_url.
+//
+// Documented reference subset per doc/api/environments.md
 type DeployablePipelineOutput struct {
-	ID        int64  `json:"id"`
-	SHA       string `json:"sha,omitempty"`
-	Ref       string `json:"ref,omitempty"`
-	Status    string `json:"status,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	ID     int64  `json:"id"`
+	SHA    string `json:"sha,omitempty"`
+	Ref    string `json:"ref,omitempty"`
+	Status string `json:"status,omitempty"`
+	WebURL string `json:"web_url,omitempty"`
+}
+
+// DeployableRunnerOutput mirrors the `deployable.runner` object documented in the
+// "Retrieve an environment" response (doc/api/environments.md). The documented
+// example shows `runner` as null, so its shape is reduced to the canonical
+// runner identity fields exposed by the client-go Runner struct.
+//
+// Documented reference subset per doc/api/environments.md
+type DeployableRunnerOutput struct {
+	ID          int64  `json:"id"`
+	Description string `json:"description,omitempty"`
+	Name        string `json:"name,omitempty"`
+	IsShared    bool   `json:"is_shared,omitempty"`
+	RunnerType  string `json:"runner_type,omitempty"`
+	Online      bool   `json:"online,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+func deployableRunnerOutput(r *gl.Runner) *DeployableRunnerOutput {
+	if r == nil {
+		return nil
+	}
+	return &DeployableRunnerOutput{
+		ID:          r.ID,
+		Description: r.Description,
+		Name:        r.Name,
+		IsShared:    r.IsShared,
+		RunnerType:  r.RunnerType,
+		Online:      r.Online,
+		Status:      r.Status,
+	}
 }
 
 func deploymentOutput(d *gl.Deployment) *DeploymentOutput {
@@ -170,10 +285,9 @@ func deploymentOutput(d *gl.Deployment) *DeploymentOutput {
 		IID:       d.IID,
 		Ref:       d.Ref,
 		SHA:       d.SHA,
-		Status:    d.Status,
 		CreatedAt: formatTimePtr(d.CreatedAt),
-		UpdatedAt: formatTimePtr(d.UpdatedAt),
-		User:      projectUserOutput(d.User),
+		Status:    d.Status,
+		User:      deploymentUserOutput(d.User),
 	}
 	out.Deployable = deployableOutput(d.Deployable)
 	return out
@@ -197,17 +311,18 @@ func deployableOutput(d gl.DeploymentDeployable) *DeployableOutput {
 		StartedAt:  formatTimePtr(d.StartedAt),
 		FinishedAt: formatTimePtr(d.FinishedAt),
 		Duration:   d.Duration,
+		User:       deployableUserOutput(d.User),
+		Commit:     deployableCommitOutput(d.Commit),
+		Runner:     deployableRunnerOutput(d.Runner),
 	}
 	p := d.Pipeline
 	if p.ID != 0 {
 		out.Pipeline = &DeployablePipelineOutput{
-			ID:        p.ID,
-			SHA:       p.SHA,
-			Ref:       p.Ref,
-			Status:    p.Status,
-			WebURL:    p.WebURL,
-			CreatedAt: formatTimePtr(p.CreatedAt),
-			UpdatedAt: formatTimePtr(p.UpdatedAt),
+			ID:     p.ID,
+			SHA:    p.SHA,
+			Ref:    p.Ref,
+			Status: p.Status,
+			WebURL: p.WebURL,
 		}
 	}
 	return out

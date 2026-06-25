@@ -99,8 +99,6 @@ type Output struct {
 	ClusterAgent *ClusterAgentOutput `json:"cluster_agent,omitempty"`
 	// LastDeployment is the most recent deployment to this environment, when present.
 	LastDeployment *DeploymentOutput `json:"last_deployment,omitempty"`
-	// Project is a compact reference to the owning project, when returned by the API.
-	Project *ProjectObject `json:"project,omitempty"`
 }
 
 // ListOutput holds a paginated list of environments.
@@ -129,7 +127,6 @@ func toOutput(e *gl.Environment) Output {
 		FluxResourcePath:    e.FluxResourcePath,
 		ClusterAgent:        clusterAgentOutput(e.ClusterAgent),
 		LastDeployment:      deploymentOutput(e.LastDeployment),
-		Project:             projectObject(e.Project),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)

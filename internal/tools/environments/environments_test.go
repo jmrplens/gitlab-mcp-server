@@ -1103,9 +1103,10 @@ func environmentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 // ---------------------------------------------------------------------------.
 
 // envFullJSON is a full single-environment API response exercising every
-// additive 1:1 field: scalar (auto_stop_setting, kubernetes_namespace,
+// documented 1:1 field: scalar (auto_stop_setting, kubernetes_namespace,
 // flux_resource_path) and nested objects (cluster_agent, last_deployment with
-// its deployable+pipeline+user, and project).
+// its deployable+pipeline+user+commit+runner) as documented in
+// doc/api/environments.md "Retrieve an environment".
 const envFullJSON = `{
 	"id":7,"name":"production","slug":"production","state":"available","tier":"production",
 	"description":"Prod","external_url":"https://prod.example.com",
@@ -1118,16 +1119,18 @@ const envFullJSON = `{
 	},
 	"last_deployment":{
 		"id":501,"iid":12,"ref":"main","sha":"abc123","status":"success",
-		"created_at":"2026-06-15T11:00:00Z","updated_at":"2026-06-15T11:05:00Z",
+		"created_at":"2026-06-15T11:00:00Z",
 		"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","avatar_url":"https://av","web_url":"https://u"},
 		"deployable":{
 			"id":900,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,
 			"coverage":88.5,"created_at":"2026-06-15T10:55:00Z","started_at":"2026-06-15T10:56:00Z",
 			"finished_at":"2026-06-15T11:00:00Z","duration":240,
-			"pipeline":{"id":700,"sha":"abc123","ref":"main","status":"success","web_url":"https://pipe","created_at":"2026-06-15T10:50:00Z","updated_at":"2026-06-15T11:00:00Z"}
+			"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","web_url":"https://u","created_at":"2025-01-01T00:00:00Z","bio":"bio text","location":"Earth","public_email":"d@x","organization":"Acme"},
+			"commit":{"id":"abc123def","short_id":"abc123","title":"Deploy fix","message":"Deploy fix\n","author_name":"Dev","author_email":"dev@x","authored_date":"2026-06-15T10:00:00Z","committer_name":"Dev","committer_email":"dev@x","committed_date":"2026-06-15T10:00:00Z","created_at":"2026-06-15T10:00:00Z","parent_ids":["p1"]},
+			"pipeline":{"id":700,"sha":"abc123","ref":"main","status":"success","web_url":"https://pipe"},
+			"runner":{"id":55,"description":"shared-runner","name":"runner-1","is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}
 		}
-	},
-	"project":{"id":42,"name":"My Project","path":"my-project","path_with_namespace":"grp/my-project","web_url":"https://gitlab/grp/my-project"}
+	}
 }`
 
 // TestEnvironmentGet_FullNestedObjects verifies that Get surfaces every additive
@@ -1158,10 +1161,6 @@ func TestEnvironmentGet_FullNestedObjects(t *testing.T) {
 
 	assertClusterAgent(t, out.ClusterAgent)
 	assertLastDeployment(t, out.LastDeployment)
-	if out.Project == nil || out.Project.ID != 42 || out.Project.Name != "My Project" ||
-		out.Project.Path != "my-project" || out.Project.PathWithNamespace != "grp/my-project" || out.Project.WebURL != "https://gitlab/grp/my-project" {
-		t.Errorf("Project = %#v", out.Project)
-	}
 }
 
 // assertClusterAgent validates the fully populated cluster_agent sub-object.
@@ -1190,8 +1189,8 @@ func assertLastDeployment(t *testing.T, ld *DeploymentOutput) {
 	if ld.ID != wantLD.ID || ld.IID != wantLD.IID || ld.Ref != wantLD.Ref || ld.SHA != wantLD.SHA || ld.Status != wantLD.Status {
 		t.Errorf("LastDeployment = %#v", ld)
 	}
-	if ld.CreatedAt == "" || ld.UpdatedAt == "" {
-		t.Error("LastDeployment timestamps empty")
+	if ld.CreatedAt == "" {
+		t.Error("LastDeployment created_at empty")
 	}
 	if u := ld.User; u == nil || u.ID != 4 || u.Username != "deployer" || u.State != "active" || u.WebURL != "https://u" {
 		t.Errorf("LastDeployment.User = %#v", ld.User)
@@ -1199,7 +1198,8 @@ func assertLastDeployment(t *testing.T, ld *DeploymentOutput) {
 	assertDeployable(t, ld.Deployable)
 }
 
-// assertDeployable validates the deployable job sub-object and its pipeline.
+// assertDeployable validates the deployable job sub-object and its documented
+// user, commit, pipeline, and runner references.
 func assertDeployable(t *testing.T, dep *DeployableOutput) {
 	t.Helper()
 	if dep == nil {
@@ -1214,9 +1214,44 @@ func assertDeployable(t *testing.T, dep *DeployableOutput) {
 	if dep.CreatedAt == "" || dep.StartedAt == "" || dep.FinishedAt == "" {
 		t.Error("Deployable timestamps empty")
 	}
-	p := dep.Pipeline
-	if p == nil || p.ID != 700 || p.WebURL != "https://pipe" || p.CreatedAt == "" || p.UpdatedAt == "" {
+	assertDeployableUser(t, dep.User)
+	assertDeployableCommit(t, dep.Commit)
+	assertDeployablePipeline(t, dep.Pipeline)
+	assertDeployableRunner(t, dep.Runner)
+}
+
+// assertDeployableUser validates the documented deployable.user subset.
+func assertDeployableUser(t *testing.T, u *DeployableUserOutput) {
+	t.Helper()
+	if u == nil || u.ID != 4 || u.Username != "deployer" || u.Bio != "bio text" ||
+		u.Location != "Earth" || u.PublicEmail != "d@x" || u.Organization != "Acme" || u.CreatedAt == "" {
+		t.Errorf("Deployable.User = %#v", u)
+	}
+}
+
+// assertDeployableCommit validates the documented deployable.commit subset.
+func assertDeployableCommit(t *testing.T, c *DeployableCommitOutput) {
+	t.Helper()
+	if c == nil || c.ID != "abc123def" || c.ShortID != "abc123" || c.Title != "Deploy fix" ||
+		c.AuthorEmail != "dev@x" || c.CommittedDate == "" || len(c.ParentIDs) != 1 || c.ParentIDs[0] != "p1" {
+		t.Errorf("Deployable.Commit = %#v", c)
+	}
+}
+
+// assertDeployablePipeline validates the documented deployable.pipeline subset.
+func assertDeployablePipeline(t *testing.T, p *DeployablePipelineOutput) {
+	t.Helper()
+	if p == nil || p.ID != 700 || p.WebURL != "https://pipe" || p.SHA != "abc123" || p.Ref != "main" || p.Status != "success" {
 		t.Errorf("Deployable.Pipeline = %#v", p)
+	}
+}
+
+// assertDeployableRunner validates the documented deployable.runner subset.
+func assertDeployableRunner(t *testing.T, r *DeployableRunnerOutput) {
+	t.Helper()
+	if r == nil || r.ID != 55 || r.Name != "runner-1" || !r.IsShared ||
+		r.RunnerType != "instance_type" || !r.Online || r.Status != "online" {
+		t.Errorf("Deployable.Runner = %#v", r)
 	}
 }
 
@@ -1240,9 +1275,6 @@ func TestEnvironmentGet_NilNestedObjects(t *testing.T) {
 	}
 	if out.LastDeployment != nil {
 		t.Errorf("LastDeployment = %#v, want nil", out.LastDeployment)
-	}
-	if out.Project != nil {
-		t.Errorf("Project = %#v, want nil", out.Project)
 	}
 }
 
@@ -1272,6 +1304,41 @@ func TestEnvironmentGet_DeploymentWithoutDeployable(t *testing.T) {
 	}
 	if out.LastDeployment.User != nil {
 		t.Errorf("User = %#v, want nil", out.LastDeployment.User)
+	}
+}
+
+// TestEnvironmentGet_DeployableWithoutNestedRefs verifies a deployable that has
+// identity but omits its user, commit, and runner references maps each to a nil
+// pointer (covering the nil-guard branches of the deployable converters).
+func TestEnvironmentGet_DeployableWithoutNestedRefs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":10,"name":"qa","slug":"qa","state":"available",
+				"last_deployment":{"id":2,"ref":"main","status":"success",
+					"deployable":{"id":3,"name":"deploy-qa","status":"success"}}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	dep := out.LastDeployment.Deployable
+	if dep == nil || dep.ID != 3 {
+		t.Fatalf("Deployable = %#v", dep)
+	}
+	if dep.User != nil {
+		t.Errorf("Deployable.User = %#v, want nil", dep.User)
+	}
+	if dep.Commit != nil {
+		t.Errorf("Deployable.Commit = %#v, want nil", dep.Commit)
+	}
+	if dep.Runner != nil {
+		t.Errorf("Deployable.Runner = %#v, want nil", dep.Runner)
 	}
 }
 
