@@ -22,7 +22,10 @@ type ListInput struct {
 	Name      string               `json:"name,omitempty"   jsonschema:"Filter by exact environment name"`
 	Search    string               `json:"search,omitempty" jsonschema:"Search environments by name (fuzzy)"`
 	States    string               `json:"states,omitempty" jsonschema:"Filter by state: available, stopping, stopped"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, name)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single environment.
@@ -33,21 +36,29 @@ type GetInput struct {
 
 // CreateInput defines parameters for creating an environment.
 type CreateInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
-	Name        string               `json:"name"                   jsonschema:"Environment name (e.g. production, staging),required"`
-	Description string               `json:"description,omitempty"  jsonschema:"Description of the environment"`
-	ExternalURL string               `json:"external_url,omitempty" jsonschema:"URL of the environment's external deployment"`
-	Tier        string               `json:"tier,omitempty"         jsonschema:"Deployment tier: production, staging, testing, development, other"`
+	ProjectID           toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
+	Name                string               `json:"name"                   jsonschema:"Environment name (e.g. production, staging),required"`
+	Description         string               `json:"description,omitempty"  jsonschema:"Description of the environment"`
+	ExternalURL         string               `json:"external_url,omitempty" jsonschema:"URL of the environment's external deployment"`
+	Tier                string               `json:"tier,omitempty"         jsonschema:"Deployment tier: production, staging, testing, development, other"`
+	ClusterAgentID      *int64               `json:"cluster_agent_id,omitempty"      jsonschema:"ID of the cluster agent to associate with this environment"`
+	KubernetesNamespace string               `json:"kubernetes_namespace,omitempty"  jsonschema:"Kubernetes namespace for the cluster agent"`
+	FluxResourcePath    string               `json:"flux_resource_path,omitempty"    jsonschema:"Flux resource path used to track the environment's deployment status"`
+	AutoStopSetting     string               `json:"auto_stop_setting,omitempty"     jsonschema:"Auto-stop behavior: always or with_action"`
 }
 
 // UpdateInput defines parameters for updating an environment.
 type UpdateInput struct {
-	ProjectID     toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
-	EnvironmentID int64                `json:"environment_id"         jsonschema:"Environment ID,required"`
-	Name          string               `json:"name,omitempty"         jsonschema:"New environment name"`
-	Description   string               `json:"description,omitempty"  jsonschema:"Updated description"`
-	ExternalURL   string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
-	Tier          string               `json:"tier,omitempty"         jsonschema:"Updated tier: production, staging, testing, development, other"`
+	ProjectID           toolutil.StringOrInt `json:"project_id"             jsonschema:"Project ID or URL-encoded path,required"`
+	EnvironmentID       int64                `json:"environment_id"         jsonschema:"Environment ID,required"`
+	Name                string               `json:"name,omitempty"         jsonschema:"New environment name"`
+	Description         string               `json:"description,omitempty"  jsonschema:"Updated description"`
+	ExternalURL         string               `json:"external_url,omitempty" jsonschema:"Updated external URL"`
+	Tier                string               `json:"tier,omitempty"         jsonschema:"Updated tier: production, staging, testing, development, other"`
+	ClusterAgentID      *int64               `json:"cluster_agent_id,omitempty"      jsonschema:"ID of the cluster agent to associate with this environment"`
+	KubernetesNamespace string               `json:"kubernetes_namespace,omitempty"  jsonschema:"Kubernetes namespace for the cluster agent"`
+	FluxResourcePath    string               `json:"flux_resource_path,omitempty"    jsonschema:"Flux resource path used to track the environment's deployment status"`
+	AutoStopSetting     string               `json:"auto_stop_setting,omitempty"     jsonschema:"Auto-stop behavior: always or with_action"`
 }
 
 // DeleteInput defines parameters for deleting an environment.
@@ -70,16 +81,26 @@ type StopInput struct {
 // Output represents a single GitLab environment.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description,omitempty"`
-	State       string `json:"state"`
-	Tier        string `json:"tier,omitempty"`
-	ExternalURL string `json:"external_url,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	AutoStopAt  string `json:"auto_stop_at,omitempty"`
+	ID                  int64  `json:"id"`
+	Name                string `json:"name"`
+	Slug                string `json:"slug"`
+	Description         string `json:"description,omitempty"`
+	State               string `json:"state"`
+	Tier                string `json:"tier,omitempty"`
+	ExternalURL         string `json:"external_url,omitempty"`
+	CreatedAt           string `json:"created_at,omitempty"`
+	UpdatedAt           string `json:"updated_at,omitempty"`
+	AutoStopAt          string `json:"auto_stop_at,omitempty"`
+	AutoStopSetting     string `json:"auto_stop_setting,omitempty"`
+	KubernetesNamespace string `json:"kubernetes_namespace,omitempty"`
+	FluxResourcePath    string `json:"flux_resource_path,omitempty"`
+
+	// ClusterAgent is the cluster agent associated with the environment, when set.
+	ClusterAgent *ClusterAgentOutput `json:"cluster_agent,omitempty"`
+	// LastDeployment is the most recent deployment to this environment, when present.
+	LastDeployment *DeploymentOutput `json:"last_deployment,omitempty"`
+	// Project is a compact reference to the owning project, when returned by the API.
+	Project *ProjectObject `json:"project,omitempty"`
 }
 
 // ListOutput holds a paginated list of environments.
@@ -96,13 +117,19 @@ type ListOutput struct {
 // environmentToOutput converts a client-go Environment to the MCP output type.
 func toOutput(e *gl.Environment) Output {
 	out := Output{
-		ID:          e.ID,
-		Name:        e.Name,
-		Slug:        e.Slug,
-		Description: e.Description,
-		State:       e.State,
-		Tier:        e.Tier,
-		ExternalURL: e.ExternalURL,
+		ID:                  e.ID,
+		Name:                e.Name,
+		Slug:                e.Slug,
+		Description:         e.Description,
+		State:               e.State,
+		Tier:                e.Tier,
+		ExternalURL:         e.ExternalURL,
+		AutoStopSetting:     e.AutoStopSetting,
+		KubernetesNamespace: e.KubernetesNamespace,
+		FluxResourcePath:    e.FluxResourcePath,
+		ClusterAgent:        clusterAgentOutput(e.ClusterAgent),
+		LastDeployment:      deploymentOutput(e.LastDeployment),
+		Project:             projectObject(e.Project),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
@@ -128,11 +155,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.ProjectID == "" {
 		return ListOutput{}, errors.New("environmentList: project_id is required")
 	}
-	opts := &gl.ListEnvironmentsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListEnvironmentsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -200,6 +229,18 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Tier != "" {
 		opts.Tier = new(input.Tier)
 	}
+	if input.ClusterAgentID != nil {
+		opts.ClusterAgentID = input.ClusterAgentID
+	}
+	if input.KubernetesNamespace != "" {
+		opts.KubernetesNamespace = new(input.KubernetesNamespace)
+	}
+	if input.FluxResourcePath != "" {
+		opts.FluxResourcePath = new(input.FluxResourcePath)
+	}
+	if input.AutoStopSetting != "" {
+		opts.AutoStopSetting = new(input.AutoStopSetting)
+	}
 	env, _, err := client.GL().Environments.CreateEnvironment(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("environmentCreate", err, http.StatusBadRequest,
@@ -231,6 +272,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Tier != "" {
 		opts.Tier = new(input.Tier)
+	}
+	if input.ClusterAgentID != nil {
+		opts.ClusterAgentID = input.ClusterAgentID
+	}
+	if input.KubernetesNamespace != "" {
+		opts.KubernetesNamespace = new(input.KubernetesNamespace)
+	}
+	if input.FluxResourcePath != "" {
+		opts.FluxResourcePath = new(input.FluxResourcePath)
+	}
+	if input.AutoStopSetting != "" {
+		opts.AutoStopSetting = new(input.AutoStopSetting)
 	}
 	env, _, err := client.GL().Environments.EditEnvironment(string(input.ProjectID), input.EnvironmentID, opts, gl.WithContext(ctx))
 	if err != nil {

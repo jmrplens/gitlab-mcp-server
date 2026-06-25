@@ -88,6 +88,16 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 		options.Usage = "Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments."
 		options.Aliases = []string{"create environment", "new environment", "add environment"}
 		options.RelatedActions = []string{"environment.list", "environment.update", "deployment.create"}
+	case "update":
+		options.Usage = "Update an existing environment by environment_id. Use to change its name, description, external URL, tier, cluster agent, Kubernetes namespace, Flux resource path, or auto-stop setting."
+		options.Aliases = []string{"update environment", "edit environment", "modify environment"}
+		options.RelatedActions = []string{"environment.get", "environment.list", "environment.stop"}
+		options.IndividualTool.Description = "Update an existing environment in a project. Returns: the updated environment with state, tier, external URL, cluster agent, Kubernetes namespace, Flux resource path, and auto-stop settings. See also: gitlab_environment_get, gitlab_environment_list, gitlab_environment_stop."
+	case "delete":
+		options.Usage = "Delete an environment by environment_id. The environment must be stopped first. Use to permanently remove a runtime target that is no longer used."
+		options.Aliases = []string{"delete environment", "remove environment", "destroy environment"}
+		options.RelatedActions = []string{"environment.stop", "environment.list", "environment.get"}
+		options.IndividualTool.Description = "Delete a stopped environment from a project. Returns: a success confirmation naming the deleted environment. See also: gitlab_environment_stop, gitlab_environment_list, gitlab_environment_get."
 	case "stop":
 		options.Usage = "Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource."
 		options.Aliases = []string{"stop environment", "pause environment", "halt environment"}
