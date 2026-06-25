@@ -1201,7 +1201,7 @@
   },
   {
     "name": "gitlab_add_gpg_key",
-    "description": "Add a GPG key to the currently authenticated GitLab user. Requires the armored GPG public key.\n\nSee also: gitlab_list_gpg_keys, gitlab_delete_gpg_key\n\nReturns: JSON with the created GPG key details.",
+    "description": "Add a GPG key to the authenticated user's account. Returns: the created key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys, gitlab_get_gpg_key, gitlab_delete_gpg_key, gitlab_add_gpg_key_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1250,7 +1250,7 @@
   },
   {
     "name": "gitlab_add_gpg_key_for_user",
-    "description": "Add a GPG key to a specific GitLab user (admin only). Requires user ID and GPG public key.\n\nSee also: gitlab_list_gpg_keys_for_user, gitlab_delete_gpg_key_for_user\n\nReturns: JSON with the created GPG key details.",
+    "description": "Add a GPG key to a specific user's account (admin only). Returns: the created key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys_for_user, gitlab_get_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_add_gpg_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -10860,7 +10860,7 @@
   },
   {
     "name": "gitlab_confirm_vulnerability",
-    "description": "Confirm a detected vulnerability (requires Ultimate/Premium). Changes state from DETECTED to CONFIRMED. Returns: updated vulnerability state. See also: gitlab_get_vulnerability, gitlab_dismiss_vulnerability, gitlab_resolve_vulnerability.",
+    "description": "Confirm a vulnerability as a real finding. Returns: the updated vulnerability with its new confirmed state and timestamp. See also: gitlab_get_vulnerability, gitlab_dismiss_vulnerability, gitlab_resolve_vulnerability.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16535,7 +16535,7 @@
   },
   {
     "name": "gitlab_delete_gpg_key",
-    "description": "Delete a GPG key from the currently authenticated GitLab user.\n\nSee also: gitlab_list_gpg_keys, gitlab_add_gpg_key\n\nReturns: JSON with deletion confirmation.",
+    "description": "Delete a GPG key from the authenticated user's account. Returns: a confirmation naming the deleted key ID. See also: gitlab_list_gpg_keys, gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16578,7 +16578,7 @@
   },
   {
     "name": "gitlab_delete_gpg_key_for_user",
-    "description": "Delete a GPG key from a specific GitLab user (admin only).\n\nSee also: gitlab_list_gpg_keys_for_user, gitlab_add_gpg_key_for_user\n\nReturns: JSON with deletion confirmation.",
+    "description": "Delete a GPG key from a specific user's account (admin only). Returns: a confirmation naming the deleted key ID. See also: gitlab_list_gpg_keys_for_user, gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22121,7 +22121,7 @@
   },
   {
     "name": "gitlab_dismiss_vulnerability",
-    "description": "Dismiss a vulnerability with optional comment and reason (requires Ultimate/Premium). Valid reasons: ACCEPTABLE_RISK, FALSE_POSITIVE, MITIGATING_CONTROL, USED_IN_TESTS, NOT_APPLICABLE. Returns: updated vulnerability state. See also: gitlab_get_vulnerability, gitlab_revert_vulnerability, gitlab_resolve_vulnerability.",
+    "description": "Dismiss a vulnerability with a dismissal reason. Returns: the updated vulnerability with its new dismissed state and timestamp. See also: gitlab_get_vulnerability, gitlab_confirm_vulnerability, gitlab_revert_vulnerability.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32072,7 +32072,7 @@
   },
   {
     "name": "gitlab_get_gpg_key",
-    "description": "Retrieve a specific GPG key by its ID for the current user.\n\nSee also: gitlab_list_gpg_keys, gitlab_add_gpg_key\n\nReturns: JSON with GPG key details.",
+    "description": "Get one GPG key from the authenticated user's account by ID. Returns: the key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys, gitlab_add_gpg_key, gitlab_delete_gpg_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32123,7 +32123,7 @@
   },
   {
     "name": "gitlab_get_gpg_key_for_user",
-    "description": "Retrieve a specific GPG key for a specific user by user ID and key ID.\n\nSee also: gitlab_list_gpg_keys_for_user, gitlab_add_gpg_key_for_user\n\nReturns: JSON with GPG key details.",
+    "description": "Get one GPG key from a specific user's account by ID. Returns: the key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32179,7 +32179,7 @@
   },
   {
     "name": "gitlab_get_group_audit_event",
-    "description": "Get a single group-level audit event by ID. Returns: audit event with ID, author, entity, event details, and created timestamp. See also: gitlab_list_group_audit_events.",
+    "description": "Get a single group-level audit event by group_id and ID. Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: gitlab_list_group_audit_events, gitlab_get_project_audit_event, gitlab_get_instance_audit_event.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32210,7 +32210,22 @@
         "details": {
           "additionalProperties": false,
           "properties": {
+            "add": {
+              "type": "string"
+            },
+            "as": {
+              "type": "string"
+            },
+            "author_class": {
+              "type": "string"
+            },
+            "author_email": {
+              "type": "string"
+            },
             "author_name": {
+              "type": "string"
+            },
+            "change": {
               "type": "string"
             },
             "custom_message": {
@@ -32219,7 +32234,19 @@
             "entity_path": {
               "type": "string"
             },
+            "event_name": {
+              "type": "string"
+            },
+            "failed_login": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
             "ip_address": {
+              "type": "string"
+            },
+            "remove": {
               "type": "string"
             },
             "target_details": {
@@ -32229,6 +32256,12 @@
               "type": "string"
             },
             "target_type": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "with": {
               "type": "string"
             }
           },
@@ -33254,7 +33287,7 @@
   },
   {
     "name": "gitlab_get_instance_audit_event",
-    "description": "Get a single instance-level audit event by ID (admin only). Returns: audit event with ID, author, entity, event details, and created timestamp. See also: gitlab_list_instance_audit_events.",
+    "description": "Get a single instance-level audit event by ID (administrator only). Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: gitlab_list_instance_audit_events, gitlab_get_group_audit_event, gitlab_get_project_audit_event.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -33280,7 +33313,22 @@
         "details": {
           "additionalProperties": false,
           "properties": {
+            "add": {
+              "type": "string"
+            },
+            "as": {
+              "type": "string"
+            },
+            "author_class": {
+              "type": "string"
+            },
+            "author_email": {
+              "type": "string"
+            },
             "author_name": {
+              "type": "string"
+            },
+            "change": {
               "type": "string"
             },
             "custom_message": {
@@ -33289,7 +33337,19 @@
             "entity_path": {
               "type": "string"
             },
+            "event_name": {
+              "type": "string"
+            },
+            "failed_login": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
             "ip_address": {
+              "type": "string"
+            },
+            "remove": {
               "type": "string"
             },
             "target_details": {
@@ -33299,6 +33359,12 @@
               "type": "string"
             },
             "target_type": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "with": {
               "type": "string"
             }
           },
@@ -34875,7 +34941,7 @@
   },
   {
     "name": "gitlab_get_project_audit_event",
-    "description": "Get a single project-level audit event by ID. Returns: audit event with ID, author, entity, event details, and created timestamp. See also: gitlab_list_project_audit_events.",
+    "description": "Get a single project-level audit event by project_id and ID. Returns: the audit event with author, entity, event name/type, target details, IP address, and timestamp. See also: gitlab_list_project_audit_events, gitlab_get_group_audit_event, gitlab_get_instance_audit_event.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34906,7 +34972,22 @@
         "details": {
           "additionalProperties": false,
           "properties": {
+            "add": {
+              "type": "string"
+            },
+            "as": {
+              "type": "string"
+            },
+            "author_class": {
+              "type": "string"
+            },
+            "author_email": {
+              "type": "string"
+            },
             "author_name": {
+              "type": "string"
+            },
+            "change": {
               "type": "string"
             },
             "custom_message": {
@@ -34915,7 +34996,19 @@
             "entity_path": {
               "type": "string"
             },
+            "event_name": {
+              "type": "string"
+            },
+            "failed_login": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
             "ip_address": {
+              "type": "string"
+            },
+            "remove": {
               "type": "string"
             },
             "target_details": {
@@ -34925,6 +35018,12 @@
               "type": "string"
             },
             "target_type": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "with": {
               "type": "string"
             }
           },
@@ -39230,7 +39329,7 @@
   },
   {
     "name": "gitlab_get_vulnerability",
-    "description": "Get a single vulnerability by GID (requires Ultimate/Premium). Returns: full vulnerability details including identifiers, scanner, location, solution, and linked issues/MRs. See also: gitlab_list_vulnerabilities, gitlab_confirm_vulnerability, gitlab_dismiss_vulnerability.",
+    "description": "Get a single vulnerability by global ID. Returns: title, description, severity, state, report type, scanner, identifiers, location, solution, linked issues, and merge request. See also: gitlab_list_vulnerabilities, gitlab_dismiss_vulnerability, gitlab_confirm_vulnerability.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -92171,7 +92270,7 @@
   },
   {
     "name": "gitlab_list_gpg_keys",
-    "description": "List GPG keys for the currently authenticated GitLab user.\n\nSee also: gitlab_add_gpg_key, gitlab_get_gpg_key\n\nReturns: JSON array of GPG keys.",
+    "description": "List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -92238,7 +92337,7 @@
   },
   {
     "name": "gitlab_list_gpg_keys_for_user",
-    "description": "List GPG keys for a specific GitLab user by user ID.\n\nSee also: gitlab_list_gpg_keys, gitlab_get_gpg_key_for_user\n\nReturns: JSON array of GPG keys.",
+    "description": "List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -92313,7 +92412,7 @@
   },
   {
     "name": "gitlab_list_group_audit_events",
-    "description": "List audit events for a GitLab group. Supports filtering by date range. Returns: paginated list of audit events with ID, author, entity, event details. See also: gitlab_get_group_audit_event, gitlab_list_instance_audit_events, gitlab_list_project_audit_events.",
+    "description": "List group-level audit events for a group. Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: gitlab_get_group_audit_event, gitlab_list_project_audit_events, gitlab_list_instance_audit_events.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -92359,7 +92458,22 @@
               "details": {
                 "additionalProperties": false,
                 "properties": {
+                  "add": {
+                    "type": "string"
+                  },
+                  "as": {
+                    "type": "string"
+                  },
+                  "author_class": {
+                    "type": "string"
+                  },
+                  "author_email": {
+                    "type": "string"
+                  },
                   "author_name": {
+                    "type": "string"
+                  },
+                  "change": {
                     "type": "string"
                   },
                   "custom_message": {
@@ -92368,7 +92482,19 @@
                   "entity_path": {
                     "type": "string"
                   },
+                  "event_name": {
+                    "type": "string"
+                  },
+                  "failed_login": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
                   "ip_address": {
+                    "type": "string"
+                  },
+                  "remove": {
                     "type": "string"
                   },
                   "target_details": {
@@ -92378,6 +92504,12 @@
                     "type": "string"
                   },
                   "target_type": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "with": {
                     "type": "string"
                   }
                 },
@@ -93957,7 +94089,7 @@
   },
   {
     "name": "gitlab_list_instance_audit_events",
-    "description": "List instance-level audit events (admin only). Supports filtering by date range. Returns: paginated list of audit events with ID, author, entity, event details. See also: gitlab_get_instance_audit_event, gitlab_list_group_audit_events, gitlab_list_project_audit_events.",
+    "description": "List instance-level audit events (administrator only). Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: gitlab_get_instance_audit_event, gitlab_list_group_audit_events, gitlab_list_project_audit_events.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93996,7 +94128,22 @@
               "details": {
                 "additionalProperties": false,
                 "properties": {
+                  "add": {
+                    "type": "string"
+                  },
+                  "as": {
+                    "type": "string"
+                  },
+                  "author_class": {
+                    "type": "string"
+                  },
+                  "author_email": {
+                    "type": "string"
+                  },
                   "author_name": {
+                    "type": "string"
+                  },
+                  "change": {
                     "type": "string"
                   },
                   "custom_message": {
@@ -94005,7 +94152,19 @@
                   "entity_path": {
                     "type": "string"
                   },
+                  "event_name": {
+                    "type": "string"
+                  },
+                  "failed_login": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
                   "ip_address": {
+                    "type": "string"
+                  },
+                  "remove": {
                     "type": "string"
                   },
                   "target_details": {
@@ -94015,6 +94174,12 @@
                     "type": "string"
                   },
                   "target_type": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "with": {
                     "type": "string"
                   }
                 },
@@ -95828,7 +95993,7 @@
   },
   {
     "name": "gitlab_list_project_audit_events",
-    "description": "List audit events for a GitLab project. Supports filtering by date range. Returns: paginated list of audit events with ID, author, entity, event details. See also: gitlab_get_project_audit_event, gitlab_list_group_audit_events, gitlab_list_instance_audit_events.",
+    "description": "List project-level audit events for a project. Returns: audit events with author, entity, event name/type, details, timestamps, and pagination metadata. See also: gitlab_get_project_audit_event, gitlab_list_group_audit_events, gitlab_list_instance_audit_events.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -95874,7 +96039,22 @@
               "details": {
                 "additionalProperties": false,
                 "properties": {
+                  "add": {
+                    "type": "string"
+                  },
+                  "as": {
+                    "type": "string"
+                  },
+                  "author_class": {
+                    "type": "string"
+                  },
+                  "author_email": {
+                    "type": "string"
+                  },
                   "author_name": {
+                    "type": "string"
+                  },
+                  "change": {
                     "type": "string"
                   },
                   "custom_message": {
@@ -95883,7 +96063,19 @@
                   "entity_path": {
                     "type": "string"
                   },
+                  "event_name": {
+                    "type": "string"
+                  },
+                  "failed_login": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
                   "ip_address": {
+                    "type": "string"
+                  },
+                  "remove": {
                     "type": "string"
                   },
                   "target_details": {
@@ -95893,6 +96085,12 @@
                     "type": "string"
                   },
                   "target_type": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "with": {
                     "type": "string"
                   }
                 },
@@ -100999,7 +101197,7 @@
   },
   {
     "name": "gitlab_list_vulnerabilities",
-    "description": "List project vulnerabilities (requires Ultimate/Premium). Supports filtering by severity, state, scanner, report type. Returns: paginated list with severity, state, scanner, and detected date. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.",
+    "description": "List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination. Returns: matching vulnerabilities with title, severity, state, report type, scanner, identifiers, detection time, and web URL. See also: gitlab_get_vulnerability, gitlab_vulnerability_severity_count, gitlab_list_security_findings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -128317,7 +128515,7 @@
   },
   {
     "name": "gitlab_notification_global_get",
-    "description": "Get global notification settings for the authenticated user.\n\nReturns: JSON with global notification settings.\n\nSee also: gitlab_notification_global_update, gitlab_notification_project_get",
+    "description": "Get the authenticated user's global notification settings. Returns: the global notification level, notification email, and the per-event flags (issue, merge request, pipeline, note, and epic events) when the level is custom. See also: gitlab_notification_global_update, gitlab_notification_project_get, gitlab_notification_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -128439,7 +128637,7 @@
   },
   {
     "name": "gitlab_notification_global_update",
-    "description": "Update global notification settings for the authenticated user.\n\nReturns: JSON with the updated global notification settings.\n\nSee also: gitlab_notification_global_get, gitlab_notification_project_update",
+    "description": "Update the authenticated user's global notification settings. Returns: the updated global notification level, notification email, and per-event flags. See also: gitlab_notification_global_get, gitlab_notification_project_update, gitlab_notification_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -128695,7 +128893,7 @@
   },
   {
     "name": "gitlab_notification_group_get",
-    "description": "Get notification settings for a specific group.\n\nReturns: JSON with group notification settings.\n\nSee also: gitlab_notification_group_update, gitlab_notification_global_get",
+    "description": "Get the authenticated user's notification settings for a group. Returns: the group notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_group_update, gitlab_notification_global_get, gitlab_notification_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -128825,7 +129023,7 @@
   },
   {
     "name": "gitlab_notification_group_update",
-    "description": "Update notification settings for a specific group.\n\nReturns: JSON with the updated group notification settings.\n\nSee also: gitlab_notification_group_get, gitlab_notification_global_update",
+    "description": "Update the authenticated user's notification settings for a group. Returns: the updated group notification level, notification email, and per-event flags. See also: gitlab_notification_group_get, gitlab_notification_global_update, gitlab_notification_project_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -129088,7 +129286,7 @@
   },
   {
     "name": "gitlab_notification_project_get",
-    "description": "Get notification settings for a specific project.\n\nReturns: JSON with project notification settings.\n\nSee also: gitlab_notification_project_update, gitlab_notification_global_get",
+    "description": "Get the authenticated user's notification settings for a project. Returns: the project notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_project_update, gitlab_notification_global_get, gitlab_notification_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -129218,7 +129416,7 @@
   },
   {
     "name": "gitlab_notification_project_update",
-    "description": "Update notification settings for a specific project.\n\nReturns: JSON with the updated project notification settings.\n\nSee also: gitlab_notification_project_get, gitlab_notification_global_update",
+    "description": "Update the authenticated user's notification settings for a project. Returns: the updated project notification level, notification email, and per-event flags. See also: gitlab_notification_project_get, gitlab_notification_global_update, gitlab_notification_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -135276,7 +135474,7 @@
   },
   {
     "name": "gitlab_pipeline_security_summary",
-    "description": "Get security report summary for a pipeline (requires Ultimate/Premium). Returns: scanner-level breakdown (SAST, DAST, dependency scanning, container scanning, secret detection, coverage fuzzing, API fuzzing, cluster image scanning) with vulnerability counts. See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities, gitlab_list_security_findings.",
+    "description": "Summarize a pipeline's security scan results. Returns: per-scanner vulnerability and scanned-resource counts for the pipeline (SAST, DAST, and other report types). See also: gitlab_vulnerability_severity_count, gitlab_list_vulnerabilities.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -174147,7 +174345,7 @@
   },
   {
     "name": "gitlab_resolve_vulnerability",
-    "description": "Resolve a vulnerability (requires Ultimate/Premium). Changes state to RESOLVED. Returns: updated vulnerability state. See also: gitlab_get_vulnerability, gitlab_confirm_vulnerability, gitlab_revert_vulnerability.",
+    "description": "Resolve a vulnerability after it is fixed. Returns: the updated vulnerability with its new resolved state and timestamp. See also: gitlab_get_vulnerability, gitlab_confirm_vulnerability, gitlab_revert_vulnerability.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -175493,7 +175691,7 @@
   },
   {
     "name": "gitlab_revert_vulnerability",
-    "description": "Revert a vulnerability to detected state (requires Ultimate/Premium). Changes state back to DETECTED. Returns: updated vulnerability state. See also: gitlab_get_vulnerability, gitlab_dismiss_vulnerability, gitlab_resolve_vulnerability.",
+    "description": "Revert a vulnerability back to the detected state. Returns: the updated vulnerability with its restored detected state. See also: gitlab_get_vulnerability, gitlab_dismiss_vulnerability, gitlab_resolve_vulnerability.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -180015,7 +180213,7 @@
   },
   {
     "name": "gitlab_search_code",
-    "description": "Search for code (blobs) in GitLab. Scope is determined by which ID you provide: set project_id for project scope, group_id for group scope, or neither for global scope. Only one scope at a time. Returns matching file name, path, ref, and a content snippet with pagination.\n\nReturns: JSON array of matching code blobs with pagination. See also: gitlab_file_get, gitlab_repository_tree.",
+    "description": "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_get_repository_file, gitlab_list_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -180164,7 +180362,7 @@
   },
   {
     "name": "gitlab_search_commits",
-    "description": "Search for commits by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching commits with ID, title, author, date, and web URL with pagination.\n\nReturns: JSON array of matching commits with pagination. See also: gitlab_commit_get.",
+    "description": "Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: gitlab_search_code, gitlab_get_commit, gitlab_list_commits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -180430,7 +180628,7 @@
   },
   {
     "name": "gitlab_search_issues",
-    "description": "Search for issues by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching issues with title, state, labels, assignees, and web URL with pagination.\n\nReturns: JSON array of matching issues with pagination. See also: gitlab_issue_get, gitlab_issue_list.",
+    "description": "Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_list_issues, gitlab_get_issue.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -181205,7 +181403,7 @@
   },
   {
     "name": "gitlab_search_merge_requests",
-    "description": "Search for merge requests by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching merge requests with title, state, author, labels, and web URL with pagination.\n\nReturns: JSON array of matching merge requests with pagination. See also: gitlab_mr_get, gitlab_mr_list.",
+    "description": "Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_list_merge_requests, gitlab_get_merge_request.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -182230,7 +182428,7 @@
   },
   {
     "name": "gitlab_search_milestones",
-    "description": "Search for milestones by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching milestones with title, state, dates, and web URL with pagination.\n\nReturns: JSON array of matching milestones with pagination. See also: gitlab_milestone_get.",
+    "description": "Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_list_milestones, gitlab_get_milestone, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -182407,7 +182605,7 @@
   },
   {
     "name": "gitlab_search_notes",
-    "description": "Search for notes (comments) within a GitLab project by keyword. Returns matching notes with body, author, notable type/ID, and timestamps with pagination.\n\nReturns: JSON array of matching notes with pagination. See also: gitlab_issue_note_list, gitlab_mr_notes_list.",
+    "description": "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_list_issue_notes.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -182471,13 +182669,13 @@
               "id": {
                 "type": "integer"
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_iid": {
+              "noteable_iid": {
                 "type": "integer"
               },
-              "notable_type": {
+              "noteable_type": {
                 "type": "string"
               },
               "system": {
@@ -182493,8 +182691,8 @@
               "author",
               "created_at",
               "updated_at",
-              "notable_type",
-              "notable_id",
+              "noteable_type",
+              "noteable_id",
               "system"
             ],
             "type": "object"
@@ -182556,7 +182754,7 @@
   },
   {
     "name": "gitlab_search_projects",
-    "description": "Search for projects by keyword. Searches within a group (group_id) or globally. Returns matching projects with name, path, visibility, and web URL with pagination.\n\nReturns: JSON array of matching projects with pagination. See also: gitlab_project_get, gitlab_project_list.",
+    "description": "Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_get_project, gitlab_list_projects, gitlab_search_code.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -183568,7 +183766,7 @@
   },
   {
     "name": "gitlab_search_snippets",
-    "description": "Search for snippet titles globally in GitLab. Returns matching snippets with title, file name, description, author, and web URL with pagination.\n\nReturns: JSON array of matching snippets with pagination. See also: gitlab_snippet_get.",
+    "description": "Search snippet titles globally. Returns: matching snippets with title, file name, description, visibility, author, project ID, web and raw URLs, and timestamps plus pagination metadata. See also: gitlab_search_code, gitlab_search_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -183720,7 +183918,7 @@
   },
   {
     "name": "gitlab_search_users",
-    "description": "Search for users by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching users with username, name, state, and web URL with pagination.\n\nReturns: JSON array of matching users with pagination. See also: gitlab_get_user.",
+    "description": "Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_list_project_members.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -183861,7 +184059,7 @@
   },
   {
     "name": "gitlab_search_wiki",
-    "description": "Search for wiki blobs by keyword. Searches within a project (project_id), a group (group_id), or globally. Returns matching wiki pages with title, slug, content, and format with pagination.\n\nReturns: JSON array of matching wiki pages with pagination. See also: gitlab_wiki_get.",
+    "description": "Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_list_wikis, gitlab_get_wiki.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -195220,7 +195418,7 @@
   },
   {
     "name": "gitlab_vulnerability_severity_count",
-    "description": "Get vulnerability severity counts for a project (requires Ultimate/Premium). Returns: counts per severity level (critical, high, medium, low, info, unknown) and total. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary.",
+    "description": "Count a project's vulnerabilities grouped by severity. Returns: critical, high, medium, low, info, and unknown counts. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
