@@ -14,11 +14,7 @@ func FormatMarkdown(v Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Group Milestone: %s\n\n", toolutil.EscapeMdHeading(v.Title))
 	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", v.ID, v.IID)
-	if v.GroupPath != "" {
-		fmt.Fprintf(&b, "- **Group**: %s\n", v.GroupPath)
-	} else {
-		fmt.Fprintf(&b, "- **Group**: %d\n", v.GroupID)
-	}
+	fmt.Fprintf(&b, "- **Group**: %d\n", v.GroupID)
 	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
 	if v.Description != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdDescription, v.Description)

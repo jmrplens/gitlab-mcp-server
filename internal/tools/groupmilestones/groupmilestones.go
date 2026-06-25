@@ -20,18 +20,24 @@ const hintVerifyGroupMilestoneID = "verify milestone_id with gitlab_group_milest
 
 // ListInput defines parameters for listing milestones in a GitLab group.
 type ListInput struct {
-	GroupID            toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
-	State              string               `json:"state,omitempty"                jsonschema:"Filter by state (active, closed)"`
-	Title              string               `json:"title,omitempty"                jsonschema:"Filter by exact milestone title"`
-	Search             string               `json:"search,omitempty"               jsonschema:"Search milestones by title or description"`
-	SearchTitle        string               `json:"search_title,omitempty"         jsonschema:"Search milestones by title only"`
-	IncludeAncestors   bool                 `json:"include_ancestors,omitempty"    jsonschema:"Include milestones from ancestor groups"`
-	IncludeDescendants bool                 `json:"include_descendants,omitempty"  jsonschema:"Include milestones from descendant groups"`
-	IIDs               []int64              `json:"iids,omitempty"                 jsonschema:"Filter by milestone IIDs"`
-	UpdatedBefore      string               `json:"updated_before,omitempty"       jsonschema:"Return milestones updated before date (YYYY-MM-DD)"`
-	UpdatedAfter       string               `json:"updated_after,omitempty"        jsonschema:"Return milestones updated after date (YYYY-MM-DD)"`
-	ContainingDate     string               `json:"containing_date,omitempty"      jsonschema:"Return milestones containing this date (YYYY-MM-DD)"`
+	GroupID                 toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
+	State                   string               `json:"state,omitempty"                jsonschema:"Filter by state (active, closed)"`
+	Title                   string               `json:"title,omitempty"                jsonschema:"Filter by exact milestone title"`
+	Search                  string               `json:"search,omitempty"               jsonschema:"Search milestones by title or description"`
+	SearchTitle             string               `json:"search_title,omitempty"         jsonschema:"Search milestones by title only"`
+	IncludeAncestors        bool                 `json:"include_ancestors,omitempty"    jsonschema:"Include milestones from ancestor groups"`
+	IncludeDescendants      bool                 `json:"include_descendants,omitempty"  jsonschema:"Include milestones from descendant groups"`
+	IIDs                    []int64              `json:"iids,omitempty"                 jsonschema:"Filter by milestone IIDs"`
+	UpdatedBefore           string               `json:"updated_before,omitempty"       jsonschema:"Return milestones updated before date (YYYY-MM-DD)"`
+	UpdatedAfter            string               `json:"updated_after,omitempty"        jsonschema:"Return milestones updated after date (YYYY-MM-DD)"`
+	ContainingDate          string               `json:"containing_date,omitempty"      jsonschema:"Return milestones containing this date (YYYY-MM-DD)"`
+	StartDate               string               `json:"start_date,omitempty"           jsonschema:"Return milestones with a start date on or after this date (YYYY-MM-DD)"`
+	EndDate                 string               `json:"end_date,omitempty"             jsonschema:"Return milestones with a due date on or before this date (YYYY-MM-DD)"`
+	OrderBy                 string               `json:"order_by,omitempty"             jsonschema:"Order results by field (e.g. created_at, updated_at, due_date, title)"`
+	Sort                    string               `json:"sort,omitempty"                 jsonschema:"Sort direction (asc, desc)"`
+	IncludeParentMilestones bool                 `json:"include_parent_milestones,omitempty" jsonschema:"Deprecated (GitLab 16.7): use include_ancestors instead. Include milestones from parent groups"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single group milestone.
@@ -70,21 +76,30 @@ type DeleteInput struct {
 type GetIssuesInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a group milestone.
 type GetMergeRequestsInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetBurndownChartEventsInput defines parameters for listing burndown chart events for a group milestone.
 type GetBurndownChartEventsInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id"       jsonschema:"Group ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs,required"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ---------- Output types ----------.
@@ -95,7 +110,6 @@ type Output struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`
 	GroupID     int64  `json:"group_id"`
-	GroupPath   string `json:"group_path,omitempty"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	State       string `json:"state"`
@@ -203,10 +217,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			"verify group_id with gitlab_group_get; group milestones differ from project milestones")
 	}
 
-	groupPath := string(input.GroupID)
 	out := make([]Output, len(milestones))
 	for i, m := range milestones {
-		out[i] = toOutput(m, groupPath)
+		out[i] = toOutput(m)
 	}
 	return ListOutput{Milestones: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -242,6 +255,10 @@ func applyListFilters(opts *gl.ListGroupMilestonesOptions, input ListInput) {
 	if input.IncludeDescendants {
 		opts.IncludeDescendents = new(true)
 	}
+	if input.IncludeParentMilestones {
+		//nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+		opts.IncludeParentMilestones = new(true)
+	}
 	if len(input.IIDs) > 0 {
 		opts.IIDs = new(input.IIDs)
 	}
@@ -270,16 +287,32 @@ func applyListDates(opts *gl.ListGroupMilestonesOptions, input ListInput) error 
 		}
 		opts.ContainingDate = d
 	}
+	if input.StartDate != "" {
+		d, err := parseISODate(input.StartDate)
+		if err != nil {
+			return fmt.Errorf("groupMilestoneList: start_date: %w", err)
+		}
+		opts.StartDate = d
+	}
+	if input.EndDate != "" {
+		d, err := parseISODate(input.EndDate)
+		if err != nil {
+			return fmt.Errorf("groupMilestoneList: end_date: %w", err)
+		}
+		opts.EndDate = d
+	}
 	return nil
 }
 
-// applyListPagination applies list pagination transformations.
+// applyListPagination applies offset/keyset pagination and ordering. OrderBy
+// and Sort are applied after ApplyListOptions so explicit values win.
 func applyListPagination(opts *gl.ListGroupMilestonesOptions, input ListInput) {
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 }
 
@@ -305,7 +338,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneGet", err, http.StatusNotFound,
 			hintVerifyGroupMilestoneID)
 	}
-	return toOutput(m, string(input.GroupID)), nil
+	return toOutput(m), nil
 }
 
 // Create creates a new milestone in a GitLab group.
@@ -343,7 +376,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneCreate", err, http.StatusBadRequest,
 			"title is required and must be unique within the group; start_date and due_date must be YYYY-MM-DD with start_date <= due_date; creating group milestones requires Reporter role or higher")
 	}
-	return toOutput(m, string(input.GroupID)), nil
+	return toOutput(m), nil
 }
 
 // Update modifies an existing group milestone. Only non-empty fields are applied.
@@ -395,7 +428,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneUpdate", err, http.StatusBadRequest,
 			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with gitlab_group_milestone_list")
 	}
-	return toOutput(m, string(input.GroupID)), nil
+	return toOutput(m), nil
 }
 
 // Delete removes a group milestone.
@@ -441,11 +474,12 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	}
 
 	opts := &gl.GetGroupMilestoneIssuesOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	issues, resp, err := client.GL().GroupMilestones.GetGroupMilestoneIssues(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
@@ -490,11 +524,12 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	}
 
 	opts := &gl.GetGroupMilestoneMergeRequestsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	mrs, resp, err := client.GL().GroupMilestones.GetGroupMilestoneMergeRequests(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
@@ -541,11 +576,12 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gl.GetGroupMilestoneBurndownChartEventsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	events, resp, err := client.GL().GroupMilestones.GetGroupMilestoneBurndownChartEvents(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
@@ -573,13 +609,11 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 // ---------- Converters ----------.
 
 // toOutput converts a GitLab API [gl.GroupMilestone] to MCP output format.
-// groupPath carries the caller-supplied group identifier (path or numeric string).
-func toOutput(m *gl.GroupMilestone, groupPath string) Output {
+func toOutput(m *gl.GroupMilestone) Output {
 	out := Output{
 		ID:          m.ID,
 		IID:         m.IID,
 		GroupID:     m.GroupID,
-		GroupPath:   groupPath,
 		Title:       m.Title,
 		Description: m.Description,
 		State:       m.State,

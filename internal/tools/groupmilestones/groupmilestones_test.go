@@ -5,12 +5,25 @@ package groupmilestones
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// assertQueryParams fails the test for each expected query parameter whose
+// observed value does not match. It keeps multi-parameter forwarding tests flat
+// and within cognitive-complexity limits.
+func assertQueryParams(t *testing.T, q url.Values, want map[string]string) {
+	t.Helper()
+	for key, exp := range want {
+		if got := q.Get(key); got != exp {
+			t.Errorf("expected %s=%s, got %q", key, exp, got)
+		}
+	}
+}
 
 const (
 	// pathGroupMilestones identifies the path group milestones constant used by this package.
@@ -58,9 +71,6 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Milestones[0].GroupID != 10 {
 		t.Errorf("GroupID = %d, want 10", out.Milestones[0].GroupID)
-	}
-	if out.Milestones[0].GroupPath != testGroupID {
-		t.Errorf("GroupPath = %q, want %q", out.Milestones[0].GroupPath, testGroupID)
 	}
 }
 
@@ -698,22 +708,48 @@ func TestList_InvalidContainingDate(t *testing.T) {
 	}
 }
 
+// TestList_InvalidStartDate verifies List rejects a malformed start_date filter.
+// The test asserts that an invalid start_date returns an error before any API call.
+func TestList_InvalidStartDate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	_, err := List(context.Background(), client, ListInput{GroupID: "10", StartDate: "nope"})
+	if err == nil {
+		t.Fatal("expected error for invalid start_date")
+	}
+}
+
+// TestList_InvalidEndDate verifies List rejects a malformed end_date filter.
+// The test asserts that an invalid end_date returns an error before any API call.
+func TestList_InvalidEndDate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	_, err := List(context.Background(), client, ListInput{GroupID: "10", EndDate: "nope"})
+	if err == nil {
+		t.Fatal("expected error for invalid end_date")
+	}
+}
+
 // TestList_AllFilterParams verifies that List_AllFilterParams forwards pagination parameters to the GitLab API and parses the response metadata.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_AllFilterParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones {
-			q := r.URL.Query()
-			if q.Get("title") != "v1.0" {
-				t.Errorf("expected title=v1.0, got %q", q.Get("title"))
-			}
-			if q.Get("search_title") != "v1" {
-				t.Errorf("expected search_title=v1, got %q", q.Get("search_title"))
-			}
-			if q.Get("include_descendents") != "true" {
-				t.Errorf("expected include_descendents=true, got %q", q.Get("include_descendents"))
-			}
+			assertQueryParams(t, r.URL.Query(), map[string]string{
+				"title":                     "v1.0",
+				"search_title":              "v1",
+				"include_descendents":       "true",
+				"include_parent_milestones": "true",
+				"start_date":                "2026-01-01",
+				"end_date":                  "2026-12-31",
+				"order_by":                  "due_date",
+				"sort":                      "asc",
+				"pagination":                "keyset",
+				"page_token":                "99",
+			})
 			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
 			return
 		}
@@ -721,14 +757,20 @@ func TestList_AllFilterParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:            "10",
-		Title:              "v1.0",
-		SearchTitle:        "v1",
-		IncludeDescendants: true,
-		IIDs:               []int64{1, 2},
-		UpdatedBefore:      "2026-12-31",
-		UpdatedAfter:       testDateStart,
-		ContainingDate:     "2026-06-15",
+		GroupID:                 "10",
+		Title:                   "v1.0",
+		SearchTitle:             "v1",
+		IncludeDescendants:      true,
+		IncludeParentMilestones: true,
+		IIDs:                    []int64{1, 2},
+		UpdatedBefore:           "2026-12-31",
+		UpdatedAfter:            testDateStart,
+		ContainingDate:          "2026-06-15",
+		StartDate:               testDateStart,
+		EndDate:                 "2026-12-31",
+		OrderBy:                 "due_date",
+		Sort:                    "asc",
+		KeysetPaginationInput:   toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1024,6 +1066,19 @@ func TestGetIssues_WithPagination(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/issues" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "created_at" {
+				t.Errorf("expected order_by=created_at, got %q", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "50" {
+				t.Errorf("expected page_token=50, got %q", q.Get("page_token"))
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
 				`[{"id":100,"iid":5,"title":"Bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"},{"id":101,"iid":6,"title":"Feature","state":"closed","created_at":"2026-01-11T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
@@ -1032,9 +1087,12 @@ func TestGetIssues_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetIssues(context.Background(), client, GetIssuesInput{
-		GroupID:         "10",
-		MilestoneIID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		GroupID:               "10",
+		MilestoneIID:          1,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "50"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1104,6 +1162,19 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/merge_requests" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "updated_at" {
+				t.Errorf("expected order_by=updated_at, got %q", q.Get("order_by"))
+			}
+			if q.Get("sort") != "asc" {
+				t.Errorf("expected sort=asc, got %q", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "70" {
+				t.Errorf("expected page_token=70, got %q", q.Get("page_token"))
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
 				`[{"id":200,"iid":10,"title":"MR 1","state":"merged","source_branch":"feat","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"},{"id":201,"iid":11,"title":"MR 2","state":"opened","source_branch":"fix","target_branch":"main","created_at":"2026-02-02T00:00:00Z"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
@@ -1112,9 +1183,12 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{
-		GroupID:         "10",
-		MilestoneIID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		GroupID:               "10",
+		MilestoneIID:          1,
+		OrderBy:               "updated_at",
+		Sort:                  "asc",
+		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "70"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1184,6 +1258,19 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/burndown_events" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "created_at" {
+				t.Errorf("expected order_by=created_at, got %q", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "80" {
+				t.Errorf("expected page_token=80, got %q", q.Get("page_token"))
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
 				`[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"},{"created_at":"2026-01-06T00:00:00Z","weight":2,"action":"remove"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
@@ -1192,9 +1279,12 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{
-		GroupID:         "10",
-		MilestoneIID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		GroupID:               "10",
+		MilestoneIID:          1,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "80"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1219,7 +1309,7 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMarkdown(Output{
-		ID: 1, IID: 1, GroupID: 10, GroupPath: "my-org/backend", Title: "v1.0",
+		ID: 1, IID: 1, GroupID: 10, Title: "v1.0",
 		Description: "Release milestone", State: "active",
 		StartDate: testDateStart, DueDate: "2026-06-30",
 		CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-15T00:00:00Z",
@@ -1229,7 +1319,7 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 	for _, want := range []string{
 		"## Group Milestone: v1.0",
 		"**ID**: 1 (IID: 1)",
-		"**Group**: my-org/backend",
+		"**Group**: 10",
 		"**State**: active",
 		"**Description**: Release milestone",
 		"**Start Date**: 1 Jan 2026",
