@@ -3615,7 +3615,7 @@
   },
   {
     "name": "gitlab_branch_create",
-    "description": "Create a new Git branch in a GitLab project from a ref (branch name, tag name, or commit SHA). Returns: branch name, merged/protected/default status, web URL, and latest commit ID. See also: gitlab_mr_create, gitlab_branch_list.",
+    "description": "Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_merge_request_create, gitlab_repository_compare.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3645,8 +3645,155 @@
         "can_push": {
           "type": "boolean"
         },
-        "commit_id": {
-          "type": "string"
+        "commit": {
+          "additionalProperties": false,
+          "properties": {
+            "author_email": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": "string"
+            },
+            "authored_date": {
+              "type": "string"
+            },
+            "committed_date": {
+              "type": "string"
+            },
+            "committer_email": {
+              "type": "string"
+            },
+            "committer_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "extended_trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "last_pipeline": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "iid": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "project_id": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "parent_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "short_id": {
+              "type": "string"
+            },
+            "stats": {
+              "additionalProperties": false,
+              "properties": {
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "additions",
+                "deletions",
+                "total"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "short_id",
+            "title",
+            "author_name",
+            "author_email",
+            "committer_name",
+            "committer_email",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "default": {
           "type": "boolean"
@@ -3685,7 +3832,6 @@
         "protected",
         "default",
         "web_url",
-        "commit_id",
         "can_push",
         "developers_can_push",
         "developers_can_merge"
@@ -3699,7 +3845,7 @@
   },
   {
     "name": "gitlab_branch_delete",
-    "description": "Delete a branch from a GitLab repository. Cannot delete the default branch or protected branches.\n\nReturns: confirmation message. See also: gitlab_branch_list, gitlab_branch_create.",
+    "description": "Delete a single branch by name. Returns: a success confirmation. Fails for protected or default branches. See also: gitlab_branch_list, gitlab_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3756,7 +3902,7 @@
   },
   {
     "name": "gitlab_branch_delete_merged",
-    "description": "Delete all branches that have been merged into the default branch. The default branch and protected branches are never deleted.\n\nReturns: confirmation message. See also: gitlab_branch_list, gitlab_mr_list.",
+    "description": "Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_merge_request_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3808,7 +3954,7 @@
   },
   {
     "name": "gitlab_branch_get",
-    "description": "Retrieve detailed information about a single branch in a GitLab project. Returns branch name, merged/protected/default status, web URL, and latest commit ID.\n\nReturns: name, merged, protected, default status, web_url, and latest commit_id. See also: gitlab_branch_create, gitlab_commit_list.",
+    "description": "Get a single branch by name. Returns: the branch with protection, default, and merged flags, push/merge permissions, the head commit object, and web URL. See also: gitlab_branch_list, gitlab_branch_protect, gitlab_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3833,8 +3979,155 @@
         "can_push": {
           "type": "boolean"
         },
-        "commit_id": {
-          "type": "string"
+        "commit": {
+          "additionalProperties": false,
+          "properties": {
+            "author_email": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": "string"
+            },
+            "authored_date": {
+              "type": "string"
+            },
+            "committed_date": {
+              "type": "string"
+            },
+            "committer_email": {
+              "type": "string"
+            },
+            "committer_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "extended_trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "last_pipeline": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "iid": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "project_id": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "parent_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "short_id": {
+              "type": "string"
+            },
+            "stats": {
+              "additionalProperties": false,
+              "properties": {
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "additions",
+                "deletions",
+                "total"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "short_id",
+            "title",
+            "author_name",
+            "author_email",
+            "committer_name",
+            "committer_email",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "default": {
           "type": "boolean"
@@ -3873,7 +4166,6 @@
         "protected",
         "default",
         "web_url",
-        "commit_id",
         "can_push",
         "developers_can_push",
         "developers_can_merge"
@@ -3889,13 +4181,25 @@
   },
   {
     "name": "gitlab_branch_list",
-    "description": "List Git branches in a GitLab project. Supports optional name search filter. Returns paginated results including each branch's protection status and latest commit info.\n\nReturns: paginated list of branches with name, protected status, and latest commit info. See also: gitlab_branch_get, gitlab_branch_create.",
+    "description": "List repository branches in one project with optional search/regex filtering, ordering, and offset or keyset pagination. Returns: matching branches with protection, default, merged flags, the head commit object, and pagination metadata. See also: gitlab_branch_get, gitlab_branch_create, gitlab_repository_compare.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. name, updated)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -3905,8 +4209,16 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "regex": {
+          "description": "Filter branches whose names match this regular expression",
+          "type": "string"
+        },
         "search": {
           "description": "Filter branches by name (substring match)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -3925,8 +4237,155 @@
               "can_push": {
                 "type": "boolean"
               },
-              "commit_id": {
-                "type": "string"
+              "commit": {
+                "additionalProperties": false,
+                "properties": {
+                  "author_email": {
+                    "type": "string"
+                  },
+                  "author_name": {
+                    "type": "string"
+                  },
+                  "authored_date": {
+                    "type": "string"
+                  },
+                  "committed_date": {
+                    "type": "string"
+                  },
+                  "committer_email": {
+                    "type": "string"
+                  },
+                  "committer_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "extended_trailers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "last_pipeline": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "iid": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "project_id": {
+                        "type": "integer"
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "sha": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "parent_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "short_id": {
+                    "type": "string"
+                  },
+                  "stats": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "additions": {
+                        "type": "integer"
+                      },
+                      "deletions": {
+                        "type": "integer"
+                      },
+                      "total": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "additions",
+                      "deletions",
+                      "total"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "trailers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "short_id",
+                  "title",
+                  "author_name",
+                  "author_email",
+                  "committer_name",
+                  "committer_email",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "default": {
                 "type": "boolean"
@@ -3965,7 +4424,6 @@
               "protected",
               "default",
               "web_url",
-              "commit_id",
               "can_push",
               "developers_can_push",
               "developers_can_merge"
@@ -4038,7 +4496,7 @@
   },
   {
     "name": "gitlab_branch_protect",
-    "description": "Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer). Protected branches cannot be force-pushed or deleted. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_branch_unprotect, gitlab_protected_branches_list.",
+    "description": "Protect a branch or wildcard with push/merge/unprotect access levels and optional fine-grained allowed_to_push/merge/unprotect entries. Returns: the protected rule with its access-level arrays. Idempotent: returns the existing rule when the branch is already protected. See also: gitlab_branch_unprotect, gitlab_protected_branch_get, gitlab_protected_branch_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -4047,6 +4505,171 @@
           "type": [
             "null",
             "boolean"
+          ]
+        },
+        "allowed_to_merge": {
+          "description": "Fine-grained merge access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "allowed_to_push": {
+          "description": "Fine-grained push access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "allowed_to_unprotect": {
+          "description": "Fine-grained unprotect access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "branch_name": {
@@ -4081,6 +4704,10 @@
             40
           ],
           "type": "integer"
+        },
+        "unprotect_access_level": {
+          "description": "Access level allowed to unprotect (0=No access 30=Developer 40=Maintainer)",
+          "type": "integer"
         }
       },
       "required": [
@@ -4095,17 +4722,46 @@
         "allow_force_push": {
           "type": "boolean"
         },
-        "already_protected": {
-          "type": "boolean"
-        },
         "code_owner_approval_required": {
           "type": "boolean"
         },
         "id": {
           "type": "integer"
         },
-        "merge_access_level": {
-          "type": "integer"
+        "merge_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -4119,15 +4775,80 @@
             "array"
           ]
         },
-        "push_access_level": {
-          "type": "integer"
+        "push_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unprotect_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "push_access_level",
-        "merge_access_level",
         "allow_force_push",
         "code_owner_approval_required"
       ],
@@ -4141,7 +4862,7 @@
   },
   {
     "name": "gitlab_branch_unprotect",
-    "description": "Remove all protection rules from a GitLab branch, allowing unrestricted push, merge, and force-push access.\n\nReturns: confirmation message. See also: gitlab_branch_protect, gitlab_protected_branches_list.",
+    "description": "Remove protection from a branch (idempotent). Returns: a status and message confirming protection removed or already absent. See also: gitlab_branch_protect, gitlab_protected_branch_get, gitlab_branch_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -18244,12 +18965,31 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "auto_stop_setting": {
+          "description": "Auto-stop behavior: always or with_action",
+          "type": "string"
+        },
+        "cluster_agent_id": {
+          "description": "ID of the cluster agent to associate with this environment",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "description": {
           "description": "Description of the environment",
           "type": "string"
         },
         "external_url": {
           "description": "URL of the environment's external deployment",
+          "type": "string"
+        },
+        "flux_resource_path": {
+          "description": "Flux resource path used to track the environment's deployment status",
+          "type": "string"
+        },
+        "kubernetes_namespace": {
+          "description": "Kubernetes namespace for the cluster agent",
           "type": "string"
         },
         "name": {
@@ -18277,6 +19017,68 @@
         "auto_stop_at": {
           "type": "string"
         },
+        "auto_stop_setting": {
+          "type": "string"
+        },
+        "cluster_agent": {
+          "additionalProperties": false,
+          "properties": {
+            "config_project": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "name_with_namespace": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "path_with_namespace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "created_by_user_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "created_at": {
           "type": "string"
         },
@@ -18286,8 +19088,156 @@
         "external_url": {
           "type": "string"
         },
+        "flux_resource_path": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "kubernetes_namespace": {
+          "type": "string"
+        },
+        "last_deployment": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "deployable": {
+              "additionalProperties": false,
+              "properties": {
+                "coverage": {
+                  "type": "number"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "finished_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pipeline": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "name": {
           "type": "string"
@@ -18299,6 +19249,34 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "project": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "slug": {
@@ -18329,7 +19307,7 @@
   },
   {
     "name": "gitlab_environment_delete",
-    "description": "Permanently delete an environment from a GitLab project. The environment must be stopped before it can be deleted.\n\nReturns: confirmation message. See also: gitlab_environment_list.",
+    "description": "Delete a stopped environment from a project. Returns: a success confirmation naming the deleted environment. See also: gitlab_environment_stop, gitlab_environment_list, gitlab_environment_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -18411,6 +19389,68 @@
         "auto_stop_at": {
           "type": "string"
         },
+        "auto_stop_setting": {
+          "type": "string"
+        },
+        "cluster_agent": {
+          "additionalProperties": false,
+          "properties": {
+            "config_project": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "name_with_namespace": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "path_with_namespace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "created_by_user_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "created_at": {
           "type": "string"
         },
@@ -18420,8 +19460,156 @@
         "external_url": {
           "type": "string"
         },
+        "flux_resource_path": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "kubernetes_namespace": {
+          "type": "string"
+        },
+        "last_deployment": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "deployable": {
+              "additionalProperties": false,
+              "properties": {
+                "coverage": {
+                  "type": "number"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "finished_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pipeline": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "name": {
           "type": "string"
@@ -18433,6 +19621,34 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "project": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "slug": {
@@ -18473,9 +19689,21 @@
           "description": "Filter by exact environment name",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. id, name)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -18487,6 +19715,10 @@
         },
         "search": {
           "description": "Search environments by name (fuzzy)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
           "type": "string"
         },
         "states": {
@@ -18509,6 +19741,68 @@
               "auto_stop_at": {
                 "type": "string"
               },
+              "auto_stop_setting": {
+                "type": "string"
+              },
+              "cluster_agent": {
+                "additionalProperties": false,
+                "properties": {
+                  "config_project": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "name_with_namespace": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "path_with_namespace": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "created_by_user_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "created_at": {
                 "type": "string"
               },
@@ -18518,8 +19812,156 @@
               "external_url": {
                 "type": "string"
               },
+              "flux_resource_path": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "kubernetes_namespace": {
+                "type": "string"
+              },
+              "last_deployment": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "deployable": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "coverage": {
+                        "type": "number"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": "number"
+                      },
+                      "finished_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "pipeline": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "ref": {
+                            "type": "string"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "web_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "stage": {
+                        "type": "string"
+                      },
+                      "started_at": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "tag": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "name": {
                 "type": "string"
@@ -18531,6 +19973,34 @@
                 "type": [
                   "null",
                   "array"
+                ]
+              },
+              "project": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "path_with_namespace": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
                 ]
               },
               "slug": {
@@ -18657,6 +20127,68 @@
         "auto_stop_at": {
           "type": "string"
         },
+        "auto_stop_setting": {
+          "type": "string"
+        },
+        "cluster_agent": {
+          "additionalProperties": false,
+          "properties": {
+            "config_project": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "name_with_namespace": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "path_with_namespace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "created_by_user_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "created_at": {
           "type": "string"
         },
@@ -18666,8 +20198,156 @@
         "external_url": {
           "type": "string"
         },
+        "flux_resource_path": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "kubernetes_namespace": {
+          "type": "string"
+        },
+        "last_deployment": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "deployable": {
+              "additionalProperties": false,
+              "properties": {
+                "coverage": {
+                  "type": "number"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "finished_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pipeline": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "name": {
           "type": "string"
@@ -18679,6 +20359,34 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "project": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "slug": {
@@ -18710,10 +20418,21 @@
   },
   {
     "name": "gitlab_environment_update",
-    "description": "Update an existing environment in a GitLab project. Can modify name, description, external URL, and tier. Returns: id, name, slug, state, tier, external_url, updated_at. See also: gitlab_environment_get.",
+    "description": "Update an existing environment in a project. Returns: the updated environment with state, tier, external URL, cluster agent, Kubernetes namespace, Flux resource path, and auto-stop settings. See also: gitlab_environment_get, gitlab_environment_list, gitlab_environment_stop.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "auto_stop_setting": {
+          "description": "Auto-stop behavior: always or with_action",
+          "type": "string"
+        },
+        "cluster_agent_id": {
+          "description": "ID of the cluster agent to associate with this environment",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "description": {
           "description": "Updated description",
           "type": "string"
@@ -18724,6 +20443,14 @@
         },
         "external_url": {
           "description": "Updated external URL",
+          "type": "string"
+        },
+        "flux_resource_path": {
+          "description": "Flux resource path used to track the environment's deployment status",
+          "type": "string"
+        },
+        "kubernetes_namespace": {
+          "description": "Kubernetes namespace for the cluster agent",
           "type": "string"
         },
         "name": {
@@ -18751,6 +20478,68 @@
         "auto_stop_at": {
           "type": "string"
         },
+        "auto_stop_setting": {
+          "type": "string"
+        },
+        "cluster_agent": {
+          "additionalProperties": false,
+          "properties": {
+            "config_project": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "name_with_namespace": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "path_with_namespace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "created_by_user_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "created_at": {
           "type": "string"
         },
@@ -18760,8 +20549,156 @@
         "external_url": {
           "type": "string"
         },
+        "flux_resource_path": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "kubernetes_namespace": {
+          "type": "string"
+        },
+        "last_deployment": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "deployable": {
+              "additionalProperties": false,
+              "properties": {
+                "coverage": {
+                  "type": "number"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "finished_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pipeline": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "sha": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "name": {
           "type": "string"
@@ -18773,6 +20710,34 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "project": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         },
         "slug": {
@@ -80169,7 +82134,7 @@
   },
   {
     "name": "gitlab_milestone_create",
-    "description": "Create a new milestone in a GitLab project. Requires title; optionally set description, start_date (YYYY-MM-DD), and due_date (YYYY-MM-DD). Returns: milestone IID, title, state, start/due dates, web URL, and expiration status. See also: gitlab_milestone_get.",
+    "description": "Create a new milestone in a project with title and optional description, start date, and due date. Returns: the created milestone with IID, state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80275,7 +82240,7 @@
   },
   {
     "name": "gitlab_milestone_delete",
-    "description": "Delete a project milestone by IID. This action is irreversible.\n\nReturns: confirmation message. See also: gitlab_milestone_list.",
+    "description": "Delete a milestone permanently from a project by milestone IID. Returns: a success confirmation naming the milestone and project. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80332,7 +82297,7 @@
   },
   {
     "name": "gitlab_milestone_get",
-    "description": "Get details of a single project milestone by IID. Returns milestone title, description, state, start/due dates, web URL, and expiration status.\n\nReturns: JSON with milestone details. See also: gitlab_milestone_update, gitlab_milestone_issues.",
+    "description": "Get a single milestone from a project by milestone IID. Returns: milestone title, description, state, start/due dates, expiry, group/project IDs, timestamps, and web URL. See also: gitlab_milestone_list, gitlab_milestone_update, gitlab_milestone_issues, gitlab_milestone_merge_requests.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80428,7 +82393,7 @@
   },
   {
     "name": "gitlab_milestone_issues",
-    "description": "List all issues assigned to a project milestone by IID. Returns issue IID, title, state, web URL, and creation date with pagination.\n\nReturns: JSON array of issues with pagination. See also: gitlab_milestone_get, gitlab_issue_list.",
+    "description": "List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, title, state, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80436,9 +82401,21 @@
           "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -80446,6 +82423,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -80557,7 +82538,7 @@
   },
   {
     "name": "gitlab_milestone_list",
-    "description": "List milestones for a GitLab project. Supports filtering by state (active, closed), exact title, search keyword, and including milestones from ancestor groups. Returns milestone title, description, state, start/due dates, web URL, and expiration status with pagination.\n\nReturns: JSON array of milestones with pagination. See also: gitlab_milestone_get, gitlab_milestone_create.",
+    "description": "List milestones in one project with state/title/search filters, ancestor inclusion, ordering, and pagination. Returns: matching milestones with state, dates, expiry, web URL, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_create, gitlab_milestone_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80575,9 +82556,25 @@
           "description": "Include milestones from parent groups",
           "type": "boolean"
         },
+        "include_parent_milestones": {
+          "description": "Deprecated (GitLab 16.7+): use include_ancestors instead. Include milestones from parent groups",
+          "type": "boolean"
+        },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at, due_date, title)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -80589,6 +82586,10 @@
         },
         "search": {
           "description": "Search milestones by title or description",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         },
         "state": {
@@ -80743,7 +82744,7 @@
   },
   {
     "name": "gitlab_milestone_merge_requests",
-    "description": "List all merge requests assigned to a project milestone by IID. Returns MR IID, title, state, source/target branches, web URL, and creation date with pagination.\n\nReturns: JSON array of merge requests with pagination. See also: gitlab_milestone_get, gitlab_mr_list.",
+    "description": "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_merge_request_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -80751,9 +82752,21 @@
           "description": "Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -80761,6 +82774,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -80880,7 +82897,7 @@
   },
   {
     "name": "gitlab_milestone_update",
-    "description": "Update an existing project milestone by IID. Supports changing title, description, start_date, due_date, and state_event (activate/close). Returns: updated milestone with IID, title, state, dates, web URL, and expired flag. See also: gitlab_milestone_get.",
+    "description": "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -142658,7 +144675,7 @@
   },
   {
     "name": "gitlab_protected_branch_get",
-    "description": "Get details of a single protected branch by name. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_protected_branches_list, gitlab_branch_protect.",
+    "description": "Get a single protected branch or wildcard rule by name. Returns: the rule with push, merge, and unprotect access-level arrays, allow-force-push, and CODEOWNERS-approval flags. See also: gitlab_protected_branches_list, gitlab_protected_branch_update, gitlab_branch_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -142683,17 +144700,46 @@
         "allow_force_push": {
           "type": "boolean"
         },
-        "already_protected": {
-          "type": "boolean"
-        },
         "code_owner_approval_required": {
           "type": "boolean"
         },
         "id": {
           "type": "integer"
         },
-        "merge_access_level": {
-          "type": "integer"
+        "merge_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -142707,15 +144753,80 @@
             "array"
           ]
         },
-        "push_access_level": {
-          "type": "integer"
+        "push_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unprotect_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "push_access_level",
-        "merge_access_level",
         "allow_force_push",
         "code_owner_approval_required"
       ],
@@ -142730,7 +144841,7 @@
   },
   {
     "name": "gitlab_protected_branch_update",
-    "description": "Update settings on an existing protected branch (allow_force_push, code_owner_approval_required). Use gitlab_branch_protect to initially protect a branch. Returns: updated name, push/merge access levels, allow_force_push, and code_owner_approval_required.\n\nSee also: gitlab_protected_branch_get, gitlab_protected_branches_list.",
+    "description": "Update an existing protected branch rule: allow-force-push, CODEOWNERS approval, rename, or fine-grained allowed_to_push/merge/unprotect entries. Returns: the updated rule with its access-level arrays. See also: gitlab_protected_branch_get, gitlab_protected_branches_list, gitlab_branch_protect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -142741,8 +144852,173 @@
             "boolean"
           ]
         },
+        "allowed_to_merge": {
+          "description": "Fine-grained merge access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "allowed_to_push": {
+          "description": "Fine-grained push access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "allowed_to_unprotect": {
+          "description": "Fine-grained unprotect access entries (by user, group, deploy key, or access level)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "_destroy": {
+                "description": "When true, remove this existing access entry",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "access_level": {
+                "description": "Coarse access level (0=No access, 30=Developer, 40=Maintainer)",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "deploy_key_id": {
+                "description": "Grant access via a specific deploy key by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "group_id": {
+                "description": "Grant access to a specific group by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "id": {
+                "description": "ID of an existing access entry to update",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "user_id": {
+                "description": "Grant access to a specific user by ID",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "branch_name": {
-          "description": "Name of the protected branch",
+          "description": "Name of the protected branch to update",
           "type": "string"
         },
         "code_owner_approval_required": {
@@ -142751,6 +145027,10 @@
             "null",
             "boolean"
           ]
+        },
+        "name": {
+          "description": "New name or wildcard for the protected branch rule (rename)",
+          "type": "string"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -142769,17 +145049,46 @@
         "allow_force_push": {
           "type": "boolean"
         },
-        "already_protected": {
-          "type": "boolean"
-        },
         "code_owner_approval_required": {
           "type": "boolean"
         },
         "id": {
           "type": "integer"
         },
-        "merge_access_level": {
-          "type": "integer"
+        "merge_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -142793,15 +145102,80 @@
             "array"
           ]
         },
-        "push_access_level": {
-          "type": "integer"
+        "push_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unprotect_access_levels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "access_level_description": {
+                "type": "string"
+              },
+              "deploy_key_id": {
+                "type": "integer"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "access_level",
+              "access_level_description"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "push_access_level",
-        "merge_access_level",
         "allow_force_push",
         "code_owner_approval_required"
       ],
@@ -142815,13 +145189,25 @@
   },
   {
     "name": "gitlab_protected_branches_list",
-    "description": "List all protected branches in a GitLab project with their configured push and merge access level restrictions. Returns paginated results.\n\nReturns: paginated list of protected branches with name, push/merge access levels, and allow_force_push. See also: gitlab_branch_protect, gitlab_protected_branch_get.",
+    "description": "List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination. Returns: protected rules with push/merge/unprotect access-level arrays and pagination metadata. See also: gitlab_protected_branch_get, gitlab_branch_protect, gitlab_protected_branch_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. name)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -142829,6 +145215,14 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "search": {
+          "description": "Filter protected branches by name (substring match)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -142847,17 +145241,46 @@
               "allow_force_push": {
                 "type": "boolean"
               },
-              "already_protected": {
-                "type": "boolean"
-              },
               "code_owner_approval_required": {
                 "type": "boolean"
               },
               "id": {
                 "type": "integer"
               },
-              "merge_access_level": {
-                "type": "integer"
+              "merge_access_levels": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_level": {
+                      "type": "integer"
+                    },
+                    "access_level_description": {
+                      "type": "string"
+                    },
+                    "deploy_key_id": {
+                      "type": "integer"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "user_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "access_level",
+                    "access_level_description"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -142871,15 +145294,80 @@
                   "array"
                 ]
               },
-              "push_access_level": {
-                "type": "integer"
+              "push_access_levels": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_level": {
+                      "type": "integer"
+                    },
+                    "access_level_description": {
+                      "type": "string"
+                    },
+                    "deploy_key_id": {
+                      "type": "integer"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "user_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "access_level",
+                    "access_level_description"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "unprotect_access_levels": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_level": {
+                      "type": "integer"
+                    },
+                    "access_level_description": {
+                      "type": "string"
+                    },
+                    "deploy_key_id": {
+                      "type": "integer"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "user_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "access_level",
+                    "access_level_description"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "push_access_level",
-              "merge_access_level",
               "allow_force_push",
               "code_owner_approval_required"
             ],
@@ -147692,7 +150180,7 @@
   },
   {
     "name": "gitlab_repository_archive",
-    "description": "Get the download URL for a repository archive. Supports tar.gz, tar.bz2, zip formats and optional SHA/branch/tag/path filters. Returns the URL (does not download binary content).\n\nReturns: archive download URL. See also: gitlab_project_get.",
+    "description": "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147759,7 +150247,7 @@
   },
   {
     "name": "gitlab_repository_blob",
-    "description": "Get a git blob by SHA from a repository. For text content returns decoded text; for images returns viewable image data; for binary files returns metadata only. Requires a blob SHA obtained from gitlab_repository_tree. For reading files by path, use gitlab_file_get.\n\nReturns: blob content (text/image) or metadata (binary). See also: gitlab_repository_tree.",
+    "description": "Get a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: gitlab_repository_raw_blob, gitlab_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147820,7 +150308,7 @@
   },
   {
     "name": "gitlab_repository_changelog_add",
-    "description": "Add changelog data to a changelog file by creating a commit. Requires version string. Optionally specify branch, from/to range, config file, and commit message.\n\nReturns: JSON with the commit details for the changelog update. See also: gitlab_release_create.",
+    "description": "Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: gitlab_repository_changelog_generate, gitlab_release_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147830,6 +150318,10 @@
         },
         "config_file": {
           "description": "Path to the changelog config file in the project",
+          "type": "string"
+        },
+        "date": {
+          "description": "Date and time of the release as an RFC3339 timestamp (default: current time)",
           "type": "string"
         },
         "file": {
@@ -147899,12 +150391,16 @@
   },
   {
     "name": "gitlab_repository_changelog_generate",
-    "description": "Generate changelog data (notes) without committing. Returns the changelog notes as Markdown text. Requires version string.\n\nReturns: Markdown changelog notes for the specified version.\n\nSee also: gitlab_repository_changelog_generate.",
+    "description": "Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: gitlab_repository_changelog_add, gitlab_release_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "config_file": {
           "description": "Path to the changelog config file",
+          "type": "string"
+        },
+        "date": {
+          "description": "Date and time of the release as an RFC3339 timestamp (default: current time)",
           "type": "string"
         },
         "from": {
@@ -148003,6 +150499,166 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "commit": {
+          "additionalProperties": false,
+          "properties": {
+            "author_email": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": "string"
+            },
+            "authored_date": {
+              "type": "string"
+            },
+            "committed_date": {
+              "type": "string"
+            },
+            "committer_email": {
+              "type": "string"
+            },
+            "committer_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "extended_trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "last_pipeline": {
+              "additionalProperties": false,
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "iid": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "project_id": {
+                  "type": "integer"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "next_steps": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "parent_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "short_id": {
+              "type": "string"
+            },
+            "stats": {
+              "additionalProperties": false,
+              "properties": {
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "additions",
+                "deletions",
+                "total"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "short_id",
+            "title",
+            "author_name",
+            "author_email",
+            "committer_name",
+            "committer_email",
+            "committed_date",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "commits": {
           "items": {
             "additionalProperties": false,
@@ -148247,7 +150903,7 @@
   },
   {
     "name": "gitlab_repository_contributors",
-    "description": "List repository contributors with commit, addition, and deletion counts. Supports ordering by name, email, or commits and pagination.\n\nReturns: JSON array of contributors with commit statistics and pagination. See also: gitlab_project_get.",
+    "description": "List repository contributors. Returns: each contributor's name, email, commit count, additions, deletions, and pagination metadata. See also: gitlab_repository_tree, gitlab_commit_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148258,6 +150914,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -148375,7 +151039,7 @@
   },
   {
     "name": "gitlab_repository_merge_base",
-    "description": "Find the common ancestor (merge base) commit of two or more branches, tags, or commits.\n\nReturns: JSON with the merge base commit details.\n\nSee also: gitlab_repository_compare, gitlab_repository_tree.",
+    "description": "Find the common ancestor (merge base) of two or more refs. Returns: the merge-base commit with metadata and web URL. See also: gitlab_repository_compare, gitlab_branch_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148566,7 +151230,7 @@
   },
   {
     "name": "gitlab_repository_raw_blob",
-    "description": "Get the content of a git blob by SHA. For text content returns decoded text; for images returns viewable image data; for binary files returns metadata only. Requires a blob SHA from gitlab_repository_tree. For reading files by path, use gitlab_file_get instead.\n\nReturns: blob content (text/image) or metadata (binary). See also: gitlab_repository_blob.",
+    "description": "Get the raw content of a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: gitlab_repository_blob, gitlab_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148631,9 +151295,21 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by: 'id', 'name', 'path', or 'type' (only used with pagination='keyset')",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "path": {
           "description": "Path inside the repository to list (default: root)",
@@ -148653,6 +151329,10 @@
         },
         "ref": {
           "description": "Branch name, tag, or commit SHA (default: default branch)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')",
           "type": "string"
         }
       },
@@ -161780,7 +164460,7 @@
   },
   {
     "name": "gitlab_tag_create",
-    "description": "Create a Git tag in a GitLab project pointing to a ref (branch, tag, or SHA). Optionally include an annotation message for an annotated tag. Returns: tag name, target, message, protected status, and commit SHA. See also: gitlab_release_create, gitlab_tag_list.",
+    "description": "Create a new tag in a project pointing at a ref. Returns: the created tag with target, message, protection flag, and the associated commit object. See also: gitlab_tag_get, gitlab_tag_delete, gitlab_release_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161811,11 +164491,103 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "commit_message": {
-          "type": "string"
-        },
-        "commit_sha": {
-          "type": "string"
+        "commit": {
+          "additionalProperties": false,
+          "properties": {
+            "author_email": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": "string"
+            },
+            "authored_date": {
+              "type": "string"
+            },
+            "committed_date": {
+              "type": "string"
+            },
+            "committer_email": {
+              "type": "string"
+            },
+            "committer_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "extended_trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "parent_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "short_id": {
+              "type": "string"
+            },
+            "stats": {
+              "additionalProperties": false,
+              "properties": {
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "additions",
+                "deletions",
+                "total"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -161838,6 +164610,25 @@
         "protected": {
           "type": "boolean"
         },
+        "release": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "tag_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag_name",
+            "description"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "target": {
           "type": "string"
         }
@@ -161857,7 +164648,7 @@
   },
   {
     "name": "gitlab_tag_delete",
-    "description": "Delete a Git tag from a GitLab project. If a release is associated with the tag, the release is also removed.\n\nReturns: confirmation message. See also: gitlab_tag_list, gitlab_tag_create.",
+    "description": "Delete a tag from a project permanently. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_get, gitlab_tag_list, gitlab_tag_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161914,7 +164705,7 @@
   },
   {
     "name": "gitlab_tag_get",
-    "description": "Retrieve detailed information about a single Git tag. Returns tag name, target commit SHA, annotation message, and protection status.\n\nReturns: name, target, message, protected status, and commit details. See also: gitlab_tag_create, gitlab_release_create.",
+    "description": "Get a single tag from a project by name. Returns: the tag with target, message, protection flag, the full associated commit object, release note, and creation time. See also: gitlab_tag_list, gitlab_tag_get_signature, gitlab_release_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161936,11 +164727,103 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "commit_message": {
-          "type": "string"
-        },
-        "commit_sha": {
-          "type": "string"
+        "commit": {
+          "additionalProperties": false,
+          "properties": {
+            "author_email": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": "string"
+            },
+            "authored_date": {
+              "type": "string"
+            },
+            "committed_date": {
+              "type": "string"
+            },
+            "committer_email": {
+              "type": "string"
+            },
+            "committer_name": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "extended_trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "parent_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "short_id": {
+              "type": "string"
+            },
+            "stats": {
+              "additionalProperties": false,
+              "properties": {
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "additions",
+                "deletions",
+                "total"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "trailers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -161963,6 +164846,25 @@
         "protected": {
           "type": "boolean"
         },
+        "release": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "tag_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag_name",
+            "description"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "target": {
           "type": "string"
         }
@@ -161984,7 +164886,7 @@
   },
   {
     "name": "gitlab_tag_get_protected",
-    "description": "Get a single protected tag by name. Returns: tag name and create access levels (access_level, user_id, group_id per entry). See also: gitlab_tag_list_protected, gitlab_tag_protect.",
+    "description": "Get a single protected tag or wildcard rule by name. Returns: the protected tag with its create access levels (access level, user, group, and deploy key descriptions). See also: gitlab_tag_list_protected, gitlab_tag_protect, gitlab_tag_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162069,7 +164971,7 @@
   },
   {
     "name": "gitlab_tag_get_signature",
-    "description": "Get the X.509 signature of a tag. Returns signature type, verification status, and certificate details.\n\nReturns: signature_type, verification_status, and certificate details.\n\nSee also: gitlab_tag_get.",
+    "description": "Get the X.509 signature of a tag. Returns: the signature type, verification status, and the X.509 certificate with issuer detail. See also: gitlab_tag_get, gitlab_tag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162179,7 +165081,7 @@
   },
   {
     "name": "gitlab_tag_list",
-    "description": "List Git tags in a GitLab project. Supports search by name pattern, ordering by name/updated/version, and sort direction (asc/desc). Returns paginated results.\n\nReturns: paginated list of tags with name, target SHA, message, and protected status. See also: gitlab_tag_get, gitlab_tag_create.",
+    "description": "List tags in one project with optional search and offset or keyset pagination. Returns: matching tags with target, message, protection flag, the associated commit object, release note, and pagination metadata. See also: gitlab_tag_get, gitlab_tag_create, gitlab_release_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162190,6 +165092,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -162265,11 +165175,103 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "commit_message": {
-                "type": "string"
-              },
-              "commit_sha": {
-                "type": "string"
+              "commit": {
+                "additionalProperties": false,
+                "properties": {
+                  "author_email": {
+                    "type": "string"
+                  },
+                  "author_name": {
+                    "type": "string"
+                  },
+                  "authored_date": {
+                    "type": "string"
+                  },
+                  "committed_date": {
+                    "type": "string"
+                  },
+                  "committer_email": {
+                    "type": "string"
+                  },
+                  "committer_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "extended_trailers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "parent_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "short_id": {
+                    "type": "string"
+                  },
+                  "stats": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "additions": {
+                        "type": "integer"
+                      },
+                      "deletions": {
+                        "type": "integer"
+                      },
+                      "total": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "additions",
+                      "deletions",
+                      "total"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "trailers": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -162291,6 +165293,25 @@
               },
               "protected": {
                 "type": "boolean"
+              },
+              "release": {
+                "additionalProperties": false,
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "tag_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tag_name",
+                  "description"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "target": {
                 "type": "string"
@@ -162325,13 +165346,25 @@
   },
   {
     "name": "gitlab_tag_list_protected",
-    "description": "List protected tags in a GitLab project with their create access levels. Returns paginated results.\n\nReturns: paginated list of protected tags with name and create access levels. See also: gitlab_tag_protect, gitlab_tag_get_protected.",
+    "description": "List protected tags in one project with offset or keyset pagination. Returns: protected tag patterns with their create access levels and pagination metadata. See also: gitlab_tag_get_protected, gitlab_tag_protect, gitlab_tag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -162339,6 +165372,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -162474,7 +165511,7 @@
   },
   {
     "name": "gitlab_tag_protect",
-    "description": "Protect a repository tag or wildcard pattern. Optionally set create access level or granular permissions (user, group, deploy key). Returns: protected tag name and create access levels. See also: gitlab_tag_unprotect, gitlab_tag_list_protected.",
+    "description": "Protect a tag or wildcard pattern with create access levels. Returns: the protected tag with its resolved create access levels. See also: gitlab_tag_unprotect, gitlab_tag_list_protected, gitlab_tag_get_protected.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162590,7 +165627,7 @@
   },
   {
     "name": "gitlab_tag_unprotect",
-    "description": "Remove protection from a repository tag. The tag itself is not deleted.\n\nReturns: confirmation message. See also: gitlab_tag_protect, gitlab_tag_list_protected.",
+    "description": "Remove protection from a tag or wildcard pattern. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_protect, gitlab_tag_list_protected, gitlab_tag_get_protected.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
