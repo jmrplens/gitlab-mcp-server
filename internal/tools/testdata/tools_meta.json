@@ -4569,9 +4569,6 @@
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
@@ -4640,42 +4637,10 @@
                 "array"
               ]
             },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "web_url": {
               "type": "string"
             }
           },

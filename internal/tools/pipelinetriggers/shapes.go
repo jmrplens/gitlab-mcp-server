@@ -25,11 +25,13 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// UserOutput mirrors gl.User, the full user object returned as a pipeline
-// trigger's owner. Only the stable, non-sensitive identity fields are
-// surfaced; administrative and session fields (sign-in IPs, 2FA, license
-// seat, identities) are intentionally omitted as they are never populated on
-// the trigger owner payload.
+// UserOutput is the trigger owner. Documented reference subset per
+// doc/api/pipeline_triggers.md: the trigger-token endpoints document `owner`
+// only as an identity object (it renders as `null` in every documented
+// example), so only the stable, non-sensitive identity fields of gl.User are
+// surfaced. Administrative and session fields (sign-in IPs, 2FA, license seat,
+// identities, profile attributes) are intentionally omitted as they are never
+// part of the documented owner payload.
 type UserOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -57,7 +59,10 @@ func userOutput(u *gl.User) *UserOutput {
 }
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object embedded on a
-// triggered pipeline (the user that started it).
+// triggered pipeline (the user that started it). Documented reference subset
+// per doc/api/pipeline_triggers.md: the "Trigger a pipeline with a token"
+// response documents `user` as the {id,username,name,state,avatar_url,web_url}
+// identity object surfaced here.
 type BasicUserOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -81,28 +86,44 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 }
 
 // DetailedStatusOutput mirrors gl.DetailedStatus, the rich CI status object on
-// a triggered pipeline.
+// a triggered pipeline. Documented reference subset per
+// doc/api/pipeline_triggers.md ("Trigger a pipeline with a token" response):
+// every documented detailed_status field is surfaced, with the nested
+// `illustration` object mirrored on its canonical key rather than flattened.
 type DetailedStatusOutput struct {
-	Icon        string `json:"icon"`
-	Text        string `json:"text"`
-	Label       string `json:"label"`
-	Group       string `json:"group"`
-	Tooltip     string `json:"tooltip"`
-	HasDetails  bool   `json:"has_details"`
-	DetailsPath string `json:"details_path"`
-	Favicon     string `json:"favicon,omitempty"`
-	Image       string `json:"illustration_image,omitempty"`
+	Icon         string              `json:"icon"`
+	Text         string              `json:"text"`
+	Label        string              `json:"label"`
+	Group        string              `json:"group"`
+	Tooltip      string              `json:"tooltip"`
+	HasDetails   bool                `json:"has_details"`
+	DetailsPath  string              `json:"details_path"`
+	Illustration *IllustrationOutput `json:"illustration,omitempty"`
+	Favicon      string              `json:"favicon,omitempty"`
+}
+
+// IllustrationOutput mirrors gl.DetailedStatusIllustration, the nested
+// illustration object of a detailed CI status. Documented as `null` in
+// doc/api/pipeline_triggers.md; the SDK surfaces its single image field.
+type IllustrationOutput struct {
+	Image string `json:"image,omitempty"`
 }
 
 // detailedStatusOutput converts a gl.DetailedStatus to its output shape,
-// returning nil when the SDK value is nil.
+// returning nil when the SDK value is nil. The nested illustration object is
+// surfaced only when it carries a non-empty image, matching the documented
+// `"illustration": null` default.
 func detailedStatusOutput(d *gl.DetailedStatus) *DetailedStatusOutput {
 	if d == nil {
 		return nil
 	}
-	return &DetailedStatusOutput{
+	out := &DetailedStatusOutput{
 		Icon: d.Icon, Text: d.Text, Label: d.Label, Group: d.Group,
 		Tooltip: d.Tooltip, HasDetails: d.HasDetails, DetailsPath: d.DetailsPath,
-		Favicon: d.Favicon, Image: d.Illustration.Image,
+		Favicon: d.Favicon,
 	}
+	if d.Illustration.Image != "" {
+		out.Illustration = &IllustrationOutput{Image: d.Illustration.Image}
+	}
+	return out
 }

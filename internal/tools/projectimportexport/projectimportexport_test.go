@@ -5,6 +5,7 @@ package projectimportexport
 
 import (
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"os"
 	"runtime"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -209,6 +209,10 @@ func TestImportFromFile_FilePath_Success(t *testing.T) {
 	if out.ID != 43 {
 		t.Errorf("ID = %d, want 43", out.ID)
 	}
+	// The raw multipart import path must surface the documented `created_at`.
+	if out.CreatedAt != "2026-02-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want documented created_at to be surfaced", out.CreatedAt)
+	}
 }
 
 // TestImportFromFile_BothParams_Error verifies that providing both file_path
@@ -270,6 +274,7 @@ func TestGetImportStatus_Success(t *testing.T) {
 				"name_with_namespace": "group / imported-project",
 				"path": "imported-project",
 				"path_with_namespace": "group/imported-project",
+				"created_at": "2026-03-01T10:00:00Z",
 				"import_status": "finished",
 				"import_type": "file",
 				"correlation_id": "abc-123"
@@ -289,6 +294,11 @@ func TestGetImportStatus_Success(t *testing.T) {
 	}
 	if out.ImportStatus != "finished" {
 		t.Errorf("ImportStatus = %q, want %q", out.ImportStatus, "finished")
+	}
+	// The documented `created_at` attribute (which gl.ImportStatus mistags as
+	// `create_at`) must now be surfaced via the raw-decode superset.
+	if out.CreatedAt != "2026-03-01T10:00:00Z" {
+		t.Errorf("CreatedAt = %q, want documented created_at to be surfaced", out.CreatedAt)
 	}
 }
 
@@ -650,12 +660,13 @@ func TestImportFromFile_Base64DecodeError(t *testing.T) {
 	}
 }
 
-// TestImportStatusToOutput_NilCreatedAt verifies importStatusToOutput handles
-// nil CreateAt without panicking (the missed branch).
-func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
-	out := importStatusToOutput(&gl.ImportStatus{
+// TestRawImportStatusToOutput_NilCreatedAt verifies rawImportStatusToOutput
+// handles both timestamp fields being nil without panicking (the missed branch).
+func TestRawImportStatusToOutput_NilCreatedAt(t *testing.T) {
+	out := rawImportStatusToOutput(&importStatusAPI{
 		ID:           42,
 		ImportStatus: "finished",
+		CreatedAt:    nil,
 		CreateAt:     nil,
 	})
 	if out.ID != 42 {
@@ -666,17 +677,61 @@ func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestImportStatusToOutput_CreatedAt verifies importStatusToOutput formats a
-// present CreateAt timestamp.
-func TestImportStatusToOutput_CreatedAt(t *testing.T) {
+// TestRawImportStatusToOutput_DocumentedCreatedAt verifies rawImportStatusToOutput
+// surfaces the documented `created_at` attribute (the spelling the SDK mistags as
+// `create_at`).
+func TestRawImportStatusToOutput_DocumentedCreatedAt(t *testing.T) {
 	createdAt := time.Date(2026, 2, 1, 12, 30, 0, 0, time.UTC)
-	out := importStatusToOutput(&gl.ImportStatus{
+	out := rawImportStatusToOutput(&importStatusAPI{
 		ID:           42,
 		ImportStatus: "finished",
-		CreateAt:     &createdAt,
+		CreatedAt:    &createdAt,
 	})
 	if out.CreatedAt != "2026-02-01T12:30:00Z" {
 		t.Errorf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
+	}
+}
+
+// TestRawImportStatusToOutput_LegacyCreateAt verifies rawImportStatusToOutput
+// falls back to the legacy `create_at` spelling when the documented `created_at`
+// is absent, preserving compatibility with older instances/SDK decodes.
+func TestRawImportStatusToOutput_LegacyCreateAt(t *testing.T) {
+	legacy := time.Date(2025, 12, 25, 8, 0, 0, 0, time.UTC)
+	out := rawImportStatusToOutput(&importStatusAPI{
+		ID:           42,
+		ImportStatus: "finished",
+		CreateAt:     &legacy,
+	})
+	if out.CreatedAt != "2025-12-25T08:00:00Z" {
+		t.Errorf("CreatedAt = %q, want RFC3339 timestamp from create_at fallback", out.CreatedAt)
+	}
+}
+
+// errReader is an io.Reader that always fails, used to exercise the
+// request-construction error branch of rawImportFromFile.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("forced read error") }
+
+// TestRawGetImportStatus_RequestError verifies rawGetImportStatus returns the
+// request-construction error when the path contains an invalid percent escape.
+func TestRawGetImportStatus_RequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when request construction fails")
+	}))
+	if _, err := rawGetImportStatus(t.Context(), client, "projects/%zz/import"); err == nil {
+		t.Fatal("expected request-construction error for invalid path escape, got nil")
+	}
+}
+
+// TestRawImportFromFile_RequestError verifies rawImportFromFile returns the
+// request-construction error when the archive reader fails during multipart copy.
+func TestRawImportFromFile_RequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when request construction fails")
+	}))
+	if _, err := rawImportFromFile(t.Context(), client, errReader{}, nil); err == nil {
+		t.Fatal("expected request-construction error for failing archive reader, got nil")
 	}
 }
 

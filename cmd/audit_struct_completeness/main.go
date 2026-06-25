@@ -169,6 +169,22 @@ var curatedRefSubsets = map[string]string{
 	"groupepicboards.ListLabelOutput":    "group_epic_boards.md",
 	"groupepicboards.LabelDetailsOutput": "group_epic_boards.md",
 	"groupepicboards.BoardListOutput":    "group_epic_boards.md",
+
+	// pipelinetriggers — owner/user are documented identity subsets of gl.User
+	// (doc/api/pipeline_triggers.md).
+	"pipelinetriggers.UserOutput":           "pipeline_triggers.md",
+	"pipelinetriggers.BasicUserOutput":      "pipeline_triggers.md",
+	"pipelinetriggers.DetailedStatusOutput": "pipeline_triggers.md",
+
+	// releases / groupreleases — author and commit are documented subsets
+	// (doc/api/releases/_index.md, doc/api/group_releases.md).
+	"releases.AuthorOutput":      "releases/_index.md",
+	"releases.CommitOutput":      "releases/_index.md",
+	"groupreleases.AuthorOutput": "group_releases.md",
+	"groupreleases.CommitOutput": "group_releases.md",
+
+	// tags — the tag's nested commit is a documented identity subset (doc/api/tags.md).
+	"tags.CommitOutput": "tags.md",
 }
 
 // isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
@@ -262,6 +278,19 @@ var docAddedFields = map[string]string{
 	"groupepicboards.LabelDetailsOutput.updated_at": "group_epic_boards.md",
 	"groupepicboards.BoardListOutput.list_type":     "group_epic_boards.md",
 	"groupepicboards.BoardListOutput.collapsed":     "group_epic_boards.md",
+
+	// commits — the commit signature endpoint documents SSH/X.509 signature fields
+	// absent from gl.GPGSignature; fetched via raw REST (rawGetGPGSignature into the
+	// gpgSignatureAPI superset). Citation: commits.md#get-the-signature-of-a-commit.
+	"commits.GPGSignatureOutput.signature_type":   "commits.md#get-the-signature-of-a-commit",
+	"commits.GPGSignatureOutput.commit_source":    "commits.md#get-the-signature-of-a-commit",
+	"commits.GPGSignatureOutput.key":              "commits.md#get-the-signature-of-a-commit",
+	"commits.GPGSignatureOutput.x509_certificate": "commits.md#get-the-signature-of-a-commit",
+
+	// projectimportexport — the import-status response documents `created_at`, but the
+	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the
+	// documented `created_at` via a raw-decode superset (importStatusAPI).
+	"projectimportexport.ImportStatusOutput.created_at": "project_import_export.md",
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we
@@ -644,6 +673,14 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	// only took a Response wrapper or an *Options/time arg), skip the pair rather
 	// than mis-pairing the MCP output against a non-result SDK struct.
 	if sdkCount != 1 {
+		return
+	}
+	// Skip unexported converter result types: they are internal mapping
+	// intermediates (e.g. commits.commitFields, a shared struct embedded into the
+	// real exported Output/DetailOutput), not serialized MCP output structs. Their
+	// fields carry no json tags, so pairing them against the SDK result would flag
+	// every SDK field as missing. Real MCP output structs are always exported.
+	if name := mcpNamed.Obj().Name(); name == "" || !ast.IsExported(name) {
 		return
 	}
 	key := [2]string{mcpNamed.Obj().Name(), sdkNamed.Obj().Name()}

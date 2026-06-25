@@ -19,7 +19,8 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// NoteUserOutput mirrors gl.NoteAuthor: the user who authored a note.
+// NoteUserOutput mirrors gl.NoteAuthor / gl.NoteResolvedBy (identical shapes):
+// the user who authored or resolved a note.
 type NoteUserOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -37,6 +38,18 @@ func noteAuthorOutput(a gl.NoteAuthor) *NoteUserOutput {
 	return &NoteUserOutput{
 		ID: a.ID, Username: a.Username, Email: a.Email, Name: a.Name,
 		State: a.State, AvatarURL: a.AvatarURL, WebURL: a.WebURL,
+	}
+}
+
+// noteResolvedByOutput converts a gl.NoteResolvedBy value into the resolved-by
+// object, returning nil when no user has resolved the note (zero ID).
+func noteResolvedByOutput(r gl.NoteResolvedBy) *NoteUserOutput {
+	if r.ID == 0 && r.Username == "" {
+		return nil
+	}
+	return &NoteUserOutput{
+		ID: r.ID, Username: r.Username, Email: r.Email, Name: r.Name,
+		State: r.State, AvatarURL: r.AvatarURL, WebURL: r.WebURL,
 	}
 }
 

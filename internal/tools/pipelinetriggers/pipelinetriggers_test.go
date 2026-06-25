@@ -302,11 +302,51 @@ func TestRunTrigger_FullPipeline(t *testing.T) {
 	if out.User == nil || out.User.Username != "bot" {
 		t.Fatalf("user object not mapped: %+v", out.User)
 	}
-	if out.DetailedStatus == nil || out.DetailedStatus.Label != "running" || out.DetailedStatus.Image != "/img" {
-		t.Fatalf("detailed_status not mapped: %+v", out.DetailedStatus)
-	}
+	assertDetailedStatusRunning(t, out.DetailedStatus)
 	if out.StartedAt == "" || out.FinishedAt == "" || out.CommittedAt == "" || out.UpdatedAt == "" {
 		t.Errorf("timestamps not mapped: %+v", out)
+	}
+}
+
+// assertDetailedStatusRunning verifies the triggered-pipeline detailed_status
+// object and its nested illustration sub-object were mapped from the API
+// response. Extracted from TestRunTrigger_FullPipeline to keep that test below
+// the gocyclo complexity threshold.
+func assertDetailedStatusRunning(t *testing.T, ds *DetailedStatusOutput) {
+	t.Helper()
+	if ds == nil || ds.Label != "running" {
+		t.Fatalf("detailed_status not mapped: %+v", ds)
+	}
+	if ds.Illustration == nil || ds.Illustration.Image != "/img" {
+		t.Fatalf("detailed_status illustration not mapped: %+v", ds.Illustration)
+	}
+}
+
+// TestRunTrigger_NullIllustration verifies version tolerance for the documented
+// "illustration": null detailed_status payload. Per doc/api/pipeline_triggers.md
+// the triggered-pipeline response renders illustration as null by default, and
+// older GitLab versions omit the nested image entirely; the converter must leave
+// DetailedStatus.Illustration nil rather than emit an empty object.
+func TestRunTrigger_NullIllustration(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id":99,"status":"created","ref":"main","sha":"abc",
+			"web_url":"https://gl/p/1/-/pipelines/99",
+			"detailed_status":{"icon":"status_created","text":"created","label":"created","group":"created","tooltip":"created","has_details":true,"details_path":"/p","illustration":null,"favicon":"/f"}
+		}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.DetailedStatus == nil {
+		t.Fatalf("detailed_status not mapped: %+v", out)
+	}
+	if out.DetailedStatus.Illustration != nil {
+		t.Errorf("expected nil illustration for null payload, got %+v", out.DetailedStatus.Illustration)
 	}
 }
 

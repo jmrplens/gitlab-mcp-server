@@ -360,8 +360,11 @@ func TestList_FullNestedObjects(t *testing.T) {
 
 func assertFullAuthor(t *testing.T, a *AuthorOutput) {
 	t.Helper()
+	// The fixture server sends an extra author.created_at field that is not part
+	// of the documented author subset; the trimmed AuthorOutput must ignore it
+	// (version tolerance) while mapping the documented fields.
 	if a == nil || a.ID != 7 || a.Name != "Releaser" || a.State != "active" ||
-		a.AvatarURL != "https://a" || a.WebURL != "https://u" || a.CreatedAt == "" {
+		a.AvatarURL != "https://a" || a.WebURL != "https://u" {
 		t.Errorf("Author not fully mapped: %+v", a)
 	}
 }
@@ -371,12 +374,13 @@ func assertFullCommit(t *testing.T, c *CommitOutput) {
 	if c == nil {
 		t.Fatal("Commit should be populated")
 	}
-	if c.ID != "abcdef" || c.ShortID != "abc" || c.ProjectID != 9 ||
-		c.WebURL != "https://c" || c.Status != "success" || len(c.ParentIDs) != 1 {
+	// The fixture server sends extra commit fields (project_id, status, stats)
+	// that are not part of the documented group-release commit subset; the
+	// trimmed CommitOutput must ignore them (version tolerance) while mapping the
+	// documented fields including web_url.
+	if c.ID != "abcdef" || c.ShortID != "abc" ||
+		c.WebURL != "https://c" || len(c.ParentIDs) != 1 {
 		t.Errorf("Commit not fully mapped: %+v", c)
-	}
-	if c.Stats == nil || c.Stats.Additions != 1 || c.Stats.Deletions != 2 || c.Stats.Total != 3 {
-		t.Errorf("Commit.Stats not mapped: %+v", c.Stats)
 	}
 }
 

@@ -1372,9 +1372,11 @@ func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
 	}
 }
 
-// TestToOutput_FullNestedObjects verifies that ToOutput mirrors every nested
-// sub-object field: commit (with stats and status), assets (sources + links),
-// _links, milestones (with issue_stats and dates), and evidences.
+// TestToOutput_FullNestedObjects verifies that ToOutput mirrors the documented
+// nested sub-object reference subsets: commit, assets (sources + links),
+// _links, milestones (with issue_stats and dates), and evidences. SDK-only
+// commit fields (stats, status) are intentionally not surfaced per the
+// documented release commit subset in doc/api/releases/_index.md.
 func TestToOutput_FullNestedObjects(t *testing.T) {
 	zip := "zip"
 	r := &gl.Release{
@@ -1382,8 +1384,6 @@ func TestToOutput_FullNestedObjects(t *testing.T) {
 		Author:  gl.BasicUser{ID: 7, Username: "alice", Name: "Alice", State: "active"},
 		Commit: gl.Commit{
 			ID: "abc", ShortID: "abc1", Title: "t", AuthorName: "Bob",
-			Stats:  &gl.CommitStats{Additions: 3, Deletions: 1, Total: 4},
-			Status: func() *gl.BuildStateValue { s := gl.BuildStateValue("success"); return &s }(),
 		},
 		Assets: gl.ReleaseAssets{
 			Count:            1,
@@ -1409,11 +1409,8 @@ func TestToOutput_FullNestedObjects(t *testing.T) {
 	if out.Author == nil || out.Author.ID != 7 {
 		t.Fatalf("author = %+v", out.Author)
 	}
-	if out.Commit == nil || out.Commit.Stats == nil || out.Commit.Stats.Total != 4 {
-		t.Fatalf("commit stats = %+v", out.Commit)
-	}
-	if out.Commit.Status != "success" {
-		t.Errorf("commit status = %q, want success", out.Commit.Status)
+	if out.Commit == nil || out.Commit.ID != "abc" || out.Commit.ShortID != "abc1" {
+		t.Fatalf("commit = %+v", out.Commit)
 	}
 	if out.Assets == nil || out.Assets.EvidenceFilePath != "/ev/file" {
 		t.Fatalf("assets = %+v", out.Assets)
@@ -1458,4 +1455,65 @@ func mustParseDay(t *testing.T, s string) time.Time {
 		t.Fatalf("parse day %q: %v", s, err)
 	}
 	return parsed
+}
+
+// TestToOutput_DocumentedSubset_OmitsUndocumentedCommitAndAuthorFields verifies
+// that the trimmed nested reference subsets stay aligned with
+// doc/api/releases/_index.md across SDK version drift: even when client-go
+// populates commit fields (stats, status, project_id, web_url) and an author
+// created_at that are NOT part of the documented release commit/author objects,
+// the serialized MCP output must not surface those keys. This is the
+// version-tolerance guard for the doc-grounded output reconcile.
+func TestToOutput_DocumentedSubset_OmitsUndocumentedCommitAndAuthorFields(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	status := gl.BuildStateValue("success")
+	r := &gl.Release{
+		TagName: "v9.9.9",
+		Author: gl.BasicUser{
+			ID: 7, Username: "alice", Name: "Alice", State: "active",
+			AvatarURL: "https://a", WebURL: "https://u", CreatedAt: &created,
+		},
+		Commit: gl.Commit{
+			ID: "abc", ShortID: "abc1", Title: "t", AuthorName: "Bob",
+			Stats:     &gl.CommitStats{Additions: 3, Deletions: 1, Total: 4},
+			Status:    &status,
+			ProjectID: 123,
+			WebURL:    "https://commit",
+		},
+	}
+
+	out := ToOutput(r)
+
+	// Marshal the commit sub-object in isolation so undocumented commit keys can
+	// be asserted without colliding with the documented author.web_url field.
+	commitData, err := json.Marshal(out.Commit)
+	if err != nil {
+		t.Fatalf("marshal commit: %v", err)
+	}
+	commitJSON := string(commitData)
+	for _, undocumented := range []string{`"stats"`, `"status"`, `"project_id"`, `"web_url"`} {
+		if strings.Contains(commitJSON, undocumented) {
+			t.Errorf("serialized commit must omit undocumented field %s; got %s", undocumented, commitJSON)
+		}
+	}
+	for _, documented := range []string{`"id"`, `"short_id"`, `"title"`} {
+		if !strings.Contains(commitJSON, documented) {
+			t.Errorf("serialized commit must keep documented field %s; got %s", documented, commitJSON)
+		}
+	}
+
+	// The author created_at is not part of the documented author subset.
+	authorData, err := json.Marshal(out.Author)
+	if err != nil {
+		t.Fatalf("marshal author: %v", err)
+	}
+	authorJSON := string(authorData)
+	if strings.Contains(authorJSON, `"created_at"`) {
+		t.Errorf("serialized author must omit undocumented created_at; got %s", authorJSON)
+	}
+	for _, documented := range []string{`"avatar_url"`, `"web_url"`, `"state"`} {
+		if !strings.Contains(authorJSON, documented) {
+			t.Errorf("serialized author must keep documented field %s; got %s", documented, authorJSON)
+		}
+	}
 }

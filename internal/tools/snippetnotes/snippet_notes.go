@@ -69,6 +69,10 @@ type Output struct {
 	System       bool                `json:"system"`
 	Internal     bool                `json:"internal"`
 	Resolvable   bool                `json:"resolvable,omitempty"`
+	Resolved     bool                `json:"resolved,omitempty"`
+	ResolvedAt   string              `json:"resolved_at,omitempty"`
+	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
+	Type         string              `json:"type,omitempty"`
 	CommitID     string              `json:"commit_id,omitempty"`
 	Position     *NotePositionOutput `json:"position,omitempty"`
 	NoteableType string              `json:"noteable_type,omitempty"`
@@ -101,6 +105,9 @@ func toOutput(n *gl.Note) Output {
 		System:       n.System,
 		Internal:     n.Internal,
 		Resolvable:   n.Resolvable,
+		Resolved:     n.Resolved,
+		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
+		Type:         string(n.Type),
 		CommitID:     n.CommitID,
 		Position:     notePositionOutput(n.Position),
 		NoteableType: n.NoteableType,
@@ -112,6 +119,7 @@ func toOutput(n *gl.Note) Output {
 	out.CreatedAt = formatTimePtr(n.CreatedAt)
 	out.UpdatedAt = formatTimePtr(n.UpdatedAt)
 	out.ExpiresAt = formatTimePtr(n.ExpiresAt)
+	out.ResolvedAt = formatTimePtr(n.ResolvedAt)
 	return out
 }
 

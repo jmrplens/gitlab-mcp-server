@@ -221,6 +221,86 @@ type ImportStatusOutput struct {
 	ImportError       string `json:"import_error,omitempty"`
 }
 
+// importStatusAPI is a raw-decode superset of the documented import-status
+// response (doc/api/project_import_export.md import/status responses). It exists
+// because gl.ImportStatus tags its timestamp field as `create_at` (an SDK typo),
+// so it never captures the documented `created_at` attribute. Decoding into this
+// superset reads the documented `created_at` first and falls back to the legacy
+// `create_at` spelling, so the value is surfaced regardless of which spelling the
+// instance returns. All other fields mirror gl.ImportStatus 1:1.
+type importStatusAPI struct {
+	ID                int64      `json:"id"`
+	Description       string     `json:"description"`
+	Name              string     `json:"name"`
+	NameWithNamespace string     `json:"name_with_namespace"`
+	Path              string     `json:"path"`
+	PathWithNamespace string     `json:"path_with_namespace"`
+	CreatedAt         *time.Time `json:"created_at"`
+	CreateAt          *time.Time `json:"create_at"`
+	ImportStatus      string     `json:"import_status"`
+	ImportType        string     `json:"import_type"`
+	CorrelationID     string     `json:"correlation_id"`
+	ImportError       string     `json:"import_error"`
+}
+
+// rawImportStatusToOutput maps the raw-decode superset onto ImportStatusOutput,
+// preferring the documented `created_at` attribute over the legacy `create_at`.
+func rawImportStatusToOutput(s *importStatusAPI) ImportStatusOutput {
+	out := ImportStatusOutput{
+		ID:                s.ID,
+		Description:       s.Description,
+		Name:              s.Name,
+		NameWithNamespace: s.NameWithNamespace,
+		Path:              s.Path,
+		PathWithNamespace: s.PathWithNamespace,
+		ImportStatus:      s.ImportStatus,
+		ImportType:        s.ImportType,
+		CorrelationID:     s.CorrelationID,
+		ImportError:       s.ImportError,
+	}
+	if created := s.CreatedAt; created != nil {
+		out.CreatedAt = created.Format(time.RFC3339)
+	} else if s.CreateAt != nil {
+		out.CreatedAt = s.CreateAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// rawGetImportStatus issues a raw REST GET against the import-status path,
+// decoding the documented response (including the documented `created_at`
+// attribute the SDK mistags) into an [importStatusAPI].
+func rawGetImportStatus(ctx context.Context, client *gitlabclient.Client, path string) (*importStatusAPI, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var status importStatusAPI
+	_, err = client.GL().Do(req, &status)
+	return &status, err
+}
+
+// rawImportFromFile issues a raw multipart REST POST against the import path,
+// decoding the documented response (including the documented `created_at`
+// attribute the SDK mistags) into an [importStatusAPI]. It mirrors the SDK's
+// ProjectImportExport.ImportFromFile upload but reads the documented timestamp.
+func rawImportFromFile(ctx context.Context, client *gitlabclient.Client, archive io.Reader, opts *gl.ImportFileOptions) (*importStatusAPI, error) {
+	req, err := client.GL().UploadRequest(
+		http.MethodPost,
+		"projects/import",
+		archive,
+		"archive.tar.gz",
+		gl.UploadFile,
+		opts,
+		[]gl.RequestOptionFunc{gl.WithContext(ctx)},
+	)
+	if err != nil {
+		return nil, err
+	}
+	var status importStatusAPI
+	_, err = client.GL().Do(req, &status)
+	return &status, err
+}
+
 // ImportFromFile imports a project from an export archive.
 func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input ImportFromFileInput) (ImportStatusOutput, error) {
 	hasFilePath := input.FilePath != ""
@@ -270,12 +350,12 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		opts.OverrideParams = op
 	}
 
-	status, _, err := client.GL().ProjectImportExport.ImportFromFile(archiveReader, opts, gl.WithContext(ctx))
+	status, err := rawImportFromFile(ctx, client, archiveReader, opts)
 	if err != nil {
 		return ImportStatusOutput{}, toolutil.WrapErrWithStatusHint("import_from_file", err, http.StatusBadRequest,
 			"archive must be a valid GitLab project export (.tar.gz from gitlab_export_download); namespace must exist and you need create-project permission there; path must be unique unless overwrite=true")
 	}
-	return importStatusToOutput(status), nil
+	return rawImportStatusToOutput(status), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -289,12 +369,13 @@ type GetImportStatusInput struct {
 
 // GetImportStatus returns the import status of a project.
 func GetImportStatus(ctx context.Context, client *gitlabclient.Client, input GetImportStatusInput) (ImportStatusOutput, error) {
-	status, _, err := client.GL().ProjectImportExport.ImportStatus(string(input.ProjectID), gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/import", gl.PathEscape(string(input.ProjectID)))
+	status, err := rawGetImportStatus(ctx, client, path)
 	if err != nil {
 		return ImportStatusOutput{}, toolutil.WrapErrWithStatusHint("import_status", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; status values: none, scheduled, started, finished, failed; check import_error field for failure reasons")
 	}
-	return importStatusToOutput(status), nil
+	return rawImportStatusToOutput(status), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -366,26 +447,6 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 		return nil
 	}
 	return opts
-}
-
-// importStatusToOutput converts the GitLab API response to the tool output format.
-func importStatusToOutput(s *gl.ImportStatus) ImportStatusOutput {
-	out := ImportStatusOutput{
-		ID:                s.ID,
-		Description:       s.Description,
-		Name:              s.Name,
-		NameWithNamespace: s.NameWithNamespace,
-		Path:              s.Path,
-		PathWithNamespace: s.PathWithNamespace,
-		ImportStatus:      s.ImportStatus,
-		ImportType:        s.ImportType,
-		CorrelationID:     s.CorrelationID,
-		ImportError:       s.ImportError,
-	}
-	if s.CreateAt != nil {
-		out.CreatedAt = s.CreateAt.Format(time.RFC3339)
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------

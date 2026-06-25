@@ -945,6 +945,159 @@ func TestGetGPGSignature_Success(t *testing.T) {
 	}
 }
 
+// TestGetGPGSignature_PGPSuperset verifies that GetGPGSignature surfaces the
+// documented-but-not-in-SDK superset fields (signature_type, commit_source) for a
+// PGP-signed commit via the raw REST fetch.
+func TestGetGPGSignature_PGPSuperset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"PGP",
+				"verification_status":"verified",
+				"gpg_key_id":1,
+				"gpg_key_primary_keyid":"8254AAB3FBD54AC9",
+				"gpg_key_user_name":"John Doe",
+				"gpg_key_user_email":"johndoe@example.com",
+				"gpg_key_subkey_id":null,
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.SignatureType != "PGP" {
+		t.Errorf("SignatureType = %q, want %q", out.SignatureType, "PGP")
+	}
+	if out.CommitSource != "gitaly" {
+		t.Errorf("CommitSource = %q, want %q", out.CommitSource, "gitaly")
+	}
+	if out.Key != nil || out.X509Certificate != nil {
+		t.Errorf("expected nil SSH/X509 objects for PGP signature, got key=%v x509=%v", out.Key, out.X509Certificate)
+	}
+}
+
+// TestGetGPGSignature_SSH verifies that GetGPGSignature decodes the documented
+// SSH `key` sub-object (absent from gl.GPGSignature) via the raw REST superset.
+func TestGetGPGSignature_SSH(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"SSH",
+				"verification_status":"verified",
+				"key":{
+					"id":11,
+					"title":"Key",
+					"created_at":"2023-05-08T09:12:38.503Z",
+					"expires_at":"2024-05-07T00:00:00.000Z",
+					"key":"ssh-ed25519 AAAAC3 MyKey",
+					"usage_type":"auth_and_signing"
+				},
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.SignatureType != "SSH" {
+		t.Errorf("SignatureType = %q, want %q", out.SignatureType, "SSH")
+	}
+	if out.Key == nil {
+		t.Fatal("expected non-nil SSH key object")
+	}
+	if out.Key.ID != 11 || out.Key.UsageType != "auth_and_signing" {
+		t.Errorf("SSH key = %+v, want id=11 usage_type=auth_and_signing", out.Key)
+	}
+}
+
+// TestGetGPGSignature_X509 verifies that GetGPGSignature decodes the documented
+// X.509 `x509_certificate` sub-object (and nested x509_issuer), neither of which
+// exists in gl.GPGSignature, via the raw REST superset.
+func TestGetGPGSignature_X509(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"X509",
+				"verification_status":"unverified",
+				"x509_certificate":{
+					"id":1,
+					"subject":"CN=gitlab@example.org,OU=Example,O=World",
+					"subject_key_identifier":"BC:BC:BC",
+					"email":"gitlab@example.org",
+					"serial_number":278969561018901340486471282831158785578,
+					"certificate_status":"good",
+					"x509_issuer":{
+						"id":1,
+						"subject":"CN=PKI,OU=Example,O=World",
+						"crl_url":"http://example.com/pki.crl"
+					}
+				},
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.X509Certificate == nil {
+		t.Fatal("expected non-nil X509 certificate object")
+	}
+	if out.X509Certificate.Email != "gitlab@example.org" {
+		t.Errorf("X509 email = %q, want %q", out.X509Certificate.Email, "gitlab@example.org")
+	}
+	if out.X509Certificate.SerialNumber.String() != "278969561018901340486471282831158785578" {
+		t.Errorf("X509 serial = %q, want big integer", out.X509Certificate.SerialNumber.String())
+	}
+	if out.X509Certificate.X509Issuer == nil || out.X509Certificate.X509Issuer.CRLURL != "http://example.com/pki.crl" {
+		t.Errorf("X509 issuer = %+v, want crl_url set", out.X509Certificate.X509Issuer)
+	}
+}
+
+// TestGetGPGSignature_VersionTolerance verifies that GetGPGSignature degrades
+// gracefully on older GitLab instances whose signature response predates the
+// signature_type/commit_source/key/x509_certificate fields: the raw-fetch
+// superset decodes the legacy PGP-only body and omits the absent fields.
+func TestGetGPGSignature_VersionTolerance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			// Legacy body: only the SDK-known PGP fields, no superset fields.
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"gpg_key_id":7,
+				"gpg_key_primary_keyid":"LEGACYKEY",
+				"gpg_key_user_name":"Old User",
+				"gpg_key_user_email":"old@example.com",
+				"verification_status":"verified"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.VerificationStatus != "verified" || out.KeyPrimaryKeyID != "LEGACYKEY" {
+		t.Errorf("legacy PGP fields not decoded: %+v", out)
+	}
+	if out.SignatureType != "" || out.CommitSource != "" || out.Key != nil || out.X509Certificate != nil {
+		t.Errorf("expected superset fields to be absent on legacy response, got %+v", out)
+	}
+}
+
 // TestGetGPGSignature_EmptyProjectID verifies the GetGPGSignature_EmptyProjectID handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -2138,7 +2291,7 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 		VerificationStatus: "verified",
 	}
 	md := FormatGPGSignatureMarkdown(sig)
-	if !strings.Contains(md, "GPG Signature") {
+	if !strings.Contains(md, "Commit Signature") {
 		t.Error(errExpHeader)
 	}
 	if !strings.Contains(md, "verified") {
@@ -2146,6 +2299,44 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "ABC123") {
 		t.Error("expected key ID")
+	}
+}
+
+// TestFormatGPGSignatureMarkdown_SSH verifies the signature Markdown formatter
+// renders SSH-signature details (type, key title, usage) for an SSH-signed
+// commit and omits the PGP key-user block.
+func TestFormatGPGSignatureMarkdown_SSH(t *testing.T) {
+	sig := GPGSignatureOutput{
+		SignatureType:      "SSH",
+		VerificationStatus: "verified",
+		CommitSource:       "gitaly",
+		Key:                &SSHSignatureKey{ID: 11, Title: "MyKey", UsageType: "auth_and_signing"},
+	}
+	md := FormatGPGSignatureMarkdown(sig)
+	for _, want := range []string{"SSH", "verified", "MyKey", "auth_and_signing", "gitaly"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected Markdown to contain %q\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatGPGSignatureMarkdown_X509 verifies the signature Markdown formatter
+// renders X.509-certificate details (subject, email) for an X.509-signed commit.
+func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
+	sig := GPGSignatureOutput{
+		SignatureType:      "X509",
+		VerificationStatus: "unverified",
+		X509Certificate: &X509CertificateOutput{
+			ID:      1,
+			Subject: "CN=gitlab@example.org,OU=Example,O=World",
+			Email:   "gitlab@example.org",
+		},
+	}
+	md := FormatGPGSignatureMarkdown(sig)
+	for _, want := range []string{"X509", "unverified", "CN=gitlab@example.org", "gitlab@example.org"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected Markdown to contain %q\n%s", want, md)
+		}
 	}
 }
 

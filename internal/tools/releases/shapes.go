@@ -67,7 +67,10 @@ func assetLinkOption(l AssetLinkInput) *gl.ReleaseAssetLinkOptions {
 	return opt
 }
 
-// AuthorOutput mirrors gl.BasicUser (the release author object).
+// AuthorOutput is the documented reference subset of the release author object
+// per doc/api/releases/_index.md (the documented JSON shows id, name, username,
+// state, avatar_url, web_url; created_at is not part of the release author
+// subset and is intentionally omitted).
 type AuthorOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -75,48 +78,41 @@ type AuthorOutput struct {
 	State     string `json:"state"`
 	AvatarURL string `json:"avatar_url"`
 	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
 }
 
 func authorOutput(u gl.BasicUser) *AuthorOutput {
 	return &AuthorOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
 }
 
-// CommitStatsOutput mirrors gl.CommitStats.
-type CommitStatsOutput struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-	Total     int64 `json:"total"`
-}
-
-// CommitOutput mirrors gl.Commit (the commit the release tag points to).
+// CommitOutput is the documented reference subset of the commit the release tag
+// points to per doc/api/releases/_index.md. The documented release commit JSON
+// surfaces id, short_id, title, created_at, parent_ids, message, author_name,
+// author_email, authored_date, committer_name, committer_email, committed_date.
+// SDK-only commit fields (stats, status, project_id, web_url) are not part of
+// the documented release commit subset and are intentionally omitted.
 type CommitOutput struct {
-	ID             string             `json:"id"`
-	ShortID        string             `json:"short_id"`
-	Title          string             `json:"title"`
-	AuthorName     string             `json:"author_name"`
-	AuthorEmail    string             `json:"author_email"`
-	AuthoredDate   string             `json:"authored_date,omitempty"`
-	CommitterName  string             `json:"committer_name"`
-	CommitterEmail string             `json:"committer_email"`
-	CommittedDate  string             `json:"committed_date,omitempty"`
-	CreatedAt      string             `json:"created_at,omitempty"`
-	Message        string             `json:"message"`
-	ParentIDs      []string           `json:"parent_ids,omitempty"`
-	Stats          *CommitStatsOutput `json:"stats,omitempty"`
-	Status         string             `json:"status,omitempty"`
-	ProjectID      int64              `json:"project_id,omitempty"`
-	WebURL         string             `json:"web_url,omitempty"`
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id"`
+	Title          string   `json:"title"`
+	AuthorName     string   `json:"author_name"`
+	AuthorEmail    string   `json:"author_email"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name"`
+	CommitterEmail string   `json:"committer_email"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	Message        string   `json:"message"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
 }
 
 func commitOutput(c gl.Commit) *CommitOutput {
 	if c.ID == "" {
 		return nil
 	}
-	out := &CommitOutput{
+	return &CommitOutput{
 		ID: c.ID, ShortID: c.ShortID, Title: c.Title,
 		AuthorName: c.AuthorName, AuthorEmail: c.AuthorEmail,
 		AuthoredDate:   formatTimePtr(c.AuthoredDate),
@@ -126,18 +122,7 @@ func commitOutput(c gl.Commit) *CommitOutput {
 		CreatedAt:      formatTimePtr(c.CreatedAt),
 		Message:        c.Message,
 		ParentIDs:      c.ParentIDs,
-		ProjectID:      c.ProjectID,
-		WebURL:         c.WebURL,
 	}
-	if c.Stats != nil {
-		out.Stats = &CommitStatsOutput{
-			Additions: c.Stats.Additions, Deletions: c.Stats.Deletions, Total: c.Stats.Total,
-		}
-	}
-	if c.Status != nil {
-		out.Status = string(*c.Status)
-	}
-	return out
 }
 
 // AssetSourceOutput mirrors gl.ReleaseAssetsSource (an auto-generated archive).

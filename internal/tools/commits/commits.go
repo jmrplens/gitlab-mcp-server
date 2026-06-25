@@ -2,7 +2,9 @@ package commits
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -1028,18 +1030,98 @@ type GPGSignatureInput struct {
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA,required"`
 }
 
-// GPGSignatureOutput represents a commit's GPG signature.
+// GPGSignatureOutput represents a commit's cryptographic signature. It mirrors
+// the documented "Get the signature of a commit" response, which is a superset
+// of gl.GPGSignature: the SDK struct only exposes the PGP (gpg_key_*) fields and
+// verification_status, while the documented response also returns signature_type,
+// commit_source, and the SSH (key) and X.509 (x509_certificate) sub-objects.
+// Those documented-but-not-in-SDK fields are surfaced via a raw REST fetch
+// (client.GL().NewRequest+Do, per doc/api/commits.md#get-the-signature-of-a-commit).
 type GPGSignatureOutput struct {
 	toolutil.HintableOutput
-	KeyID              int64  `json:"gpg_key_id"`
-	KeyPrimaryKeyID    string `json:"gpg_key_primary_keyid"`
-	KeyUserName        string `json:"gpg_key_user_name"`
-	KeyUserEmail       string `json:"gpg_key_user_email"`
-	VerificationStatus string `json:"verification_status"`
-	KeySubkeyID        int64  `json:"gpg_key_subkey_id,omitempty"`
+	SignatureType      string                 `json:"signature_type,omitempty"`
+	VerificationStatus string                 `json:"verification_status"`
+	CommitSource       string                 `json:"commit_source,omitempty"`
+	KeyID              int64                  `json:"gpg_key_id"`
+	KeyPrimaryKeyID    string                 `json:"gpg_key_primary_keyid"`
+	KeyUserName        string                 `json:"gpg_key_user_name"`
+	KeyUserEmail       string                 `json:"gpg_key_user_email"`
+	KeySubkeyID        int64                  `json:"gpg_key_subkey_id,omitempty"`
+	Key                *SSHSignatureKey       `json:"key,omitempty"`
+	X509Certificate    *X509CertificateOutput `json:"x509_certificate,omitempty"`
 }
 
-// GetGPGSignature retrieves the GPG signature of a commit.
+// SSHSignatureKey mirrors the documented `key` object on an SSH-signed commit
+// signature (doc/api/commits.md#get-the-signature-of-a-commit). The SDK
+// gl.GPGSignature lacks this object, so it is decoded via the raw REST superset.
+type SSHSignatureKey struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+	Key       string `json:"key,omitempty"`
+	UsageType string `json:"usage_type,omitempty"`
+}
+
+// X509CertificateOutput mirrors the documented `x509_certificate` object on an
+// X.509-signed commit signature (doc/api/commits.md#get-the-signature-of-a-commit).
+// The SDK gl.GPGSignature lacks this object, so it is decoded via the raw REST
+// superset.
+type X509CertificateOutput struct {
+	ID                   int64             `json:"id"`
+	Subject              string            `json:"subject,omitempty"`
+	SubjectKeyIdentifier string            `json:"subject_key_identifier,omitempty"`
+	Email                string            `json:"email,omitempty"`
+	SerialNumber         json.Number       `json:"serial_number,omitempty"`
+	CertificateStatus    string            `json:"certificate_status,omitempty"`
+	X509Issuer           *X509IssuerOutput `json:"x509_issuer,omitempty"`
+}
+
+// X509IssuerOutput mirrors the documented nested `x509_issuer` object of an X.509
+// certificate (doc/api/commits.md#get-the-signature-of-a-commit).
+type X509IssuerOutput struct {
+	ID                   int64  `json:"id"`
+	Subject              string `json:"subject,omitempty"`
+	SubjectKeyIdentifier string `json:"subject_key_identifier,omitempty"`
+	CRLURL               string `json:"crl_url,omitempty"`
+}
+
+// gpgSignatureAPI is the raw-fetch superset decoded from the documented
+// signature response. It is intentionally tolerant: GitLab versions that omit the
+// newer signature_type/commit_source/key/x509_certificate fields decode them as
+// zero values, which are then dropped by omitempty.
+type gpgSignatureAPI struct {
+	SignatureType      string                 `json:"signature_type"`
+	VerificationStatus string                 `json:"verification_status"`
+	CommitSource       string                 `json:"commit_source"`
+	KeyID              int64                  `json:"gpg_key_id"`
+	KeyPrimaryKeyID    string                 `json:"gpg_key_primary_keyid"`
+	KeyUserName        string                 `json:"gpg_key_user_name"`
+	KeyUserEmail       string                 `json:"gpg_key_user_email"`
+	KeySubkeyID        int64                  `json:"gpg_key_subkey_id"`
+	Key                *SSHSignatureKey       `json:"key"`
+	X509Certificate    *X509CertificateOutput `json:"x509_certificate"`
+}
+
+// rawGetGPGSignature issues a raw REST GET against the commit signature path,
+// decoding the full documented response (including the SDK-missing signature_type,
+// commit_source, key, and x509_certificate fields) into a [gpgSignatureAPI]. The
+// unmarshal is naturally tolerant of older instances that omit these fields.
+func rawGetGPGSignature(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, sha string) (*gpgSignatureAPI, *gl.Response, error) {
+	path := fmt.Sprintf("projects/%s/repository/commits/%s/signature",
+		gl.PathEscape(string(projectID)), gl.PathEscape(sha))
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var sig gpgSignatureAPI
+	resp, err := client.GL().Do(req, &sig)
+	return &sig, resp, err
+}
+
+// GetGPGSignature retrieves the cryptographic signature of a commit. It uses a
+// raw REST fetch to surface the full documented signature superset (PGP, SSH, and
+// X.509 variants); the SDK's gl.GPGSignature only exposes the PGP subset.
 func GetGPGSignature(ctx context.Context, client *gitlabclient.Client, input GPGSignatureInput) (GPGSignatureOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GPGSignatureOutput{}, err
@@ -1047,17 +1129,21 @@ func GetGPGSignature(ctx context.Context, client *gitlabclient.Client, input GPG
 	if input.ProjectID == "" {
 		return GPGSignatureOutput{}, errors.New("getGPGSignature: project_id is required")
 	}
-	sig, _, err := client.GL().Commits.GetGPGSignature(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
+	sig, _, err := rawGetGPGSignature(ctx, client, input.ProjectID, input.SHA)
 	if err != nil {
 		return GPGSignatureOutput{}, toolutil.WrapErrWithStatusHint("getGPGSignature", err, http.StatusNotFound,
 			"verify SHA with gitlab_commit_get \u2014 404 also returned for unsigned commits or unsupported signature types")
 	}
 	return GPGSignatureOutput{
+		SignatureType:      sig.SignatureType,
+		VerificationStatus: sig.VerificationStatus,
+		CommitSource:       sig.CommitSource,
 		KeyID:              sig.KeyID,
 		KeyPrimaryKeyID:    sig.KeyPrimaryKeyID,
 		KeyUserName:        sig.KeyUserName,
 		KeyUserEmail:       sig.KeyUserEmail,
-		VerificationStatus: sig.VerificationStatus,
 		KeySubkeyID:        sig.KeySubkeyID,
+		Key:                sig.Key,
+		X509Certificate:    sig.X509Certificate,
 	}, nil
 }

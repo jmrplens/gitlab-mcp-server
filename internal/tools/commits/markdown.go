@@ -260,11 +260,32 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 // FormatGPGSignatureMarkdown renders a GPG signature as Markdown.
 func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 	var b strings.Builder
-	b.WriteString("## GPG Signature\n\n")
+	b.WriteString("## Commit Signature\n\n")
+	if sig.SignatureType != "" {
+		fmt.Fprintf(&b, "- **Type**: %s\n", sig.SignatureType)
+	}
 	fmt.Fprintf(&b, "- **Verification**: %s\n", sig.VerificationStatus)
-	fmt.Fprintf(&b, "- **Key User**: %s <%s>\n", sig.KeyUserName, sig.KeyUserEmail)
-	fmt.Fprintf(&b, "- **Key ID**: %d\n", sig.KeyID)
-	fmt.Fprintf(&b, "- **Primary Key ID**: %s\n", sig.KeyPrimaryKeyID)
+	switch {
+	case sig.X509Certificate != nil:
+		fmt.Fprintf(&b, "- **X.509 Subject**: %s\n", toolutil.EscapeMdTableCell(sig.X509Certificate.Subject))
+		if sig.X509Certificate.Email != "" {
+			fmt.Fprintf(&b, "- **X.509 Email**: %s\n", sig.X509Certificate.Email)
+		}
+	case sig.Key != nil:
+		if sig.Key.Title != "" {
+			fmt.Fprintf(&b, "- **SSH Key**: %s\n", toolutil.EscapeMdTableCell(sig.Key.Title))
+		}
+		if sig.Key.UsageType != "" {
+			fmt.Fprintf(&b, "- **Usage**: %s\n", sig.Key.UsageType)
+		}
+	default:
+		fmt.Fprintf(&b, "- **Key User**: %s <%s>\n", sig.KeyUserName, sig.KeyUserEmail)
+		fmt.Fprintf(&b, "- **Key ID**: %d\n", sig.KeyID)
+		fmt.Fprintf(&b, "- **Primary Key ID**: %s\n", sig.KeyPrimaryKeyID)
+	}
+	if sig.CommitSource != "" {
+		fmt.Fprintf(&b, "- **Commit Source**: %s\n", sig.CommitSource)
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_commit_get` to view the full commit details",

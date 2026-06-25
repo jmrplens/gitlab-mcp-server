@@ -35,35 +35,27 @@ type Output struct {
 	CreatedAt string             `json:"created_at,omitempty"`
 }
 
-// CommitOutput mirrors the gl.Commit payload embedded in a tag as its commit
-// object (C-IMPORTS).
+// CommitOutput is the documented reference subset of the gl.Commit payload that
+// the GitLab tags API embeds in a tag as its `commit` object. The tags endpoint
+// documents only an identity subset of the commit (id/short_id/title/message,
+// author/committer name+email+date, parent_ids, created_at), not the full commit
+// resource, so deeper gl.Commit fields (web_url, status, project_id, trailers,
+// stats, last_pipeline, ...) are intentionally omitted here.
+//
+// Documented reference subset per doc/api/tags.md
 type CommitOutput struct {
-	ID               string             `json:"id"`
-	ShortID          string             `json:"short_id,omitempty"`
-	Title            string             `json:"title,omitempty"`
-	Message          string             `json:"message,omitempty"`
-	AuthorName       string             `json:"author_name,omitempty"`
-	AuthorEmail      string             `json:"author_email,omitempty"`
-	AuthoredDate     string             `json:"authored_date,omitempty"`
-	CommitterName    string             `json:"committer_name,omitempty"`
-	CommitterEmail   string             `json:"committer_email,omitempty"`
-	CommittedDate    string             `json:"committed_date,omitempty"`
-	CreatedAt        string             `json:"created_at,omitempty"`
-	WebURL           string             `json:"web_url,omitempty"`
-	ParentIDs        []string           `json:"parent_ids,omitempty"`
-	Status           string             `json:"status,omitempty"`
-	ProjectID        int64              `json:"project_id,omitempty"`
-	Trailers         map[string]string  `json:"trailers,omitempty"`
-	ExtendedTrailers map[string]string  `json:"extended_trailers,omitempty"`
-	Stats            *CommitStatsOutput `json:"stats,omitempty"`
-}
-
-// CommitStatsOutput mirrors gl.CommitStats: line additions/deletions/total for
-// the commit a tag points at.
-type CommitStatsOutput struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-	Total     int64 `json:"total"`
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id,omitempty"`
+	Title          string   `json:"title,omitempty"`
+	Message        string   `json:"message,omitempty"`
+	AuthorName     string   `json:"author_name,omitempty"`
+	AuthorEmail    string   `json:"author_email,omitempty"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name,omitempty"`
+	CommitterEmail string   `json:"committer_email,omitempty"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
 }
 
 // ReleaseNoteOutput mirrors gl.ReleaseNote, the release summary embedded in a
@@ -80,19 +72,15 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 		return nil
 	}
 	out := &CommitOutput{
-		ID:               c.ID,
-		ShortID:          c.ShortID,
-		Title:            c.Title,
-		Message:          c.Message,
-		AuthorName:       c.AuthorName,
-		AuthorEmail:      c.AuthorEmail,
-		CommitterName:    c.CommitterName,
-		CommitterEmail:   c.CommitterEmail,
-		WebURL:           c.WebURL,
-		ParentIDs:        c.ParentIDs,
-		ProjectID:        c.ProjectID,
-		Trailers:         c.Trailers,
-		ExtendedTrailers: c.ExtendedTrailers,
+		ID:             c.ID,
+		ShortID:        c.ShortID,
+		Title:          c.Title,
+		Message:        c.Message,
+		AuthorName:     c.AuthorName,
+		AuthorEmail:    c.AuthorEmail,
+		CommitterName:  c.CommitterName,
+		CommitterEmail: c.CommitterEmail,
+		ParentIDs:      c.ParentIDs,
 	}
 	if c.AuthoredDate != nil {
 		out.AuthoredDate = c.AuthoredDate.Format(time.RFC3339)
@@ -102,16 +90,6 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 	}
 	if c.CreatedAt != nil {
 		out.CreatedAt = c.CreatedAt.Format(time.RFC3339)
-	}
-	if c.Status != nil {
-		out.Status = string(*c.Status)
-	}
-	if c.Stats != nil {
-		out.Stats = &CommitStatsOutput{
-			Additions: c.Stats.Additions,
-			Deletions: c.Stats.Deletions,
-			Total:     c.Stats.Total,
-		}
 	}
 	return out
 }

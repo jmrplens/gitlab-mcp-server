@@ -243,6 +243,7 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 				"commit":{
 					"id":"aaa111bbb222","short_id":"aaa111b","title":"feat",
 					"message":"feat: new feature","author_name":"Dev","author_email":"dev@example.com",
+					"committer_name":"Dev","committer_email":"dev@example.com",
 					"authored_date":"2026-06-15T08:00:00Z","committed_date":"2026-06-15T08:10:00Z",
 					"created_at":"2026-06-15T08:00:00Z","web_url":"https://gitlab.example.com/-/commit/aaa111bbb222",
 					"parent_ids":["zzz000"],"project_id":42,"status":"success",
@@ -272,15 +273,14 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 		t.Fatal("out.Release is nil, want release object")
 	}
 	stringChecks := map[string][2]string{
-		"Commit.ID":          {out.Commit.ID, "aaa111bbb222"},
-		"Commit.Message":     {out.Commit.Message, "feat: new feature"},
-		"Commit.ShortID":     {out.Commit.ShortID, "aaa111b"},
-		"Commit.AuthorEmail": {out.Commit.AuthorEmail, "dev@example.com"},
-		"Commit.Status":      {out.Commit.Status, "success"},
-		"Commit.Trailers":    {out.Commit.Trailers["Signed-off-by"], "Dev"},
-		"Commit.ExtTrailers": {out.Commit.ExtendedTrailers["Signed-off-by"], "Dev"},
-		"Release.TagName":    {out.Release.TagName, "v2.0.0"},
-		"Release.Desc":       {out.Release.Description, "Second major release"},
+		"Commit.ID":             {out.Commit.ID, "aaa111bbb222"},
+		"Commit.Message":        {out.Commit.Message, "feat: new feature"},
+		"Commit.ShortID":        {out.Commit.ShortID, "aaa111b"},
+		"Commit.AuthorEmail":    {out.Commit.AuthorEmail, "dev@example.com"},
+		"Commit.CommitterName":  {out.Commit.CommitterName, "Dev"},
+		"Commit.CommitterEmail": {out.Commit.CommitterEmail, "dev@example.com"},
+		"Release.TagName":       {out.Release.TagName, "v2.0.0"},
+		"Release.Desc":          {out.Release.Description, "Second major release"},
 	}
 	for field, pair := range stringChecks {
 		if pair[0] != pair[1] {
@@ -297,14 +297,42 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 			t.Errorf("%s is empty, want timestamp", field)
 		}
 	}
-	if out.Commit.ProjectID != 42 {
-		t.Errorf("out.Commit.ProjectID = %d, want 42", out.Commit.ProjectID)
-	}
 	if len(out.Commit.ParentIDs) != 1 || out.Commit.ParentIDs[0] != "zzz000" {
 		t.Errorf("out.Commit.ParentIDs = %v, want [zzz000]", out.Commit.ParentIDs)
 	}
-	if out.Commit.Stats == nil || out.Commit.Stats.Total != 4 {
-		t.Errorf("out.Commit.Stats = %+v, want total 4", out.Commit.Stats)
+}
+
+// TestTagGet_CommitSubsetIgnoresUndocumentedFields verifies that the documented
+// reference subset CommitOutput silently ignores commit fields the tags API does
+// not document (web_url, status, project_id, trailers, stats, last_pipeline),
+// providing version tolerance when GitLab returns a richer commit object.
+func TestTagGet_CommitSubsetIgnoresUndocumentedFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoTags+"/v3.0.0" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"name":"v3.0.0","target":"ccc333","protected":false,
+				"commit":{
+					"id":"ccc333","short_id":"ccc333a","title":"chore",
+					"web_url":"https://gitlab.example.com/-/commit/ccc333","status":"success",
+					"project_id":99,"trailers":{"k":"v"},"extended_trailers":{"k":"v"},
+					"stats":{"additions":1,"deletions":0,"total":1},
+					"last_pipeline":{"id":7,"ref":"main","status":"success"}
+				}
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", TagName: "v3.0.0"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.Commit == nil {
+		t.Fatal("out.Commit is nil, want commit object")
+	}
+	if out.Commit.ID != "ccc333" {
+		t.Errorf("out.Commit.ID = %q, want %q", out.Commit.ID, "ccc333")
 	}
 }
 

@@ -614,6 +614,9 @@ func TestToOutput_FullFields(t *testing.T) {
 		"system": false,
 		"internal": true,
 		"resolvable": true,
+		"resolved": true,
+		"resolved_at": "2026-03-11T08:00:00Z",
+		"resolved_by": {"id": 9, "username": "bob", "name": "Bob", "state": "active"},
 		"commit_id": "abc123",
 		"expires_at": "2027-01-01T00:00:00Z",
 		"created_at": "2026-03-10T09:00:00Z",
@@ -665,6 +668,44 @@ func assertFullNoteScalars(t *testing.T, out Output) {
 	}
 	if out.NoteableIID != 2 || out.ProjectID != 42 {
 		t.Errorf("noteable_iid/project_id not mapped: %d %d", out.NoteableIID, out.ProjectID)
+	}
+	assertFullNoteResolution(t, out)
+}
+
+// assertFullNoteResolution checks the additive type / resolution sub-fields.
+func assertFullNoteResolution(t *testing.T, out Output) {
+	t.Helper()
+	if out.Type != "DiffNote" {
+		t.Errorf("Type = %q, want DiffNote", out.Type)
+	}
+	if !out.Resolved || out.ResolvedAt != "2026-03-11T08:00:00Z" {
+		t.Errorf("resolved/resolved_at not mapped: resolved=%v resolved_at=%q", out.Resolved, out.ResolvedAt)
+	}
+	if out.ResolvedBy == nil || out.ResolvedBy.ID != 9 || out.ResolvedBy.Username != "bob" {
+		t.Errorf("ResolvedBy = %+v, want populated", out.ResolvedBy)
+	}
+}
+
+// TestToOutput_UnresolvedNote verifies version-tolerant degradation: when the
+// GitLab response omits the resolved_* fields (older instances) the resolved_by
+// object is nil and the timestamp/flag fields are zero-valued (the
+// noteResolvedByOutput nil branch).
+func TestToOutput_UnresolvedNote(t *testing.T) {
+	const minimalNoteJSON = `{"id":100,"body":"plain"}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSnippetNote100 {
+			testutil.RespondJSON(w, http.StatusOK, minimalNoteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 100})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if out.Resolved || out.ResolvedAt != "" || out.ResolvedBy != nil || out.Type != "" {
+		t.Errorf("unresolved note should have zero resolved_* fields: resolved=%v resolved_at=%q resolved_by=%+v type=%q",
+			out.Resolved, out.ResolvedAt, out.ResolvedBy, out.Type)
 	}
 }
 
