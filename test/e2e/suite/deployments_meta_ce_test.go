@@ -72,7 +72,37 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 		})
 		requireNoError(t, err, "deployment get")
 		requireTruef(t, out.ID > 0, "deployment get: expected ID > 0")
-		t.Logf("Got deployment %d: status=%s, ref=%s", out.ID, out.Status, out.Ref)
+
+		// Validate the doc-grounded 1:1 output shape (deployments.Output mirrors the
+		// documented top-level deployment fields: id, iid, ref, sha, created_at,
+		// status, user). These were created with ref=main, sha=main, status=running
+		// by the test token user, so the documented scalars must be populated.
+		requireTruef(t, out.SHA != "",
+			"deployment get: doc field 'sha' must be populated (1:1 output shape)")
+		requireTruef(t, out.Ref == "main",
+			"deployment get: doc field 'ref' must be 'main' (1:1 output shape), got %q", out.Ref)
+		requireTruef(t, out.Status != "",
+			"deployment get: doc field 'status' must be populated (1:1 output shape), got %q", out.Status)
+		// The deployment was created by the test token user, so the documented
+		// 'user' object must be present and carry a username.
+		requireTruef(t, out.User != nil,
+			"deployment get: doc field 'user' object must be present (1:1 output shape)")
+		if out.User != nil {
+			requireTruef(t, out.User.Username != "",
+				"deployment get: doc field 'user.username' must be populated (1:1 output shape)")
+		}
+
+		// CAVEAT: the deployment was created via the deployments API with no CI job,
+		// so 'deployable' (the job) is legitimately null. Do NOT require it; only
+		// assert its sub-fields when it happens to be present, keeping the test
+		// correct whether or not a job exists.
+		if out.Deployable != nil {
+			requireTruef(t, out.Deployable.ID > 0,
+				"deployment get: when 'deployable' is present its id must be > 0 (1:1 output shape)")
+		}
+
+		t.Logf("Got deployment %d: status=%s, ref=%s, sha=%s, user=%v",
+			out.ID, out.Status, out.Ref, out.SHA, out.User != nil)
 	})
 
 	t.Run("Update", func(t *testing.T) {

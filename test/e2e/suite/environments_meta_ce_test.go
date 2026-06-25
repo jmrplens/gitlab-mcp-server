@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/freezeperiods"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
 )
@@ -210,7 +211,7 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 
 	// Create an environment for deployments
 	envName := "production-" + uniqueName("")
-	_, envErr := callToolOn[struct{ Name string }](ctx, sess.meta, "gitlab_environment", map[string]any{
+	envOut, envErr := callToolOn[environments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 		"action": "create",
 		"params": map[string]any{
 			"project_id": proj.pidStr(),
@@ -218,6 +219,7 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 		},
 	})
 	requireNoError(t, envErr, "create environment for deployments")
+	envID := envOut.ID
 
 	t.Run("DeploymentList", func(t *testing.T) {
 		out, err := callToolOn[deployments.ListOutput](ctx, sess.meta, "gitlab_environment", map[string]any{
@@ -244,5 +246,45 @@ func TestMeta_DeploymentsExtended(t *testing.T) {
 		requireNoError(t, err, "deployment create")
 		requireTruef(t, out.ID > 0, "deployment create: expected ID > 0")
 		t.Logf("Created deployment %d", out.ID)
+	})
+
+	t.Run("EnvironmentLastDeployment", func(t *testing.T) {
+		requireTruef(t, envID > 0, "envID not set")
+		out, err := callToolOn[environments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
+			"action": "get",
+			"params": map[string]any{
+				"project_id":     proj.pidStr(),
+				"environment_id": envID,
+			},
+		})
+		requireNoError(t, err, "environment get")
+		requireTruef(t, out.ID == envID, "environment get: expected ID %d, got %d", envID, out.ID)
+
+		// Validate the doc-grounded 1:1 output shape: the environment surfaces the
+		// documented `last_deployment` object (id, iid, ref, sha, created_at,
+		// status, user, deployable). A deployment with ref=main, sha=main,
+		// status=success was just created on this environment, so it must appear.
+		requireTruef(t, out.LastDeployment != nil,
+			"environment get: documented 'last_deployment' object must be present after a deployment (1:1 output shape)")
+		if out.LastDeployment != nil {
+			ld := out.LastDeployment
+			requireTruef(t, ld.SHA != "",
+				"environment get: doc field 'last_deployment.sha' must be populated (1:1 output shape)")
+			requireTruef(t, ld.Ref == "main",
+				"environment get: doc field 'last_deployment.ref' must be 'main' (1:1 output shape), got %q", ld.Ref)
+			requireTruef(t, ld.Status != "",
+				"environment get: doc field 'last_deployment.status' must be populated (1:1 output shape), got %q", ld.Status)
+
+			// CAVEAT: the deployment was created via the deployments API with no CI
+			// job, so 'last_deployment.deployable' (the job) is legitimately null.
+			// Do NOT require it; only assert its sub-fields when present so the test
+			// stays correct whether or not a job ran.
+			if ld.Deployable != nil {
+				requireTruef(t, ld.Deployable.ID > 0,
+					"environment get: when 'last_deployment.deployable' is present its id must be > 0 (1:1 output shape)")
+			}
+			t.Logf("Environment %d last_deployment: status=%s, ref=%s, sha=%s, deployable=%v",
+				out.ID, ld.Status, ld.Ref, ld.SHA, ld.Deployable != nil)
+		}
 	})
 }

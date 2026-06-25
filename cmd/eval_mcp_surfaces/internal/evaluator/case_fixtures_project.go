@@ -145,6 +145,28 @@ var (
 	MemberFixture = liveCaseFixture("member", FixtureScopeCase, []string{"project_id", "user_id"}, func(ctx context.Context, preparer *liveFixturePreparer) error {
 		return preparer.ensureDisposableUser(ctx)
 	}, "member")
+	EnvironmentDeploymentFixture = CaseFixtureSpec{
+		Name:                "environment_deployment",
+		Scope:               FixtureScopeAttempt,
+		Timeout:             2 * time.Minute,
+		Retries:             2,
+		Outputs:             []string{"project_id", "project_path", "environment_name", "deployment_id", "deployment_sha", "deployment_ref"},
+		IdempotencyKeyParts: []string{"environment_deployment"},
+		Ensure: func(ctx context.Context, env FixtureContext) (FixtureOutput, error) {
+			return liveFixtureOutputs.ensure(env.IdempotencyKey, func() (FixtureOutput, error) {
+				preparer, err := newLiveCaseFixturePreparer(ctx, env)
+				if err != nil {
+					return nil, err
+				}
+				if deployErr := preparer.ensureEnvironmentDeployment(ctx); deployErr != nil {
+					return nil, deployErr
+				}
+				return fixtureOutputFromLiveState(preparer.state), nil
+			})
+		},
+		Validate: validateLiveCaseFixtureOutput,
+		Cleanup:  noopCaseFixtureCleanup,
+	}
 	MergeRequestSourceFixture = CaseFixtureSpec{
 		Name:                "merge_request_source",
 		Scope:               FixtureScopeAttempt,
@@ -383,6 +405,11 @@ func fixtureOutputFromLiveState(state *liveFixtureState) FixtureOutput {
 		"badge_id":                      formatInt64(state.BadgeDeleteID),
 		"wiki_slug":                     state.WikiSlug,
 		"snippet_id":                    formatInt64(state.SnippetID),
+		"environment_id":                formatInt64(state.EnvironmentID),
+		"environment_name":              state.EnvironmentName,
+		"deployment_id":                 formatInt64(state.DeploymentID),
+		"deployment_sha":                state.DeploymentSHA,
+		"deployment_ref":                state.DeploymentRef,
 		"feature_flag_name":             state.FeatureFlagName,
 		"deploy_token_id":               formatInt64(state.DeployTokenID),
 		"deploy_key_id":                 formatInt64(state.DeployKeyID),

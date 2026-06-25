@@ -46,6 +46,11 @@ type modelEvaluationState struct {
 	simulationAttempts     map[int]int
 	simulatedErrorSeen     bool
 	messages               []modelMessage
+	// realStepContent records the real MCP tool output for each completed step
+	// (1-based step number -> content) when the step executed for real against a
+	// live MCP session. It stays empty for simulated steps so output_contains
+	// assertions only grade against genuine tool output.
+	realStepContent map[int]string
 }
 
 type capabilityBridgeStepContext struct {
@@ -125,6 +130,7 @@ func (r *modelRunner) evaluatePreparedCase(ctx context.Context, prepared Prepare
 	state := &modelEvaluationState{
 		firstFinalAttempt:  true,
 		simulationAttempts: map[int]int{},
+		realStepContent:    map[int]string{},
 		messages:           []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: userPrompt}}}},
 	}
 
@@ -134,15 +140,18 @@ func (r *modelRunner) evaluatePreparedCase(ctx context.Context, prepared Prepare
 		result.Usage.add(response.Usage)
 		if err != nil {
 			recordModelCallError(&result, err)
+			r.gradeCaseAssertions(prepared, &result, state)
 			return result
 		}
 		turnCtx := modelTurnContext{task: task, steps: steps, callBudget: callBudget, routes: routes, result: &result, repairLimit: repairLimit, state: state}
 		if r.handleModelTurn(ctx, response, turnCtx) {
+			r.gradeCaseAssertions(prepared, &result, state)
 			return result
 		}
 	}
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
+	r.gradeCaseAssertions(prepared, &result, state)
 	return result
 }
 
@@ -309,6 +318,7 @@ func (r *modelRunner) handleValidToolStep(ctx context.Context, validCtx validToo
 	stepIndex := validCtx.state.stepIndex
 	completedStep := validCtx.steps[stepIndex]
 	simulation := r.validatedToolResult(ctx, completedStep, validCtx.toolUse, validCtx.state.simulationAttempts[stepIndex], stepIndex+1, len(validCtx.steps))
+	r.recordRealStepContent(completedStep, validCtx.state, stepIndex+1, simulation)
 	if simulation.Injected {
 		hadPreviousAttempt := validCtx.state.simulationAttempts[stepIndex] > 0
 		validCtx.state.simulationAttempts[stepIndex]++
@@ -1169,6 +1179,21 @@ func (r *modelRunner) validatedToolResult(ctx context.Context, step evalStep, to
 		return simulatedToolResult(step, attempt, stepNumber, totalSteps)
 	}
 	return r.mcpToolResult(ctx, toolUse)
+}
+
+// recordRealStepContent stores the real MCP tool output for a completed step so
+// case-level output_contains assertions can grade against genuine tool output.
+// It records only when the step executed for real against a live MCP session
+// (mcpSession != nil and the step was not simulated), keeping simulated steps
+// out of assertion grading.
+func (r *modelRunner) recordRealStepContent(step evalStep, state *modelEvaluationState, stepNumber int, simulation simulationResult) {
+	if r.mcpSession == nil || step.Simulation != "" || state == nil {
+		return
+	}
+	if state.realStepContent == nil {
+		state.realStepContent = map[int]string{}
+	}
+	state.realStepContent[stepNumber] = simulation.Content
 }
 
 // mcpToolResult handles MCP tool result for modelRunner.

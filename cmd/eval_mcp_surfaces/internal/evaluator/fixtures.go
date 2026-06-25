@@ -116,6 +116,10 @@ type liveFixtureState struct {
 	BadgeDeleteID                int64    `json:"badge_delete_id"`
 	SnippetID                    int64    `json:"snippet_id"`
 	EnvironmentID                int64    `json:"environment_id"`
+	EnvironmentName              string   `json:"environment_name,omitempty"`
+	DeploymentID                 int64    `json:"deployment_id,omitempty"`
+	DeploymentSHA                string   `json:"deployment_sha,omitempty"`
+	DeploymentRef                string   `json:"deployment_ref,omitempty"`
 	ProjectTokenID               int64    `json:"project_token_id"`
 	PackageID                    int64    `json:"package_id"`
 	PackageReleaseName           string   `json:"package_release_name,omitempty"`
@@ -856,6 +860,57 @@ func (p *liveFixturePreparer) ensureEnvironment(ctx context.Context) error {
 		return err
 	}
 	p.state.EnvironmentID = env.ID
+	return nil
+}
+
+// ensureEnvironmentDeployment seeds a deployable environment with one running
+// deployment so read cases can report its last deployment evidence.
+//
+// It creates a uniquely named environment, commits a file to the default branch
+// (yielding a valid commit SHA), resolves that SHA, then creates a deployment
+// via the deployments API (ref=default branch, sha=resolved SHA, status=running).
+// API-created deployments have no associated CI job, so the resulting
+// last_deployment.deployable is null; cases must assert only the top-level
+// last_deployment fields (sha/ref/status).
+func (p *liveFixturePreparer) ensureEnvironmentDeployment(ctx context.Context) error {
+	ref := p.defaultRef()
+	envName := "eval-deploy-" + liveUniqueSuffix()
+	env, _, err := p.client.GL().Environments.CreateEnvironment(p.state.ProjectID, &gl.CreateEnvironmentOptions{
+		Name:        new(envName),
+		Description: new("Evaluation deployment environment"),
+		Tier:        new("other"),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("create environment %s: %w", envName, err)
+	}
+	p.state.EnvironmentID = env.ID
+	p.state.EnvironmentName = envName
+
+	filePath := "tmp/eval-deploy-" + safeFixturePathPart(envName) + ".txt"
+	if fileErr := p.ensureFile(ctx, filePath, ref, "evaluation deployment fixture\n", "Seed evaluation deployment fixture"); fileErr != nil {
+		return fileErr
+	}
+
+	commit, _, err := p.client.GL().Commits.GetCommit(p.state.ProjectID, ref, nil, gl.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("resolve deployment SHA on %s: %w", ref, err)
+	}
+
+	tag := false
+	status := gl.DeploymentStatusRunning
+	deployment, _, err := p.client.GL().Deployments.CreateProjectDeployment(p.state.ProjectID, &gl.CreateProjectDeploymentOptions{
+		Environment: new(envName),
+		Ref:         new(ref),
+		SHA:         new(commit.ID),
+		Tag:         &tag,
+		Status:      &status,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("create deployment for environment %s: %w", envName, err)
+	}
+	p.state.DeploymentID = deployment.ID
+	p.state.DeploymentSHA = firstNonEmpty(deployment.SHA, commit.ID)
+	p.state.DeploymentRef = firstNonEmpty(deployment.Ref, ref)
 	return nil
 }
 
