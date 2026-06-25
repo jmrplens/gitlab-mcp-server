@@ -7,10 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -80,8 +83,8 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 	if out.AwardEmoji[0].Name != testEmojiThumbsup {
 		t.Errorf(fmtNameWantThumbsup, out.AwardEmoji[0].Name)
 	}
-	if out.AwardEmoji[0].UserID != 1 {
-		t.Errorf("user_id = %d, want 1", out.AwardEmoji[0].UserID)
+	if out.AwardEmoji[0].User == nil || out.AwardEmoji[0].User.ID != 1 {
+		t.Errorf("user.id = %v, want 1", out.AwardEmoji[0].User)
 	}
 }
 
@@ -361,8 +364,8 @@ func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
 	if requests != 4 {
 		t.Fatalf("requests = %d, want 4", requests)
 	}
-	if out.ID != 31 || out.Name != "eyes" || out.UserID != 9 {
-		t.Fatalf("award = {ID:%d Name:%q UserID:%d}, want {ID:31 Name:eyes UserID:9}", out.ID, out.Name, out.UserID)
+	if out.ID != 31 || out.Name != "eyes" || out.User == nil || out.User.ID != 9 {
+		t.Fatalf("award = {ID:%d Name:%q User:%v}, want {ID:31 Name:eyes User.ID:9}", out.ID, out.Name, out.User)
 	}
 }
 
@@ -402,8 +405,8 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
-			{ID: 10, Name: testEmojiThumbsup, UserID: 1, Username: "admin", UserWebURL: "https://gitlab.example.com/admin", CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
-			{ID: 11, Name: "heart", UserID: 2, Username: "dev", CreatedAt: "2026-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+			{ID: 10, Name: testEmojiThumbsup, User: &UserOutput{ID: 1, Username: "admin", WebURL: "https://gitlab.example.com/admin"}, CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+			{ID: 11, Name: "heart", User: &UserOutput{ID: 2, Username: "dev"}, CreatedAt: "2026-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
 		},
 	}
 	md := FormatListMarkdownString(out)
@@ -439,8 +442,7 @@ func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:        10,
 		Name:      testEmojiThumbsup,
-		UserID:    1,
-		Username:  "admin",
+		User:      &UserOutput{ID: 1, Username: "admin"},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	md := FormatMarkdownString(out)
@@ -1495,7 +1497,7 @@ func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
-	out := ListOutput{AwardEmoji: []Output{{ID: 1, Name: "thumbsup", Username: "alice"}}}
+	out := ListOutput{AwardEmoji: []Output{{ID: 1, Name: "thumbsup", User: &UserOutput{Username: "alice"}}}}
 	md := FormatListMarkdownString(out)
 	if !strings.Contains(md, "thumbsup") || !strings.Contains(md, "alice") {
 		t.Error("expected emoji details")
@@ -1516,7 +1518,7 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice"})
+	md := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}})
 	if strings.Contains(md, "Created") {
 		t.Error("should not show Created for empty CreatedAt")
 	}
@@ -1526,9 +1528,86 @@ func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice", CreatedAt: "2026-06-01T10:00:00Z"})
+	md := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}, CreatedAt: "2026-06-01T10:00:00Z"})
 	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2026") {
 		t.Error("expected Created date")
+	}
+}
+
+// TestListIssueAwardEmoji_ForwardsListQuery verifies that order_by, sort, and
+// keyset pagination parameters (mirrored from gl.ListAwardEmojiOptions /
+// gl.ListOptions) are forwarded to the underlying list request.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the request query string carries every supplied list option.
+func TestListIssueAwardEmoji_ForwardsListQuery(t *testing.T) {
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "5", Total: "0"})
+	}))
+
+	in := IssueListInput{ProjectID: testProjectID, IID: 1, OrderBy: "created_at", Sort: "desc"}
+	in.Page = 2
+	in.PerPage = 5
+	in.Pagination = "keyset"
+	in.PageToken = "42"
+	if _, err := ListIssueAwardEmoji(t.Context(), client, in); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for key, want := range map[string]string{
+		"order_by":   "created_at",
+		"sort":       "desc",
+		"page":       "2",
+		"per_page":   "5",
+		"pagination": "keyset",
+		"page_token": "42",
+	} {
+		if got := gotQuery.Get(key); got != want {
+			t.Errorf("query %s = %q, want %q", key, got, want)
+		}
+	}
+}
+
+// TestToOutput_FullUserAndTimestamps verifies that toOutput migrates the award
+// emoji onto a full user object (mirroring gl.BasicUser) and surfaces both
+// created_at and updated_at timestamps.
+// The test exercises the conversion path only.
+// It asserts every mirrored field is populated from the SDK struct.
+func TestToOutput_FullUserAndTimestamps(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)
+	userCreated := time.Date(2020, 5, 5, 0, 0, 0, 0, time.UTC)
+	out := toOutput(&gl.AwardEmoji{
+		ID:   7,
+		Name: testEmojiThumbsup,
+		User: gl.BasicUser{
+			ID: 9, Username: "alice", Name: "Alice", State: "active",
+			CreatedAt: &userCreated, AvatarURL: "https://gitlab.example.com/a.png", WebURL: "https://gitlab.example.com/alice",
+		},
+		CreatedAt:     &created,
+		UpdatedAt:     &updated,
+		AwardableID:   3,
+		AwardableType: "Issue",
+	})
+	if out.User == nil {
+		t.Fatal("expected user object")
+	}
+	if out.User.ID != 9 || out.User.Username != "alice" || out.User.Name != "Alice" || out.User.State != "active" ||
+		out.User.AvatarURL == "" || out.User.WebURL == "" || out.User.CreatedAt == "" {
+		t.Fatalf("user object missing mirrored fields: %+v", out.User)
+	}
+	if out.CreatedAt == "" || out.UpdatedAt == "" {
+		t.Fatalf("expected created_at and updated_at, got created=%q updated=%q", out.CreatedAt, out.UpdatedAt)
+	}
+}
+
+// TestAwardEmojiUserMarkdown_NilUser verifies the list formatter renders an
+// empty awarding-user cell when the award has no user object.
+// The test exercises the Markdown rendering path only.
+// It asserts the rendered string omits any user link.
+func TestAwardEmojiUserMarkdown_NilUser(t *testing.T) {
+	if got := awardEmojiUserMarkdown(Output{Name: "thumbsup"}); got != "" {
+		t.Errorf("awardEmojiUserMarkdown(nil user) = %q, want empty", got)
 	}
 }
 
@@ -1557,6 +1636,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		}
 		if len(spec.Aliases) == 0 {
 			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Fatalf("IndividualTool.Description for %s should follow the Returns:/See also: form, got %q", spec.Name, desc)
 		}
 	}
 	if byTool["gitlab_issue_emoji_list"].ParameterGuidance["issue_iid"].SemanticRole == "" {

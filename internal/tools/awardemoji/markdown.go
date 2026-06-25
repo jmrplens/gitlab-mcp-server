@@ -41,10 +41,13 @@ func FormatListMarkdownString(out ListOutput) string {
 }
 
 func awardEmojiUserMarkdown(out Output) string {
-	if out.UserWebURL == "" {
-		return out.Username
+	if out.User == nil {
+		return ""
 	}
-	return toolutil.MdTitleLink(out.Username, out.UserWebURL)
+	if out.User.WebURL == "" {
+		return out.User.Username
+	}
+	return toolutil.MdTitleLink(out.User.Username, out.User.WebURL)
 }
 
 // FormatMarkdown formats a single award emoji as a Markdown CallToolResult.
@@ -58,7 +61,9 @@ func FormatMarkdownString(out Output) string {
 	fmt.Fprintf(&b, "## Award Emoji\n\n")
 	fmt.Fprintf(&b, "- **Name**: :%s:\n", out.Name)
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, "- **User**: %s (ID: %d)\n", out.Username, out.UserID)
+	if out.User != nil {
+		fmt.Fprintf(&b, "- **User**: %s (ID: %d)\n", out.User.Username, out.User.ID)
+	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
