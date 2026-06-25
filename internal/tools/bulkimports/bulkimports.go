@@ -16,7 +16,15 @@ import (
 // StartMigration
 // ---------------------------------------------------------------------------.
 
-// EntityInput represents a single entity to migrate.
+// ConfigurationInput mirrors gl.BulkImportStartMigrationConfiguration and
+// carries the connection details for the external GitLab source instance.
+type ConfigurationInput struct {
+	URL         string `json:"url" jsonschema:"Source GitLab instance URL,required"`
+	AccessToken string `json:"access_token" jsonschema:"Personal access token for source instance,required"`
+}
+
+// EntityInput mirrors gl.BulkImportStartMigrationEntity: a single entity
+// (group or project) to migrate.
 type EntityInput struct {
 	SourceType           string `json:"source_type" jsonschema:"Source type: group_entity or project_entity"`
 	SourceFullPath       string `json:"source_full_path" jsonschema:"Full path of the source entity"`
@@ -26,11 +34,12 @@ type EntityInput struct {
 	MigrateMemberships   *bool  `json:"migrate_memberships,omitempty" jsonschema:"Whether to migrate memberships"`
 }
 
-// StartMigrationInput is the input for starting a bulk import migration.
+// StartMigrationInput is the input for starting a bulk import migration. It
+// mirrors gl.BulkImportStartMigrationOptions: a nested configuration object
+// describing the source instance plus the list of entities to migrate.
 type StartMigrationInput struct {
-	URL         string        `json:"url" jsonschema:"Source GitLab instance URL,required"`
-	AccessToken string        `json:"access_token" jsonschema:"Personal access token for source instance,required"`
-	Entities    []EntityInput `json:"entities" jsonschema:"List of entities to migrate,required"`
+	Configuration ConfigurationInput `json:"configuration" jsonschema:"Source instance connection details (url, access_token),required"`
+	Entities      []EntityInput      `json:"entities" jsonschema:"List of entities to migrate,required"`
 }
 
 // MigrationOutput is the output for a bulk import migration.
@@ -66,8 +75,8 @@ func StartMigration(ctx context.Context, client *gitlabclient.Client, input Star
 
 	opts := &gl.BulkImportStartMigrationOptions{
 		Configuration: &gl.BulkImportStartMigrationConfiguration{
-			URL:         new(input.URL),
-			AccessToken: new(input.AccessToken),
+			URL:         new(input.Configuration.URL),
+			AccessToken: new(input.Configuration.AccessToken),
 		},
 		Entities: entities,
 	}
@@ -103,10 +112,15 @@ type MigrationSummary struct {
 	HasFailures bool   `json:"has_failures"`
 }
 
-// ListInput defines parameters for listing bulk import migrations.
+// ListInput defines parameters for listing bulk import migrations. It mirrors
+// gl.ListBulkImportsOptions, including keyset pagination (order_by, sort,
+// pagination, page_token) via the embedded gl.ListOptions.
 type ListInput struct {
-	Status string `json:"status,omitempty" jsonschema:"Filter by status: created, started, finished, timeout, failed, canceled"`
+	Status  string `json:"status,omitempty"   jsonschema:"Filter by status: created, started, finished, timeout, failed, canceled"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds the paginated list of bulk import migrations.
@@ -118,11 +132,13 @@ type ListOutput struct {
 
 // List returns all bulk import migrations visible to the caller.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListBulkImportsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListBulkImportsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Status != "" {
 		opts.Status = &input.Status
@@ -193,45 +209,56 @@ func toSummary(m *gl.BulkImport) MigrationSummary {
 // Entities
 // ---------------------------------------------------------------------------.
 
-// EntityStats summarizes per-relation import counts for a migration entity.
+// EntityStatItem mirrors gl.BulkImportEntityStatItem: source/fetched/imported
+// counts for a single relation type within a migration entity.
+type EntityStatItem struct {
+	Source   int `json:"source"`
+	Fetched  int `json:"fetched"`
+	Imported int `json:"imported"`
+}
+
+// EntityStats mirrors gl.BulkImportEntityStats: per-relation import counts for a
+// migration entity.
 type EntityStats struct {
-	LabelsSource       int `json:"labels_source"`
-	LabelsFetched      int `json:"labels_fetched"`
-	LabelsImported     int `json:"labels_imported"`
-	MilestonesSource   int `json:"milestones_source"`
-	MilestonesFetched  int `json:"milestones_fetched"`
-	MilestonesImported int `json:"milestones_imported"`
+	Labels     EntityStatItem `json:"labels"`
+	Milestones EntityStatItem `json:"milestones"`
 }
 
 // EntitySummary describes a single bulk import migration entity (group or project).
 type EntitySummary struct {
-	ID                   int64       `json:"id"`
-	BulkImportID         int64       `json:"bulk_import_id"`
-	Status               string      `json:"status"`
-	EntityType           string      `json:"entity_type"`
-	SourceFullPath       string      `json:"source_full_path"`
-	DestinationFullPath  string      `json:"destination_full_path"`
-	DestinationName      string      `json:"destination_name"`
-	DestinationSlug      string      `json:"destination_slug"`
-	DestinationNamespace string      `json:"destination_namespace"`
-	ParentID             *int64      `json:"parent_id,omitempty"`
-	NamespaceID          *int64      `json:"namespace_id,omitempty"`
-	ProjectID            *int64      `json:"project_id,omitempty"`
-	CreatedAt            string      `json:"created_at"`
-	UpdatedAt            string      `json:"updated_at"`
-	MigrateProjects      bool        `json:"migrate_projects"`
-	MigrateMemberships   bool        `json:"migrate_memberships"`
-	HasFailures          bool        `json:"has_failures"`
-	Stats                EntityStats `json:"stats"`
+	ID                   int64           `json:"id"`
+	BulkImportID         int64           `json:"bulk_import_id"`
+	Status               string          `json:"status"`
+	EntityType           string          `json:"entity_type"`
+	SourceFullPath       string          `json:"source_full_path"`
+	DestinationFullPath  string          `json:"destination_full_path"`
+	DestinationName      string          `json:"destination_name"`
+	DestinationSlug      string          `json:"destination_slug"`
+	DestinationNamespace string          `json:"destination_namespace"`
+	ParentID             *int64          `json:"parent_id,omitempty"`
+	NamespaceID          *int64          `json:"namespace_id,omitempty"`
+	ProjectID            *int64          `json:"project_id,omitempty"`
+	CreatedAt            string          `json:"created_at"`
+	UpdatedAt            string          `json:"updated_at"`
+	MigrateProjects      bool            `json:"migrate_projects"`
+	MigrateMemberships   bool            `json:"migrate_memberships"`
+	HasFailures          bool            `json:"has_failures"`
+	Failures             []EntityFailure `json:"failures,omitempty"`
+	Stats                EntityStats     `json:"stats"`
 }
 
 // ListEntitiesInput defines parameters for listing bulk import entities.
 // When BulkImportID > 0, entities are scoped to that import; otherwise all
 // entities visible to the caller are returned.
+// It mirrors gl.ListBulkImportsEntitiesOptions, including keyset pagination
+// (order_by, sort, pagination, page_token) via the embedded gl.ListOptions.
 type ListEntitiesInput struct {
 	BulkImportID int64  `json:"bulk_import_id,omitempty" jsonschema:"Bulk import ID. If omitted, returns entities across all imports."`
 	Status       string `json:"status,omitempty"          jsonschema:"Filter by entity status: created, started, finished, timeout, failed, canceled"`
+	OrderBy      string `json:"order_by,omitempty"        jsonschema:"Column to order results by (e.g. created_at)"`
+	Sort         string `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListEntitiesOutput holds the paginated list of bulk import entities.
@@ -246,11 +273,13 @@ func ListEntities(ctx context.Context, client *gitlabclient.Client, input ListEn
 	if input.BulkImportID < 0 {
 		return ListEntitiesOutput{}, errors.New("bulk_import_entity_list: bulk_import_id must be >= 0 (omit or set to 0 to list across all imports)")
 	}
-	opts := &gl.ListBulkImportsEntitiesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListBulkImportsEntitiesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Status != "" {
 		opts.Status = &input.Status
@@ -343,26 +372,38 @@ func ListEntityFailures(ctx context.Context, client *gitlabclient.Client, input 
 		if f == nil {
 			continue
 		}
-		out.Failures = append(out.Failures, EntityFailure{
-			Relation:           f.Relation,
-			ExceptionMessage:   f.ExceptionMessage,
-			ExceptionClass:     f.ExceptionClass,
-			CorrelationIDValue: f.CorrelationIDValue,
-			SourceURL:          f.SourceURL,
-			SourceTitle:        f.SourceTitle,
-			Step:               f.Step,
-			CreatedAt:          f.CreatedAt.Format(time.RFC3339),
-			PipelineClass:      f.PipelineClass,
-			PipelineStep:       f.PipelineStep,
-		})
+		out.Failures = append(out.Failures, toEntityFailure(f))
 	}
 	return out, nil
+}
+
+// toEntityFailure converts a *gl.BulkImportEntityFailure to EntityFailure.
+func toEntityFailure(f *gl.BulkImportEntityFailure) EntityFailure {
+	return EntityFailure{
+		Relation:           f.Relation,
+		ExceptionMessage:   f.ExceptionMessage,
+		ExceptionClass:     f.ExceptionClass,
+		CorrelationIDValue: f.CorrelationIDValue,
+		SourceURL:          f.SourceURL,
+		SourceTitle:        f.SourceTitle,
+		Step:               f.Step,
+		CreatedAt:          f.CreatedAt.Format(time.RFC3339),
+		PipelineClass:      f.PipelineClass,
+		PipelineStep:       f.PipelineStep,
+	}
 }
 
 // toEntitySummary converts a *gl.BulkImportEntity to EntitySummary.
 func toEntitySummary(e *gl.BulkImportEntity) EntitySummary {
 	if e == nil {
 		return EntitySummary{}
+	}
+	var failures []EntityFailure
+	for _, f := range e.Failures {
+		if f == nil {
+			continue
+		}
+		failures = append(failures, toEntityFailure(f))
 	}
 	return EntitySummary{
 		ID:                   e.ID,
@@ -382,13 +423,18 @@ func toEntitySummary(e *gl.BulkImportEntity) EntitySummary {
 		MigrateProjects:      e.MigrateProjects,
 		MigrateMemberships:   e.MigrateMemberships,
 		HasFailures:          e.HasFailures,
+		Failures:             failures,
 		Stats: EntityStats{
-			LabelsSource:       e.Stats.Labels.Source,
-			LabelsFetched:      e.Stats.Labels.Fetched,
-			LabelsImported:     e.Stats.Labels.Imported,
-			MilestonesSource:   e.Stats.Milestones.Source,
-			MilestonesFetched:  e.Stats.Milestones.Fetched,
-			MilestonesImported: e.Stats.Milestones.Imported,
+			Labels: EntityStatItem{
+				Source:   e.Stats.Labels.Source,
+				Fetched:  e.Stats.Labels.Fetched,
+				Imported: e.Stats.Labels.Imported,
+			},
+			Milestones: EntityStatItem{
+				Source:   e.Stats.Milestones.Source,
+				Fetched:  e.Stats.Milestones.Fetched,
+				Imported: e.Stats.Milestones.Imported,
+			},
 		},
 	}
 }

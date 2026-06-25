@@ -42,6 +42,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if len(spec.Aliases) == 0 {
 			t.Errorf("Aliases for %s are empty", spec.Name)
 		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("IndividualTool.Description for %s lacks Returns:/See also: form: %q", spec.Name, desc)
+		}
 	}
 	for _, name := range []string{
 		"gitlab_list_bulk_imports",
@@ -70,9 +74,8 @@ func TestActionSpecs_StartMigrationError(t *testing.T) {
 	byTool := bulkImportSpecsByTool(t, mux)
 
 	_, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
-		"url":          "https://gitlab.example.com",
-		"access_token": "glpat-test",
-		"entities":     []any{map[string]any{"source_type": "group_entity", "source_full_path": "my-group", "destination_slug": "my-group", "destination_namespace": "root"}},
+		"configuration": map[string]any{"url": "https://gitlab.example.com", "access_token": "glpat-test"},
+		"entities":      []any{map[string]any{"source_type": "group_entity", "source_full_path": "my-group", "destination_slug": "my-group", "destination_namespace": "root"}},
 	})
 	if err == nil {
 		t.Error("expected error from gitlab_start_bulk_import")
@@ -122,9 +125,8 @@ func TestActionSpecs_SuccessPaths(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_start_bulk_import", map[string]any{
-			"url":          "https://gitlab.example.com",
-			"access_token": "glpat-test",
-			"entities":     []any{map[string]any{"source_type": "group_entity", "source_full_path": "g", "destination_slug": "g", "destination_namespace": "root"}},
+			"configuration": map[string]any{"url": "https://gitlab.example.com", "access_token": "glpat-test"},
+			"entities":      []any{map[string]any{"source_type": "group_entity", "source_full_path": "g", "destination_slug": "g", "destination_namespace": "root"}},
 		}},
 		{"gitlab_list_bulk_imports", map[string]any{}},
 		{"gitlab_get_bulk_import", map[string]any{"id": 1}},
@@ -296,7 +298,7 @@ func TestToSummary_Nil(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToEntitySummary_Nil(t *testing.T) {
-	if got := toEntitySummary(nil); got != (EntitySummary{}) {
+	if got := toEntitySummary(nil); got.ID != 0 || got.Failures != nil || got.Stats != (EntityStats{}) {
 		t.Errorf("toEntitySummary(nil) = %+v, want zero value", got)
 	}
 }

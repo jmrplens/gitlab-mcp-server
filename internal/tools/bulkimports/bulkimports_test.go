@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestStartMigration verifies the StartMigration handler.
@@ -39,8 +40,10 @@ func TestStartMigration(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := StartMigration(t.Context(), client, StartMigrationInput{
-		URL:         "https://source.gitlab.com",
-		AccessToken: "glpat-test",
+		Configuration: ConfigurationInput{
+			URL:         "https://source.gitlab.com",
+			AccessToken: "glpat-test",
+		},
 		Entities: []EntityInput{
 			{
 				SourceType:           "group_entity",
@@ -73,9 +76,11 @@ func TestStartMigration_Error(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 	_, err := StartMigration(t.Context(), client, StartMigrationInput{
-		URL:         "https://source.gitlab.com",
-		AccessToken: "bad",
-		Entities:    []EntityInput{},
+		Configuration: ConfigurationInput{
+			URL:         "https://source.gitlab.com",
+			AccessToken: "bad",
+		},
+		Entities: []EntityInput{},
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -134,8 +139,10 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 	migrateProjects := true
 	migrateMemberships := false
 	out, err := StartMigration(t.Context(), client, StartMigrationInput{
-		URL:         "https://source.gitlab.com",
-		AccessToken: "glpat-test",
+		Configuration: ConfigurationInput{
+			URL:         "https://source.gitlab.com",
+			AccessToken: "glpat-test",
+		},
 		Entities: []EntityInput{
 			{
 				SourceType:           "group_entity",
@@ -205,8 +212,10 @@ func TestActionSpecs_StartMigrationRoute(t *testing.T) {
 	byTool := bulkImportSpecsByTool(t, handler)
 
 	result, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
-		"url":          "https://source.gitlab.com",
-		"access_token": "glpat-test",
+		"configuration": map[string]any{
+			"url":          "https://source.gitlab.com",
+			"access_token": "glpat-test",
+		},
 		"entities": []any{
 			map[string]any{
 				"source_type":           "group_entity",
@@ -236,8 +245,10 @@ func TestActionSpecs_StartMigrationAPIError(t *testing.T) {
 	byTool := bulkImportSpecsByTool(t, handler)
 
 	_, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
-		"url":          "https://source.gitlab.com",
-		"access_token": "glpat-test",
+		"configuration": map[string]any{
+			"url":          "https://source.gitlab.com",
+			"access_token": "glpat-test",
+		},
 		"entities": []any{
 			map[string]any{
 				"source_type":           "group_entity",
@@ -261,8 +272,18 @@ func TestList_OK(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
 		}
-		if got := r.URL.Query().Get("status"); got != "started" {
+		q := r.URL.Query()
+		if got := q.Get("status"); got != "started" {
 			t.Errorf("status = %q, want started", got)
+		}
+		if got := q.Get("order_by"); got != "created_at" {
+			t.Errorf("order_by = %q, want created_at", got)
+		}
+		if got := q.Get("sort"); got != "desc" {
+			t.Errorf("sort = %q, want desc", got)
+		}
+		if got := q.Get("pagination"); got != "keyset" {
+			t.Errorf("pagination = %q, want keyset", got)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id":1,"status":"started","source_type":"gitlab","source_url":"https://src","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","has_failures":false},
@@ -271,7 +292,12 @@ func TestList_OK(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := List(t.Context(), client, ListInput{Status: "started"})
+	out, err := List(t.Context(), client, ListInput{
+		Status:                "started",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -359,14 +385,28 @@ func TestListEntities_RejectsNegativeID(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestListEntities_AllScope(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/bulk_imports/entities", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/v4/bulk_imports/entities", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if got := q.Get("order_by"); got != "created_at" {
+			t.Errorf("order_by = %q, want created_at", got)
+		}
+		if got := q.Get("sort"); got != "asc" {
+			t.Errorf("sort = %q, want asc", got)
+		}
+		if got := q.Get("page_token"); got != "tok-1" {
+			t.Errorf("page_token = %q, want tok-1", got)
+		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id":1,"bulk_import_id":10,"status":"finished","entity_type":"group_entity","source_full_path":"src","destination_full_path":"dst","destination_name":"dst","destination_slug":"dst","destination_namespace":"ns","has_failures":false}
 		]`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := ListEntities(t.Context(), client, ListEntitiesInput{})
+	out, err := ListEntities(t.Context(), client, ListEntitiesInput{
+		OrderBy:               "created_at",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+	})
 	if err != nil {
 		t.Fatalf("ListEntities: %v", err)
 	}
@@ -400,7 +440,19 @@ func TestListEntities_PerImport(t *testing.T) {
 func TestGetEntity_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/3/entities/77", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"id":77,"bulk_import_id":3,"status":"started","entity_type":"project_entity","source_full_path":"src","destination_full_path":"dst","destination_name":"dst","destination_slug":"dst","destination_namespace":"ns","has_failures":false}`)
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":77,"bulk_import_id":3,"status":"started","entity_type":"project_entity",
+			"source_full_path":"src","destination_full_path":"dst","destination_name":"dst",
+			"destination_slug":"dst","destination_namespace":"ns","has_failures":true,
+			"failures":[
+				null,
+				{"relation":"labels","exception_class":"StandardError","exception_message":"boom"}
+			],
+			"stats":{
+				"labels":{"source":5,"fetched":4,"imported":3},
+				"milestones":{"source":2,"fetched":2,"imported":1}
+			}
+		}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
@@ -410,6 +462,15 @@ func TestGetEntity_OK(t *testing.T) {
 	}
 	if out.ID != 77 || out.EntityType != "project_entity" {
 		t.Errorf("got %+v", out)
+	}
+	if len(out.Failures) != 1 || out.Failures[0].Relation != "labels" {
+		t.Errorf("Failures = %+v, want one labels failure (nil skipped)", out.Failures)
+	}
+	if out.Stats.Labels.Source != 5 || out.Stats.Labels.Imported != 3 {
+		t.Errorf("Stats.Labels = %+v, want source=5 imported=3", out.Stats.Labels)
+	}
+	if out.Stats.Milestones.Fetched != 2 {
+		t.Errorf("Stats.Milestones.Fetched = %d, want 2", out.Stats.Milestones.Fetched)
 	}
 }
 
