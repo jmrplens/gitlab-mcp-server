@@ -102,6 +102,43 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_PaginationParameters verifies that offset and keyset pagination
+// inputs are forwarded as query parameters on the list request.
+// The mock asserts page, per_page, pagination, and page_token are present.
+// It confirms List succeeds and returns the mocked certificate.
+func TestList_PaginationParameters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/groups/mygroup/ssh_certificates" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		for key, want := range map[string]string{
+			"page":       "2",
+			"per_page":   "50",
+			"pagination": "keyset",
+			"page_token": "tok-123",
+		} {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":7,"title":"cert-7","key":"ssh-rsa AAAA7","created_at":"2026-03-01T00:00:00Z"}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		GroupID:               toolutil.StringOrInt("mygroup"),
+		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Certificates) != 1 || out.Certificates[0].ID != 7 {
+		t.Fatalf("unexpected certificates: %+v", out.Certificates)
+	}
+}
+
 // TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
