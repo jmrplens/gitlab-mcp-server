@@ -22,8 +22,8 @@ func FormatOutputMarkdown(j Output) string {
 		b.WriteString("- **Allow Failure**: yes\n")
 	}
 	fmt.Fprintf(&b, "- **Ref**: %s\n", j.Ref)
-	if j.CommitSHA != "" {
-		fmt.Fprintf(&b, "- **Commit**: `%s`\n", j.CommitSHA[:min(len(j.CommitSHA), 12)])
+	if j.Commit != nil && j.Commit.ID != "" {
+		fmt.Fprintf(&b, "- **Commit**: `%s`\n", j.Commit.ID[:min(len(j.Commit.ID), 12)])
 	}
 	if j.Duration > 0 {
 		fmt.Fprintf(&b, "- **Duration**: %.1fs\n", j.Duration)
@@ -37,8 +37,8 @@ func FormatOutputMarkdown(j Output) string {
 	if j.Coverage > 0 {
 		fmt.Fprintf(&b, "- **Coverage**: %.1f%%\n", j.Coverage)
 	}
-	if j.UserUsername != "" {
-		fmt.Fprintf(&b, "- **User**: %s\n", j.UserUsername)
+	if j.User != nil && j.User.Username != "" {
+		fmt.Fprintf(&b, "- **User**: %s\n", j.User.Username)
 	}
 	if j.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(j.CreatedAt))
@@ -109,8 +109,8 @@ func FormatBridgeListMarkdown(out BridgeListOutput) string {
 	b.WriteString(toolutil.TblSep6Col)
 	for _, br := range out.Bridges {
 		ds := ""
-		if br.DownstreamPipeline > 0 {
-			ds = fmt.Sprintf("#%d", br.DownstreamPipeline)
+		if br.DownstreamPipeline != nil && br.DownstreamPipeline.ID > 0 {
+			ds = fmt.Sprintf("#%d", br.DownstreamPipeline.ID)
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %s %s | %.1fs | %s |\n",
 			br.ID, toolutil.EscapeMdTableCell(br.Name), toolutil.EscapeMdTableCell(br.Stage),

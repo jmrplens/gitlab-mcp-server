@@ -89,11 +89,11 @@ func TestJobList_Success(t *testing.T) {
 	if out.Jobs[0].PipelineID != 10 {
 		t.Errorf("Jobs[0].PipelineID = %d, want 10", out.Jobs[0].PipelineID)
 	}
-	if out.Jobs[0].UserUsername != "testuser" {
-		t.Errorf("Jobs[0].UserUsername = %q, want %q", out.Jobs[0].UserUsername, "testuser")
+	if out.Jobs[0].User == nil || out.Jobs[0].User.Username != "testuser" {
+		t.Errorf("Jobs[0].User = %+v, want username testuser", out.Jobs[0].User)
 	}
-	if out.Jobs[0].RunnerID != 1 {
-		t.Errorf("Jobs[0].RunnerID = %d, want 1", out.Jobs[0].RunnerID)
+	if out.Jobs[0].Runner == nil || out.Jobs[0].Runner.ID != 1 {
+		t.Errorf("Jobs[0].Runner = %+v, want ID 1", out.Jobs[0].Runner)
 	}
 }
 
@@ -427,8 +427,8 @@ func TestListBridges_Success(t *testing.T) {
 	if out.Bridges[0].ID != 200 {
 		t.Errorf("Bridges[0].ID = %d, want 200", out.Bridges[0].ID)
 	}
-	if out.Bridges[0].DownstreamPipeline != 50 {
-		t.Errorf("Bridges[0].DownstreamPipeline = %d, want 50", out.Bridges[0].DownstreamPipeline)
+	if out.Bridges[0].DownstreamPipeline == nil || out.Bridges[0].DownstreamPipeline.ID != 50 {
+		t.Errorf("Bridges[0].DownstreamPipeline = %+v, want ID 50", out.Bridges[0].DownstreamPipeline)
 	}
 }
 
@@ -1171,6 +1171,15 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 			if len(scopes) != 1 || scopes[0] != "success" {
 				t.Errorf("expected scope[]=[success], got %v", scopes)
 			}
+			if q.Get("include_retried") != "true" {
+				t.Errorf("expected include_retried=true, got %q", q.Get("include_retried"))
+			}
+			if q.Get("order_by") != "id" || q.Get("sort") != "desc" {
+				t.Errorf("expected order_by=id&sort=desc, got order_by=%q sort=%q", q.Get("order_by"), q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" || q.Get("page_token") != "tok" {
+				t.Errorf("expected keyset/tok, got pagination=%q page_token=%q", q.Get("pagination"), q.Get("page_token"))
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", bridgeJSON),
 				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "1", TotalPages: "1"})
 			return
@@ -1179,10 +1188,14 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 	}))
 
 	out, err := ListBridges(context.Background(), client, BridgeListInput{
-		ProjectID:       "42",
-		PipelineID:      10,
-		Scope:           []string{"success"},
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
+		ProjectID:             "42",
+		PipelineID:            10,
+		Scope:                 []string{"success"},
+		IncludeRetried:        true,
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 5},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1507,7 +1520,7 @@ func TestPlay_WithVariables(t *testing.T) {
 	out, err := Play(context.Background(), client, PlayInput{
 		ProjectID: "42",
 		JobID:     100,
-		Variables: []JobVariableInput{
+		JobVariablesAttributes: []JobVariableInput{
 			{Key: "ENV", Value: "production", VariableType: "env_var"},
 			{Key: "SECRET", Value: "/tmp/secret", VariableType: "file"},
 		},
@@ -1581,13 +1594,13 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Status:         "success",
 		PipelineID:     10,
 		Ref:            "main",
-		CommitSHA:      "abcdef1234567890",
+		Commit:         &CommitObject{ID: "abcdef1234567890"},
 		AllowFailure:   true,
 		Duration:       45.5,
 		QueuedDuration: 2.1,
 		FailureReason:  "script_failure",
 		Coverage:       85.5,
-		UserUsername:   "testuser",
+		User:           &UserObject{Username: "testuser"},
 		CreatedAt:      "2026-03-01T10:00:00Z",
 		WebURL:         "https://gitlab.example.com/-/jobs/100",
 	})
@@ -1779,7 +1792,7 @@ func TestFormatTraceMarkdown_Empty(t *testing.T) {
 func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 	out := BridgeListOutput{
 		Bridges: []BridgeOutput{
-			{ID: 200, Name: "trigger-downstream", Stage: "deploy", Status: "success", Duration: 10.0, DownstreamPipeline: 50},
+			{ID: 200, Name: "trigger-downstream", Stage: "deploy", Status: "success", Duration: 10.0, DownstreamPipeline: &PipelineInfoObject{ID: 50}},
 			{ID: 201, Name: "trigger-other", Stage: "deploy", Status: "failed", Duration: 5.0},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
