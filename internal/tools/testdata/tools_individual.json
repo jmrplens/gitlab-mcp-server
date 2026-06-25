@@ -12831,7 +12831,7 @@
   },
   {
     "name": "gitlab_create_group_ssh_certificate",
-    "description": "Create an SSH certificate for a GitLab group. Provide a public key and title.\n\nReturns: JSON with created certificate details. See also: gitlab_list_group_ssh_certificates.",
+    "description": "Register a new SSH CA certificate on a group from a CA public key and title. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13442,7 +13442,7 @@
   },
   {
     "name": "gitlab_create_mr_context_commits",
-    "description": "Add context commits to a merge request. Context commits are additional commits relevant to the MR that are not part of the source branch diff. Provide a list of commit SHAs to attach.\n\nReturns: JSON array of the added context commits.\n\nSee also: gitlab_list_mr_context_commits",
+    "description": "Attach existing repository commit SHAs to a merge request as context commits. Returns: the resulting context commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_list_mr_context_commits, gitlab_delete_mr_context_commits, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16968,7 +16968,7 @@
   },
   {
     "name": "gitlab_delete_group_ssh_certificate",
-    "description": "Delete an SSH certificate from a GitLab group.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_group_ssh_certificates.",
+    "description": "Revoke an SSH CA certificate from a group by certificate id. Returns: a success status and confirmation message. See also: gitlab_list_group_ssh_certificates, gitlab_create_group_ssh_certificate, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17310,7 +17310,7 @@
   },
   {
     "name": "gitlab_delete_mr_context_commits",
-    "description": "Remove context commits from a merge request. Provide the list of commit SHAs to detach from the MR context.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_mr_context_commits",
+    "description": "Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation; the underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22446,7 +22446,7 @@
   },
   {
     "name": "gitlab_download_group_export",
-    "description": "Download the finished export archive of a group. Returns the archive as base64-encoded content.\n\nReturns: JSON with the base64-encoded export archive.\n\nSee also: gitlab_schedule_group_export, gitlab_import_group_from_file",
+    "description": "Download a group's finished export archive. Returns: the export archive as base64 content plus its size in bytes. See also: gitlab_schedule_group_export, gitlab_import_group_from_file, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36431,7 +36431,7 @@
   },
   {
     "name": "gitlab_get_recently_added_members_count",
-    "description": "Get the count of recently added members in a group (last 90 days).\n\nReturns: JSON with group path and new members count.\n\nSee also: gitlab_get_recently_created_issues_count, gitlab_get_recently_created_mr_count",
+    "description": "Get the count of recently added members across a group. Returns: the group path and recently added members count (Premium). See also: gitlab_get_recently_created_issues_count, gitlab_get_recently_created_mr_count, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36479,7 +36479,7 @@
   },
   {
     "name": "gitlab_get_recently_created_issues_count",
-    "description": "Get the count of recently created issues for a group (last 90 days).\n\nReturns: JSON with group path and issues count.\n\nSee also: gitlab_get_recently_created_mr_count, gitlab_get_recently_added_members_count",
+    "description": "Get the count of recently created issues across a group. Returns: the group path and recently created issues count (Premium). See also: gitlab_get_recently_created_mr_count, gitlab_get_recently_added_members_count, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36527,7 +36527,7 @@
   },
   {
     "name": "gitlab_get_recently_created_mr_count",
-    "description": "Get the count of recently created merge requests for a group (last 90 days).\n\nReturns: JSON with group path and merge requests count.\n\nSee also: gitlab_get_recently_created_issues_count, gitlab_get_recently_added_members_count",
+    "description": "Get the count of recently created merge requests across a group. Returns: the group path and recently created merge requests count (Premium). See also: gitlab_get_recently_created_issues_count, gitlab_get_recently_added_members_count, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61181,7 +61181,7 @@
   },
   {
     "name": "gitlab_import_group_from_file",
-    "description": "Import a group from an export archive file. Requires a local .tar.gz archive path under the current working directory, OS temp directory, or GITLAB_MCP_ALLOWED_IMPORT_DIRS after symlink resolution.\n\nReturns: JSON with the import details.\n\nSee also: gitlab_schedule_group_export, gitlab_start_bulk_import",
+    "description": "Import a group from a local export archive. Returns: a confirmation that the import started (GitLab builds the group asynchronously). See also: gitlab_schedule_group_export, gitlab_download_group_export, gitlab_group_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -94388,13 +94388,29 @@
   },
   {
     "name": "gitlab_list_group_ssh_certificates",
-    "description": "List all SSH certificates for a GitLab group.\n\nReturns: JSON with certificates array. See also: gitlab_create_group_ssh_certificate.",
+    "description": "List the SSH CA certificates registered on a group. Returns: each certificate's id, title, public key, and creation timestamp, with offset/keyset pagination. See also: gitlab_create_group_ssh_certificate, gitlab_delete_group_ssh_certificate, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
         }
       },
       "required": [
@@ -96359,7 +96375,7 @@
   },
   {
     "name": "gitlab_list_mr_context_commits",
-    "description": "List context commits associated with a merge request. Context commits are additional commits relevant to the MR but not in the diff. Returns commit SHA, title, and author for each.\n\nReturns: JSON array of context commits.\n\nSee also: gitlab_mr_commits, gitlab_create_mr_context_commits",
+    "description": "List the context commits pinned to a merge request for review. Returns: commit summaries (full SHA, short SHA, title, author name/email, created date). See also: gitlab_mr_get, gitlab_create_mr_context_commits, gitlab_delete_mr_context_commits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98641,7 +98657,7 @@
   },
   {
     "name": "gitlab_list_repository_submodules",
-    "description": "List all Git submodules defined in a repository. Parses .gitmodules and enriches each entry with the current commit SHA pointer and resolved project path.\n\nReturns: JSON array of submodules with commit SHAs.\n\nSee also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule",
+    "description": "List the Git submodules defined in a repository's .gitmodules. Returns: each submodule's name, path, remote url, resolved_project, and pinned commit_sha, plus a count. See also: gitlab_read_repository_submodule_file, gitlab_update_repository_submodule, gitlab_repository_tree.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168298,7 +168314,7 @@
   },
   {
     "name": "gitlab_read_repository_submodule_file",
-    "description": "Read a file from inside a Git submodule transparently. Resolves the submodule's target project and pinned commit SHA, then fetches the file content. No need to manually find the submodule's project or commit.\n\nReturns: JSON with the file content.\n\nSee also: gitlab_list_repository_submodules, gitlab_file_get",
+    "description": "Read a file from inside a submodule at the parent-pinned commit. Returns: file_name, file_path, submodule_path, resolved_project, commit_sha, size, decoded content, and encoding. See also: gitlab_list_repository_submodules, gitlab_file_get, gitlab_update_repository_submodule.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -180512,7 +180528,7 @@
   },
   {
     "name": "gitlab_schedule_group_export",
-    "description": "Schedule an asynchronous export of a group.\n\nReturns: JSON with the export schedule confirmation.\n\nSee also: gitlab_download_group_export, gitlab_schedule_project_export",
+    "description": "Schedule an asynchronous export of a GitLab group. Returns: a confirmation that the export was scheduled (the archive is built in the background). See also: gitlab_download_group_export, gitlab_import_group_from_file, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194570,7 +194586,7 @@
   },
   {
     "name": "gitlab_update_repository_submodule",
-    "description": "Update an existing submodule reference in a GitLab repository to point to a new commit SHA.\n\nReturns: JSON with the updated submodule reference.\n\nSee also: gitlab_list_repository_submodules",
+    "description": "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194612,7 +194628,16 @@
         "author_name": {
           "type": "string"
         },
+        "authored_date": {
+          "type": "string"
+        },
         "committed_date": {
+          "type": "string"
+        },
+        "committer_email": {
+          "type": "string"
+        },
+        "committer_name": {
           "type": "string"
         },
         "created_at": {
@@ -194633,7 +194658,19 @@
             "array"
           ]
         },
+        "parent_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "short_id": {
+          "type": "string"
+        },
+        "status": {
           "type": "string"
         },
         "title": {
