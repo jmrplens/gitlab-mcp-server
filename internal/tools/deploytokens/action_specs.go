@@ -112,6 +112,37 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		ParameterGuidance: guidance,
 		OpenWorld:         true,
 		OwnerPackage:      "deploytokens",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: deployTokenDescription(actionName),
+		},
+	}
+}
+
+// deployTokenDescription returns the "Returns: … See also: …" individual-tool
+// description for each deploy-token action (1:1 audit R-META).
+func deployTokenDescription(actionName string) string {
+	switch actionName {
+	case "deploy_token_list_all":
+		return "List all deploy tokens across the GitLab instance (admin only). Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group."
+	case "deploy_token_list_project":
+		return "List deploy tokens owned by a project. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project."
+	case "deploy_token_list_group":
+		return "List deploy tokens owned by a group. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_group, gitlab_deploy_token_create_group, gitlab_deploy_token_delete_group."
+	case "deploy_token_get_project":
+		return "Get a single project deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project."
+	case "deploy_token_get_group":
+		return "Get a single group deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_create_group, gitlab_deploy_token_delete_group."
+	case "deploy_token_create_project":
+		return "Create a deploy token for a project. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_delete_project."
+	case "deploy_token_create_group":
+		return "Create a deploy token for a group. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_delete_group."
+	case "deploy_token_delete_project":
+		return "Permanently delete a project deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project."
+	case "deploy_token_delete_group":
+		return "Permanently delete a group deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group."
+	default:
+		return ""
 	}
 }

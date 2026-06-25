@@ -4,6 +4,7 @@ package deploytokens
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -220,6 +221,35 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDeployTokenDescription_AllActions verifies that every deploy-token action
+// has a non-empty "Returns: … See also: …" individual-tool description and that
+// an unknown action name returns the empty default (1:1 audit R-META).
+func TestDeployTokenDescription_AllActions(t *testing.T) {
+	actions := []string{
+		"deploy_token_list_all",
+		"deploy_token_list_project",
+		"deploy_token_list_group",
+		"deploy_token_get_project",
+		"deploy_token_get_group",
+		"deploy_token_create_project",
+		"deploy_token_create_group",
+		"deploy_token_delete_project",
+		"deploy_token_delete_group",
+	}
+	for _, action := range actions {
+		desc := deployTokenDescription(action)
+		if desc == "" {
+			t.Errorf("action %q has empty description", action)
+		}
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("action %q description missing Returns/See also: %q", action, desc)
+		}
+	}
+	if got := deployTokenDescription("unknown_action"); got != "" {
+		t.Errorf("unknown action description = %q, want empty", got)
 	}
 }
 
