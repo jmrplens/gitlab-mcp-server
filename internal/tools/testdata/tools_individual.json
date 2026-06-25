@@ -15046,7 +15046,7 @@
   },
   {
     "name": "gitlab_deploy_key_add",
-    "description": "Add a deploy key to a GitLab project with title, public SSH key, and optional push access and expiry date.\n\nSee also: gitlab_deploy_key_list_project, gitlab_deploy_key_enable\n\nReturns: JSON with the created deploy key details.",
+    "description": "Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15133,7 +15133,7 @@
   },
   {
     "name": "gitlab_deploy_key_add_instance",
-    "description": "Create an instance-level deploy key with title, public SSH key, and optional expiry date. Requires admin access.\n\nSee also: gitlab_deploy_key_list_all, gitlab_deploy_key_add\n\nReturns: JSON with the created instance deploy key details.",
+    "description": "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15193,10 +15193,19 @@
               "created_at": {
                 "type": "string"
               },
+              "description": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
               "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
                 "type": "string"
               },
               "path_with_namespace": {
@@ -15222,10 +15231,19 @@
               "created_at": {
                 "type": "string"
               },
+              "description": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
               "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
                 "type": "string"
               },
               "path_with_namespace": {
@@ -15262,7 +15280,7 @@
   },
   {
     "name": "gitlab_deploy_key_delete",
-    "description": "Remove a deploy key from a GitLab project.\n\nSee also: gitlab_deploy_key_list_project, gitlab_deploy_key_add\n\nReturns: confirmation message.",
+    "description": "Delete a deploy key from a project (removes it from all projects where it is enabled). Returns: a success confirmation. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15319,7 +15337,7 @@
   },
   {
     "name": "gitlab_deploy_key_enable",
-    "description": "Enable an existing deploy key for a project (e.g., a key shared from another project).\n\nSee also: gitlab_deploy_key_list_project, gitlab_deploy_key_add\n\nReturns: JSON with the enabled deploy key details.",
+    "description": "Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15391,7 +15409,7 @@
   },
   {
     "name": "gitlab_deploy_key_get",
-    "description": "Get a specific deploy key for a project by its ID.\n\nSee also: gitlab_deploy_key_list_project, gitlab_deploy_key_update\n\nReturns: JSON with deploy key details including title, key content, and permissions.",
+    "description": "Get a single project deploy key by id. Returns: the deploy key with title, key, fingerprint, fingerprint_sha256, can_push, created_at, and expires_at. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_update, gitlab_deploy_key_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15464,16 +15482,28 @@
   },
   {
     "name": "gitlab_deploy_key_list_all",
-    "description": "List all instance-level deploy keys. Requires admin access. Filter by public keys.\n\nSee also: gitlab_deploy_key_add_instance, gitlab_deploy_key_list_project\n\nReturns: JSON array of instance deploy keys with pagination.",
+    "description": "List all instance-level deploy keys (admin only) with ordering and pagination. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. id, title, created_at)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Results per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "public": {
@@ -15482,6 +15512,10 @@
             "null",
             "boolean"
           ]
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -15527,10 +15561,19 @@
                     "created_at": {
                       "type": "string"
                     },
+                    "description": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "integer"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
                       "type": "string"
                     },
                     "path_with_namespace": {
@@ -15556,10 +15599,19 @@
                     "created_at": {
                       "type": "string"
                     },
+                    "description": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "integer"
                     },
                     "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
                       "type": "string"
                     },
                     "path_with_namespace": {
@@ -15655,20 +15707,36 @@
   },
   {
     "name": "gitlab_deploy_key_list_project",
-    "description": "List all deploy keys for a GitLab project.\n\nSee also: gitlab_deploy_key_add, gitlab_deploy_token_list_project\n\nReturns: JSON array of deploy keys with pagination.",
+    "description": "List a project's SSH deploy keys with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: gitlab_deploy_key_get, gitlab_deploy_key_add, gitlab_deploy_key_enable.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. id, title, created_at)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Results per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -15792,17 +15860,33 @@
   },
   {
     "name": "gitlab_deploy_key_list_user_project",
-    "description": "List all deploy keys across projects for a specific user.\n\nSee also: gitlab_deploy_key_list_project, gitlab_deploy_key_list_all\n\nReturns: JSON array of deploy keys with pagination.",
+    "description": "List the deploy keys across a user's projects (admin only) with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_get, gitlab_get_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. id, title, created_at)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Results per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         },
         "user_id": {
           "description": "User ID or username",
@@ -15929,7 +16013,7 @@
   },
   {
     "name": "gitlab_deploy_key_update",
-    "description": "Update an existing deploy key's title or push access permission.\n\nSee also: gitlab_deploy_key_get, gitlab_deploy_key_list_project\n\nReturns: JSON with the updated deploy key details.",
+    "description": "Update a project deploy key's title or push permission. Returns: the updated deploy key. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32365,17 +32449,64 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created_after": {
+          "description": "Return tokens created on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return tokens created on or before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "expires_after": {
+          "description": "Return tokens that expire on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "expires_before": {
+          "description": "Return tokens that expire on or before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "last_used_after": {
+          "description": "Return tokens last used on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "last_used_before": {
+          "description": "Return tokens last used on or before this date (YYYY-MM-DD)",
           "type": "string"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "revoked": {
+          "description": "Filter by revoked status: true to return only revoked tokens, false for non-revoked",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "search": {
+          "description": "Filter tokens by name (partial match)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
+          "type": "string"
         },
         "state": {
           "description": "Token state filter: active, inactive",
@@ -109579,7 +109710,7 @@
   },
   {
     "name": "gitlab_package_delete",
-    "description": "Delete a package and all its files from the GitLab Package Registry. This action cannot be undone.\n\nSee also: gitlab_package_list, gitlab_package_file_delete\n\nReturns: confirmation message.",
+    "description": "Delete a package permanently. Returns: a success confirmation naming the deleted package and project. See also: gitlab_package_list, gitlab_package_file_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109636,7 +109767,7 @@
   },
   {
     "name": "gitlab_package_download",
-    "description": "Download a file from the GitLab Generic Package Registry and save it to a local path. Returns the output path, file size, and SHA256 checksum.\n\nSee also: gitlab_package_list, gitlab_package_publish\n\nReturns: JSON with output path, file size, and SHA256 checksum.",
+    "description": "Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: gitlab_package_file_list, gitlab_package_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109708,7 +109839,7 @@
   },
   {
     "name": "gitlab_package_file_delete",
-    "description": "Delete a single file from a package in the GitLab Package Registry. This action cannot be undone.\n\nSee also: gitlab_package_file_list, gitlab_package_delete\n\nReturns: confirmation message.",
+    "description": "Delete a single file from a package permanently. Returns: a success confirmation naming the deleted file, package, and project. See also: gitlab_package_file_list, gitlab_package_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109770,10 +109901,14 @@
   },
   {
     "name": "gitlab_package_file_list",
-    "description": "List files within a specific package. Returns file ID, name, size, and SHA256 for each file with pagination.\n\nSee also: gitlab_package_list, gitlab_package_download\n\nReturns: JSON array of package files with pagination.",
+    "description": "List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Order package files by: created_at, file_name, or id",
+          "type": "string"
+        },
         "package_id": {
           "description": "Package ID",
           "type": "string"
@@ -109782,12 +109917,24 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
           "type": "string"
         }
       },
@@ -109904,7 +110051,7 @@
   },
   {
     "name": "gitlab_package_list",
-    "description": "List packages in a GitLab project. Can filter by name, version, type, and supports pagination and sorting.\n\nSee also: gitlab_package_file_list, gitlab_package_publish\n\nReturns: JSON array of packages with pagination.",
+    "description": "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -109937,6 +110084,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -109988,6 +110143,21 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "delete_api_path": {
+                    "type": "string"
+                  },
+                  "web_path": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "created_at": {
                 "type": "string"
               },
@@ -110027,10 +110197,19 @@
                   "user": {
                     "additionalProperties": false,
                     "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
                       "id": {
                         "type": "integer"
                       },
                       "name": {
+                        "type": "string"
+                      },
+                      "state": {
                         "type": "string"
                       },
                       "username": {
@@ -110092,10 +110271,19 @@
                     "user": {
                       "additionalProperties": false,
                       "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
                         "id": {
                           "type": "integer"
                         },
                         "name": {
+                          "type": "string"
+                        },
+                        "state": {
                           "type": "string"
                         },
                         "username": {
@@ -110139,7 +110327,30 @@
               },
               "tags": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "package_id": {
+                      "type": "integer"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "package_id",
+                    "name"
+                  ],
+                  "type": "object"
                 },
                 "type": [
                   "null",
@@ -110147,9 +110358,6 @@
                 ]
               },
               "version": {
-                "type": "string"
-              },
-              "web_path": {
                 "type": "string"
               }
             },
@@ -110219,7 +110427,7 @@
   },
   {
     "name": "gitlab_package_publish",
-    "description": "Upload a single file to the GitLab Generic Package Registry. Provide either file_path (absolute local path) or content_base64 (base64-encoded content), not both. Returns the package file ID, size, SHA256, and the real download URL in the 'url' field. Use that 'url' value with gitlab_release_link_create to attach the package to a release — do NOT construct package URLs manually. To upload multiple files at once, use gitlab_package_publish_directory instead. To publish and link to a release in one step, use gitlab_package_publish_and_link.\n\nSee also: gitlab_package_publish_and_link, gitlab_package_list\n\nReturns: JSON with the published package details and download URL.",
+    "description": "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -110245,6 +110453,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "select": {
+          "description": "Response detail selector. Set to 'package_file' to receive the published file metadata (id, size, checksums). Defaults to 'package_file'.",
           "type": "string"
         },
         "status": {
@@ -110324,7 +110536,7 @@
   },
   {
     "name": "gitlab_package_publish_and_link",
-    "description": "Upload a file to the Generic Package Registry and create a release asset link pointing to it in one step (recommended over separate publish + link calls). Provide either file_path or content_base64 for the file content. The release identified by tag_name must already exist. Automatically uses the real download URL — no manual URL construction needed.\n\nIMPORTANT: link_name MUST be the exact filename (e.g. 'checksums.txt.asc'). NEVER add descriptive suffixes like '(GPG signature)' — tools like go-selfupdate match release asset names exactly.\n\nSee also: gitlab_package_publish, gitlab_release_link_create\n\nReturns: JSON with the published package details and release link URL.",
+    "description": "Publish a file to the Generic Package Registry and link it to a release in one call. Returns: the published file metadata and the created release asset link. See also: gitlab_package_publish, gitlab_package_publish_directory, gitlab_release_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -110501,7 +110713,7 @@
   },
   {
     "name": "gitlab_package_publish_directory",
-    "description": "Batch-upload all matching files from a local directory to the Generic Package Registry. Walks the directory (non-recursive), filters by an optional glob pattern (e.g. *.tar.gz, *.exe), and publishes each file. Ideal for uploading release binaries or build artifacts in bulk. Returns the list of published files with checksums and URLs.\n\nSee also: gitlab_package_publish, gitlab_package_publish_and_link\n\nReturns: JSON with the list of published files, checksums, and URLs.",
+    "description": "Publish every regular file from a local directory to the Generic Package Registry. Returns: total files, total bytes, per-file results, and any per-file errors. See also: gitlab_package_publish, gitlab_package_publish_and_link, gitlab_package_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -111661,16 +111873,59 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created_after": {
+          "description": "Return tokens created on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return tokens created on or before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "expires_after": {
+          "description": "Return tokens that expire on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "expires_before": {
+          "description": "Return tokens that expire on or before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "last_used_after": {
+          "description": "Return tokens last used on or after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "last_used_before": {
+          "description": "Return tokens last used on or before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "revoked": {
+          "description": "Filter by revoked status: true to return only revoked tokens, false for non-revoked",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "search": {
           "description": "Search by token name",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
           "type": "string"
         },
         "state": {
@@ -117433,9 +117688,21 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, expires_at, last_used_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -117443,6 +117710,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
           "type": "string"
         },
         "state": {
@@ -147033,7 +147304,7 @@
   },
   {
     "name": "gitlab_registry_delete_repository",
-    "description": "Delete a container registry repository. This action cannot be undone.\n\nSee also: gitlab_registry_list_project, gitlab_registry_get_repository\n\nReturns: confirmation message.",
+    "description": "Delete one container registry repository (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_list_project, gitlab_registry_get_repository, gitlab_registry_delete_tag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147090,7 +147361,7 @@
   },
   {
     "name": "gitlab_registry_delete_tag",
-    "description": "Delete a single container registry repository tag. This action cannot be undone.\n\nSee also: gitlab_registry_list_tags, gitlab_registry_delete_tags_bulk\n\nReturns: confirmation message.",
+    "description": "Delete one container registry tag (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_list_tags, gitlab_registry_delete_tags_bulk, gitlab_registry_get_tag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147152,7 +147423,7 @@
   },
   {
     "name": "gitlab_registry_delete_tags_bulk",
-    "description": "Delete container registry repository tags in bulk using regex patterns. Use name_regex_delete to match tags to delete and name_regex_keep to exclude tags from deletion.\n\nSee also: gitlab_registry_list_tags, gitlab_registry_delete_tag\n\nReturns: confirmation message.",
+    "description": "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation; deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147163,6 +147434,10 @@
         "keep_n": {
           "description": "Number of latest tags to keep",
           "type": "integer"
+        },
+        "name_regex": {
+          "description": "Deprecated: regex pattern of tag names to delete. Use name_regex_delete instead",
+          "type": "string"
         },
         "name_regex_delete": {
           "description": "Regex pattern of tag names to delete",
@@ -147225,7 +147500,7 @@
   },
   {
     "name": "gitlab_registry_get_repository",
-    "description": "Get details of a single container registry repository by its ID.\n\nSee also: gitlab_registry_list_project, gitlab_registry_list_tags\n\nReturns: JSON with repository details.",
+    "description": "Get details of one container registry repository by its id. Returns: the repository's name, path, location, status, tag count, and optional tags. See also: gitlab_registry_list_project, gitlab_registry_list_tags, gitlab_registry_delete_repository.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147283,6 +147558,57 @@
         "status": {
           "type": "string"
         },
+        "tags": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "short_revision": {
+                "type": "string"
+              },
+              "total_size": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "path",
+              "location",
+              "total_size"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "tags_count": {
           "type": "integer"
         }
@@ -147306,7 +147632,7 @@
   },
   {
     "name": "gitlab_registry_get_tag",
-    "description": "Get details of a specific container registry repository tag.\n\nSee also: gitlab_registry_list_tags, gitlab_registry_delete_tag\n\nReturns: JSON with tag details.",
+    "description": "Get metadata of one container registry tag. Returns: the tag's name, path, location, revision, digest, total size, and creation time. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147384,7 +147710,7 @@
   },
   {
     "name": "gitlab_registry_list_group",
-    "description": "List container registry repositories for a GitLab group.\n\nSee also: gitlab_registry_list_project, gitlab_registry_get_repository\n\nReturns: JSON array of container repositories with pagination.",
+    "description": "List container registry image repositories across a group. Returns: each repository's id, name, path, location, status, tag count, and pagination metadata. See also: gitlab_registry_list_project, gitlab_registry_get_repository.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147392,13 +147718,29 @@
           "description": "Group ID or path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by (keyset pagination)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -147491,6 +147833,57 @@
               "status": {
                 "type": "string"
               },
+              "tags": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "next_steps": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "short_revision": {
+                      "type": "string"
+                    },
+                    "total_size": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "path",
+                    "location",
+                    "total_size"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "tags_count": {
                 "type": "integer"
               }
@@ -147526,20 +147919,36 @@
   },
   {
     "name": "gitlab_registry_list_project",
-    "description": "List container registry repositories for a GitLab project.\n\nSee also: gitlab_registry_list_tags, gitlab_registry_list_group\n\nReturns: JSON array of container repositories with pagination.",
+    "description": "List container registry image repositories in a project. Returns: each repository's id, name, path, location, status, tag count, optional tags, and pagination metadata. See also: gitlab_registry_get_repository, gitlab_registry_list_tags, gitlab_registry_list_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (keyset pagination)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         },
         "tags": {
@@ -147641,6 +148050,57 @@
               "status": {
                 "type": "string"
               },
+              "tags": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "next_steps": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "short_revision": {
+                      "type": "string"
+                    },
+                    "total_size": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "path",
+                    "location",
+                    "total_size"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "tags_count": {
                 "type": "integer"
               }
@@ -147680,12 +148140,24 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (keyset pagination)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
@@ -147695,6 +148167,10 @@
         "repository_id": {
           "description": "Registry repository ID",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -147889,7 +148365,7 @@
   },
   {
     "name": "gitlab_registry_protection_delete",
-    "description": "Delete a container registry protection rule. This action cannot be undone.\n\nSee also: gitlab_registry_protection_list, gitlab_registry_protection_create\n\nReturns: confirmation message.",
+    "description": "Delete a container registry repository-path protection rule (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_protection_list, gitlab_registry_protection_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148067,7 +148543,7 @@
   },
   {
     "name": "gitlab_registry_protection_update",
-    "description": "Update a container registry protection rule.\n\nSee also: gitlab_registry_protection_list, gitlab_registry_protection_create\n\nReturns: JSON with the updated protection rule details.",
+    "description": "Update a container registry repository-path protection rule. Returns: the updated rule with its path pattern and minimum push/delete access levels. See also: gitlab_registry_protection_list, gitlab_registry_protection_delete, gitlab_registry_protection_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164218,12 +164694,16 @@
   },
   {
     "name": "gitlab_snippet_note_create",
-    "description": "Add a comment (note) to a GitLab project snippet. Supports Markdown formatting.\n\nReturns: JSON with created note including ID, body, author, and timestamps. See also: gitlab_project_snippet_get.",
+    "description": "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "body": {
           "description": "Note body (Markdown supported)",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.",
           "type": "string"
         },
         "project_id": {
@@ -164245,17 +164725,67 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "author": {
+        "attachment": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
         },
+        "commit_id": {
+          "type": "string"
+        },
+        "confidential": {
+          "type": "boolean"
+        },
         "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "file_name": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "internal": {
+          "type": "boolean"
         },
         "next_steps": {
           "items": {
@@ -164266,14 +164796,110 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_iid": {
+          "type": "integer"
+        },
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "resolvable": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "updated_at": {
           "type": "string"
@@ -164282,9 +164908,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
-        "system"
+        "system",
+        "internal",
+        "confidential"
       ],
       "type": "object"
     },
@@ -164295,7 +164922,7 @@
   },
   {
     "name": "gitlab_snippet_note_delete",
-    "description": "Permanently delete a comment from a GitLab project snippet. Only the note author or a project maintainer can delete a note.\n\nReturns: JSON with deletion confirmation. See also: gitlab_snippet_note_get.",
+    "description": "Delete a snippet note permanently. Returns: a success confirmation naming the note, snippet, and project. See also: gitlab_snippet_note_get, gitlab_snippet_note_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164838,7 +165465,7 @@
   },
   {
     "name": "gitlab_snippet_note_get",
-    "description": "Get a single comment (note) from a GitLab project snippet by its note ID, including author, timestamps, body, and system flag.\n\nReturns: JSON with note details including ID, body, author, and timestamps. See also: gitlab_snippet_note_list.",
+    "description": "Get a single snippet note by its ID. Returns: the note with author, body, timestamps, and position. See also: gitlab_snippet_note_list, gitlab_snippet_note_update, gitlab_snippet_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164865,17 +165492,67 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "author": {
+        "attachment": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
         },
+        "commit_id": {
+          "type": "string"
+        },
+        "confidential": {
+          "type": "boolean"
+        },
         "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "file_name": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "internal": {
+          "type": "boolean"
         },
         "next_steps": {
           "items": {
@@ -164886,14 +165563,110 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_iid": {
+          "type": "integer"
+        },
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "resolvable": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "updated_at": {
           "type": "string"
@@ -164902,9 +165675,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
-        "system"
+        "system",
+        "internal",
+        "confidential"
       ],
       "type": "object"
     },
@@ -164917,7 +165691,7 @@
   },
   {
     "name": "gitlab_snippet_note_list",
-    "description": "List all comments (notes) on a GitLab project snippet. Supports ordering by created_at or updated_at, sort direction, and pagination.\n\nReturns: JSON with notes array including body, author, timestamps, and system flags. See also: gitlab_project_snippet_get.",
+    "description": "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164928,6 +165702,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -164968,17 +165750,67 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "author": {
+              "attachment": {
                 "type": "string"
+              },
+              "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "body": {
                 "type": "string"
               },
+              "commit_id": {
+                "type": "string"
+              },
+              "confidential": {
+                "type": "boolean"
+              },
               "created_at": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "file_name": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "internal": {
+                "type": "boolean"
               },
               "next_steps": {
                 "items": {
@@ -164989,14 +165821,110 @@
                   "array"
                 ]
               },
-              "notable_id": {
+              "noteable_id": {
                 "type": "integer"
               },
-              "notable_type": {
+              "noteable_iid": {
+                "type": "integer"
+              },
+              "noteable_type": {
                 "type": "string"
+              },
+              "position": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "line_range": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "end": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "start": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_code": {
+                            "type": "string"
+                          },
+                          "new_line": {
+                            "type": "integer"
+                          },
+                          "old_line": {
+                            "type": "integer"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      }
+                    },
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "new_line": {
+                    "type": "integer"
+                  },
+                  "new_path": {
+                    "type": "string"
+                  },
+                  "old_line": {
+                    "type": "integer"
+                  },
+                  "old_path": {
+                    "type": "string"
+                  },
+                  "position_type": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              },
+              "resolvable": {
+                "type": "boolean"
               },
               "system": {
                 "type": "boolean"
+              },
+              "title": {
+                "type": "string"
               },
               "updated_at": {
                 "type": "string"
@@ -165005,9 +165933,10 @@
             "required": [
               "id",
               "body",
-              "author",
               "created_at",
-              "system"
+              "system",
+              "internal",
+              "confidential"
             ],
             "type": "object"
           },
@@ -165068,7 +165997,7 @@
   },
   {
     "name": "gitlab_snippet_note_update",
-    "description": "Edit the body text of an existing comment on a GitLab project snippet. Only the note author or a project maintainer can update a note.\n\nReturns: JSON with updated note including ID, body, author, and timestamps. See also: gitlab_snippet_note_get.",
+    "description": "Update a snippet note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_snippet_note_get, gitlab_snippet_note_list, gitlab_snippet_note_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -165100,17 +166029,67 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "author": {
+        "attachment": {
           "type": "string"
+        },
+        "author": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "body": {
           "type": "string"
         },
+        "commit_id": {
+          "type": "string"
+        },
+        "confidential": {
+          "type": "boolean"
+        },
         "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "file_name": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "internal": {
+          "type": "boolean"
         },
         "next_steps": {
           "items": {
@@ -165121,14 +166100,110 @@
             "array"
           ]
         },
-        "notable_id": {
+        "noteable_id": {
           "type": "integer"
         },
-        "notable_type": {
+        "noteable_iid": {
+          "type": "integer"
+        },
+        "noteable_type": {
           "type": "string"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "base_sha": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "line_range": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "start": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "line_code": {
+                      "type": "string"
+                    },
+                    "new_line": {
+                      "type": "integer"
+                    },
+                    "old_line": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "new_line": {
+              "type": "integer"
+            },
+            "new_path": {
+              "type": "string"
+            },
+            "old_line": {
+              "type": "integer"
+            },
+            "old_path": {
+              "type": "string"
+            },
+            "position_type": {
+              "type": "string"
+            },
+            "start_sha": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "project_id": {
+          "type": "integer"
+        },
+        "resolvable": {
+          "type": "boolean"
         },
         "system": {
           "type": "boolean"
+        },
+        "title": {
+          "type": "string"
         },
         "updated_at": {
           "type": "string"
@@ -165137,9 +166212,10 @@
       "required": [
         "id",
         "body",
-        "author",
         "created_at",
-        "system"
+        "system",
+        "internal",
+        "confidential"
       ],
       "type": "object"
     },
