@@ -32894,7 +32894,7 @@
   },
   {
     "name": "gitlab_get_group_mr_approval_settings",
-    "description": "Get group-level merge request approval settings: whether author/committer approval is allowed, approver list overrides, approval retention on push, and reauthentication requirements. Settings may be locked or inherited from parent groups.\n\nReturns: JSON with each setting's value, locked status, and inheritance source. Requires GitLab Premium.\n\nSee also: gitlab_update_group_mr_approval_settings, gitlab_get_project_mr_approval_settings.",
+    "description": "Read the merge request approval settings of a group. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_group_mr_approval_settings, gitlab_get_project_mr_approval_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32949,7 +32949,7 @@
           ],
           "type": "object"
         },
-        "allow_overrides_approver_list_per_mr": {
+        "allow_overrides_to_approver_list_per_merge_request": {
           "additionalProperties": false,
           "properties": {
             "inherited_from": {
@@ -33057,7 +33057,7 @@
       "required": [
         "allow_author_approval",
         "allow_committer_approval",
-        "allow_overrides_approver_list_per_mr",
+        "allow_overrides_to_approver_list_per_merge_request",
         "retain_approvals_on_push",
         "selective_code_owner_removals",
         "require_password_to_approve",
@@ -35802,7 +35802,7 @@
   },
   {
     "name": "gitlab_get_project_mr_approval_settings",
-    "description": "Get project-level merge request approval settings: whether author/committer approval is allowed, approver list overrides, approval retention on push, selective code owner removals, and reauthentication requirements. Settings may be locked or inherited from parent group.\n\nReturns: JSON with each setting's value, locked status, and inheritance source. Requires GitLab Premium.\n\nSee also: gitlab_update_project_mr_approval_settings, gitlab_get_group_mr_approval_settings.",
+    "description": "Read the merge request approval settings of a project. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_project_mr_approval_settings, gitlab_get_group_mr_approval_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -35857,7 +35857,7 @@
           ],
           "type": "object"
         },
-        "allow_overrides_approver_list_per_mr": {
+        "allow_overrides_to_approver_list_per_merge_request": {
           "additionalProperties": false,
           "properties": {
             "inherited_from": {
@@ -35965,7 +35965,7 @@
       "required": [
         "allow_author_approval",
         "allow_committer_approval",
-        "allow_overrides_approver_list_per_mr",
+        "allow_overrides_to_approver_list_per_merge_request",
         "retain_approvals_on_push",
         "selective_code_owner_removals",
         "require_password_to_approve",
@@ -44486,7 +44486,7 @@
   },
   {
     "name": "gitlab_group_epic_board_get",
-    "description": "Get a single epic board in a GitLab group by its ID, including board lists (columns) and labels.\n\nReturns: JSON with board details. See also: gitlab_group_epic_board_list.",
+    "description": "Get a single group epic board by ID (Premium/Ultimate). Returns: the epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope. See also: gitlab_group_epic_board_list, gitlab_group_epic_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44508,12 +44508,96 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "group": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "full_name": {
+              "type": "string"
+            },
+            "full_path": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "lfs_enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "parent_id": {
+              "type": "integer"
+            },
+            "path": {
+              "type": "string"
+            },
+            "request_access_enabled": {
+              "type": "boolean"
+            },
+            "visibility": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "path",
+            "request_access_enabled",
+            "lfs_enabled"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "labels": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -44524,14 +44608,206 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "assignee": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "username"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
-              "label": {
-                "type": "string"
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
-              "label_id": {
+              "label": {
+                "additionalProperties": false,
+                "properties": {
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "closed_issues_count": {
+                    "type": "integer"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "is_project_label": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "open_issues_count": {
+                    "type": "integer"
+                  },
+                  "open_merge_requests_count": {
+                    "type": "integer"
+                  },
+                  "priority": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "subscribed": {
+                    "type": "boolean"
+                  },
+                  "text_color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "color"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "max_issue_count": {
                 "type": "integer"
+              },
+              "max_issue_weight": {
+                "type": "integer"
+              },
+              "milestone": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "expired": {
+                    "type": [
+                      "null",
+                      "boolean"
+                    ]
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "group_id",
+                  "project_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "position": {
                 "type": "integer"
@@ -44576,7 +44852,7 @@
   },
   {
     "name": "gitlab_group_epic_board_list",
-    "description": "List all epic boards in a GitLab group. Supports pagination.\n\nReturns: JSON with boards array and pagination metadata. See also: gitlab_group_epic_board_get.",
+    "description": "List all epic boards in a group with pagination (Premium/Ultimate). Returns: each epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope, plus pagination metadata. See also: gitlab_group_epic_board_get, gitlab_group_epic_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44584,13 +44860,29 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column by which to order results (keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -44605,12 +44897,96 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "lfs_enabled": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "request_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "request_access_enabled",
+                  "lfs_enabled"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "labels": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -44621,14 +44997,206 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "assignee": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "username"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
                     "id": {
                       "type": "integer"
                     },
-                    "label": {
-                      "type": "string"
+                    "iteration": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "due_date": {
+                          "type": "string"
+                        },
+                        "group_id": {
+                          "type": "integer"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "iid": {
+                          "type": "integer"
+                        },
+                        "sequence": {
+                          "type": "integer"
+                        },
+                        "start_date": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "integer"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "iid",
+                        "sequence",
+                        "group_id",
+                        "title",
+                        "description",
+                        "state",
+                        "web_url"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
                     },
-                    "label_id": {
+                    "label": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "archived": {
+                          "type": "boolean"
+                        },
+                        "closed_issues_count": {
+                          "type": "integer"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "is_project_label": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "open_issues_count": {
+                          "type": "integer"
+                        },
+                        "open_merge_requests_count": {
+                          "type": "integer"
+                        },
+                        "priority": {
+                          "type": [
+                            "null",
+                            "integer"
+                          ]
+                        },
+                        "subscribed": {
+                          "type": "boolean"
+                        },
+                        "text_color": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "color"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "max_issue_count": {
                       "type": "integer"
+                    },
+                    "max_issue_weight": {
+                      "type": "integer"
+                    },
+                    "milestone": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "due_date": {
+                          "type": "string"
+                        },
+                        "expired": {
+                          "type": [
+                            "null",
+                            "boolean"
+                          ]
+                        },
+                        "group_id": {
+                          "type": "integer"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "iid": {
+                          "type": "integer"
+                        },
+                        "project_id": {
+                          "type": "integer"
+                        },
+                        "start_date": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "iid",
+                        "group_id",
+                        "project_id",
+                        "title",
+                        "description",
+                        "state",
+                        "web_url"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
                     },
                     "position": {
                       "type": "integer"
@@ -192925,7 +193493,7 @@
   },
   {
     "name": "gitlab_update_group_mr_approval_settings",
-    "description": "Update group-level merge request approval settings: control author/committer approval, approver list overrides, approval retention on push, and reauthentication. Only include settings you want to change.\n\nReturns: JSON with all updated settings. Requires GitLab Premium.\n\nSee also: gitlab_get_group_mr_approval_settings.",
+    "description": "Update the merge request approval settings of a group. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_group_mr_approval_settings, gitlab_update_project_mr_approval_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -192943,8 +193511,8 @@
             "boolean"
           ]
         },
-        "allow_overrides_approver_list_per_mr": {
-          "description": "Allow overriding approver list per merge request",
+        "allow_overrides_to_approver_list_per_merge_request": {
+          "description": "Allow overriding the approver list per merge request",
           "type": [
             "null",
             "boolean"
@@ -193015,7 +193583,7 @@
           ],
           "type": "object"
         },
-        "allow_overrides_approver_list_per_mr": {
+        "allow_overrides_to_approver_list_per_merge_request": {
           "additionalProperties": false,
           "properties": {
             "inherited_from": {
@@ -193123,7 +193691,7 @@
       "required": [
         "allow_author_approval",
         "allow_committer_approval",
-        "allow_overrides_approver_list_per_mr",
+        "allow_overrides_to_approver_list_per_merge_request",
         "retain_approvals_on_push",
         "selective_code_owner_removals",
         "require_password_to_approve",
@@ -193619,7 +194187,7 @@
   },
   {
     "name": "gitlab_update_project_mr_approval_settings",
-    "description": "Update project-level merge request approval settings: control author/committer approval, approver list overrides, approval retention on push, selective code owner removals, and reauthentication. Only include settings you want to change.\n\nReturns: JSON with all updated settings. Requires GitLab Premium.\n\nSee also: gitlab_get_project_mr_approval_settings.",
+    "description": "Update the merge request approval settings of a project. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_project_mr_approval_settings, gitlab_update_group_mr_approval_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -193637,8 +194205,8 @@
             "boolean"
           ]
         },
-        "allow_overrides_approver_list_per_mr": {
-          "description": "Allow overriding approver list per merge request",
+        "allow_overrides_to_approver_list_per_merge_request": {
+          "description": "Allow overriding the approver list per merge request",
           "type": [
             "null",
             "boolean"
@@ -193716,7 +194284,7 @@
           ],
           "type": "object"
         },
-        "allow_overrides_approver_list_per_mr": {
+        "allow_overrides_to_approver_list_per_merge_request": {
           "additionalProperties": false,
           "properties": {
             "inherited_from": {
@@ -193824,7 +194392,7 @@
       "required": [
         "allow_author_approval",
         "allow_committer_approval",
-        "allow_overrides_approver_list_per_mr",
+        "allow_overrides_to_approver_list_per_merge_request",
         "retain_approvals_on_push",
         "selective_code_owner_removals",
         "require_password_to_approve",
