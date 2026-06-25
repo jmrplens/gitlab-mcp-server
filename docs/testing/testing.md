@@ -629,7 +629,7 @@ make test-e2e-docker-enterprise
 
 The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
 
-The E2E harness also re-validates the GitLab edition at runtime by calling `GET /api/v4/version`. When `GITLAB_ENTERPRISE=true` is requested but the fixture reports CE, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
+The E2E harness also re-validates the GitLab tier at runtime by calling the License API (`GET /api/v4/license`). When an enterprise tier is requested (via `GITLAB_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 

@@ -244,7 +244,7 @@ func envMapPreferences(cfg ServerConfig) map[string]string {
 		env["META_PARAM_SCHEMA"] = cfg.MetaParamSchema
 	}
 	if cfg.Enterprise {
-		env["GITLAB_ENTERPRISE"] = "true"
+		env["GITLAB_TIER"] = tierString(cfg.Enterprise)
 	}
 	if cfg.ReadOnly {
 		env["GITLAB_READ_ONLY"] = "true"

@@ -178,7 +178,7 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client for pool: %w", err)
 	}
-	client.SetEnterprise(p.cfg.Enterprise)
+	client.SetTier(p.cfg.Tier)
 
 	entryCfg := p.entryConfig(client, gitlabURL)
 	server, err := p.factory(client, entryCfg)
@@ -200,8 +200,9 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 		"server pool: created new entry",
 		"pool_size", len(p.entries),
 		"gitlab_url", entryCfg.GitLabURL,
-		"enterprise", entryCfg.Enterprise,
-		"enterprise_source", p.enterpriseSource(),
+		"tier", entryCfg.Tier.String(),
+		"enterprise", entryCfg.Enterprise(),
+		"tier_source", p.tierSource(),
 		"scopes_detected", entryCfg.TokenScopes != nil,
 		"token_suffix", tokenSuffix(token),
 	)
@@ -226,12 +227,15 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
-	if p.cfg.AutoDetectEnterprise || !p.cfg.IgnoreScopes {
+	// Detect the tier from the instance license only when the operator did not
+	// pin it explicitly via --tier/GITLAB_TIER.
+	autoDetectTier := !p.cfg.TierExplicit
+	if autoDetectTier || !p.cfg.IgnoreScopes {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if p.cfg.AutoDetectEnterprise {
-			entryCfg.Enterprise = client.DetectEnterprise(ctx, entryCfg.Enterprise)
+		if autoDetectTier {
+			entryCfg.Tier = client.DetectTier(ctx)
 		}
 
 		if p.cfg.IgnoreScopes {
@@ -242,13 +246,13 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	return entryCfg
 }
 
-// enterpriseSource returns the label used in logs for how Enterprise/Premium
-// tool availability was selected for new pool entries.
-func (p *ServerPool) enterpriseSource() string {
-	if p.cfg.AutoDetectEnterprise {
-		return "detected"
+// tierSource returns the label used in logs for how the licensing tier was
+// selected for new pool entries.
+func (p *ServerPool) tierSource() string {
+	if p.cfg.TierExplicit {
+		return "configured"
 	}
-	return "configured"
+	return "detected"
 }
 
 // Size returns the current number of entries in the pool.
@@ -430,5 +434,5 @@ func poolEntryConfigLogValues(entry *poolEntry) (string, bool) {
 	if entry == nil || entry.serverConfig == nil {
 		return "", false
 	}
-	return entry.serverConfig.GitLabURL, entry.serverConfig.Enterprise
+	return entry.serverConfig.GitLabURL, entry.serverConfig.Enterprise()
 }

@@ -10,7 +10,7 @@ In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **32 base GitLab/i
 
 The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in the 32/48/49 GitLab action catalog counts.
 
-Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
+Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 

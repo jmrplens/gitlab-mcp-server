@@ -21,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -1720,10 +1721,15 @@ func newEvalTestClient(t *testing.T, enterprise bool) *gitlabclient.Client {
 		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
 	}))
 	t.Cleanup(srv.Close)
+	tier := edition.Free
+	if enterprise {
+		tier = edition.Ultimate
+	}
 	client, err := gitlabclient.NewClient(&config.Config{
 		GitLabURL:       srv.URL,
 		GitLabToken:     "eval-token",
-		Enterprise:      enterprise,
+		Tier:            tier,
+		TierExplicit:    true,
 		MetaTools:       true,
 		MetaParamSchema: config.DefaultMetaParamSchema,
 	})

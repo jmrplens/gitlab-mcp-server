@@ -11455,7 +11455,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 17 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 17 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 

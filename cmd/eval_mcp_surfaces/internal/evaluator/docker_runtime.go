@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 func ensureDockerRuntimeIfNeeded(ctx context.Context, opts options) error {
@@ -62,9 +64,15 @@ func dockerGitLabURL(opts options) string {
 
 func dockerRuntimeEnv(opts options) []string {
 	enterprise := dockerEnterpriseRuntime(opts)
+	// The evaluated MCP server reads GITLAB_TIER (GITLAB_ENTERPRISE was removed);
+	// map the eval's binary enterprise runtime to ultimate (show all EE tools) / free.
+	tier := "free"
+	if enterprise {
+		tier = "ultimate"
+	}
 	env := []string{
 		"E2E_DOCKER_COMPOSE_FILE=" + dockerComposeFile(opts),
-		"GITLAB_ENTERPRISE=" + strconv.FormatBool(enterprise),
+		"GITLAB_TIER=" + tier,
 	}
 	image := os.Getenv("EVAL_DOCKER_GITLAB_IMAGE")
 	if image == "" && enterprise && os.Getenv("GITLAB_IMAGE") == "" {
@@ -78,6 +86,11 @@ func dockerRuntimeEnv(opts options) []string {
 
 func dockerEnterpriseRuntime(opts options) bool {
 	if opts.Edition == editionEnterprise || strings.HasPrefix(opts.Preset, "docker-enterprise-") {
+		return true
+	}
+	// Harness-side toggle: accept the new GITLAB_TIER (premium/ultimate) and the
+	// legacy GITLAB_ENTERPRISE for back-compat of existing eval invocations.
+	if tier, ok := edition.ParseTier(os.Getenv("GITLAB_TIER")); ok && tier.IsEnterprise() {
 		return true
 	}
 	return envBool("GITLAB_ENTERPRISE") || strings.Contains(os.Getenv("GITLAB_IMAGE"), "gitlab-ee") || strings.Contains(os.Getenv("EVAL_DOCKER_GITLAB_IMAGE"), "gitlab-ee")

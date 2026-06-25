@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 // Test fixtures used across configuration tests.
@@ -931,7 +933,8 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	cfg := &Config{
 		GitLabURL:         "https://gitlab.example.com",
 		MetaTools:         true,
-		Enterprise:        true,
+		Tier:              edition.Ultimate,
+		TierExplicit:      true,
 		ReadOnly:          true,
 		SafeMode:          true,
 		ExcludeTools:      []string{"gitlab_create_project"},
@@ -943,8 +946,11 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 
 	snapshot := cfg.ServerConfig()
-	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.MetaTools || !snapshot.Enterprise || !snapshot.ReadOnly || !snapshot.SafeMode {
+	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.MetaTools || !snapshot.Enterprise() || !snapshot.ReadOnly || !snapshot.SafeMode {
 		t.Fatalf("ServerConfig snapshot does not preserve boolean/url fields: %+v", snapshot)
+	}
+	if snapshot.Tier != edition.Ultimate || !snapshot.TierExplicit {
+		t.Fatalf("ServerConfig snapshot does not preserve tier fields: %+v", snapshot)
 	}
 	if snapshot.RateLimitRPS != cfg.RateLimitRPS || snapshot.RateLimitBurst != cfg.RateLimitBurst {
 		t.Fatalf("ServerConfig rate limit fields = (%v, %d), want (%v, %d)", snapshot.RateLimitRPS, snapshot.RateLimitBurst, cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -998,17 +1004,60 @@ func TestLoad_InvalidMetaTools(t *testing.T) {
 	}
 }
 
-// TestLoad_InvalidEnterprise verifies that Load returns an error when
-// GITLAB_ENTERPRISE has an invalid boolean value.
-func TestLoad_InvalidEnterprise(t *testing.T) {
-	t.Setenv("GITLAB_ENTERPRISE", "notabool")
+// TestLoad_InvalidTier verifies that Load returns an error when GITLAB_TIER
+// holds an unrecognized value.
+func TestLoad_InvalidTier(t *testing.T) {
+	t.Setenv("GITLAB_TIER", "platinum")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
 	_, err := Load()
 	if err == nil {
-		t.Fatal("expected error for invalid GITLAB_ENTERPRISE")
+		t.Fatal("expected error for invalid GITLAB_TIER")
+	}
+}
+
+// TestLoad_TierResolution verifies that GITLAB_TIER resolves to the expected
+// tier and explicit flag, including the unset (detect) case.
+func TestLoad_TierResolution(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        string
+		set          bool
+		wantTier     edition.Tier
+		wantExplicit bool
+		wantEnt      bool
+	}{
+		{name: "unset detects free", set: false, wantTier: edition.Free, wantExplicit: false, wantEnt: false},
+		{name: "free", value: "free", set: true, wantTier: edition.Free, wantExplicit: true, wantEnt: false},
+		{name: "ce maps to free", value: "ce", set: true, wantTier: edition.Free, wantExplicit: true, wantEnt: false},
+		{name: "premium", value: "premium", set: true, wantTier: edition.Premium, wantExplicit: true, wantEnt: true},
+		{name: "ultimate", value: "ultimate", set: true, wantTier: edition.Ultimate, wantExplicit: true, wantEnt: true},
+		{name: "case insensitive", value: "Premium", set: true, wantTier: edition.Premium, wantExplicit: true, wantEnt: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+			t.Setenv("GITLAB_TOKEN", "test")
+			if tc.set {
+				t.Setenv("GITLAB_TIER", tc.value)
+			} else {
+				t.Setenv("GITLAB_TIER", "")
+			}
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.Tier != tc.wantTier {
+				t.Errorf("Tier = %v, want %v", cfg.Tier, tc.wantTier)
+			}
+			if cfg.TierExplicit != tc.wantExplicit {
+				t.Errorf("TierExplicit = %v, want %v", cfg.TierExplicit, tc.wantExplicit)
+			}
+			if cfg.Enterprise() != tc.wantEnt {
+				t.Errorf("Enterprise() = %v, want %v", cfg.Enterprise(), tc.wantEnt)
+			}
+		})
 	}
 }
 

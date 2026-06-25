@@ -420,7 +420,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
 	b.WriteString("- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs\n")
 	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
-	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
+	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n\n")
 
 	b.WriteString("Tool domains:\n\n")
 	b.WriteString(strings.Join(domains, ", "))
@@ -649,7 +649,7 @@ func writeLLMSFullEnterpriseOnlyMetaTools(b *strings.Builder, catalog llmsCatalo
 		return
 	}
 	b.WriteString("## Enterprise-Only Meta-Tools\n\n")
-	fmt.Fprintf(b, "These %d tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
+	fmt.Fprintf(b, "These %d tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=%s.\n\n", len(enterpriseOnly), config.DefaultGitLabURL)
 	for _, tool := range enterpriseOnly {
 		writeLLMSFullMetaTool(b, tool, catalog.MetaRoutes)
 	}

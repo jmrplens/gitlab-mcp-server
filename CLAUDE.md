@@ -289,7 +289,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
 | `AUTO_UPDATE_TIMEOUT`    | No       | Startup/background update timeout (`60s` default, range 5s–10m) |
-| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition (`false` default) |
+| `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
@@ -305,7 +305,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
-| `--enterprise`        | `false` | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL pool entry when GitLab reports edition |
+| `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
 | `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
@@ -518,7 +518,7 @@ Find combines canonical `domain.action` IDs, domain/action names, aliases, natur
 
 ### Enterprise tool gating
 
-`GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in stdio mode. In HTTP mode, the `--enterprise` flag explicitly forces the Premium/Ultimate catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition. The catalog effect is the same in individual and meta-tool modes:
+`GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes:
 
 **Individual mode** (`TOOL_SURFACE=individual`; legacy `META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 

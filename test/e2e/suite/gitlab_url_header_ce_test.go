@@ -90,7 +90,6 @@ func newTestMCPOverHTTP(t *testing.T, defaultGitLabURL string) (string, *serverp
 	cfg := &config.Config{
 		GitLabURL:     defaultGitLabURL,
 		SkipTLSVerify: true,
-		Enterprise:    false,
 		IgnoreScopes:  true,
 	}
 

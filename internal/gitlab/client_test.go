@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 // Test constants used across client tests.
@@ -712,6 +713,81 @@ func TestDetectEnterprise_ErrorUsesFallback(t *testing.T) {
 	}
 }
 
+// licenseServer returns an httptest server that serves GET /api/v4/license with
+// the given status and plan body (plan ignored when status is non-200).
+func licenseServer(t *testing.T, status int, plan string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "17.0.0"})
+		case "/api/v4/license":
+			if status != http.StatusOK {
+				w.WriteHeader(status)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"plan": plan})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestDetectTier_FromLicensePlan verifies that DetectTier maps the license plan
+// (including legacy names) to the expected tier and stores it on the client.
+func TestDetectTier_FromLicensePlan(t *testing.T) {
+	tests := []struct {
+		plan string
+		want edition.Tier
+	}{
+		{plan: "premium", want: edition.Premium},
+		{plan: "ultimate", want: edition.Ultimate},
+		{plan: "starter", want: edition.Premium},
+		{plan: "bronze", want: edition.Premium},
+		{plan: "silver", want: edition.Premium},
+		{plan: "gold", want: edition.Ultimate},
+		{plan: "free", want: edition.Free},
+		{plan: "", want: edition.Free},
+		{plan: "mystery", want: edition.Free},
+	}
+	for _, tc := range tests {
+		t.Run(tc.plan, func(t *testing.T) {
+			srv := licenseServer(t, http.StatusOK, tc.plan)
+			client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+			if err != nil {
+				t.Fatalf(fmtNewClientErr, err)
+			}
+			got := client.DetectTier(context.Background())
+			if got != tc.want {
+				t.Errorf("DetectTier() = %v, want %v", got, tc.want)
+			}
+			if client.Tier() != tc.want {
+				t.Errorf("client.Tier() = %v, want %v", client.Tier(), tc.want)
+			}
+		})
+	}
+}
+
+// TestDetectTier_ErrorFallsBackToFree verifies that a license API error (e.g.
+// non-admin token or CE instance) maps the client to the Free tier.
+func TestDetectTier_ErrorFallsBackToFree(t *testing.T) {
+	srv := licenseServer(t, http.StatusForbidden, "")
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if got := client.DetectTier(context.Background()); got != edition.Free {
+		t.Errorf("DetectTier() on error = %v, want free", got)
+	}
+	if client.IsEnterprise() {
+		t.Error("client should not be enterprise after license detection error")
+	}
+}
+
 // TestCurrentUsername_Success verifies that [Client.CurrentUsername] returns
 // the username from the /user API endpoint.
 func TestCurrentUsername_Success(t *testing.T) {
@@ -862,24 +938,28 @@ func TestPingDirect_MalformedJSON(t *testing.T) {
 	}
 }
 
-// TestNewClient_EnterpriseConfig verifies that [NewClient] respects the
-// Enterprise flag from configuration.
-func TestNewClient_EnterpriseConfig(t *testing.T) {
+// TestNewClient_TierConfig verifies that [NewClient] adopts the configured
+// tier and that IsEnterprise derives correctly from it.
+func TestNewClient_TierConfig(t *testing.T) {
 	srv := stubVersionServer(t, http.StatusOK)
 	defer srv.Close()
 
 	cfg := &config.Config{
-		GitLabURL:   srv.URL,
-		GitLabToken: testValidToken,
-		Enterprise:  true,
+		GitLabURL:    srv.URL,
+		GitLabToken:  testValidToken,
+		Tier:         edition.Ultimate,
+		TierExplicit: true,
 	}
 
 	client, err := NewClient(cfg)
 	if err != nil {
 		t.Fatalf(fmtNewClientErr, err)
 	}
+	if client.Tier() != edition.Ultimate {
+		t.Errorf("Tier() = %v, want ultimate", client.Tier())
+	}
 	if !client.IsEnterprise() {
-		t.Error("client should be enterprise when config.Enterprise=true")
+		t.Error("client should be enterprise when config tier is ultimate")
 	}
 }
 

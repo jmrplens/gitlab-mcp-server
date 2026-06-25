@@ -406,7 +406,7 @@ func TestHandleConfigure_ValidRequest(t *testing.T) {
 		"TOOL_SURFACE=dynamic",
 		"CAPABILITY_SURFACE=minimal",
 		"META_PARAM_SCHEMA=compact",
-		"GITLAB_ENTERPRISE=true",
+		"GITLAB_TIER=ultimate",
 		"GITLAB_READ_ONLY=true",
 		"GITLAB_SAFE_MODE=true",
 		"EMBEDDED_RESOURCES=false",

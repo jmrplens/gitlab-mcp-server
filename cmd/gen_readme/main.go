@@ -331,7 +331,7 @@ func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) (
 func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
 	var b strings.Builder
 	b.WriteString("Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the same byte/4 token heuristic as `cmd/audit_tokens`.\n\n")
-	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
+	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
 
 	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
@@ -355,7 +355,7 @@ func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
 		tableRows,
 	))
 
-	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.\n", schemaMode)
+	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_TIER=free`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.\n", schemaMode)
 	return b.String()
 }
 

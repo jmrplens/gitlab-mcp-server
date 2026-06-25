@@ -181,29 +181,29 @@ The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-
 
 The host passes these environment variables through to the container:
 
-| Variable                         | Required | Description                                                                             |
-| -------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `GITLAB_URL`                     | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances   |
-| `GITLAB_TOKEN`                   | Yes      | Personal Access Token                                                                   |
-| `GITLAB_SKIP_TLS_VERIFY`         | No       | `true` for self-signed certs (default `false`)                                          |
-| `TOOL_SURFACE`                   | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`) |
-| `CAPABILITY_SURFACE`             | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)              |
-| `META_PARAM_SCHEMA`              | No       | Meta-tool input schema detail: `opaque`, `compact`, or `full` (default `opaque`)        |
-| `GITLAB_ENTERPRISE`              | No       | Enable Premium/Ultimate tools (default `false`)                                         |
-| `GITLAB_READ_ONLY`               | No       | Disable mutating tools (default `false`)                                                |
-| `GITLAB_SAFE_MODE`               | No       | Preview mutating tool inputs (default `false`)                                          |
-| `EMBEDDED_RESOURCES`             | No       | Append embedded MCP resource links to get-style tool results (default `true`)           |
-| `EXCLUDE_TOOLS`                  | No       | Comma-separated tool names to exclude from registration                                 |
-| `GITLAB_IGNORE_SCOPES`           | No       | Skip token scope detection and register all tools (default `false`)                     |
-| `UPLOAD_MAX_FILE_SIZE`           | No       | Maximum attachment upload size in bytes (default `2147483648`)                          |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No       | Extra path-list-separated directories allowed for local GitLab import archives          |
-| `RATE_LIMIT_RPS`                 | No       | Per-server tools/call rate limit in requests per second; `0` disables it (default `0`)  |
-| `RATE_LIMIT_BURST`               | No       | Token-bucket burst size when `RATE_LIMIT_RPS` is greater than `0` (default `40`)        |
-| `AUTO_UPDATE`                    | No       | Auto-update mode in the container; default is `false` for Open Plugins installs         |
-| `AUTO_UPDATE_REPO`               | No       | GitHub repository slug for release assets (default `jmrplens/gitlab-mcp-server`)        |
-| `AUTO_UPDATE_INTERVAL`           | No       | Periodic update check interval in HTTP mode (default `1h`)                              |
-| `AUTO_UPDATE_TIMEOUT`            | No       | Startup/background update timeout (default `60s`)                                       |
-| `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                       |
+| Variable                         | Required | Description                                                                                      |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `GITLAB_URL`                     | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances            |
+| `GITLAB_TOKEN`                   | Yes      | Personal Access Token                                                                            |
+| `GITLAB_SKIP_TLS_VERIFY`         | No       | `true` for self-signed certs (default `false`)                                                   |
+| `TOOL_SURFACE`                   | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)          |
+| `CAPABILITY_SURFACE`             | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                       |
+| `META_PARAM_SCHEMA`              | No       | Meta-tool input schema detail: `opaque`, `compact`, or `full` (default `opaque`)                 |
+| `GITLAB_TIER`                    | No       | Licensing tier: `free`/`ce`, `premium`, `ultimate`; unset detects from license (fallback `free`) |
+| `GITLAB_READ_ONLY`               | No       | Disable mutating tools (default `false`)                                                         |
+| `GITLAB_SAFE_MODE`               | No       | Preview mutating tool inputs (default `false`)                                                   |
+| `EMBEDDED_RESOURCES`             | No       | Append embedded MCP resource links to get-style tool results (default `true`)                    |
+| `EXCLUDE_TOOLS`                  | No       | Comma-separated tool names to exclude from registration                                          |
+| `GITLAB_IGNORE_SCOPES`           | No       | Skip token scope detection and register all tools (default `false`)                              |
+| `UPLOAD_MAX_FILE_SIZE`           | No       | Maximum attachment upload size in bytes (default `2147483648`)                                   |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No       | Extra path-list-separated directories allowed for local GitLab import archives                   |
+| `RATE_LIMIT_RPS`                 | No       | Per-server tools/call rate limit in requests per second; `0` disables it (default `0`)           |
+| `RATE_LIMIT_BURST`               | No       | Token-bucket burst size when `RATE_LIMIT_RPS` is greater than `0` (default `40`)                 |
+| `AUTO_UPDATE`                    | No       | Auto-update mode in the container; default is `false` for Open Plugins installs                  |
+| `AUTO_UPDATE_REPO`               | No       | GitHub repository slug for release assets (default `jmrplens/gitlab-mcp-server`)                 |
+| `AUTO_UPDATE_INTERVAL`           | No       | Periodic update check interval in HTTP mode (default `1h`)                                       |
+| `AUTO_UPDATE_TIMEOUT`            | No       | Startup/background update timeout (default `60s`)                                                |
+| `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                |
 
 Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the Open Plugins config forwards the explicit `TOOL_SURFACE` variable.
 

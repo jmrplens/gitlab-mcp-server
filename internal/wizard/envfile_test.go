@@ -117,7 +117,7 @@ func TestWriteEnvFile_WritesAdvancedOptions(t *testing.T) {
 		"TOOL_SURFACE=dynamic",
 		"CAPABILITY_SURFACE=minimal",
 		"META_PARAM_SCHEMA=compact",
-		"GITLAB_ENTERPRISE=true",
+		"GITLAB_TIER=ultimate",
 		"GITLAB_READ_ONLY=true",
 		"GITLAB_SAFE_MODE=true",
 		"EMBEDDED_RESOURCES=false",
@@ -169,7 +169,7 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 		"TOOL_SURFACE=dynamic\n" +
 		"CAPABILITY_SURFACE=minimal\n" +
 		"META_PARAM_SCHEMA=full\n" +
-		"GITLAB_ENTERPRISE=true\n" +
+		"GITLAB_TIER=ultimate\n" +
 		"GITLAB_READ_ONLY=true\n" +
 		"GITLAB_SAFE_MODE=true\n" +
 		"EMBEDDED_RESOURCES=false\n" +

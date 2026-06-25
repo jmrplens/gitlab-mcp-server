@@ -27,7 +27,7 @@ Configuration (environment variables, stdio mode):
 - TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
 - META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs
 - CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny
-- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)
+- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
 
 Tool domains:
 

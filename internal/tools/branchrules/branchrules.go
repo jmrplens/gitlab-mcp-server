@@ -46,7 +46,8 @@ type ExternalStatusCheck struct {
 // GraphQL query.
 
 // queryListBranchRulesEE includes Enterprise-only fields (codeOwnerApprovalRequired,
-// approvalRules, externalStatusChecks). Used when GITLAB_ENTERPRISE=true.
+// approvalRules, externalStatusChecks). Used when the resolved tier is
+// Premium or Ultimate (GITLAB_TIER=premium/ultimate or a detected EE license).
 const queryListBranchRulesEE = `
 query($projectPath: ID!, $first: Int!, $after: String) {
   project(fullPath: $projectPath) {

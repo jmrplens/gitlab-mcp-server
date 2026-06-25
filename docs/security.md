@@ -29,7 +29,7 @@ The Setup Wizard (`gitlab-mcp-server --setup`) writes a single env file and a pe
 #### `~/.gitlab-mcp-server.env`
 
 - Created on the first successful run with mode `0600` (owner read/write only) on Unix and `0644` on Windows.
-- Contains `GITLAB_TOKEN` plus non-secret launch preferences (`GITLAB_URL`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_ENTERPRISE`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `AUTO_UPDATE`, `AUTO_UPDATE_REPO`, `AUTO_UPDATE_TIMEOUT`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `YOLO_MODE`, `LOG_LEVEL`).
+- Contains `GITLAB_TOKEN` plus non-secret launch preferences (`GITLAB_URL`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `AUTO_UPDATE`, `AUTO_UPDATE_REPO`, `AUTO_UPDATE_TIMEOUT`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `YOLO_MODE`, `LOG_LEVEL`).
 - The server loads this file at startup as a fallback after the local `.env` and the shell environment.
 - The Web UI's existing-token placeholder shows only the first 8 characters followed by `*` (see `wizard.MaskToken`). The full token never leaves the local browser session.
 
