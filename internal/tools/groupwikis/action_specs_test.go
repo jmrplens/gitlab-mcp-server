@@ -124,6 +124,68 @@ func TestActionSpecs_CallRouteError(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_RichMetadata verifies that every group wiki action carries
+// non-generic discovery metadata (Usage, Aliases, RelatedActions) and a
+// "Returns: … See also: …" individual-tool description (1:1 audit R-META), that
+// the natural-language aliases are group-wiki-specific (distinct from the
+// project wikis package), and that decorateGroupWikiMeta is a no-op for an
+// unknown tool.
+func TestActionSpecs_RichMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := groupWikiSpecsByTool(t, ActionSpecs(client))
+
+	wantTools := []string{
+		"gitlab_group_wiki_list",
+		"gitlab_group_wiki_get",
+		"gitlab_group_wiki_create",
+		"gitlab_group_wiki_edit",
+		"gitlab_group_wiki_delete",
+	}
+	for _, name := range wantTools {
+		spec, ok := byTool[name]
+		if !ok {
+			t.Fatalf("missing spec for %s", name)
+		}
+		if spec.Usage == "" || spec.Usage == "Use to execute groupwikis domain action." {
+			t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
+		}
+		if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
+			t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
+		}
+		for _, alias := range spec.Aliases {
+			if !containsSubstr(alias, "group") {
+				t.Errorf("%s: alias %q is not group-wiki-specific", name, alias)
+			}
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty RelatedActions", name)
+		}
+		desc := spec.IndividualTool.Description
+		if !containsSubstr(desc, "Returns:") || !containsSubstr(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
+		}
+	}
+
+	// decorateGroupWikiMeta must be a no-op for a tool with no metadata entry.
+	opts := groupWikiOptions("gitlab_group_wiki_unknown")
+	decorateGroupWikiMeta(&opts, "gitlab_group_wiki_unknown")
+	if opts.Usage != "Use to execute groupwikis domain action." {
+		t.Errorf("unknown tool Usage mutated: %q", opts.Usage)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("unknown tool Description mutated: %q", opts.IndividualTool.Description)
+	}
+}
+
+func containsSubstr(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func groupWikiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
