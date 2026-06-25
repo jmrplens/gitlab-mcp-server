@@ -5,6 +5,7 @@ package geo
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -27,7 +28,13 @@ const geoSiteJSON = `{
 	"sync_object_storage": false,
 	"selective_sync_type": "",
 	"minimum_reverification_interval": 7,
-	"web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit"
+	"web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit",
+	"web_geo_replication_details_url": "https://primary.example.com/admin/geo/replication",
+	"_links": {
+		"self": "https://primary.example.com/api/v4/geo_sites/1",
+		"status": "https://primary.example.com/api/v4/geo_sites/1/status",
+		"repair": "https://primary.example.com/api/v4/geo_sites/1/repair"
+	}
 }`
 
 const geoSiteStatusJSON = `{
@@ -41,10 +48,30 @@ const geoSiteStatusJSON = `{
 	"lfs_objects_synced_in_percentage": "100.00%",
 	"job_artifacts_synced_in_percentage": "99.50%",
 	"uploads_synced_in_percentage": "100.00%",
+	"container_repositories_replication_enabled": true,
+	"lfs_objects_count": 120,
+	"lfs_objects_verified_count": 118,
+	"ci_secure_files_count": 7,
+	"ci_secure_files_synced_count": 6,
+	"ci_secure_files_verified_count": 5,
+	"ci_secure_files_synced_in_percentage": "85.71%",
+	"ci_secure_files_verified_in_percentage": "71.43%",
+	"group_wiki_repositories_verification_total_count": 9,
+	"replication_slots_count": 3,
+	"replication_slots_used_count": 2,
+	"replication_slots_max_retained_wal_bytes": 1048576,
+	"last_event_id": 999,
+	"cursor_last_event_id": 998,
+	"namespaces": ["group-a", "group-b"],
+	"selective_sync_type": "namespaces",
 	"version": "16.5.0",
 	"revision": "abc123",
 	"storage_shards_match": true,
-	"updated_at": "2026-01-15T10:30:00Z"
+	"updated_at": "2026-01-15T10:30:00Z",
+	"_links": {
+		"self": "https://primary.example.com/api/v4/geo_sites/1/status",
+		"site": "https://primary.example.com/api/v4/geo_sites/1"
+	}
 }`
 
 // TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
@@ -968,5 +995,206 @@ func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 
 	if !strings.Contains(md, "_Page 2, 1 statuses shown._") {
 		t.Errorf("expected pagination footer:\n%s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Keyset pagination + order_by/sort forwarding (1:1 audit P3)
+// ---------------------------------------------------------------------------
+
+// TestList_KeysetAndOrdering verifies that List forwards order_by, sort,
+// pagination=keyset, and page_token to the GitLab Geo sites endpoint.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	var query url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
+			query = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if got := query.Get("order_by"); got != "id" {
+		t.Errorf("order_by = %q, want id", got)
+	}
+	if got := query.Get("sort"); got != "desc" {
+		t.Errorf("sort = %q, want desc", got)
+	}
+	if got := query.Get("pagination"); got != "keyset" {
+		t.Errorf("pagination = %q, want keyset", got)
+	}
+	if got := query.Get("page_token"); got != "42" {
+		t.Errorf("page_token = %q, want 42", got)
+	}
+}
+
+// TestListStatus_KeysetAndOrdering verifies that ListStatus forwards order_by,
+// sort, pagination=keyset, and page_token to the Geo statuses endpoint.
+func TestListStatus_KeysetAndOrdering(t *testing.T) {
+	var query url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
+			query = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteStatusJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListStatus(context.Background(), client, ListStatusInput{
+		OrderBy:               "geo_node_id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+	})
+	if err != nil {
+		t.Fatalf("ListStatus() error: %v", err)
+	}
+	if got := query.Get("order_by"); got != "geo_node_id" {
+		t.Errorf("order_by = %q, want geo_node_id", got)
+	}
+	if got := query.Get("sort"); got != "asc" {
+		t.Errorf("sort = %q, want asc", got)
+	}
+	if got := query.Get("pagination"); got != "keyset" {
+		t.Errorf("pagination = %q, want keyset", got)
+	}
+	if got := query.Get("page_token"); got != "7" {
+		t.Errorf("page_token = %q, want 7", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Full field mirror vs client-go (1:1 audit R-OUTPUT)
+// ---------------------------------------------------------------------------
+
+// TestGet_MirrorsLinksAndReplicationURL verifies the Output mirrors the
+// GeoSite _links object and web_geo_replication_details_url field.
+func TestGet_MirrorsLinksAndReplicationURL(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1" {
+			testutil.RespondJSON(w, http.StatusOK, geoSiteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if out.WebGeoReplicationDetailsURL != "https://primary.example.com/admin/geo/replication" {
+		t.Errorf("WebGeoReplicationDetailsURL = %q", out.WebGeoReplicationDetailsURL)
+	}
+	if out.Links.Self == "" || out.Links.Status == "" || out.Links.Repair == "" {
+		t.Errorf("_links not fully mirrored: %+v", out.Links)
+	}
+}
+
+// TestGetStatus_MirrorsFullStruct verifies that GetStatus mirrors the scalar
+// count fields, the upstream-typo group-wiki total, namespaces, and _links
+// of GeoSiteStatus added by the 1:1 audit.
+func TestGetStatus_MirrorsFullStruct(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1/status" {
+			testutil.RespondJSON(w, http.StatusOK, geoSiteStatusJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetStatus(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("GetStatus() error: %v", err)
+	}
+	// Field-by-field mirror assertions, table-driven to keep complexity low.
+	// The group-wiki verification total maps via the upstream-typo SDK field
+	// GrupWikiRepositoriesVerificationTotalCount (JSON tag is correct).
+	intChecks := map[string]struct{ got, want int64 }{
+		"lfs_objects_count":                                {out.LFSObjectsCount, 120},
+		"lfs_objects_verified_count":                       {out.LFSObjectsVerifiedCount, 118},
+		"ci_secure_files_count":                            {out.CISecureFilesCount, 7},
+		"ci_secure_files_synced_count":                     {out.CISecureFilesSyncedCount, 6},
+		"ci_secure_files_verified_count":                   {out.CISecureFilesVerifiedCount, 5},
+		"group_wiki_repositories_verification_total_count": {out.GroupWikiRepositoriesVerificationTotalCount, 9},
+		"replication_slots_count":                          {out.ReplicationSlotsCount, 3},
+		"replication_slots_used_count":                     {out.ReplicationSlotsUsedCount, 2},
+		"replication_slots_max_retained_wal_bytes":         {out.ReplicationSlotsMaxRetainedWalBytes, 1048576},
+		"last_event_id":                                    {out.LastEventID, 999},
+		"cursor_last_event_id":                             {out.CursorLastEventID, 998},
+	}
+	for name, c := range intChecks {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", name, c.got, c.want)
+		}
+	}
+	strChecks := map[string]struct{ got, want string }{
+		"ci_secure_files_synced_in_percentage":   {out.CISecureFilesSyncedInPercentage, "85.71%"},
+		"ci_secure_files_verified_in_percentage": {out.CISecureFilesVerifiedInPercentage, "71.43%"},
+		"selective_sync_type":                    {out.SelectiveSyncType, "namespaces"},
+	}
+	for name, c := range strChecks {
+		if c.got != c.want {
+			t.Errorf("%s = %q, want %q", name, c.got, c.want)
+		}
+	}
+	if !out.ContainerRepositoriesReplicationEnabled {
+		t.Error("ContainerRepositoriesReplicationEnabled not mirrored")
+	}
+	if len(out.Namespaces) != 2 {
+		t.Errorf("namespaces = %v, want 2 entries", out.Namespaces)
+	}
+	if out.Links.Self == "" || out.Links.Site == "" {
+		t.Errorf("status _links not mirrored: %+v", out.Links)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Discovery metadata (1:1 audit R-META)
+// ---------------------------------------------------------------------------
+
+// TestActionSpecs_MetadataReturnsAndSeeAlso verifies every Geo individual tool
+// carries a non-generic description in the "Returns: … See also: …" form and
+// natural-language aliases beyond the canonical tool name.
+func TestActionSpecs_MetadataReturnsAndSeeAlso(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, http.NewServeMux()))
+	for _, spec := range specs {
+		tool := spec.IndividualTool.Name
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", tool, desc)
+		}
+		hasNatural := false
+		for _, a := range spec.Aliases {
+			if a != tool {
+				hasNatural = true
+				break
+			}
+		}
+		if !hasNatural {
+			t.Errorf("%s: no natural-language aliases beyond canonical name: %v", tool, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: no related actions", tool)
+		}
+	}
+}
+
+// TestDecorateGeoMeta_UnknownToolNoop verifies decorateGeoMeta leaves options
+// untouched for a tool name absent from geoActionMeta.
+func TestDecorateGeoMeta_UnknownToolNoop(t *testing.T) {
+	opts := geoOptions("gitlab_unknown_geo_tool")
+	before := opts
+	decorateGeoMeta(&opts, "gitlab_unknown_geo_tool")
+	if opts.Usage != before.Usage || len(opts.RelatedActions) != 0 {
+		t.Errorf("decorateGeoMeta mutated options for unknown tool: %+v", opts)
 	}
 }
