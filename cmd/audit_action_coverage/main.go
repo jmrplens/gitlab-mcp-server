@@ -196,7 +196,7 @@ func usageFor(usage map[string]*serviceUsage, named *types.Named) *serviceUsage 
 // file transfer, CI-job-token self-lookup). Each entry carries a category+rationale.
 // Key = "<Service>.<Method>" (service name without the ServiceInterface suffix).
 // Methods NOT listed here and still uncovered are the genuine new-tool backlog.
-var acceptedMissingMethods = map[string]string{
+var acceptedMissingMethods = map[string]string{ //nolint:gosec // G101 false positive: keys are SDK method names (e.g. ...Token...), not credentials.
 	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
 	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC — method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
 	"AwardEmoji.CreateIssuesAwardEmojiOnNote":       "COVERED_GENERIC — method-value -> createNoteAwardEmoji",
@@ -300,6 +300,61 @@ var acceptedMissingMethods = map[string]string{
 	// INTENTIONAL_SKIP_OTHER
 	"Jobs.GetJobTokensJob":       "INTENTIONAL_SKIP_OTHER — CI-job-token self-lookup; not usable with a PAT",
 	"Repositories.StreamArchive": "INTENTIONAL_SKIP_OTHER — streaming dup of Repositories.Archive (gitlab_repository_archive)",
+
+	// COVERED_RAW — the generic slug-dispatched integration actions (project
+	// gitlab_set_integration + group list/get/set/delete) cover the full integration
+	// slug surface at project and group scope via raw REST PUT/GET/DELETE.
+	"Integrations.DeleteGroupMattermostIntegration":              "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DeleteGroupMattermostSlashCommandsIntegration": "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableGroupHarbor":                            "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableGroupJira":                              "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableGroupMicrosoftTeamsNotifications":       "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableGroupSlack":                             "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableGroupWebexTeams":                        "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.DisableProjectGoogleChat":                      "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupDiscordSettings":                       "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupGoogleChatSettings":                    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupHarborSettings":                        "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupJiraSettings":                          "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupMatrixSettings":                        "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupMattermostIntegration":                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupMattermostSettings":                    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupMattermostSlashCommandsIntegration":    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupMicrosoftTeamsNotifications":           "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupSlackSettings":                         "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupTelegramSettings":                      "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetGroupWebexTeamsSettings":                    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.GetProjectGoogleChatSettings":                  "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.ListActiveGroupIntegrations":                   "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetGroupMattermostIntegration":                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetGroupMattermostSlashCommandsIntegration":    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetGroupMicrosoftTeamsNotifications":           "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetGroupSlackSettings":                         "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetGroupWebexTeamsSettings":                    "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetProjectGoogleChatSettings":                  "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetUpGroupHarbor":                              "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Integrations.SetUpGroupJira":                                "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.GetSlackApplication":                               "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetCustomIssueTrackerService":                      "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetDataDogService":                                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetDiscordService":                                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetDroneCIService":                                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetEmailsOnPushService":                            "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetExternalWikiService":                            "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetGithubService":                                  "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetHarborService":                                  "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetJenkinsCIService":                               "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetMatrixService":                                  "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetMattermostService":                              "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetMattermostSlashCommandsService":                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetMicrosoftTeamsService":                          "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetPipelinesEmailService":                          "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetRedmineService":                                 "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetSlackApplication":                               "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetSlackService":                                   "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetSlackSlashCommandsService":                      "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetTelegramService":                                "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
+	"Services.SetYouTrackService":                                "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)",
 }
 
 // isAcceptedMissingMethod reports whether an uncovered SDK method is adjudicated as

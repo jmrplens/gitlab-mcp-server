@@ -16584,6 +16584,63 @@
     }
   },
   {
+    "name": "gitlab_delete_group_integration",
+    "description": "Delete (disable) a group integration by slug. Requires Owner role on the group.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_integrations, gitlab_get_group_integration, gitlab_set_group_integration",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Integration slug to disable (e.g. slack, jira, harbor)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id",
+        "slug"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_delete_group_markdown_upload_by_id",
     "description": "Delete a group Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_list_group_markdown_uploads, gitlab_delete_group_markdown_upload_by_secret.",
     "inputSchema": {
@@ -33128,6 +33185,158 @@
       },
       "required": [
         "metrics"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_get_group_integration",
+    "description": "Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Integration slug to read (e.g. slack, jira, harbor). See doc/api/group_integrations.md for the supported list",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id",
+        "slug"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integration": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "alert_events": {
+              "type": "boolean"
+            },
+            "comment_on_event_enabled": {
+              "type": "boolean"
+            },
+            "commit_events": {
+              "type": "boolean"
+            },
+            "confidential_issues_events": {
+              "type": "boolean"
+            },
+            "confidential_note_events": {
+              "type": "boolean"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "deployment_events": {
+              "type": "boolean"
+            },
+            "group_confidential_mention_events": {
+              "type": "boolean"
+            },
+            "group_mention_events": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "incident_events": {
+              "type": "boolean"
+            },
+            "inherited": {
+              "type": "boolean"
+            },
+            "issues_events": {
+              "type": "boolean"
+            },
+            "job_events": {
+              "type": "boolean"
+            },
+            "merge_requests_events": {
+              "type": "boolean"
+            },
+            "note_events": {
+              "type": "boolean"
+            },
+            "pipeline_events": {
+              "type": "boolean"
+            },
+            "push_events": {
+              "type": "boolean"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "tag_push_events": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "vulnerability_events": {
+              "type": "boolean"
+            },
+            "wiki_page_events": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "slug",
+            "active",
+            "alert_events",
+            "commit_events",
+            "confidential_issues_events",
+            "confidential_note_events",
+            "deployment_events",
+            "group_confidential_mention_events",
+            "group_mention_events",
+            "incident_events",
+            "issues_events",
+            "job_events",
+            "merge_requests_events",
+            "note_events",
+            "pipeline_events",
+            "push_events",
+            "tag_push_events",
+            "vulnerability_events",
+            "wiki_page_events",
+            "comment_on_event_enabled",
+            "inherited"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integration"
       ],
       "type": "object"
     },
@@ -93167,6 +93376,159 @@
       "required": [
         "badges",
         "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_group_integrations",
+    "description": "List all active integrations configured on a group. Requires Owner role (some integrations require GitLab Premium/Ultimate).\n\nReturns: JSON array of group integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_group_integration, gitlab_set_group_integration, gitlab_delete_group_integration",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integrations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "alert_events": {
+                "type": "boolean"
+              },
+              "comment_on_event_enabled": {
+                "type": "boolean"
+              },
+              "commit_events": {
+                "type": "boolean"
+              },
+              "confidential_issues_events": {
+                "type": "boolean"
+              },
+              "confidential_note_events": {
+                "type": "boolean"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "deployment_events": {
+                "type": "boolean"
+              },
+              "group_confidential_mention_events": {
+                "type": "boolean"
+              },
+              "group_mention_events": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "incident_events": {
+                "type": "boolean"
+              },
+              "inherited": {
+                "type": "boolean"
+              },
+              "issues_events": {
+                "type": "boolean"
+              },
+              "job_events": {
+                "type": "boolean"
+              },
+              "merge_requests_events": {
+                "type": "boolean"
+              },
+              "note_events": {
+                "type": "boolean"
+              },
+              "pipeline_events": {
+                "type": "boolean"
+              },
+              "push_events": {
+                "type": "boolean"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "tag_push_events": {
+                "type": "boolean"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "vulnerability_events": {
+                "type": "boolean"
+              },
+              "wiki_page_events": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "slug",
+              "active",
+              "alert_events",
+              "commit_events",
+              "confidential_issues_events",
+              "confidential_note_events",
+              "deployment_events",
+              "group_confidential_mention_events",
+              "group_mention_events",
+              "incident_events",
+              "issues_events",
+              "job_events",
+              "merge_requests_events",
+              "note_events",
+              "pipeline_events",
+              "push_events",
+              "tag_push_events",
+              "vulnerability_events",
+              "wiki_page_events",
+              "comment_on_event_enabled",
+              "inherited"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integrations"
       ],
       "type": "object"
     },
@@ -184931,6 +185293,318 @@
               "type": "string"
             },
             "datadog_tags": {
+              "type": "string"
+            },
+            "deployment_events": {
+              "type": "boolean"
+            },
+            "group_confidential_mention_events": {
+              "type": "boolean"
+            },
+            "group_mention_events": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "incident_events": {
+              "type": "boolean"
+            },
+            "inherited": {
+              "type": "boolean"
+            },
+            "issues_events": {
+              "type": "boolean"
+            },
+            "job_events": {
+              "type": "boolean"
+            },
+            "merge_requests_events": {
+              "type": "boolean"
+            },
+            "note_events": {
+              "type": "boolean"
+            },
+            "pipeline_events": {
+              "type": "boolean"
+            },
+            "push_events": {
+              "type": "boolean"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "tag_push_events": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "vulnerability_events": {
+              "type": "boolean"
+            },
+            "wiki_page_events": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "slug",
+            "active",
+            "alert_events",
+            "commit_events",
+            "confidential_issues_events",
+            "confidential_note_events",
+            "deployment_events",
+            "group_confidential_mention_events",
+            "group_mention_events",
+            "incident_events",
+            "issues_events",
+            "job_events",
+            "merge_requests_events",
+            "note_events",
+            "pipeline_events",
+            "push_events",
+            "tag_push_events",
+            "vulnerability_events",
+            "wiki_page_events",
+            "comment_on_event_enabled",
+            "inherited"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integration"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_set_group_integration",
+    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body; see doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body)",
+          "properties": {},
+          "type": "object"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Integration slug to configure (e.g. slack, jira, harbor). See doc/api/group_integrations.md for the supported list and each integration's config fields",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id",
+        "slug"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integration": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "alert_events": {
+              "type": "boolean"
+            },
+            "comment_on_event_enabled": {
+              "type": "boolean"
+            },
+            "commit_events": {
+              "type": "boolean"
+            },
+            "confidential_issues_events": {
+              "type": "boolean"
+            },
+            "confidential_note_events": {
+              "type": "boolean"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "deployment_events": {
+              "type": "boolean"
+            },
+            "group_confidential_mention_events": {
+              "type": "boolean"
+            },
+            "group_mention_events": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "incident_events": {
+              "type": "boolean"
+            },
+            "inherited": {
+              "type": "boolean"
+            },
+            "issues_events": {
+              "type": "boolean"
+            },
+            "job_events": {
+              "type": "boolean"
+            },
+            "merge_requests_events": {
+              "type": "boolean"
+            },
+            "note_events": {
+              "type": "boolean"
+            },
+            "pipeline_events": {
+              "type": "boolean"
+            },
+            "push_events": {
+              "type": "boolean"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "tag_push_events": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "vulnerability_events": {
+              "type": "boolean"
+            },
+            "wiki_page_events": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "slug",
+            "active",
+            "alert_events",
+            "commit_events",
+            "confidential_issues_events",
+            "confidential_note_events",
+            "deployment_events",
+            "group_confidential_mention_events",
+            "group_mention_events",
+            "incident_events",
+            "issues_events",
+            "job_events",
+            "merge_requests_events",
+            "note_events",
+            "pipeline_events",
+            "push_events",
+            "tag_push_events",
+            "vulnerability_events",
+            "wiki_page_events",
+            "comment_on_event_enabled",
+            "inherited"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integration"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_set_integration",
+    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body; see doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`; harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook; harbor expects url, project_name, username, password; jenkins expects jenkins_url, project_name, username, password",
+          "properties": {},
+          "type": "object"
+        },
+        "project_id": {
+          "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Integration slug to configure (e.g. slack, harbor, jenkins, google-play). See doc/api/integrations.md for the full list and each integration's config fields",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "slug"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integration": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "alert_events": {
+              "type": "boolean"
+            },
+            "comment_on_event_enabled": {
+              "type": "boolean"
+            },
+            "commit_events": {
+              "type": "boolean"
+            },
+            "confidential_issues_events": {
+              "type": "boolean"
+            },
+            "confidential_note_events": {
+              "type": "boolean"
+            },
+            "created_at": {
               "type": "string"
             },
             "deployment_events": {

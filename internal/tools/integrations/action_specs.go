@@ -18,6 +18,18 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Delete (disable) a project integration by slug. Supports the same slugs as get, plus 'slack-application' for disabling the GitLab for Slack app.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_integrations, gitlab_get_integration"),
 		integrationCreateSpec("integration_set_jira", toolutil.RouteAction(client, SetJira), "gitlab_set_jira_integration",
 			"Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration"),
+		integrationCreateSpec("integration_set", toolutil.RouteAction(client, SetIntegration), "gitlab_set_integration",
+			"Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: "+commonIntegrationSlugs+".\n\nThe `config` object is sent verbatim as the request body; see doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`; harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration"),
+
+		// Generic group-level integration actions (group integration API mirrors the project one).
+		groupIntegrationReadSpec("integration_list_group", toolutil.RouteAction(client, ListGroupIntegrations), "gitlab_list_group_integrations",
+			"List all active integrations configured on a group. Requires Owner role (some integrations require GitLab Premium/Ultimate).\n\nReturns: JSON array of group integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_group_integration, gitlab_set_group_integration, gitlab_delete_group_integration"),
+		groupIntegrationReadSpec("integration_get_group", toolutil.RouteAction(client, GetGroupIntegration), "gitlab_get_group_integration",
+			"Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration"),
+		groupIntegrationCreateSpec("integration_set_group", toolutil.RouteAction(client, SetGroupIntegration), "gitlab_set_group_integration",
+			"Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body; see doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration"),
+		groupIntegrationDeleteSpec("integration_delete_group", toolutil.DestructiveAction(client, deleteGroupIntegrationOutput), "gitlab_delete_group_integration",
+			"Delete (disable) a group integration by slug. Requires Owner role on the group.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_integrations, gitlab_get_group_integration, gitlab_set_group_integration"),
 
 		// Group-level Datadog integration (requires GitLab Premium/Ultimate on self-managed EE or GitLab.com).
 		groupDatadogReadSpec("integration_get_group_datadog", toolutil.RouteAction(client, GetGroupDatadog), "gitlab_get_group_datadog_integration",
@@ -45,6 +57,14 @@ func deleteGroupDatadogOutput(ctx context.Context, client *gitlabclient.Client, 
 	return out, nil
 }
 
+func deleteGroupIntegrationOutput(ctx context.Context, client *gitlabclient.Client, input DeleteGroupIntegrationInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteGroupIntegration(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("integration")
+	return out, nil
+}
+
 func integrationReadSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, integrationOptions(individualTool, description))
 }
@@ -55,6 +75,18 @@ func integrationCreateSpec(name string, route toolutil.ActionRoute, individualTo
 
 func integrationDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, integrationOptions(individualTool, description))
+}
+
+func groupIntegrationReadSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, groupIntegrationOptions(individualTool, description))
+}
+
+func groupIntegrationCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, groupIntegrationOptions(individualTool, description))
+}
+
+func groupIntegrationDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
+	return toolutil.NewDeleteActionSpec(name, route, groupIntegrationOptions(individualTool, description))
 }
 
 func groupDatadogReadSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
@@ -98,6 +130,31 @@ var integrationActionMeta = map[string]struct {
 		aliases: []string{"configure jira", "set up jira integration", "connect project to jira"},
 		related: []string{"project.integration_list", "project.integration_get", "project.integration_delete"},
 	},
+	"gitlab_set_integration": {
+		usage:   "Configure any project integration by slug with a free-form config object when no dedicated tool exists (e.g. slack, harbor, jenkins, google-play).",
+		aliases: []string{"configure integration", "set up project integration", "enable integration", "update integration config", "set slack integration", "set harbor integration", "set jenkins integration"},
+		related: []string{"project.integration_get", "project.integration_list", "project.integration_delete", "project.integration_set_jira"},
+	},
+	"gitlab_list_group_integrations": {
+		usage:   "List every active integration wired up on a group to see what is enabled before reading or removing one.",
+		aliases: []string{"list group integrations", "show group services", "what integrations are enabled on the group"},
+		related: []string{"project.integration_get_group", "project.integration_set_group", "project.integration_delete_group"},
+	},
+	"gitlab_get_group_integration": {
+		usage:   "Inspect one group integration by slug to read its active status and configuration.",
+		aliases: []string{"get group integration details", "show group service config", "view group integration settings"},
+		related: []string{"project.integration_list_group", "project.integration_set_group", "project.integration_delete_group"},
+	},
+	"gitlab_set_group_integration": {
+		usage:   "Configure any group integration by slug with a free-form config object, applying it across the group's projects.",
+		aliases: []string{"configure group integration", "set up group integration", "enable group integration", "update group integration config"},
+		related: []string{"project.integration_get_group", "project.integration_list_group", "project.integration_delete_group"},
+	},
+	"gitlab_delete_group_integration": {
+		usage:   "Disable and remove a group integration by slug when it is no longer needed.",
+		aliases: []string{"disable group integration", "remove group service", "turn off group integration"},
+		related: []string{"project.integration_list_group", "project.integration_get_group", "project.integration_set_group"},
+	},
 	"gitlab_get_group_datadog_integration": {
 		usage:   "Read the Datadog integration on a group to confirm the configured site, env, service, and tags.",
 		aliases: []string{"get group datadog config", "show group datadog integration", "view group datadog settings"},
@@ -137,6 +194,21 @@ func integrationOptions(individualTool, description string) toolutil.ActionSpecO
 		OpenWorld:      true,
 		OwnerPackage:   "integrations",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
+	}
+	return applyIntegrationMeta(opts, individualTool)
+}
+
+// groupIntegrationOptions returns the spec options shared by the generic
+// group-level integration actions (list/get/set/delete). The group integration
+// API is gated on Owner role, and most integrations require GitLab
+// Premium/Ultimate (self-managed EE or GitLab.com), so we mark the edition
+// explicitly to match the existing group-Datadog actions.
+func groupIntegrationOptions(individualTool, description string) toolutil.ActionSpecOptions {
+	opts := integrationOptions(individualTool, description)
+	opts.Tags = []string{"group", "integration"}
+	opts.Edition = "premium"
+	if _, ok := integrationActionMeta[individualTool]; !ok {
+		opts.RelatedActions = []string{"group.get"}
 	}
 	return applyIntegrationMeta(opts, individualTool)
 }

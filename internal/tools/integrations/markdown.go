@@ -159,6 +159,82 @@ func formatSetGroupDatadogMarkdownString(out SetGroupDatadogOutput) string {
 	return sb.String()
 }
 
+// formatIntegrationItemString renders a single IntegrationItem as a Markdown
+// string with the given heading. Shared by the generic project and group
+// integration set/get formatters.
+func formatIntegrationItemString(heading string, i IntegrationItem) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "## %s: %s\n\n", heading, fallback(i.Title, i.Slug))
+	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
+	fmt.Fprintf(&sb, "- **Slug**: %s\n", i.Slug)
+	writeGroupDatadogActiveLine(&sb, i.Active)
+	writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
+	writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
+	return sb.String()
+}
+
+// formatSetIntegrationMarkdownString renders the generic project integration
+// upsert response.
+func formatSetIntegrationMarkdownString(out SetIntegrationOutput) string {
+	var sb strings.Builder
+	sb.WriteString(formatIntegrationItemString("Integration Updated", out.Integration))
+	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to read the stored configuration; secrets such as tokens and passwords are write-only and never returned")
+	return sb.String()
+}
+
+// formatGroupIntegrationListString renders a ListGroupIntegrationsOutput as a
+// Markdown table string.
+func formatGroupIntegrationListString(out ListGroupIntegrationsOutput) string {
+	if len(out.Integrations) == 0 {
+		return "No active integrations found for this group.\n"
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "## Group Integrations (%d)\n\n", len(out.Integrations))
+	sb.WriteString("| ID | Title | Slug | Active |\n")
+	sb.WriteString("|----|-------|------|--------|\n")
+	for _, i := range out.Integrations {
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", i.ID, toolutil.EscapeMdTableCell(i.Title), i.Slug, yesNo(i.Active))
+	}
+	toolutil.WriteHints(&sb, "Use `gitlab_get_group_integration` to view details of a specific group integration")
+	return sb.String()
+}
+
+// formatGetGroupIntegrationString renders a single group integration read response.
+func formatGetGroupIntegrationString(out GetGroupIntegrationOutput) string {
+	var sb strings.Builder
+	sb.WriteString(formatIntegrationItemString("Group Integration", out.Integration))
+	toolutil.WriteHints(&sb, "Use `gitlab_set_group_integration` to update fields; use `gitlab_delete_group_integration` to disable it")
+	return sb.String()
+}
+
+// formatSetGroupIntegrationString renders the generic group integration upsert response.
+func formatSetGroupIntegrationString(out SetGroupIntegrationOutput) string {
+	var sb strings.Builder
+	sb.WriteString(formatIntegrationItemString("Group Integration Updated", out.Integration))
+	toolutil.WriteHints(&sb, "Use `gitlab_get_group_integration` to read the stored configuration; secrets such as tokens and passwords are write-only and never returned")
+	return sb.String()
+}
+
+// FormatSetIntegrationMarkdown formats the generic project integration upsert response.
+func FormatSetIntegrationMarkdown(out SetIntegrationOutput) *mcp.CallToolResult {
+	return toolutil.ToolResultWithMarkdown(formatSetIntegrationMarkdownString(out))
+}
+
+// FormatListGroupIntegrationsMarkdown formats a list of group integrations.
+func FormatListGroupIntegrationsMarkdown(out ListGroupIntegrationsOutput) *mcp.CallToolResult {
+	return toolutil.ToolResultWithMarkdown(formatGroupIntegrationListString(out))
+}
+
+// FormatGetGroupIntegrationMarkdown formats a single group integration.
+func FormatGetGroupIntegrationMarkdown(out GetGroupIntegrationOutput) *mcp.CallToolResult {
+	return toolutil.ToolResultWithMarkdown(formatGetGroupIntegrationString(out))
+}
+
+// FormatSetGroupIntegrationMarkdown formats the generic group integration upsert response.
+func FormatSetGroupIntegrationMarkdown(out SetGroupIntegrationOutput) *mcp.CallToolResult {
+	return toolutil.ToolResultWithMarkdown(formatSetGroupIntegrationString(out))
+}
+
 // FormatListMarkdown formats a list of integrations.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(formatListMarkdownString(out))
@@ -184,4 +260,8 @@ func init() {
 	toolutil.RegisterMarkdown(formatGetMarkdownString)
 	toolutil.RegisterMarkdown(formatGetGroupDatadogMarkdownString)
 	toolutil.RegisterMarkdown(formatSetGroupDatadogMarkdownString)
+	toolutil.RegisterMarkdown(formatSetIntegrationMarkdownString)
+	toolutil.RegisterMarkdown(formatGroupIntegrationListString)
+	toolutil.RegisterMarkdown(formatGetGroupIntegrationString)
+	toolutil.RegisterMarkdown(formatSetGroupIntegrationString)
 }
