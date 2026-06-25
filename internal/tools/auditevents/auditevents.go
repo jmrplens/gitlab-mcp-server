@@ -52,15 +52,28 @@ type GetProjectInput struct {
 	EventID   int64                `json:"event_id"   jsonschema:"Audit event ID,required"`
 }
 
-// DetailsOutput represents the details of an audit event.
+// DetailsOutput represents the details of an audit event. The exact fields
+// returned depend on the action being recorded; this mirrors every field of
+// the client-go AuditEventDetails struct for 1:1 API fidelity.
 type DetailsOutput struct {
+	With          string `json:"with,omitempty"`
+	Add           string `json:"add,omitempty"`
+	As            string `json:"as,omitempty"`
+	Change        string `json:"change,omitempty"`
+	From          string `json:"from,omitempty"`
+	To            string `json:"to,omitempty"`
+	Remove        string `json:"remove,omitempty"`
 	CustomMessage string `json:"custom_message,omitempty"`
 	AuthorName    string `json:"author_name,omitempty"`
+	AuthorEmail   string `json:"author_email,omitempty"`
+	AuthorClass   string `json:"author_class,omitempty"`
 	TargetID      string `json:"target_id,omitempty"`
 	TargetType    string `json:"target_type,omitempty"`
 	TargetDetails string `json:"target_details,omitempty"`
 	IPAddress     string `json:"ip_address,omitempty"`
 	EntityPath    string `json:"entity_path,omitempty"`
+	FailedLogin   string `json:"failed_login,omitempty"`
+	EventName     string `json:"event_name,omitempty"`
 }
 
 // Output represents a single audit event.
@@ -95,24 +108,23 @@ func toOutput(e *gl.AuditEvent) Output {
 	if e.CreatedAt != nil {
 		o.CreatedAt = e.CreatedAt.Format(time.RFC3339)
 	}
-	if e.Details.AuthorName != "" {
-		o.Details.AuthorName = e.Details.AuthorName
-	}
-	if e.Details.TargetType != "" {
-		o.Details.TargetType = e.Details.TargetType
-	}
-	if e.Details.TargetDetails != "" {
-		o.Details.TargetDetails = e.Details.TargetDetails
-	}
-	if e.Details.CustomMessage != "" {
-		o.Details.CustomMessage = e.Details.CustomMessage
-	}
-	if e.Details.IPAddress != "" {
-		o.Details.IPAddress = e.Details.IPAddress
-	}
-	if e.Details.EntityPath != "" {
-		o.Details.EntityPath = e.Details.EntityPath
-	}
+	o.Details.With = e.Details.With
+	o.Details.Add = e.Details.Add
+	o.Details.As = e.Details.As
+	o.Details.Change = e.Details.Change
+	o.Details.From = e.Details.From
+	o.Details.To = e.Details.To
+	o.Details.Remove = e.Details.Remove
+	o.Details.CustomMessage = e.Details.CustomMessage
+	o.Details.AuthorName = e.Details.AuthorName
+	o.Details.AuthorEmail = e.Details.AuthorEmail
+	o.Details.AuthorClass = e.Details.AuthorClass
+	o.Details.TargetType = e.Details.TargetType
+	o.Details.TargetDetails = e.Details.TargetDetails
+	o.Details.IPAddress = e.Details.IPAddress
+	o.Details.EntityPath = e.Details.EntityPath
+	o.Details.FailedLogin = e.Details.FailedLogin
+	o.Details.EventName = e.Details.EventName
 	// TargetID is any in the SDK
 	if e.Details.TargetID != nil {
 		o.Details.TargetID = fmt.Sprintf("%v", e.Details.TargetID)
