@@ -358,9 +358,9 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, groupldap.ActionSpecs(client)...)
 	specs = append(specs, groupsaml.ActionSpecs(client)...)
 	specs = append(specs, groupanalytics.ActionSpecs(client)...)
-	specs = append(specs, groupcredentials.ActionSpecs(client)...)
+	specs = append(specs, editionTaggedSpecs(groupcredentials.ActionSpecs(client), editionUltimate)...)
 	specs = append(specs, groupsshcerts.ActionSpecs(client)...)
-	specs = append(specs, securitysettings.GroupActionSpecs(client)...)
+	specs = append(specs, editionTaggedSpecs(securitysettings.GroupActionSpecs(client), editionUltimate)...)
 	return actionSpecGroup("gitlab_group", specs)
 }
 
@@ -490,7 +490,7 @@ func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []Act
 	specs = append(specs, pages.ActionSpecs(client)...)
 	specs = append(specs, projectmirrors.ActionSpecs(client)...)
 	if enterprise {
-		specs = append(specs, securitysettings.ProjectActionSpecs(client)...)
+		specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
 		specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
 	}
 	specs = append(specs, projects.ActionSpecs(client, enterprise)...)
