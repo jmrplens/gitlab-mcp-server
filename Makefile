@@ -7,7 +7,7 @@
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -733,6 +733,10 @@ audit-1to1:
 	go run ./cmd/audit_metadata_completeness/ -gaps-only -output dist/1to1/metadata.json
 	go run ./cmd/gen_1to1_backlog/ -struct dist/1to1/struct.json -action dist/1to1/action.json -metadata dist/1to1/metadata.json -output plan/1to1-backlog.json
 	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+
+## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
+audit-edition-tier:
+	go run ./cmd/audit_edition_tier/ -gaps-only
 
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:
