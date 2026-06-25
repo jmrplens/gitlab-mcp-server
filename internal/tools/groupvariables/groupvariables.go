@@ -19,17 +19,31 @@ const (
 
 // ---------- Input types ----------.
 
-// ListInput holds parameters for listing group CI/CD variables.
+// ListInput holds parameters for listing group CI/CD variables. The OrderBy,
+// Sort, and embedded KeysetPaginationInput fields mirror the SDK
+// gitlab.ListGroupVariablesOptions (its embedded gitlab.ListOptions: order_by,
+// sort, pagination, page_token) so every supported list filter is exposed 1:1.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// Filter mirrors gitlab.VariableFilter: the available filter on group variable
+// get/update/delete operations, selecting the variable instance by its
+// environment scope when several variables share a key.
+type Filter struct {
+	EnvironmentScope string `json:"environment_scope,omitempty" jsonschema:"Filter the variable by its environment scope (e.g. * or production)"`
 }
 
 // GetInput holds parameters for retrieving a single group CI/CD variable.
 type GetInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id"          jsonschema:"Group ID or URL-encoded path,required"`
 	Key              string               `json:"key"               jsonschema:"Variable key name,required"`
-	EnvironmentScope string               `json:"environment_scope,omitempty" jsonschema:"Filter by environment scope"`
+	EnvironmentScope string               `json:"environment_scope,omitempty" jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
+	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
 }
 
 // CreateInput holds parameters for creating a group CI/CD variable.
@@ -56,14 +70,16 @@ type UpdateInput struct {
 	Protected        *bool                `json:"protected,omitempty"            jsonschema:"Only expose in protected branches/tags"`
 	Masked           *bool                `json:"masked,omitempty"               jsonschema:"Mask variable value in job logs"`
 	Raw              *bool                `json:"raw,omitempty"                  jsonschema:"Treat variable value as raw string"`
-	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Filter by environment scope"`
+	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
+	Filter           *Filter              `json:"filter,omitempty"               jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
 }
 
 // DeleteInput holds parameters for deleting a group CI/CD variable.
 type DeleteInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id"                       jsonschema:"Group ID or URL-encoded path,required"`
 	Key              string               `json:"key"                            jsonschema:"Variable key name,required"`
-	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Filter by environment scope"`
+	EnvironmentScope string               `json:"environment_scope,omitempty"    jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
+	Filter           *Filter              `json:"filter,omitempty"               jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
 }
 
 // ---------- Output types ----------.
@@ -91,6 +107,16 @@ type ListOutput struct {
 
 // ---------- Converter ----------.
 
+// resolveScope returns the effective environment-scope filter for a variable
+// get/update/delete request. The nested filter object takes precedence over the
+// flat environment_scope shorthand; both mirror gitlab.VariableFilter.
+func resolveScope(filter *Filter, flat string) string {
+	if filter != nil && filter.EnvironmentScope != "" {
+		return filter.EnvironmentScope
+	}
+	return flat
+}
+
 // toOutput converts the GitLab API response to the tool output format.
 func toOutput(v *gl.GroupVariable) Output {
 	return Output{
@@ -117,11 +143,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage("list group variables", err)
 	}
 
-	opts := &gl.ListGroupVariablesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupVariablesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	vars, resp, err := client.GL().GroupVariables.ListVariables(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -151,9 +179,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 
 	var opts *gl.GetGroupVariableOptions
-	if input.EnvironmentScope != "" {
+	if scope := resolveScope(input.Filter, input.EnvironmentScope); scope != "" {
 		opts = &gl.GetGroupVariableOptions{
-			Filter: &gl.VariableFilter{EnvironmentScope: input.EnvironmentScope},
+			Filter: &gl.VariableFilter{EnvironmentScope: scope},
 		}
 	}
 
@@ -251,8 +279,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Raw != nil {
 		opts.Raw = input.Raw
 	}
-	if input.EnvironmentScope != "" {
-		opts.Filter = &gl.VariableFilter{EnvironmentScope: input.EnvironmentScope}
+	if scope := resolveScope(input.Filter, input.EnvironmentScope); scope != "" {
+		opts.Filter = &gl.VariableFilter{EnvironmentScope: scope}
 	}
 
 	v, _, err := client.GL().GroupVariables.UpdateVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))
@@ -280,9 +308,9 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 
 	var opts *gl.RemoveGroupVariableOptions
-	if input.EnvironmentScope != "" {
+	if scope := resolveScope(input.Filter, input.EnvironmentScope); scope != "" {
 		opts = &gl.RemoveGroupVariableOptions{
-			Filter: &gl.VariableFilter{EnvironmentScope: input.EnvironmentScope},
+			Filter: &gl.VariableFilter{EnvironmentScope: scope},
 		}
 	}
 
