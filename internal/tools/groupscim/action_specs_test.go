@@ -4,6 +4,7 @@ package groupscim
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -156,6 +157,58 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result when confirmation is declined")
 	}
+}
+
+// TestActionSpecs_Metadata verifies that every SCIM identity action carries
+// non-generic discovery metadata (1:1 audit R-META): an action-specific Usage,
+// domain-specific natural-language Aliases beyond the canonical tool name,
+// canonical RelatedActions cross-links, and an individual-tool description in
+// the "Returns: … See also: …" form. It also asserts aliases are unique across
+// actions so dynamic find ranking is not diluted by shared phrasing.
+func TestActionSpecs_Metadata(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, http.NewServeMux()))
+
+	seenAlias := make(map[string]string)
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			if spec.Usage == "" || spec.Usage == "Use to execute groupscim domain action." {
+				t.Errorf("action %q has generic or empty Usage: %q", spec.Name, spec.Usage)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("action %q has empty RelatedActions", spec.Name)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("action %q description missing Returns:/See also: form: %q", spec.Name, desc)
+			}
+			if naturalLanguageAliases(t, spec, seenAlias) == 0 {
+				t.Errorf("action %q has no natural-language aliases beyond the tool name", spec.Name)
+			}
+		})
+	}
+}
+
+// naturalLanguageAliases counts the aliases of spec that are not the canonical
+// action name or the projected individual-tool name, recording each into seen
+// (action name keyed by normalized alias) and failing t when an alias is reused
+// across actions. It returns the count of distinct natural-language aliases.
+func naturalLanguageAliases(t *testing.T, spec toolutil.ActionSpec, seen map[string]string) int {
+	t.Helper()
+	canonical := strings.ToLower(spec.Name)
+	tool := strings.ToLower(spec.IndividualTool.Name)
+	count := 0
+	for _, alias := range spec.Aliases {
+		norm := strings.ToLower(strings.TrimSpace(alias))
+		if norm == "" || norm == canonical || norm == tool {
+			continue
+		}
+		count++
+		if other, dup := seen[norm]; dup {
+			t.Errorf("alias %q reused by actions %q and %q", norm, other, spec.Name)
+		}
+		seen[norm] = spec.Name
+	}
+	return count
 }
 
 func groupSCIMSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {

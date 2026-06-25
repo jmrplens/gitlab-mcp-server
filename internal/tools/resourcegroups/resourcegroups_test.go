@@ -221,6 +221,47 @@ func TestFormatJobsMarkdown_Empty(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
+// assertResourceGroupMetadata verifies one resource group ActionSpec carries
+// non-generic discovery metadata: action-specific Usage, distinctive
+// domain-specific Aliases (unique across the domain and using resource-group
+// or CI-concurrency phrasing), canonical RelatedActions, and a
+// "Returns: … See also: …" individual-tool description.
+func assertResourceGroupMetadata(t *testing.T, spec toolutil.ActionSpec, seenAlias map[string]string) {
+	t.Helper()
+	if spec.OwnerPackage != "resourcegroups" || spec.IndividualTool.Name == "" {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+	}
+	if spec.Usage == "" {
+		t.Fatalf("Usage for %s should not be empty", spec.Name)
+	}
+	// Aliases must carry domain-specific natural-language phrasing, not only
+	// the individual tool name.
+	if len(spec.Aliases) < 2 {
+		t.Fatalf("Aliases for %s should include natural-language phrases, got %v", spec.Name, spec.Aliases)
+	}
+	hasResourceGroupPhrase := false
+	for _, a := range spec.Aliases {
+		if strings.Contains(a, "resource group") || strings.Contains(a, "concurrency") || strings.Contains(a, "serialization") {
+			hasResourceGroupPhrase = true
+		}
+		// Aliases must be unique across the domain.
+		if prev, ok := seenAlias[a]; ok {
+			t.Fatalf("duplicate alias %q on %s and %s", a, prev, spec.Name)
+		}
+		seenAlias[a] = spec.Name
+	}
+	if !hasResourceGroupPhrase {
+		t.Fatalf("Aliases for %s lack distinctive resource-group phrasing: %v", spec.Name, spec.Aliases)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Fatalf("RelatedActions for %s should not be empty", spec.Name)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Fatalf("IndividualTool.Description for %s must use Returns:/See also: form, got %q", spec.Name, desc)
+	}
+}
+
 // TestActionSpecs_Metadata verifies resource group action spec metadata.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -231,16 +272,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(specs) != 4 {
 		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
 	}
+	seenAlias := map[string]string{}
 	for _, spec := range specs {
-		if spec.OwnerPackage != "resourcegroups" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", spec.Name)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", spec.Name)
-		}
+		assertResourceGroupMetadata(t, spec, seenAlias)
 	}
 	if specByTool["gitlab_get_resource_group"].ParameterGuidance["key"].SemanticRole == "" {
 		t.Fatal("gitlab_get_resource_group should define key parameter guidance")
