@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -349,9 +350,39 @@ func TestList_PaginationParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		UserID:  42,
-		Page:    2,
-		PerPage: 50,
+		UserID:          42,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Tokens) != 0 {
+		t.Errorf("len(out.Tokens) = %d, want 0", len(out.Tokens))
+	}
+}
+
+// TestList_KeysetAndSortParams verifies that List forwards keyset pagination
+// (pagination, page_token) and ordering (order_by, sort) query parameters to
+// the GitLab API.
+//
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts each keyset and ordering parameter reaches the request query.
+func TestList_KeysetAndSortParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, pathListTokens)
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "cursor-123")
+		testutil.AssertQueryParam(t, r, "order_by", "created_at")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		UserID:                42,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-123"},
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

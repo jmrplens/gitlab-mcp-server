@@ -33,6 +33,27 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_RMetaDescriptions validates that every user-token action
+// carries a non-generic individual-tool description in the "Returns: … See
+// also: …" form and a RelatedActions list (R-META; 1:1 audit).
+func TestActionSpecs_RMetaDescriptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", spec.IndividualTool.Name, desc)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: expected RelatedActions to be set", spec.IndividualTool.Name)
+		}
+		if spec.Usage == "Use to execute impersonationtokens domain action." {
+			t.Errorf("%s: Usage is still the generic placeholder", spec.IndividualTool.Name)
+		}
+	}
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.
