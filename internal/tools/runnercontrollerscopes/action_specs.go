@@ -147,6 +147,7 @@ func runnerControllerScopeOptions(individualTool string, meta scopeActionMeta) t
 		Tags:           []string{"runner", "controller", "scope"},
 		OpenWorld:      true,
 		OwnerPackage:   "runnercontrollerscopes",
+		Edition:        "ultimate",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: meta.description},
 	}
 }

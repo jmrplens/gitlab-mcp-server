@@ -47,6 +47,7 @@ func runnerControllerTokenOptions(individualTool string) toolutil.ActionSpecOpti
 		Aliases: []string{individualTool}, Tags: []string{"runner", "controller", "token"},
 		OpenWorld:      true,
 		OwnerPackage:   "runnercontrollertokens",
+		Edition:        "ultimate",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	decorateRunnerControllerTokenMeta(&options, individualTool)

@@ -342,10 +342,12 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, grouprelationsexport.ActionSpecs(client)...)
 	specs = append(specs, groupreleases.ActionSpecs(client)...)
 	specs = append(specs, issues.GroupActionSpecs(client)...)
+	// Group service accounts are Free tier (service_accounts.md); the central
+	// tier filter — not positional gating — decides their visibility.
+	specs = append(specs, groupserviceaccounts.ActionSpecs(client)...)
 	if !enterprise {
 		return actionSpecGroup("gitlab_group", specs)
 	}
-	specs = append(specs, groupserviceaccounts.ActionSpecs(client)...)
 	specs = append(specs, epicdiscussions.ActionSpecs(client)...)
 	specs = append(specs, epics.ActionSpecs(client)...)
 	specs = append(specs, resourceevents.EpicActionSpecs(client)...)
@@ -489,9 +491,11 @@ func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []Act
 	specs = append(specs, integrations.ActionSpecs(client)...)
 	specs = append(specs, pages.ActionSpecs(client)...)
 	specs = append(specs, projectmirrors.ActionSpecs(client)...)
+	// Project service accounts are Free tier (service_accounts.md); the central
+	// tier filter decides visibility, so they live in the base spec list.
+	specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
 	if enterprise {
 		specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
-		specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
 	}
 	specs = append(specs, projects.ActionSpecs(client, enterprise)...)
 	return actionSpecGroup("gitlab_project", specs)

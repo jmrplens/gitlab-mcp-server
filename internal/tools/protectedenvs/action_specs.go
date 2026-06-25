@@ -49,6 +49,7 @@ func protectedEnvironmentOptions(individualTool string) toolutil.ActionSpecOptio
 		RelatedActions: []string{"environment.list", "environment.get", "deployment.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "protectedenvs",
+		Edition:        "premium",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),

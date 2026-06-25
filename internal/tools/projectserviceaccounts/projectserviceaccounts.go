@@ -12,7 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; requires Premium/Ultimate and sufficient project permissions"
+const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; available on all tiers, requires sufficient project permissions"
 
 // Output represents a project service account.
 type Output struct {

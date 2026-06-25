@@ -10,13 +10,16 @@ import (
 // ActionSpecs returns canonical specs for merge request approval actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		approvalReadSpec("approval_state", toolutil.RouteAction(client, State), "gitlab_mr_approval_state"),
-		approvalReadSpec("approval_rules", toolutil.RouteAction(client, Rules), "gitlab_mr_approval_rules"),
+		// Per-MR approval *rule* endpoints (/approval_state, /approval_rules) are
+		// Premium/Ultimate; the basic approval-state flow (/approvals config,
+		// reset_approvals) is Free. See the merge_request_approvals API docs.
+		approvalPremiumSpec(approvalReadSpec("approval_state", toolutil.RouteAction(client, State), "gitlab_mr_approval_state")),
+		approvalPremiumSpec(approvalReadSpec("approval_rules", toolutil.RouteAction(client, Rules), "gitlab_mr_approval_rules")),
 		approvalReadSpec("approval_config", toolutil.RouteAction(client, Config), "gitlab_mr_approval_config"),
 		approvalResetSpec(client),
 		approvalPremiumSpec(approvalCreateSpec("approval_rule_create", toolutil.RouteAction(client, CreateRule), "gitlab_mr_approval_rule_create")),
-		approvalUpdateSpec("approval_rule_update", toolutil.RouteAction(client, UpdateRule), "gitlab_mr_approval_rule_update"),
-		approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveAction(client, deleteRuleOutput), "gitlab_mr_approval_rule_delete"),
+		approvalPremiumSpec(approvalUpdateSpec("approval_rule_update", toolutil.RouteAction(client, UpdateRule), "gitlab_mr_approval_rule_update")),
+		approvalPremiumSpec(approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveAction(client, deleteRuleOutput), "gitlab_mr_approval_rule_delete")),
 	}
 }
 
@@ -53,8 +56,9 @@ const (
 )
 
 // approvalPremiumSpec marks an MR approval action as Premium/Ultimate so the
-// individual catalog hides it from CE clients. Creating multiple merge-request
-// approval rules is a GitLab Premium feature.
+// individual catalog hides it from CE clients. Merge-request approval *rules*
+// (listing, per-rule approval state, create/update/delete) are a GitLab Premium
+// feature; the basic approval-state config and reset endpoints remain Free.
 func approvalPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 	spec.Edition = "premium"
 	return spec

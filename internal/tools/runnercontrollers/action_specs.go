@@ -47,6 +47,7 @@ func runnerControllerOptions(individualTool string) toolutil.ActionSpecOptions {
 		Aliases: []string{individualTool}, Usage: "Use to execute runnercontrollers domain action.", Tags: []string{"runner", "controller"},
 		OpenWorld:      true,
 		OwnerPackage:   "runnercontrollers",
+		Edition:        "ultimate",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if meta, ok := runnerControllerActionMeta[individualTool]; ok {

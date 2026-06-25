@@ -573,8 +573,8 @@ func specsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.
 		if spec.OwnerPackage != "projectserviceaccounts" {
 			t.Fatalf("OwnerPackage for %s = %q, want projectserviceaccounts", spec.Name, spec.OwnerPackage)
 		}
-		if spec.Edition != "premium" {
-			t.Fatalf("Edition for %s = %q, want premium", spec.Name, spec.Edition)
+		if spec.Edition != "" {
+			t.Fatalf("Edition for %s = %q, want \"\" (Free)", spec.Name, spec.Edition)
 		}
 		byTool[spec.IndividualTool.Name] = spec
 	}

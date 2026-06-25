@@ -39,15 +39,14 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 	options := toolutil.ActionSpecOptions{
 		Aliases:        groupServiceAccountAliases(actionName),
 		Tags:           groupServiceAccountTags(actionName),
-		Usage:          "Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Requires GitLab Premium/Ultimate and Owner permissions.",
+		Usage:          "Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.",
 		RelatedActions: []string{"group.get"},
-		Edition:        "premium",
 		OpenWorld:      true,
 		OwnerPackage:   "groupserviceaccounts",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if individualTool == "gitlab_group_service_account_pat_rotate" {
-		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (Premium/Ultimate, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value — capture it immediately, it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
+		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value — capture it immediately, it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
 	}
 	if individualTool == "gitlab_group_service_account_create" || individualTool == "gitlab_group_service_account_update" {
 		options.Usage += " Omit email unless the task gives an explicit valid email address."

@@ -176,7 +176,7 @@ func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOpt
 
 func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		resources.Register(server, glClient)
 		resources.RegisterWorkflowGuides(server)
 		return nil
@@ -185,7 +185,7 @@ func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool
 
 func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		return tools.RegisterAllMeta(server, glClient, enterprise)
+		return tools.RegisterAllMeta(server, glClient, edition.TierForEnterprise(enterprise))
 	}
 }
 
@@ -206,14 +206,14 @@ func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) f
 
 func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		return nil
 	}
 }
 
 func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		tools.WrapMutatingToolsForSafeMode(server)
 		return nil
 	}

@@ -74,6 +74,10 @@ func approvalSettingsOptions(individualTool string) toolutil.ActionSpecOptions {
 		RelatedActions: meta.relatedActions,
 		OpenWorld:      true,
 		OwnerPackage:   "mrapprovalsettings",
+		// The merge_request_approval_settings API is page-badged Premium,
+		// Ultimate with no per-section override, so every group/project MR
+		// approval-settings action is Premium minimum.
+		Edition: "premium",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),
