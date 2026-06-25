@@ -19,7 +19,7 @@ func init() {
 func FormatMarkdown(label string, out StatisticsOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s Issue Statistics\n\n| Status | Count |\n|--------|-------|\n| All | %d |\n| Opened | %d |\n| Closed | %d |\n",
-		label, out.All, out.Opened, out.Closed)
+		label, out.Statistics.Counts.All, out.Statistics.Counts.Opened, out.Statistics.Counts.Closed)
 	toolutil.WriteHints(&b, "Use gitlab_issue action 'list' to see individual issues")
 	return b.String()
 }

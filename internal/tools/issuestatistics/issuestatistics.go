@@ -3,7 +3,6 @@ package issuestatistics
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -13,52 +12,137 @@ import (
 
 // Shared output.
 
-// StatisticsOutput contains issue statistics counts.
-type StatisticsOutput struct {
-	toolutil.HintableOutput
+// CountsOutput mirrors [gl.IssuesStatisticsCounts]: the all/closed/opened
+// issue counts returned by the GitLab Issue statistics API.
+type CountsOutput struct {
 	All    int64 `json:"all"`
 	Closed int64 `json:"closed"`
 	Opened int64 `json:"opened"`
 }
 
+// StatisticsCountsOutput mirrors [gl.IssuesStatisticsStatistics], nesting the
+// issue counts under a "counts" object exactly as the GitLab API does.
+type StatisticsCountsOutput struct {
+	Counts CountsOutput `json:"counts"`
+}
+
+// StatisticsOutput mirrors [gl.IssuesStatistics]: a single "statistics"
+// object containing the nested issue counts. The nested shape matches the
+// GitLab Issue statistics API response 1:1.
+type StatisticsOutput struct {
+	toolutil.HintableOutput
+	Statistics StatisticsCountsOutput `json:"statistics"`
+}
+
 // fromGL converts a [gl.IssuesStatistics] response into the package's
-// [StatisticsOutput], flattening the nested counts structure.
+// [StatisticsOutput], preserving the nested statistics/counts structure.
 func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 	return StatisticsOutput{
-		All:    s.Statistics.Counts.All,
-		Closed: s.Statistics.Counts.Closed,
-		Opened: s.Statistics.Counts.Opened,
+		Statistics: StatisticsCountsOutput{
+			Counts: CountsOutput{
+				All:    s.Statistics.Counts.All,
+				Closed: s.Statistics.Counts.Closed,
+				Opened: s.Statistics.Counts.Opened,
+			},
+		},
 	}
+}
+
+// statisticsFilters is the shared filter set for global, group, and project
+// issue-statistics lookups. It mirrors the common option fields of
+// [gl.GetIssuesStatisticsOptions], [gl.GetGroupIssuesStatisticsOptions], and
+// [gl.GetProjectIssuesStatisticsOptions] so the option-builder helpers stay in
+// lockstep across the three scopes.
+type statisticsFilters struct {
+	Labels           []string
+	Milestone        string
+	Scope            string
+	Search           string
+	AssigneeID       *int64
+	AssigneeUsername []string
+	AuthorID         *int64
+	AuthorUsername   string
+	Confidential     *bool
+	CreatedAfter     string
+	CreatedBefore    string
+	IIDs             []int64
+	In               string
+	MyReactionEmoji  string
+}
+
+// labelOptions converts a label-name slice into a [*gl.LabelOptions], or nil
+// when empty.
+func labelOptions(values []string) *gl.LabelOptions {
+	if len(values) == 0 {
+		return nil
+	}
+	labels := gl.LabelOptions(values)
+	return &labels
+}
+
+// optStr returns a pointer to s, or nil when s is empty.
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// optStrings returns a pointer to a string slice, or nil when empty.
+func optStrings(values []string) *[]string {
+	if len(values) == 0 {
+		return nil
+	}
+	return &values
+}
+
+// optIIDs returns a pointer to the int64 IID slice, or nil when empty.
+func optIIDs(iids []int64) *[]int64 {
+	if len(iids) == 0 {
+		return nil
+	}
+	return &iids
 }
 
 // Get (global).
 
 // GetInput contains parameters for global issue statistics.
 type GetInput struct {
-	Labels    string `json:"labels" jsonschema:"Comma-separated label names"`
-	Milestone string `json:"milestone" jsonschema:"Milestone title"`
-	Scope     string `json:"scope" jsonschema:"Scope: created_by_me, assigned_to_me, all"`
-	Search    string `json:"search" jsonschema:"Search string"`
+	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	In               string   `json:"in,omitempty"                jsonschema:"Fields the search query applies to (title, description, or title,description)"`
+	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
+	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // Get retrieves global issue statistics across all projects visible to
 // the authenticated user via the GitLab Issue statistics API
-// (GET /issues_statistics). Optional filters narrow the result by label,
-// milestone, scope, or free-text search.
+// (GET /issues_statistics). Optional filters narrow the result.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (StatisticsOutput, error) {
-	opts := &gl.GetIssuesStatisticsOptions{}
-	if input.Labels != "" {
-		lbl := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &lbl
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
+	opts := &gl.GetIssuesStatisticsOptions{
+		Labels:           labelOptions(input.Labels),
+		Milestone:        optStr(input.Milestone),
+		Scope:            optStr(input.Scope),
+		Search:           optStr(input.Search),
+		In:               optStr(input.In),
+		AuthorID:         input.AuthorID,
+		AuthorUsername:   optStr(input.AuthorUsername),
+		AssigneeID:       input.AssigneeID,
+		AssigneeUsername: optStrings(input.AssigneeUsername),
+		MyReactionEmoji:  optStr(input.MyReactionEmoji),
+		IIDs:             optIIDs(input.IIDs),
+		Confidential:     input.Confidential,
+		CreatedAfter:     toolutil.ParseOptionalTime(input.CreatedAfter),
+		CreatedBefore:    toolutil.ParseOptionalTime(input.CreatedBefore),
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -71,11 +155,20 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 
 // GetGroupInput contains parameters for group issue statistics.
 type GetGroupInput struct {
-	GroupID   string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Labels    string `json:"labels" jsonschema:"Comma-separated label names"`
-	Milestone string `json:"milestone" jsonschema:"Milestone title"`
-	Scope     string `json:"scope" jsonschema:"Scope: created_by_me, assigned_to_me, all"`
-	Search    string `json:"search" jsonschema:"Search string"`
+	GroupID          string   `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
+	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
+	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // GetGroup retrieves issue statistics scoped to a group and its
@@ -84,6 +177,10 @@ type GetGroupInput struct {
 func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupInput) (StatisticsOutput, error) {
 	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, groupIssueStatsOptions(statisticsFilters{
 		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
+		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
+		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
 	}), gl.WithContext(ctx))
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_issue_statistics", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
@@ -91,56 +188,44 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	return fromGL(stats), nil
 }
 
-// statisticsFilters is the shared filter set for group and project
-// issue-statistics lookups, used to keep the option-builder helpers in
-// lockstep across the two scopes.
-type statisticsFilters struct {
-	Labels    string
-	Milestone string
-	Scope     string
-	Search    string
-}
-
-// applyStatisticsFilters copies non-empty filter values into the supplied
-// option setters, avoiding the need to repeat the same nil checks in
-// every helper.
-func applyStatisticsFilters(filters statisticsFilters, setLabels func(*gl.LabelOptions), setMilestone, setScope, setSearch func(*string)) {
-	if filters.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(filters.Labels, ","))
-		setLabels(&labels)
-	}
-	if filters.Milestone != "" {
-		setMilestone(&filters.Milestone)
-	}
-	if filters.Scope != "" {
-		setScope(&filters.Scope)
-	}
-	if filters.Search != "" {
-		setSearch(&filters.Search)
-	}
-}
-
 // groupIssueStatsOptions builds a [gl.GetGroupIssuesStatisticsOptions]
 // from the shared [statisticsFilters] set.
 func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatisticsOptions {
-	opts := &gl.GetGroupIssuesStatisticsOptions{}
-	applyStatisticsFilters(filters,
-		func(value *gl.LabelOptions) { opts.Labels = value },
-		func(value *string) { opts.Milestone = value },
-		func(value *string) { opts.Scope = value },
-		func(value *string) { opts.Search = value })
-	return opts
+	return &gl.GetGroupIssuesStatisticsOptions{
+		Labels:           labelOptions(filters.Labels),
+		IIDs:             optIIDs(filters.IIDs),
+		Milestone:        optStr(filters.Milestone),
+		Scope:            optStr(filters.Scope),
+		AuthorID:         filters.AuthorID,
+		AuthorUsername:   optStr(filters.AuthorUsername),
+		AssigneeID:       filters.AssigneeID,
+		AssigneeUsername: optStrings(filters.AssigneeUsername),
+		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
+		Search:           optStr(filters.Search),
+		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
+		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
+		Confidential:     filters.Confidential,
+	}
 }
 
 // GetProject.
 
 // GetProjectInput contains parameters for project issue statistics.
 type GetProjectInput struct {
-	ProjectID string `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Labels    string `json:"labels" jsonschema:"Comma-separated label names"`
-	Milestone string `json:"milestone" jsonschema:"Milestone title"`
-	Scope     string `json:"scope" jsonschema:"Scope: created_by_me, assigned_to_me, all"`
-	Search    string `json:"search" jsonschema:"Search string"`
+	ProjectID        string   `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
+	Labels           []string `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	Milestone        string   `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope            string   `json:"scope,omitempty"             jsonschema:"Scope: created_by_me, assigned_to_me, all"`
+	Search           string   `json:"search,omitempty"            jsonschema:"Search string for title and description"`
+	AssigneeID       *int64   `json:"assignee_id,omitempty"       jsonschema:"Filter by assignee user ID"`
+	AssigneeUsername []string `json:"assignee_username,omitempty" jsonschema:"Filter by assignee usernames"`
+	AuthorID         *int64   `json:"author_id,omitempty"         jsonschema:"Filter by author user ID"`
+	AuthorUsername   string   `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
+	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
+	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
+	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
+	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
 
 // GetProject retrieves issue statistics scoped to a single project via
@@ -149,6 +234,10 @@ type GetProjectInput struct {
 func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProjectInput) (StatisticsOutput, error) {
 	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, projectIssueStatsOptions(statisticsFilters{
 		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
+		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
+		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
 	}), gl.WithContext(ctx))
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_issue_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
@@ -159,13 +248,21 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 // projectIssueStatsOptions builds a [gl.GetProjectIssuesStatisticsOptions]
 // from the shared [statisticsFilters] set.
 func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesStatisticsOptions {
-	opts := &gl.GetProjectIssuesStatisticsOptions{}
-	applyStatisticsFilters(filters,
-		func(value *gl.LabelOptions) { opts.Labels = value },
-		func(value *string) { opts.Milestone = value },
-		func(value *string) { opts.Scope = value },
-		func(value *string) { opts.Search = value })
-	return opts
+	return &gl.GetProjectIssuesStatisticsOptions{
+		IIDs:             optIIDs(filters.IIDs),
+		Labels:           labelOptions(filters.Labels),
+		Milestone:        optStr(filters.Milestone),
+		Scope:            optStr(filters.Scope),
+		AuthorID:         filters.AuthorID,
+		AuthorUsername:   optStr(filters.AuthorUsername),
+		AssigneeID:       filters.AssigneeID,
+		AssigneeUsername: optStrings(filters.AssigneeUsername),
+		MyReactionEmoji:  optStr(filters.MyReactionEmoji),
+		Search:           optStr(filters.Search),
+		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
+		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
+		Confidential:     filters.Confidential,
+	}
 }
 
 // formatters.

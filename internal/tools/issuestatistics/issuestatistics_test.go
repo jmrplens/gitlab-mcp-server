@@ -15,6 +15,16 @@ import (
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
 
+// newStats builds a [StatisticsOutput] with the nested statistics/counts
+// structure populated from the given all/opened/closed values.
+func newStats(all, opened, closed int64) StatisticsOutput {
+	return StatisticsOutput{
+		Statistics: StatisticsCountsOutput{
+			Counts: CountsOutput{All: all, Opened: opened, Closed: closed},
+		},
+	}
+}
+
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +38,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 10 || out.Opened != 7 || out.Closed != 3 {
+	if out.Statistics.Counts.All != 10 || out.Statistics.Counts.Opened != 7 || out.Statistics.Counts.Closed != 3 {
 		t.Errorf("unexpected counts: %+v", out)
 	}
 }
@@ -57,8 +67,8 @@ func TestGetGroup(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 5 {
-		t.Errorf("All = %d", out.All)
+	if out.Statistics.Counts.All != 5 {
+		t.Errorf("All = %d", out.Statistics.Counts.All)
 	}
 }
 
@@ -86,8 +96,8 @@ func TestGetProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Opened != 10 {
-		t.Errorf("Opened = %d", out.Opened)
+	if out.Statistics.Counts.Opened != 10 {
+		t.Errorf("Opened = %d", out.Statistics.Counts.Opened)
 	}
 }
 
@@ -104,7 +114,7 @@ func TestGetProject_Error(t *testing.T) {
 
 // TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
-	md := FormatMarkdown("Test", StatisticsOutput{All: 10, Opened: 7, Closed: 3})
+	md := FormatMarkdown("Test", newStats(10, 7, 3))
 	if !strings.Contains(md, "10") || !strings.Contains(md, "Test") {
 		t.Error("missing content")
 	}
@@ -143,7 +153,7 @@ const (
 
 // TestFormatMarkdown_Populated covers FormatMarkdown with table-driven subtests for populated.
 func TestFormatMarkdown_Populated(t *testing.T) {
-	md := FormatMarkdown("Global", StatisticsOutput{All: 100, Opened: 60, Closed: 40})
+	md := FormatMarkdown("Global", newStats(100, 60, 40))
 
 	checks := []struct {
 		label, want string
@@ -185,7 +195,7 @@ func TestFormatMarkdown_DifferentLabels(t *testing.T) {
 	labels := []string{"Group", "Project", "Custom Label"}
 	for _, label := range labels {
 		t.Run(label, func(t *testing.T) {
-			md := FormatMarkdown(label, StatisticsOutput{All: 1, Opened: 1})
+			md := FormatMarkdown(label, newStats(1, 1, 0))
 			want := "## " + label + " Issue Statistics"
 			if !strings.Contains(md, want) {
 				t.Errorf("missing %q in:\n%s", want, md)
@@ -209,14 +219,14 @@ func TestFromGL_FullData(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 250 {
-		t.Errorf("All = %d, want 250", out.All)
+	if out.Statistics.Counts.All != 250 {
+		t.Errorf("All = %d, want 250", out.Statistics.Counts.All)
 	}
-	if out.Closed != 100 {
-		t.Errorf("Closed = %d, want 100", out.Closed)
+	if out.Statistics.Counts.Closed != 100 {
+		t.Errorf("Closed = %d, want 100", out.Statistics.Counts.Closed)
 	}
-	if out.Opened != 150 {
-		t.Errorf("Opened = %d, want 150", out.Opened)
+	if out.Statistics.Counts.Opened != 150 {
+		t.Errorf("Opened = %d, want 150", out.Statistics.Counts.Opened)
 	}
 }
 
@@ -231,7 +241,7 @@ func TestFromGL_ZeroCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 0 || out.Closed != 0 || out.Opened != 0 {
+	if out.Statistics.Counts.All != 0 || out.Statistics.Counts.Closed != 0 || out.Statistics.Counts.Opened != 0 {
 		t.Errorf("expected all zeros, got %+v", out)
 	}
 }
@@ -265,7 +275,7 @@ func TestGet_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := Get(t.Context(), client, GetInput{
-		Labels:    "bug,critical",
+		Labels:    []string{"bug", "critical"},
 		Milestone: "v1.0",
 		Scope:     "all",
 		Search:    "memory leak",
@@ -273,8 +283,8 @@ func TestGet_WithAllFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 10 {
-		t.Errorf("All = %d, want 10", out.All)
+	if out.Statistics.Counts.All != 10 {
+		t.Errorf("All = %d, want 10", out.Statistics.Counts.All)
 	}
 }
 
@@ -287,7 +297,7 @@ func TestGet_WithLabelsOnly(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
 	}))
-	_, err := Get(t.Context(), client, GetInput{Labels: "bug"})
+	_, err := Get(t.Context(), client, GetInput{Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -402,7 +412,7 @@ func TestGetGroup_WithAllFilters(t *testing.T) {
 
 	out, err := GetGroup(t.Context(), client, GetGroupInput{
 		GroupID:   "99",
-		Labels:    "feature,enhancement",
+		Labels:    []string{"feature", "enhancement"},
 		Milestone: "sprint-3",
 		Scope:     "assigned_to_me",
 		Search:    "refactor",
@@ -410,11 +420,11 @@ func TestGetGroup_WithAllFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 30 {
-		t.Errorf("All = %d, want 30", out.All)
+	if out.Statistics.Counts.All != 30 {
+		t.Errorf("All = %d, want 30", out.Statistics.Counts.All)
 	}
-	if out.Opened != 20 {
-		t.Errorf("Opened = %d, want 20", out.Opened)
+	if out.Statistics.Counts.Opened != 20 {
+		t.Errorf("Opened = %d, want 20", out.Statistics.Counts.Opened)
 	}
 }
 
@@ -423,7 +433,7 @@ func TestGetGroup_WithLabelsOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
 	}))
-	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Labels: "bug"})
+	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -526,7 +536,7 @@ func TestGetProject_WithAllFilters(t *testing.T) {
 
 	out, err := GetProject(t.Context(), client, GetProjectInput{
 		ProjectID: "42",
-		Labels:    "bug,security",
+		Labels:    []string{"bug", "security"},
 		Milestone: "release-1",
 		Scope:     "created_by_me",
 		Search:    "crash",
@@ -534,14 +544,14 @@ func TestGetProject_WithAllFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.All != 50 {
-		t.Errorf("All = %d, want 50", out.All)
+	if out.Statistics.Counts.All != 50 {
+		t.Errorf("All = %d, want 50", out.Statistics.Counts.All)
 	}
-	if out.Closed != 20 {
-		t.Errorf("Closed = %d, want 20", out.Closed)
+	if out.Statistics.Counts.Closed != 20 {
+		t.Errorf("Closed = %d, want 20", out.Statistics.Counts.Closed)
 	}
-	if out.Opened != 30 {
-		t.Errorf("Opened = %d, want 30", out.Opened)
+	if out.Statistics.Counts.Opened != 30 {
+		t.Errorf("Opened = %d, want 30", out.Statistics.Counts.Opened)
 	}
 }
 
@@ -550,7 +560,7 @@ func TestGetProject_WithLabelsOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
 	}))
-	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Labels: "bug"})
+	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -684,13 +694,13 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		args map[string]any
 	}{
 		{"gitlab_get_issue_statistics", map[string]any{
-			"labels": "", "milestone": "", "scope": "", "search": "",
+			"labels": []string{}, "milestone": "", "scope": "", "search": "",
 		}},
 		{"gitlab_get_group_issue_statistics", map[string]any{
-			"group_id": "99", "labels": "", "milestone": "", "scope": "", "search": "",
+			"group_id": "99", "labels": []string{}, "milestone": "", "scope": "", "search": "",
 		}},
 		{"gitlab_get_project_issue_statistics", map[string]any{
-			"project_id": "42", "labels": "", "milestone": "", "scope": "", "search": "",
+			"project_id": "42", "labels": []string{}, "milestone": "", "scope": "", "search": "",
 		}},
 	}
 
@@ -755,9 +765,124 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 // TestMarkdownInit validates the init-registered markdown formatter is callable
 // via the toolutil registry.
 func TestMarkdownInit(t *testing.T) {
-	out := StatisticsOutput{All: 10, Opened: 7, Closed: 3}
+	out := newStats(10, 7, 3)
 	res := toolutil.MarkdownForResult(out)
 	if res == nil {
 		t.Fatal("expected non-nil result from registered formatter")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extended 1:1 filter coverage (assignee, author, confidential, dates, IIDs)
+// ---------------------------------------------------------------------------.
+
+// assertExtendedStatsParams verifies that the extended issue-statistics filter
+// fields are serialized into the outgoing query string.
+func assertExtendedStatsParams(t *testing.T, q map[string][]string, getParam func(string) string) {
+	t.Helper()
+	checks := map[string]string{
+		"assignee_id":       "7",
+		"author_id":         "9",
+		"author_username":   "octocat",
+		"confidential":      "true",
+		"my_reaction_emoji": "thumbsup",
+	}
+	for key, want := range checks {
+		if got := getParam(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+	if got := q["assignee_username"]; len(got) == 0 {
+		t.Error("expected assignee_username query param")
+	}
+	if got := q["iids[]"]; len(got) == 0 {
+		t.Error("expected iids[] query param")
+	}
+	if getParam("created_after") == "" {
+		t.Error("expected created_after query param")
+	}
+	if getParam("created_before") == "" {
+		t.Error("expected created_before query param")
+	}
+}
+
+// TestGet_ExtendedFilters verifies that global statistics serializes every
+// extended filter field, covering optStrings and optIIDs non-empty branches.
+func TestGet_ExtendedFilters(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assertExtendedStatsParams(t, q, q.Get)
+		if q.Get("in") != "title" {
+			t.Errorf("in = %q, want title", q.Get("in"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := Get(t.Context(), client, GetInput{
+		AssigneeID:       new(int64(7)),
+		AssigneeUsername: []string{"alice"},
+		AuthorID:         new(int64(9)),
+		AuthorUsername:   "octocat",
+		Confidential:     new(true),
+		CreatedAfter:     "2025-01-01T00:00:00Z",
+		CreatedBefore:    "2025-12-31T23:59:59Z",
+		IIDs:             []int64{1, 2},
+		In:               "title",
+		MyReactionEmoji:  "thumbsup",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGetGroup_ExtendedFilters verifies group statistics serializes every
+// extended filter field.
+func TestGetGroup_ExtendedFilters(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assertExtendedStatsParams(t, q, q.Get)
+		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := GetGroup(t.Context(), client, GetGroupInput{
+		GroupID:          "99",
+		AssigneeID:       new(int64(7)),
+		AssigneeUsername: []string{"alice"},
+		AuthorID:         new(int64(9)),
+		AuthorUsername:   "octocat",
+		Confidential:     new(true),
+		CreatedAfter:     "2025-01-01T00:00:00Z",
+		CreatedBefore:    "2025-12-31T23:59:59Z",
+		IIDs:             []int64{1, 2},
+		MyReactionEmoji:  "thumbsup",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGetProject_ExtendedFilters verifies project statistics serializes every
+// extended filter field.
+func TestGetProject_ExtendedFilters(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assertExtendedStatsParams(t, q, q.Get)
+		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := GetProject(t.Context(), client, GetProjectInput{
+		ProjectID:        "42",
+		AssigneeID:       new(int64(7)),
+		AssigneeUsername: []string{"alice"},
+		AuthorID:         new(int64(9)),
+		AuthorUsername:   "octocat",
+		Confidential:     new(true),
+		CreatedAfter:     "2025-01-01T00:00:00Z",
+		CreatedBefore:    "2025-12-31T23:59:59Z",
+		IIDs:             []int64{1, 2},
+		MyReactionEmoji:  "thumbsup",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
