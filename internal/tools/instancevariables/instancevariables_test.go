@@ -391,6 +391,46 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 	}
 }
 
+// TestInstanceVariableList_OrderSortKeyset verifies that List forwards the
+// order_by, sort, and keyset pagination (pagination, page_token) parameters to
+// the GitLab API, mirroring gl.ListInstanceVariablesOptions 1:1.
+// The mock GitLab API at /api/v4/admin/ci/variables (GET) asserts each query
+// parameter and responds with HTTP OK.
+func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathInstanceVars && r.Method == http.MethodGet {
+			q := r.URL.Query()
+			if q.Get("order_by") != "key" {
+				t.Errorf("order_by = %q, want key", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "cursor-123" {
+				t.Errorf("page_token = %q, want cursor-123", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[`+varJSON+`]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		OrderBy:               "key",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Variables) != 1 {
+		t.Fatalf("expected 1 variable, got %d", len(out.Variables))
+	}
+}
+
 // TestInstanceVariableList_CancelledContext verifies the InstanceVariableList_CancelledContext handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
