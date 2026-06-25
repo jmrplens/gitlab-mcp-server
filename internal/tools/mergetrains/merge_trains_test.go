@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestListProjectMergeTrains validates the ListProjectMergeTrains handler.
@@ -112,8 +114,14 @@ func TestListProjectMergeTrains(t *testing.T) {
 
 func assertPopulatedMergeTrain(t *testing.T, tr Output) {
 	t.Helper()
-	if tr.ID != 1 || tr.TargetBranch != "main" || tr.Status != "merged" || tr.User != "admin" || tr.PipelineID != 200 || tr.Duration != 120 {
+	if tr.ID != 1 || tr.TargetBranch != "main" || tr.Status != "merged" || tr.Duration != 120 {
 		t.Fatalf("train = %+v, want populated merged train", tr)
+	}
+	if tr.User == nil || tr.User.Username != "admin" || tr.User.ID != 1 {
+		t.Fatalf("user = %+v, want populated BasicUser admin", tr.User)
+	}
+	if tr.Pipeline == nil || tr.Pipeline.ID != 200 {
+		t.Fatalf("pipeline = %+v, want populated pipeline id 200", tr.Pipeline)
 	}
 	if tr.MergeRequest.IID != 5 || tr.MergeRequest.WebURL != "https://gitlab.example.com/-/merge_requests/5" {
 		t.Fatalf("merge request = %+v, want IID 5 and web URL", tr.MergeRequest)
@@ -420,6 +428,166 @@ func respondMergeTrainList(w http.ResponseWriter, body string) {
 	testutil.RespondJSONWithPagination(w, http.StatusOK, body, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 }
 
+// TestListProjectMergeTrains_KeysetAndOrdering verifies order_by, sort, and
+// keyset pagination (pagination/page_token) are forwarded as query parameters.
+func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range map[string]string{"order_by": "id", "sort": "desc", "pagination": "keyset", "page_token": "tok"} {
+			testutil.AssertQueryParam(t, r, k, v)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+	_, err := ListProjectMergeTrains(context.Background(), client, ListProjectInput{
+		ProjectID:             "42",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestListMergeRequestInMergeTrain_KeysetAndOrdering verifies order_by and
+// keyset pagination forwarding for the per-branch list handler.
+func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range map[string]string{"order_by": "id", "pagination": "keyset", "page_token": "tok"} {
+			testutil.AssertQueryParam(t, r, k, v)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+	_, err := ListMergeRequestInMergeTrain(context.Background(), client, ListBranchInput{
+		ProjectID:             "42",
+		TargetBranch:          "main",
+		OrderBy:               "id",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestAddMergeRequestToMergeTrain_WhenPipelineSucceeds verifies the deprecated
+// when_pipeline_succeeds option is forwarded in the request body.
+func TestAddMergeRequestToMergeTrain_WhenPipelineSucceeds(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		var opts map[string]any
+		if jErr := json.Unmarshal(body, &opts); jErr != nil {
+			t.Fatalf("parse body: %v", jErr)
+		}
+		if opts["when_pipeline_succeeds"] != true {
+			t.Errorf("when_pipeline_succeeds = %v, want true", opts["when_pipeline_succeeds"])
+		}
+		respondMergeTrainList(w, registerTrainsJSON)
+	}))
+	_, err := AddMergeRequestToMergeTrain(context.Background(), client, AddInput{
+		ProjectID: "42", MergeRequestID: 5, WhenPipelineSucceeds: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestToOutput_FullPipeline verifies the pipeline sub-object is mirrored in full,
+// including the nested detailed_status and its illustration image.
+func TestToOutput_FullPipeline(t *testing.T) {
+	created := mustParseTime(t, "2026-01-15T10:00:00Z")
+	mt := &gl.MergeTrain{
+		ID:           1,
+		TargetBranch: "main",
+		Status:       "merged",
+		User:         &gl.BasicUser{ID: 7, Username: "admin", Name: "Admin", State: "active", AvatarURL: "a", WebURL: "w", CreatedAt: &created},
+		Pipeline: &gl.Pipeline{
+			ID: 200, IID: 3, ProjectID: 42, Status: "success", Source: "push", Ref: "main",
+			Name: "build", SHA: "deadbeef", BeforeSHA: "cafe", Tag: true, YamlErrors: "",
+			User: &gl.BasicUser{ID: 7, Username: "admin"}, UpdatedAt: &created, CreatedAt: &created,
+			StartedAt: &created, FinishedAt: &created, CommittedAt: &created,
+			Duration: 60, QueuedDuration: 5, Coverage: "90", WebURL: "https://gl/pipe/200",
+			DetailedStatus: &gl.DetailedStatus{
+				Icon: "icon", Text: "passed", Label: "passed", Group: "success",
+				Tooltip: "ok", HasDetails: true, DetailsPath: "/p", Favicon: "fav",
+				Illustration: gl.DetailedStatusIllustration{Image: "img.png"},
+			},
+		},
+	}
+	out := toOutput(mt)
+	if out.User == nil || out.User.AvatarURL != "a" || out.User.CreatedAt == "" {
+		t.Fatalf("user = %+v, want full BasicUser", out.User)
+	}
+	if out.Pipeline == nil {
+		t.Fatal("pipeline is nil, want populated")
+	}
+	assertFullPipeline(t, out.Pipeline)
+}
+
+// assertFullPipeline verifies every mirrored field of a populated pipeline.
+func assertFullPipeline(t *testing.T, p *PipelineOutput) {
+	t.Helper()
+	switch {
+	case p.ID != 200, p.IID != 3, p.Source != "push", p.SHA != "deadbeef", p.Coverage != "90", p.WebURL != "https://gl/pipe/200":
+		t.Errorf("pipeline scalars = %+v", p)
+	}
+	if p.User == nil || p.User.Username != "admin" {
+		t.Errorf("pipeline.user = %+v, want admin", p.User)
+	}
+	switch {
+	case p.StartedAt == "", p.FinishedAt == "", p.CommittedAt == "", p.UpdatedAt == "", p.CreatedAt == "":
+		t.Errorf("pipeline timestamps missing = %+v", p)
+	}
+	ds := p.DetailedStatus
+	if ds == nil || ds.Label != "passed" || ds.Illustration == nil || ds.Illustration.Image != "img.png" {
+		t.Errorf("pipeline.detailed_status = %+v", ds)
+	}
+}
+
+// mustParseTime parses an RFC 3339 timestamp or fails the test.
+func mustParseTime(t *testing.T, s string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("parse time %q: %v", s, err)
+	}
+	return parsed
+}
+
+// TestPipelineHelpers_NilBranches verifies the shape converters return nil for
+// nil inputs and omit the illustration when its image is empty.
+func TestPipelineHelpers_NilBranches(t *testing.T) {
+	if pipelineOutput(nil) != nil {
+		t.Error("pipelineOutput(nil) should be nil")
+	}
+	if basicUserOutput(nil) != nil {
+		t.Error("basicUserOutput(nil) should be nil")
+	}
+	if pipelineDetailedStatusOutput(nil) != nil {
+		t.Error("pipelineDetailedStatusOutput(nil) should be nil")
+	}
+	if formatTimePtr(nil) != "" {
+		t.Error("formatTimePtr(nil) should be empty")
+	}
+	ds := pipelineDetailedStatusOutput(&gl.DetailedStatus{Label: "passed"})
+	if ds == nil || ds.Illustration != nil {
+		t.Errorf("detailed_status = %+v, want non-nil with nil illustration", ds)
+	}
+}
+
+// TestDecorateMergeTrainMeta_UnknownTool verifies the metadata decorator leaves
+// the options untouched when the tool name is not in the metadata map.
+func TestDecorateMergeTrainMeta_UnknownTool(t *testing.T) {
+	opts := toolutil.ActionSpecOptions{Usage: "original"}
+	decorateMergeTrainMeta(&opts, "gitlab_unknown_tool")
+	if opts.Usage != "original" {
+		t.Errorf("usage = %q, want unchanged 'original'", opts.Usage)
+	}
+}
+
 // TestToOutput_NilInput verifies toOutput handles a nil MergeTrain gracefully.
 func TestToOutput_NilInput(t *testing.T) {
 	out := toOutput(nil)
@@ -441,11 +609,11 @@ func TestToOutput_MinimalFields(t *testing.T) {
 	if out.ID != 10 {
 		t.Errorf("got ID %d, want 10", out.ID)
 	}
-	if out.User != "" {
-		t.Errorf("got user %q, want empty for nil User", out.User)
+	if out.User != nil {
+		t.Errorf("got user %+v, want nil for nil User", out.User)
 	}
-	if out.PipelineID != 0 {
-		t.Errorf("got pipeline_id %d, want 0 for nil Pipeline", out.PipelineID)
+	if out.Pipeline != nil {
+		t.Errorf("got pipeline %+v, want nil for nil Pipeline", out.Pipeline)
 	}
 	if out.MergeRequest.IID != 0 {
 		t.Errorf("got MR IID %d, want 0 for nil MergeRequest", out.MergeRequest.IID)
@@ -480,7 +648,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						ID:           1,
 						TargetBranch: "main",
 						Status:       "merged",
-						User:         "admin",
+						User:         &BasicUserOutput{ID: 1, Username: "admin"},
 						Duration:     120,
 						MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 					},
@@ -504,7 +672,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						ID:           2,
 						TargetBranch: "develop",
 						Status:       "idle",
-						User:         "dev",
+						User:         &BasicUserOutput{ID: 2, Username: "dev"},
 						Duration:     0,
 						MergeRequest: MergeRequestOutput{IID: 10, Title: "Add feature"},
 					},
@@ -548,8 +716,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:           1,
 				TargetBranch: "main",
 				Status:       "merged",
-				User:         "admin",
-				PipelineID:   200,
+				User:         &BasicUserOutput{ID: 1, Username: "admin"},
+				Pipeline:     &PipelineOutput{ID: 200},
 				Duration:     120,
 				CreatedAt:    "2026-01-15T10:00:00Z",
 				MergedAt:     "2026-01-17T10:00:00Z",

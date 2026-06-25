@@ -23,16 +23,83 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 // mergeTrainReadSpec builds a read-only [toolutil.ActionSpec] for a
-// merge train action using the package's default [mergeTrainOptions].
+// merge train action, applying the action's discovery metadata
+// (usage, aliases, related actions, and the "Returns: … See also: …"
+// individual-tool description).
 func mergeTrainReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, mergeTrainOptions(individualTool))
+	options := mergeTrainOptions(individualTool)
+	decorateMergeTrainMeta(&options, individualTool)
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 // mergeTrainCreateSpec builds a create-style [toolutil.ActionSpec] for
-// a merge train action using the package's default
-// [mergeTrainOptions].
+// a merge train action, applying the action's discovery metadata.
 func mergeTrainCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, mergeTrainOptions(individualTool))
+	options := mergeTrainOptions(individualTool)
+	decorateMergeTrainMeta(&options, individualTool)
+	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
+// mergeTrainActionMetaEntry is the discovery metadata for one merge train action.
+type mergeTrainActionMetaEntry struct {
+	usage       string
+	aliases     []string
+	related     []string
+	description string
+}
+
+// mergeTrainActionMeta maps each individual merge train tool to its discovery
+// metadata, giving every tool a non-generic usage, natural-language aliases,
+// related actions, and a "Returns: … See also: …" individual-tool description
+// (1:1 audit R-META).
+var mergeTrainActionMeta = map[string]mergeTrainActionMetaEntry{
+	"gitlab_list_project_merge_trains": {
+		usage:       "List every merge train in a project. Use when the prompt asks for all merge trains, active trains, or completed trains in a known project, optionally filtered by scope and sorted.",
+		aliases:     []string{"list project merge trains", "show merge trains", "find merge trains in project"},
+		related:     []string{"merge_train.list_branch", "merge_train.get", "merge_train.add"},
+		description: "List all merge trains in a project. Returns: merge train entries with the merge request, user, pipeline, target branch, status, duration, and pagination metadata. See also: gitlab_list_merge_request_in_merge_train, gitlab_get_merge_request_on_merge_train, gitlab_add_merge_request_to_merge_train.",
+	},
+	"gitlab_list_merge_request_in_merge_train": {
+		usage:       "List the merge requests sitting on the merge train for one target branch. Use when work is scoped to a specific branch's merge train rather than the whole project.",
+		aliases:     []string{"list merge requests in merge train", "show merge train for branch", "merge train queue for branch"},
+		related:     []string{"merge_train.list_project", "merge_train.get", "merge_train.add"},
+		description: "List the merge requests on a merge train for a target branch. Returns: merge train entries with the merge request, user, pipeline, status, duration, and pagination metadata. See also: gitlab_list_project_merge_trains, gitlab_get_merge_request_on_merge_train, gitlab_add_merge_request_to_merge_train.",
+	},
+	"gitlab_get_merge_request_on_merge_train": {
+		usage:       "Fetch the merge train status of a single merge request by its IID. Use when the prompt names a concrete MR and asks whether or where it sits on a merge train.",
+		aliases:     []string{"get merge request on merge train", "merge train status of mr", "show mr merge train"},
+		related:     []string{"merge_train.list_project", "merge_train.list_branch", "merge_train.add"},
+		description: "Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_list_project_merge_trains, gitlab_list_merge_request_in_merge_train, gitlab_add_merge_request_to_merge_train.",
+	},
+	"gitlab_add_merge_request_to_merge_train": {
+		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline; optionally enable auto_merge, verify a head sha, or squash on merge.",
+		aliases:     []string{"add merge request to merge train", "enqueue mr on merge train", "merge train an mr"},
+		related:     []string{"merge_train.get", "merge_train.list_branch", "merge_train.list_project"},
+		description: "Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
+	},
+}
+
+// decorateMergeTrainMeta fills non-generic Usage, natural-language Aliases,
+// RelatedActions, and the "Returns: … See also: …" individual-tool description
+// for a merge train action, replacing the generic placeholder metadata from
+// [mergeTrainOptions].
+func decorateMergeTrainMeta(options *toolutil.ActionSpecOptions, individualTool string) {
+	meta, ok := mergeTrainActionMeta[individualTool]
+	if !ok {
+		return
+	}
+	if meta.usage != "" {
+		options.Usage = meta.usage
+	}
+	if len(meta.aliases) > 0 {
+		options.Aliases = append([]string(nil), meta.aliases...)
+	}
+	if len(meta.related) > 0 {
+		options.RelatedActions = append([]string(nil), meta.related...)
+	}
+	if meta.description != "" {
+		options.IndividualTool.Description = meta.description
+	}
 }
 
 // mergeTrainOptions returns the base [toolutil.ActionSpecOptions]
