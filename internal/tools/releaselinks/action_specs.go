@@ -91,15 +91,15 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_links",
-				ValueSource:  "Array of link objects. Each item supports only name, url, and link_type; url must be absolute.",
+				ValueSource:  "Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath); url must be absolute.",
 				CommonConfusions: []string{
-					"Do not send direct_asset_path or filepath to link_create_batch.",
+					"Prefer direct_asset_path over the deprecated filepath when setting a direct asset link.",
 					"For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.",
 				},
 			},
 		}
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("links", map[string]any{"description": "Array of release asset links. Each item supports only name, url, and link_type."}),
+			toolutil.SchemaPropertyOverride("links", map[string]any{"description": "Array of release asset links. Each item supports name, url, link_type, direct_asset_path, and the deprecated filepath."}),
 			toolutil.SchemaPropertyOverride("links.url", map[string]any{
 				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
 				"format":      "uri",
@@ -108,5 +108,21 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			toolutil.SchemaPropertyOverride("links.link_type", map[string]any{"description": "Type of the link: package, runbook, image, or other. Use package for package registry assets."}),
 		}
 	}
+	if description := releaseLinkDescriptions[actionName]; description != "" {
+		options.IndividualTool.Description = description
+	}
 	return options
+}
+
+// releaseLinkDescriptions maps each release-link action to its
+// "Returns: … See also: …" individual-tool description (R-META; 1:1 audit).
+// Returned objects mirror the GitLab ReleaseLink schema: id, name, url,
+// direct_asset_url, link_type, and external.
+var releaseLinkDescriptions = map[string]string{
+	"link_create":       "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
+	"link_create_batch": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
+	"link_get":          "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
+	"link_list":         "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
+	"link_update":       "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
+	"link_delete":       "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.",
 }
