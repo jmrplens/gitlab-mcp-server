@@ -53,10 +53,13 @@ func FormatReadMarkdown(out ReadOutput) *mcp.CallToolResult {
 
 // FormatUpdateMarkdown formats the submodule update result as markdown.
 func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(fmt.Sprintf(
-		"## Submodule Updated\n\n- **Commit**: %s (%s)\n- **Title**: %s\n- **Author**: %s <%s>\n- **Message**: %s",
-		out.ShortID, out.ID, out.Title, out.AuthorName, out.AuthorEmail, out.Message,
-	))
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Submodule Updated\n\n- **Commit**: %s (%s)\n- **Title**: %s\n- **Author**: %s <%s>\n- **Message**: %s",
+		out.ShortID, out.ID, out.Title, out.AuthorName, out.AuthorEmail, out.Message)
+	if out.Status != "" {
+		fmt.Fprintf(&b, "\n- **Status**: %s", out.Status)
+	}
+	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
 func init() {

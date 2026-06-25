@@ -27,7 +27,12 @@ func TestUpdate_Success(t *testing.T) {
 			"title": "Update submodule lib to abc123",
 			"author_name": "Dev User",
 			"author_email": "dev@example.com",
+			"committer_name": "Bot",
+			"committer_email": "bot@example.com",
+			"authored_date": "2026-01-15T10:29:00Z",
 			"message": "Update submodule lib to abc123",
+			"parent_ids": ["p1", "p2"],
+			"status": "success",
 			"created_at": "2026-01-15T10:30:00Z",
 			"committed_date": "2026-01-15T10:30:00Z"
 		}`)
@@ -51,6 +56,18 @@ func TestUpdate_Success(t *testing.T) {
 	}
 	if out.AuthorName != "Dev User" {
 		t.Errorf("expected author_name 'Dev User', got %q", out.AuthorName)
+	}
+	if out.CommitterName != "Bot" || out.CommitterEmail != "bot@example.com" {
+		t.Errorf("expected committer Bot <bot@example.com>, got %q <%q>", out.CommitterName, out.CommitterEmail)
+	}
+	if out.AuthoredDate == "" {
+		t.Error("expected authored_date to be populated")
+	}
+	if len(out.ParentIDs) != 2 || out.ParentIDs[0] != "p1" {
+		t.Errorf("expected parent_ids [p1 p2], got %v", out.ParentIDs)
+	}
+	if out.Status != "success" {
+		t.Errorf("expected status 'success', got %q", out.Status)
 	}
 }
 
@@ -138,6 +155,76 @@ func TestFormatUpdateMarkdown_Content(t *testing.T) {
 	}
 	if !strings.Contains(tc.Text, "Alice") {
 		t.Error("expected author")
+	}
+}
+
+// TestFormatUpdateMarkdown_WithStatus verifies the Status line renders when status is set.
+func TestFormatUpdateMarkdown_WithStatus(t *testing.T) {
+	out := UpdateOutput{
+		ID:      "abc123def456",
+		ShortID: "abc123d",
+		Title:   "Update lib",
+		Status:  "success",
+	}
+	r := FormatUpdateMarkdown(out)
+	tc, ok := r.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatal("expected TextContent")
+	}
+	if !strings.Contains(tc.Text, "**Status**") || !strings.Contains(tc.Text, "success") {
+		t.Errorf("expected Status line, got %q", tc.Text)
+	}
+}
+
+// TestDecorateSubmoduleMeta_UnknownTool verifies the decorator is a no-op for
+// a tool not present in submoduleActionMeta, leaving the base options intact.
+func TestDecorateSubmoduleMeta_UnknownTool(t *testing.T) {
+	options := submoduleOptions("gitlab_unknown_submodule_tool")
+	before := options
+	decorateSubmoduleMeta(&options, "gitlab_unknown_submodule_tool")
+	if options.Usage != before.Usage {
+		t.Errorf("Usage should be unchanged for unknown tool, got %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description should remain empty for unknown tool, got %q", options.IndividualTool.Description)
+	}
+}
+
+// TestActionSpecs_NonGenericMetadata verifies that every submodule action
+// carries non-generic discovery metadata (1:1 audit R-META): a real Usage,
+// distinctive submodule-phrased aliases beyond the bare tool name, canonical
+// repository.*/commit.* related actions, and a "Returns: … See also: …"
+// individual-tool description.
+func TestActionSpecs_NonGenericMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := repositorySubmoduleSpecsByTool(t, ActionSpecs(client))
+
+	for _, tool := range []string{
+		"gitlab_list_repository_submodules",
+		"gitlab_read_repository_submodule_file",
+		"gitlab_update_repository_submodule",
+	} {
+		spec := byTool[tool]
+		if strings.Contains(spec.Usage, "Use to execute") || spec.Usage == "" {
+			t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+		}
+		if len(spec.Aliases) < 2 {
+			t.Errorf("%s: expected distinctive aliases, got %v", tool, spec.Aliases)
+		}
+		for _, a := range spec.Aliases {
+			if a == tool {
+				t.Errorf("%s: alias must not equal the tool name", tool)
+			}
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: expected related actions", tool)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description must use Returns/See also form, got %q", tool, desc)
+		}
 	}
 }
 
