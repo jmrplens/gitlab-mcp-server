@@ -103,6 +103,44 @@ func registryOptions(individualTool string) toolutil.ActionSpecOptions {
 // list/create actions.
 func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
+	case "gitlab_registry_list_project":
+		options.Aliases = []string{"list container images", "project registry repositories", "docker images in project"}
+		options.RelatedActions = []string{"package.registry_get", "package.registry_tag_list", "package.registry_list_group"}
+		options.IndividualTool.Description = "List container registry image repositories in a project. Returns: each repository's id, name, path, location, status, tag count, optional tags, and pagination metadata. See also: gitlab_registry_get_repository, gitlab_registry_list_tags, gitlab_registry_list_group."
+	case "gitlab_registry_list_group":
+		options.Aliases = []string{"list group container images", "group registry repositories", "docker images across group"}
+		options.RelatedActions = []string{"package.registry_list_project", "package.registry_get"}
+		options.IndividualTool.Description = "List container registry image repositories across a group. Returns: each repository's id, name, path, location, status, tag count, and pagination metadata. See also: gitlab_registry_list_project, gitlab_registry_get_repository."
+	case "gitlab_registry_get_repository":
+		options.Aliases = []string{"get container repository", "registry image details", "show docker repository"}
+		options.RelatedActions = []string{"package.registry_list_project", "package.registry_tag_list", "package.registry_delete"}
+		options.IndividualTool.Description = "Get details of one container registry repository by its id. Returns: the repository's name, path, location, status, tag count, and optional tags. See also: gitlab_registry_list_project, gitlab_registry_list_tags, gitlab_registry_delete_repository."
+	case "gitlab_registry_delete_repository":
+		options.Aliases = []string{"delete container repository", "remove registry image", "purge docker repository"}
+		options.RelatedActions = []string{"package.registry_list_project", "package.registry_get", "package.registry_tag_delete"}
+		options.IndividualTool.Description = "Delete one container registry repository (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_list_project, gitlab_registry_get_repository, gitlab_registry_delete_tag."
+	case "gitlab_registry_get_tag":
+		options.Aliases = []string{"get image tag", "container tag details", "show registry tag"}
+		options.RelatedActions = []string{"package.registry_tag_list", "package.registry_tag_delete"}
+		options.IndividualTool.Description = "Get metadata of one container registry tag. Returns: the tag's name, path, location, revision, digest, total size, and creation time. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag."
+	case "gitlab_registry_delete_tag":
+		options.Aliases = []string{"delete image tag", "remove container tag", "purge registry tag"}
+		options.RelatedActions = []string{"package.registry_tag_list", "package.registry_tag_delete_bulk", "package.registry_tag_get"}
+		options.IndividualTool.Description = "Delete one container registry tag (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_list_tags, gitlab_registry_delete_tags_bulk, gitlab_registry_get_tag."
+	case "gitlab_registry_delete_tags_bulk":
+		options.Aliases = []string{"bulk delete image tags", "clean up old container tags", "prune registry tags"}
+		options.RelatedActions = []string{"package.registry_tag_list", "package.registry_tag_delete"}
+		options.IndividualTool.Description = "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation; deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag."
+	case "gitlab_registry_protection_update":
+		options.Aliases = []string{"update registry protection rule", "change repository path access levels", "edit image push rule"}
+		options.RelatedActions = []string{"package.registry_rule_list", "package.registry_rule_delete", "package.registry_rule_create"}
+		options.IndividualTool.Description = "Update a container registry repository-path protection rule. Returns: the updated rule with its path pattern and minimum push/delete access levels. See also: gitlab_registry_protection_list, gitlab_registry_protection_delete, gitlab_registry_protection_create."
+	case "gitlab_registry_protection_delete":
+		options.Aliases = []string{"delete registry protection rule", "remove repository path protection", "unprotect image path"}
+		options.RelatedActions = []string{"package.registry_rule_list", "package.registry_rule_create"}
+		options.IndividualTool.Description = "Delete a container registry repository-path protection rule (cannot be undone). Returns: a success confirmation. See also: gitlab_registry_protection_list, gitlab_registry_protection_create."
+	}
+	switch individualTool {
 	case "gitlab_registry_protection_list":
 		options.Aliases = []string{"list registry protection rules", "container image push rules", "repository path protection"}
 		options.RelatedActions = []string{"package.registry_rule_create", "package.registry_tag_rule_list", "project.get"}

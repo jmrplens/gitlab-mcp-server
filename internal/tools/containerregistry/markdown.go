@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -186,11 +188,11 @@ func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string
 // protectionAccessLabel renders an empty minimum access level as "immutable",
 // which is how the GitLab API expresses a rule that forbids push and delete
 // for everyone.
-func protectionAccessLabel(level string) string {
+func protectionAccessLabel(level gl.ProtectionRuleAccessLevel) string {
 	if level == "" {
 		return "immutable"
 	}
-	return level
+	return string(level)
 }
 
 func init() {

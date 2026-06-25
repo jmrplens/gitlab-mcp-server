@@ -498,6 +498,9 @@ func TestConvertRepository_AllFields(t *testing.T) {
 		CreatedAt:              &now,
 		CleanupPolicyStartedAt: &cleanup,
 		Status:                 &status,
+		Tags: []*gl.RegistryRepositoryTag{
+			{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048},
+		},
 	}
 	out := convertRepository(r)
 	if out.CreatedAt == "" {
@@ -508,6 +511,9 @@ func TestConvertRepository_AllFields(t *testing.T) {
 	}
 	if out.Status != "delete_scheduled" {
 		t.Errorf("expected Status=delete_scheduled, got %s", out.Status)
+	}
+	if len(out.Tags) != 1 || out.Tags[0].Name != "v1.0" {
+		t.Errorf("expected 1 embedded tag named v1.0, got %#v", out.Tags)
 	}
 }
 
@@ -1385,5 +1391,130 @@ func TestFormatProtectionRuleListMarkdown_NoNumericIDs(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf(fmtExpectedInMarkdown, want, md)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit additions: keyset pagination, order_by/sort, deprecated name_regex
+// ---------------------------------------------------------------------------.
+
+// TestListProject_KeysetAndOrdering verifies that ListProject forwards keyset
+// pagination (pagination, page_token), order_by, and sort query parameters to
+// the GitLab API. It asserts each parameter reaches the request unchanged.
+func TestListProject_KeysetAndOrdering(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok99" {
+			t.Errorf("page_token = %q, want tok99", q.Get("page_token"))
+		}
+		if q.Get("order_by") != "name" {
+			t.Errorf("order_by = %q, want name", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort = %q, want desc", q.Get("sort"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "0", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListProject(context.Background(), client, ListProjectInput{
+		ProjectID:             toolutil.StringOrInt("10"),
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestListGroup_KeysetAndOrdering verifies that ListGroup forwards keyset
+// pagination, order_by, and sort query parameters to the GitLab API.
+func TestListGroup_KeysetAndOrdering(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/5/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" || q.Get("sort") != "asc" || q.Get("pagination") != "keyset" {
+			t.Errorf("unexpected query: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "0", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListGroup(context.Background(), client, ListGroupInput{
+		GroupID:               toolutil.StringOrInt("5"),
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestListTags_KeysetAndOrdering verifies that ListTags forwards keyset
+// pagination, order_by, and sort query parameters to the GitLab API.
+func TestListTags_KeysetAndOrdering(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "name" || q.Get("sort") != "desc" || q.Get("page_token") != "t1" {
+			t.Errorf("unexpected query: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "0", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListTags(context.Background(), client, ListTagsInput{
+		ProjectID:             toolutil.StringOrInt("10"),
+		RepositoryID:          1,
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "t1"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestDeleteTagsBulk_AllCriteria verifies that DeleteTagsBulk forwards every
+// cleanup criterion, including the deprecated name_regex parameter, name_regex_keep,
+// and older_than. It asserts each query parameter reaches the request unchanged.
+func TestDeleteTagsBulk_AllCriteria(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf(fmtExpectedDELETE, r.Method)
+		}
+		q := r.URL.Query()
+		if q.Get("name_regex_keep") != "release.*" {
+			t.Errorf("name_regex_keep = %q, want release.*", q.Get("name_regex_keep"))
+		}
+		if q.Get("older_than") != "7d" {
+			t.Errorf("older_than = %q, want 7d", q.Get("older_than"))
+		}
+		if q.Get("name_regex") != "old.*" {
+			t.Errorf("name_regex = %q, want old.*", q.Get("name_regex"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	err := DeleteTagsBulk(context.Background(), client, DeleteTagsBulkInput{
+		ProjectID:     toolutil.StringOrInt("10"),
+		RepositoryID:  1,
+		NameRegexKeep: "release.*",
+		OlderThan:     "7d",
+		NameRegex:     "old.*",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }

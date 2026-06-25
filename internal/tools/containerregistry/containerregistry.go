@@ -18,15 +18,16 @@ import (
 // RepositoryOutput represents a container registry repository.
 type RepositoryOutput struct {
 	toolutil.HintableOutput
-	ID                     int64  `json:"id"`
-	Name                   string `json:"name"`
-	Path                   string `json:"path"`
-	ProjectID              int64  `json:"project_id"`
-	Location               string `json:"location"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	CleanupPolicyStartedAt string `json:"cleanup_policy_started_at,omitempty"`
-	Status                 string `json:"status,omitempty"`
-	TagsCount              int64  `json:"tags_count"`
+	ID                     int64                      `json:"id"`
+	Name                   string                     `json:"name"`
+	Path                   string                     `json:"path"`
+	ProjectID              int64                      `json:"project_id"`
+	Location               string                     `json:"location"`
+	CreatedAt              string                     `json:"created_at,omitempty"`
+	CleanupPolicyStartedAt string                     `json:"cleanup_policy_started_at,omitempty"`
+	Status                 gl.ContainerRegistryStatus `json:"status,omitempty"`
+	TagsCount              int64                      `json:"tags_count"`
+	Tags                   []TagOutput                `json:"tags,omitempty"`
 }
 
 // RepositoryListOutput represents a paginated list of registry repositories.
@@ -73,7 +74,10 @@ func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
 		o.CleanupPolicyStartedAt = r.CleanupPolicyStartedAt.Format(time.RFC3339)
 	}
 	if r.Status != nil {
-		o.Status = string(*r.Status)
+		o.Status = *r.Status
+	}
+	for _, t := range r.Tags {
+		o.Tags = append(o.Tags, convertTag(t))
 	}
 	return o
 }
@@ -108,8 +112,10 @@ type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Tags      bool                 `json:"tags,omitempty" jsonschema:"Include tags in response"`
 	TagsCount bool                 `json:"tags_count,omitempty" jsonschema:"Include tags count in response"`
-	Page      int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int                  `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProject lists container registry repositories for a project.
@@ -117,11 +123,13 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.ProjectID == "" {
 		return RepositoryListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := &gl.ListProjectRegistryRepositoriesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListProjectRegistryRepositoriesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Tags {
 		opts.Tags = new(true)
@@ -150,8 +158,10 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 // ListGroupInput selects a group registry repository page.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
-	Page    int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int                  `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroup lists container registry repositories for a group.
@@ -159,11 +169,13 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if input.GroupID == "" {
 		return RepositoryListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := &gl.ListGroupRegistryRepositoriesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupRegistryRepositoriesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	repos, resp, err := client.GL().ContainerRegistry.ListGroupRegistryRepositories(
 		string(input.GroupID), opts, gl.WithContext(ctx),
@@ -248,8 +260,10 @@ func DeleteRepository(ctx context.Context, client *gitlabclient.Client, input De
 type ListTagsInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	RepositoryID int64                `json:"repository_id" jsonschema:"Registry repository ID,required"`
-	Page         int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage      int                  `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListTags lists tags for a registry repository.
@@ -260,11 +274,13 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 	if input.RepositoryID == 0 {
 		return TagListOutput{}, toolutil.ErrFieldRequired("repository_id")
 	}
-	opts := &gl.ListRegistryRepositoryTagsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListRegistryRepositoryTagsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	tags, resp, err := client.GL().ContainerRegistry.ListRegistryRepositoryTags(
 		string(input.ProjectID), input.RepositoryID, opts, gl.WithContext(ctx),
@@ -356,6 +372,7 @@ type DeleteTagsBulkInput struct {
 	NameRegexKeep   string               `json:"name_regex_keep,omitempty" jsonschema:"Regex pattern of tag names to keep"`
 	KeepN           int64                `json:"keep_n,omitempty" jsonschema:"Number of latest tags to keep"`
 	OlderThan       string               `json:"older_than,omitempty" jsonschema:"Delete tags older than this (e.g. 1h, 2d, 1month)"`
+	NameRegex       string               `json:"name_regex,omitempty" jsonschema:"Deprecated: regex pattern of tag names to delete. Use name_regex_delete instead"`
 }
 
 // DeleteTagsBulk deletes registry repository tags in bulk using regex patterns.
@@ -378,6 +395,9 @@ func DeleteTagsBulk(ctx context.Context, client *gitlabclient.Client, input Dele
 	}
 	if input.OlderThan != "" {
 		opts.OlderThan = new(input.OlderThan)
+	}
+	if input.NameRegex != "" {
+		opts.NameRegexp = new(input.NameRegex) //nolint:staticcheck // 1:1 SDK fidelity: deprecated name_regex retained for API parity
 	}
 	_, err := client.GL().ContainerRegistry.DeleteRegistryRepositoryTags(
 		string(input.ProjectID), input.RepositoryID, opts, gl.WithContext(ctx),

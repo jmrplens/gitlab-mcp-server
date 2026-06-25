@@ -17,11 +17,11 @@ import (
 // TagProtectionRuleOutput represents a container registry tag protection rule.
 type TagProtectionRuleOutput struct {
 	toolutil.HintableOutput
-	ID                          int64  `json:"id"`
-	ProjectID                   int64  `json:"project_id"`
-	TagNamePattern              string `json:"tag_name_pattern"`
-	MinimumAccessLevelForPush   string `json:"minimum_access_level_for_push"`
-	MinimumAccessLevelForDelete string `json:"minimum_access_level_for_delete"`
+	ID                          int64                        `json:"id"`
+	ProjectID                   int64                        `json:"project_id"`
+	TagNamePattern              string                       `json:"tag_name_pattern"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete"`
 }
 
 // TagProtectionRuleListOutput represents a list of tag protection rules.
@@ -37,8 +37,8 @@ func convertTagProtectionRule(r *gl.ContainerRegistryTagProtectionRule) TagProte
 		ID:                          r.ID,
 		ProjectID:                   r.ProjectID,
 		TagNamePattern:              r.TagNamePattern,
-		MinimumAccessLevelForPush:   string(r.MinimumAccessLevelForPush),
-		MinimumAccessLevelForDelete: string(r.MinimumAccessLevelForDelete),
+		MinimumAccessLevelForPush:   r.MinimumAccessLevelForPush,
+		MinimumAccessLevelForDelete: r.MinimumAccessLevelForDelete,
 	}
 }
 
@@ -76,10 +76,10 @@ func ListTagProtectionRules(ctx context.Context, client *gitlabclient.Client, in
 
 // CreateTagProtectionRuleInput defines the tag name pattern and access thresholds for a new rule.
 type CreateTagProtectionRuleInput struct {
-	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	TagNamePattern              string               `json:"tag_name_pattern" jsonschema:"Tag name pattern as a RE2 regular expression (e.g. v.+),required"`
-	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
-	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
+	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
+	TagNamePattern              string                       `json:"tag_name_pattern" jsonschema:"Tag name pattern as a RE2 regular expression (e.g. v.+),required"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin). Omit both push and delete levels to make matching tags immutable"`
 }
 
 // CreateTagProtectionRule creates a container registry tag protection rule.
@@ -94,12 +94,10 @@ func CreateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 		TagNamePattern: new(input.TagNamePattern),
 	}
 	if input.MinimumAccessLevelForPush != "" {
-		lvl := gl.ProtectionRuleAccessLevel(input.MinimumAccessLevelForPush)
-		opts.MinimumAccessLevelForPush = &lvl
+		opts.MinimumAccessLevelForPush = new(input.MinimumAccessLevelForPush)
 	}
 	if input.MinimumAccessLevelForDelete != "" {
-		lvl := gl.ProtectionRuleAccessLevel(input.MinimumAccessLevelForDelete)
-		opts.MinimumAccessLevelForDelete = &lvl
+		opts.MinimumAccessLevelForDelete = new(input.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ContainerRegistryTagProtectionRules.CreateContainerRegistryTagProtectionRule(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -117,11 +115,11 @@ func CreateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 
 // UpdateTagProtectionRuleInput identifies a registry tag protection rule and the fields to change.
 type UpdateTagProtectionRuleInput struct {
-	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	RuleID                      int64                `json:"rule_id" jsonschema:"Tag protection rule ID,required"`
-	TagNamePattern              string               `json:"tag_name_pattern,omitempty" jsonschema:"Tag name pattern as a RE2 regular expression"`
-	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin)"`
+	ProjectID                   toolutil.StringOrInt         `json:"project_id" jsonschema:"Project ID or path,required"`
+	RuleID                      int64                        `json:"rule_id" jsonschema:"Tag protection rule ID,required"`
+	TagNamePattern              string                       `json:"tag_name_pattern,omitempty" jsonschema:"Tag name pattern as a RE2 regular expression"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level to push matching tags (maintainer, owner, admin)"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level to delete matching tags (maintainer, owner, admin)"`
 }
 
 // UpdateTagProtectionRule updates a container registry tag protection rule.
@@ -137,12 +135,10 @@ func UpdateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 		opts.TagNamePattern = new(input.TagNamePattern)
 	}
 	if input.MinimumAccessLevelForPush != "" {
-		lvl := gl.ProtectionRuleAccessLevel(input.MinimumAccessLevelForPush)
-		opts.MinimumAccessLevelForPush = &lvl
+		opts.MinimumAccessLevelForPush = new(input.MinimumAccessLevelForPush)
 	}
 	if input.MinimumAccessLevelForDelete != "" {
-		lvl := gl.ProtectionRuleAccessLevel(input.MinimumAccessLevelForDelete)
-		opts.MinimumAccessLevelForDelete = &lvl
+		opts.MinimumAccessLevelForDelete = new(input.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ContainerRegistryTagProtectionRules.UpdateContainerRegistryTagProtectionRule(
 		string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx),
