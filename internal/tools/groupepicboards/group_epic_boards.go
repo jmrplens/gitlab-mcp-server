@@ -13,10 +13,15 @@ import (
 
 const groupEpicBoardHint = "verify group_id; epic boards require Premium/Ultimate and can be empty until boards are configured for the group"
 
-// ListInput defines parameters for listing group epic boards.
+// ListInput defines parameters for listing group epic boards. It mirrors
+// gl.ListGroupEpicBoardsOptions (which embeds gl.ListOptions), exposing the
+// offset and keyset pagination controls of that options struct.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column by which to order results (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single group epic board.
@@ -25,21 +30,17 @@ type GetInput struct {
 	BoardID int64                `json:"board_id" jsonschema:"Epic board ID,required"`
 }
 
-// BoardListEntry represents a single list (column) in an epic board.
-type BoardListEntry struct {
-	ID       int64  `json:"id"`
-	LabelID  int64  `json:"label_id,omitempty"`
-	Label    string `json:"label,omitempty"`
-	Position int64  `json:"position"`
-}
-
-// Output represents a group epic board.
+// Output represents a group epic board. Nested objects (group, labels, lists)
+// mirror the full client-go gl.GroupEpicBoard sub-objects per the 1:1 audit
+// policy: group is the full gl.Group identifying subset, labels are full
+// gl.LabelDetails mirrors, and lists are full gl.BoardList mirrors.
 type Output struct {
 	toolutil.HintableOutput
-	ID     int64            `json:"id"`
-	Name   string           `json:"name"`
-	Labels []string         `json:"labels,omitempty"`
-	Lists  []BoardListEntry `json:"lists,omitempty"`
+	ID     int64                 `json:"id"`
+	Name   string                `json:"name"`
+	Group  *GroupRefOutput       `json:"group,omitempty"`
+	Labels []*LabelDetailsOutput `json:"labels,omitempty"`
+	Lists  []BoardListOutput     `json:"lists,omitempty"`
 }
 
 // ListOutput holds a paginated list of group epic boards.
@@ -51,28 +52,20 @@ type ListOutput struct {
 
 // toOutput converts a GitLab GroupEpicBoard to the MCP tool output format.
 func toOutput(b *gl.GroupEpicBoard) Output {
-	out := Output{
-		ID:   b.ID,
-		Name: b.Name,
+	if b == nil {
+		return Output{}
 	}
-	for _, l := range b.Labels {
-		if l != nil {
-			out.Labels = append(out.Labels, l.Name)
-		}
+	out := Output{
+		ID:     b.ID,
+		Name:   b.Name,
+		Group:  groupRefOutput(b.Group),
+		Labels: labelDetailsOutputs(b.Labels),
 	}
 	for _, bl := range b.Lists {
 		if bl == nil {
 			continue
 		}
-		entry := BoardListEntry{
-			ID:       bl.ID,
-			Position: bl.Position,
-		}
-		if bl.Label != nil {
-			entry.LabelID = bl.Label.ID
-			entry.Label = bl.Label.Name
-		}
-		out.Lists = append(out.Lists, entry)
+		out.Lists = append(out.Lists, convertBoardList(bl))
 	}
 	return out
 }
@@ -86,11 +79,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("groupEpicBoardList: group_id is required. Use gitlab_group_list to find the group ID first")
 	}
 	opts := &gl.ListGroupEpicBoardsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	boards, resp, err := client.GL().GroupEpicBoards.ListGroupEpicBoards(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {

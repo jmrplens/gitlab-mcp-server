@@ -22,7 +22,8 @@ const (
 	boardJSON = `{
 		"id": 1,
 		"name": "Epic Board",
-		"labels": [{"id": 10, "name": "Priority"}],
+		"group": {"id": 7, "name": "My Group", "full_path": "my/group"},
+		"labels": [{"id": 10, "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>"}],
 		"lists": [
 			{"id": 100, "label": {"id": 10, "name": "Priority"}, "position": 0}
 		]
@@ -75,6 +76,23 @@ func TestList(t *testing.T) {
 					t.Errorf("TotalItems = %d, want 10", out.Pagination.TotalItems)
 				}
 			},
+		},
+		{
+			name: "forwards order_by, sort, and keyset params",
+			input: ListInput{
+				GroupID:               testGroupID,
+				OrderBy:               "name",
+				Sort:                  "desc",
+				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+			},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "order_by", "name")
+				testutil.AssertQueryParam(t, r, "sort", "desc")
+				testutil.AssertQueryParam(t, r, "pagination", "keyset")
+				testutil.AssertQueryParam(t, r, "page_token", "tok")
+				testutil.RespondJSON(w, http.StatusOK, "[]")
+			}),
+			wantCount: 0,
 		},
 		{
 			name:  "returns error for missing group_id",
@@ -140,18 +158,27 @@ func assertListBoardLabels(t *testing.T, board Output) {
 	if len(board.Labels) != 1 {
 		t.Fatalf("len(Labels) = %d, want 1", len(board.Labels))
 	}
-	if board.Labels[0] != "Priority" {
-		t.Errorf("Labels[0] = %q, want %q", board.Labels[0], "Priority")
+	if board.Labels[0].Name != "Priority" {
+		t.Errorf("Labels[0].Name = %q, want %q", board.Labels[0].Name, "Priority")
+	}
+	if board.Labels[0].Color != "#FF0000" {
+		t.Errorf("Labels[0].Color = %q, want %q", board.Labels[0].Color, "#FF0000")
+	}
+	if board.Labels[0].DescriptionHTML != "<p>P</p>" {
+		t.Errorf("Labels[0].DescriptionHTML = %q, want %q", board.Labels[0].DescriptionHTML, "<p>P</p>")
 	}
 }
 
 func assertListBoardLists(t *testing.T, board Output) {
 	t.Helper()
+	if board.Group == nil || board.Group.FullPath != "my/group" {
+		t.Errorf("Group = %+v, want full_path my/group", board.Group)
+	}
 	if len(board.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(board.Lists))
 	}
-	if board.Lists[0].Label != "Priority" {
-		t.Errorf("Lists[0].Label = %q, want %q", board.Lists[0].Label, "Priority")
+	if board.Lists[0].Label == nil || board.Lists[0].Label.Name != "Priority" {
+		t.Errorf("Lists[0].Label = %+v, want name Priority", board.Lists[0].Label)
 	}
 }
 
@@ -284,14 +311,17 @@ func assertEpicBoardDetails(t *testing.T, out Output) {
 	if out.Name != "Epic Board" {
 		t.Errorf("Name = %q, want %q", out.Name, "Epic Board")
 	}
-	if len(out.Labels) != 1 || out.Labels[0] != "Priority" {
+	if len(out.Labels) != 1 || out.Labels[0].Name != "Priority" {
 		t.Errorf("Labels = %v, want [Priority]", out.Labels)
+	}
+	if out.Group == nil || out.Group.ID != 7 {
+		t.Errorf("Group = %+v, want id 7", out.Group)
 	}
 	if len(out.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
 	}
-	if out.Lists[0].LabelID != 10 {
-		t.Errorf("Lists[0].LabelID = %d, want 10", out.Lists[0].LabelID)
+	if out.Lists[0].Label == nil || out.Lists[0].Label.ID != 10 {
+		t.Errorf("Lists[0].Label = %+v, want id 10", out.Lists[0].Label)
 	}
 	if out.Lists[0].Position != 0 {
 		t.Errorf("Lists[0].Position = %d, want 0", out.Lists[0].Position)
@@ -316,11 +346,8 @@ func assertBoardListWithoutLabel(t *testing.T, out Output) {
 	if len(out.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
 	}
-	if out.Lists[0].Label != "" {
-		t.Errorf("Lists[0].Label = %q, want empty", out.Lists[0].Label)
-	}
-	if out.Lists[0].LabelID != 0 {
-		t.Errorf("Lists[0].LabelID = %d, want 0", out.Lists[0].LabelID)
+	if out.Lists[0].Label != nil {
+		t.Errorf("Lists[0].Label = %+v, want nil", out.Lists[0].Label)
 	}
 	if out.Lists[0].Position != 2 {
 		t.Errorf("Lists[0].Position = %d, want 2", out.Lists[0].Position)
@@ -332,8 +359,8 @@ func assertNullLabelFiltered(t *testing.T, out Output) {
 	if len(out.Labels) != 1 {
 		t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
 	}
-	if out.Labels[0] != "Bug" {
-		t.Errorf("Labels[0] = %q, want %q", out.Labels[0], "Bug")
+	if out.Labels[0].Name != "Bug" {
+		t.Errorf("Labels[0].Name = %q, want %q", out.Labels[0].Name, "Bug")
 	}
 }
 
@@ -405,10 +432,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			input: Output{
 				ID:     1,
 				Name:   "Sprint Board",
-				Labels: []string{"Priority", "Bug"},
-				Lists: []BoardListEntry{
-					{ID: 100, Label: "Priority", LabelID: 10, Position: 0},
-					{ID: 101, Label: "Bug", LabelID: 11, Position: 1},
+				Group:  &GroupRefOutput{ID: 7, FullPath: "my/group"},
+				Labels: []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, {ID: 11, Name: "Bug"}},
+				Lists: []BoardListOutput{
+					{ID: 100, Label: &LabelOutput{ID: 10, Name: "Priority"}, Position: 0},
+					{ID: 101, Label: &LabelOutput{ID: 11, Name: "Bug"}, Position: 1},
 				},
 			},
 			contains: []string{
@@ -468,7 +496,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders board list table",
 			input: ListOutput{
 				Boards: []Output{
-					{ID: 1, Name: "Sprint", Labels: []string{"P1"}, Lists: []BoardListEntry{{ID: 10}}},
+					{ID: 1, Name: "Sprint", Labels: []*LabelDetailsOutput{{ID: 1, Name: "P1"}}, Lists: []BoardListOutput{{ID: 10}}},
 					{ID: 2, Name: "Backlog"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
