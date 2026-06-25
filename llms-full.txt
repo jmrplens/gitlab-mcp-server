@@ -10542,6 +10542,7 @@ Action guidance:
 - create_impersonation_token: Create an impersonation token for a user (admin token required). Use to mint a token with explicit scopes and an optional expiry that can act on behalf of the target user.
 - create_personal_access_token: Create a personal access token for another user (admin token required). Use to provision a PAT with explicit scopes, an optional description, and an optional expiry on behalf of the target user.
 - create_runner: Register a CI runner scoped to the current user as instance, group, or project type. Use when the prompt asks to create a runner and provide an authentication token.
+- create_service_account: Create an instance-level service account (Premium/Ultimate) with optional name, username, and email. Use when the prompt asks to provision a service account.
 - current: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - current_user_status: Get the authenticated user's own status (emoji, message, availability). Use when the prompt asks about the caller's current status.
 - deactivate: Deactivate an inactive user account by user_id (admin only); reversible via activate. Use when the prompt asks to deactivate a dormant user.
@@ -10572,6 +10573,7 @@ Action guidance:
 - key_get_with_user: Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it; for a specific user's own keys use the per-user SSH-key tools instead.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - list_impersonation_tokens: List all impersonation tokens for a user (admin token required). Use to audit a user's impersonation tokens, optionally filtering by state and paginating with offset or keyset pagination.
+- list_service_accounts: List instance-level service accounts (Premium/Ultimate) with order_by/sort and pagination. Use when the prompt asks which service accounts exist.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - memberships: List a user's project and group memberships by user_id, optionally filtered by type (Project or Namespace). Use when the prompt asks where a user is a member and at what access level.
 - modify: Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details.
@@ -10595,6 +10597,7 @@ Action guidance:
 - todo_mark_done: Mark a single pending to-do item as done by its ID. Find the ID with gitlab_todo_list first.
 - unban: Unban a previously banned user by user_id (admin only). Use when the prompt asks to lift a ban.
 - unblock: Unblock a previously blocked user by user_id (admin only). Use when the prompt asks to restore a blocked user's access.
+- update_service_account: Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Requires admin token and GitLab Premium/Ultimate.
 - upload_avatar: Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user; there is no user_id parameter.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
