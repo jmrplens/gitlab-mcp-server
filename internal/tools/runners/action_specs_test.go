@@ -19,6 +19,29 @@ const (
 	actionSpecRunnerRegTokenJSON = `{"token":"reg-tok-new","token_expires_at":"2026-12-01T00:00:00Z"}`
 )
 
+// TestDecorateRunnerMeta_UnknownToolIsNoOp verifies decorateRunnerMeta leaves
+// the options untouched for a tool name that has no metadata entry, and applies
+// the description for a known tool.
+func TestDecorateRunnerMeta_UnknownToolIsNoOp(t *testing.T) {
+	opts := toolutil.ActionSpecOptions{Aliases: []string{"orig"}}
+	decorateRunnerMeta(&opts, "gitlab_runner_unknown")
+	if len(opts.Aliases) != 1 || opts.Aliases[0] != "orig" || opts.IndividualTool.Description != "" {
+		t.Errorf("unknown tool must be a no-op, got %+v", opts)
+	}
+
+	known := toolutil.ActionSpecOptions{}
+	decorateRunnerMeta(&known, "gitlab_runner_get")
+	if known.IndividualTool.Description == "" || len(known.RelatedActions) == 0 {
+		t.Errorf("known tool must gain description and related actions, got %+v", known)
+	}
+}
+
+// TestApplyRunnerListOptions_NilIsNoOp verifies applyRunnerListOptions safely
+// ignores a nil ListOptions pointer.
+func TestApplyRunnerListOptions_NilIsNoOp(t *testing.T) {
+	applyRunnerListOptions(nil, runnerListRequest{OrderBy: "id", Sort: "asc"})
+}
+
 // TestActionSpecs_CallRunnerRoutes exercises runner tools through their canonical routes.
 func TestActionSpecs_CallRunnerRoutes(t *testing.T) {
 	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))

@@ -5,7 +5,9 @@ package runners
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -132,9 +134,13 @@ func TestGet_Success(t *testing.T) {
 				"runner_type":"project_type","online":true,"status":"online",
 				"tag_list":["docker","linux"],"run_untagged":true,"locked":false,
 				"access_level":"not_protected","maximum_timeout":3600,
-				"projects":[{"id":1},{"id":2}],"groups":[{"id":5}],
+				"projects":[{"id":1,"name":"p1","name_with_namespace":"ns / p1","path":"p1","path_with_namespace":"ns/p1"},{"id":2}],
+				"groups":[{"id":5,"name":"g5","web_url":"https://gl/groups/g5"}],
 				"contacted_at":"2026-01-15T10:00:00Z",
-				"maintenance_note":"test note"
+				"maintenance_note":"test note",
+				"token":"glrt-tok","active":true,"architecture":"amd64",
+				"platform":"linux","revision":"abc123","version":"16.0.0",
+				"ip_address":"10.0.0.1"
 			}`)
 			return
 		}
@@ -160,8 +166,8 @@ func TestGet_Success(t *testing.T) {
 	if len(out.TagList) != 2 || out.TagList[0] != "docker" {
 		t.Errorf("tags mismatch: %v", out.TagList)
 	}
-	if out.ProjectCount != 2 || out.GroupCount != 1 {
-		t.Errorf("project/group count mismatch: proj=%d group=%d", out.ProjectCount, out.GroupCount)
+	if len(out.Projects) != 2 || len(out.Groups) != 1 {
+		t.Errorf("project/group count mismatch: proj=%d group=%d", len(out.Projects), len(out.Groups))
 	}
 	if out.MaintenanceNote != "test note" {
 		t.Errorf("maintenance_note mismatch: %s", out.MaintenanceNote)
@@ -177,6 +183,44 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.MaximumTimeout != 3600 {
 		t.Errorf("MaximumTimeout = %d, want 3600", out.MaximumTimeout)
+	}
+}
+
+// TestGet_DeprecatedAndSubObjects verifies Get surfaces the deprecated
+// token/active/architecture/platform/revision/version/ip_address fields and the
+// full groups/projects sub-object arrays from gl.RunnerDetails.
+func TestGet_DeprecatedAndSubObjects(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathRunner10 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":10,"name":"mr-10","runner_type":"project_type","status":"online",
+				"projects":[{"id":1,"name":"p1","name_with_namespace":"ns / p1","path":"p1","path_with_namespace":"ns/p1"},{"id":2}],
+				"groups":[{"id":5,"name":"g5","web_url":"https://gl/groups/g5"}],
+				"token":"glrt-tok","active":true,"architecture":"amd64",
+				"platform":"linux","revision":"abc123","version":"16.0.0","ip_address":"10.0.0.1"
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{RunnerID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Token != "glrt-tok" || !out.Active || out.Architecture != "amd64" ||
+		out.Platform != "linux" || out.Revision != "abc123" || out.Version != "16.0.0" ||
+		out.IPAddress != "10.0.0.1" {
+		t.Errorf("deprecated/details fields mismatch: %+v", out)
+	}
+	if len(out.Projects) != 2 || out.Projects[0].Name != "p1" ||
+		out.Projects[0].NameWithNamespace != "ns / p1" || out.Projects[0].Path != "p1" ||
+		out.Projects[0].PathWithNamespace != "ns/p1" {
+		t.Errorf("projects sub-object mismatch: %+v", out.Projects)
+	}
+	if len(out.Groups) != 1 || out.Groups[0].Name != "g5" ||
+		out.Groups[0].WebURL != "https://gl/groups/g5" {
+		t.Errorf("groups sub-object mismatch: %+v", out.Groups)
 	}
 }
 
@@ -976,23 +1020,28 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// assertRunnerQuery fails the test for any expected query parameter whose actual
+// value differs from want. It centralizes filter verification so the per-test
+// handlers stay simple.
+func assertRunnerQuery(t *testing.T, q url.Values, want map[string]string) {
+	t.Helper()
+	for key, exp := range want {
+		if got := q.Get(key); got != exp {
+			t.Errorf("query %s = %q, want %q", key, got, exp)
+		}
+	}
+}
+
 // TestList_WithAllFilters verifies List when with all filters.
 func TestList_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners" && r.Method == http.MethodGet {
-			q := r.URL.Query()
-			if q.Get("paused") == "" {
-				t.Error("expected paused param")
-			}
-			if q.Get("tag_list") == "" {
-				t.Error("expected tag_list param")
-			}
-			if q.Get("page") != "2" {
-				t.Errorf("expected page=2, got %s", q.Get("page"))
-			}
-			if q.Get("per_page") != "5" {
-				t.Errorf("expected per_page=5, got %s", q.Get("per_page"))
-			}
+			assertRunnerQuery(t, r.URL.Query(), map[string]string{
+				"paused": "true", "tag_list": "docker,linux", "page": "2", "per_page": "5",
+				"scope": "shared", "order_by": "id", "sort": "desc",
+				"type": "project_type", "status": "online",
+				"pagination": "keyset", "page_token": "tok-1",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "0", TotalPages: "0"})
 			return
@@ -1002,9 +1051,15 @@ func TestList_WithAllFilters(t *testing.T) {
 
 	paused := true
 	_, err := List(context.Background(), client, ListInput{
-		Paused:          &paused,
-		TagList:         "docker, linux",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		Type:                  "project_type",
+		Status:                "online",
+		Paused:                &paused,
+		TagList:               []string{"docker", "linux"},
+		Scope:                 "shared",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 5},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1054,6 +1109,13 @@ func TestUpdate_APIError(t *testing.T) {
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/10" && r.Method == http.MethodPut {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["active"] != true {
+				t.Errorf("expected active=true in body, got %v", body["active"])
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":10,"description":"desc","name":"r-10","paused":true,"is_shared":false,
 				"runner_type":"project_type","online":true,"status":"online",
@@ -1069,6 +1131,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	paused := true
 	runUntagged := false
 	locked := true
+	active := true
 	maxTimeout := int64(7200)
 	out, err := Update(context.Background(), client, UpdateInput{
 		RunnerID:        10,
@@ -1080,6 +1143,7 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		AccessLevel:     "ref_protected",
 		MaximumTimeout:  &maxTimeout,
 		MaintenanceNote: "under repair",
+		Active:          &active,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1146,16 +1210,10 @@ func TestListJobs_APIError(t *testing.T) {
 func TestListJobs_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners/10/jobs" && r.Method == http.MethodGet {
-			q := r.URL.Query()
-			if q.Get("status") != "running" {
-				t.Errorf("expected status=running, got %s", q.Get("status"))
-			}
-			if q.Get("order_by") != "id" {
-				t.Errorf("expected order_by=id, got %s", q.Get("order_by"))
-			}
-			if q.Get("sort") != "desc" {
-				t.Errorf("expected sort=desc, got %s", q.Get("sort"))
-			}
+			assertRunnerQuery(t, r.URL.Query(), map[string]string{
+				"status": "running", "order_by": "id", "sort": "desc",
+				"pagination": "keyset", "page_token": "j-tok",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "3", PerPage: "10", Total: "0", TotalPages: "0"})
 			return
@@ -1164,11 +1222,12 @@ func TestListJobs_WithAllFilters(t *testing.T) {
 	}))
 
 	_, err := ListJobs(context.Background(), client, ListJobsInput{
-		RunnerID:        10,
-		Status:          "running",
-		OrderBy:         "id",
-		Sort:            "desc",
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 10},
+		RunnerID:              10,
+		Status:                "running",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 10},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "j-tok"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1204,6 +1263,10 @@ func TestListProject_APIError(t *testing.T) {
 func TestListProject_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
+			assertRunnerQuery(t, r.URL.Query(), map[string]string{
+				"scope": "active", "paused": "false", "order_by": "id", "sort": "asc",
+				"pagination": "keyset", "page_token": "p-tok",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "0", TotalPages: "0"})
 			return
@@ -1211,12 +1274,18 @@ func TestListProject_AllFilters(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
 	}))
 
+	paused := false
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:       "42",
-		Type:            "group_type",
-		Status:          "online",
-		TagList:         "docker, linux",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
+		ProjectID:             "42",
+		Type:                  "group_type",
+		Status:                "online",
+		Paused:                &paused,
+		TagList:               []string{"docker", "linux"},
+		Scope:                 "active",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 5},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "p-tok"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1313,7 +1382,7 @@ func TestListGroup_AllFilters(t *testing.T) {
 		GroupID:         "7",
 		Type:            "instance_type",
 		Status:          "offline",
-		TagList:         "ci, nightly",
+		TagList:         []string{"ci", "nightly"},
 		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
 	})
 	if err != nil {
@@ -1346,13 +1415,30 @@ func TestRegister_APIError(t *testing.T) {
 	}
 }
 
-// TestRegister_AllOptionalFields verifies Register when all optional fields.
+// TestRegister_AllOptionalFields verifies Register when all optional fields,
+// including the deprecated active flag and the nested info hashmap, are sent and
+// that the runner output mirrors the deprecated token/active/ip_address fields.
 func TestRegister_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/runners" && r.Method == http.MethodPost {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["active"] != true {
+				t.Errorf("expected active=true in body, got %v", body["active"])
+			}
+			info, ok := body["info"].(map[string]any)
+			if !ok || info["name"] != "rn-1" || info["version"] != "16.0" ||
+				info["revision"] != "rev" || info["platform"] != "linux" ||
+				info["architecture"] != "amd64" {
+				t.Errorf("info hashmap not sent: %v", body["info"])
+			}
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":99,"description":"test","name":"nr-99","paused":true,
-				"is_shared":false,"runner_type":"project_type","online":false,"status":"never_contacted"
+				"is_shared":false,"runner_type":"project_type","online":false,"status":"never_contacted",
+				"token":"glrt-new","active":true,"ip_address":"10.1.2.3",
+				"token_expires_at":"2026-12-31T00:00:00Z"
 			}`)
 			return
 		}
@@ -1362,10 +1448,14 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 	paused := true
 	locked := false
 	runUntagged := true
+	active := true
 	maxTimeout := int64(3600)
 	out, err := Register(context.Background(), client, RegisterInput{
-		Token:           "reg-token",
-		Description:     "test runner",
+		Token:       "reg-token",
+		Description: "test runner",
+		Info: &RegisterInfoInput{
+			Name: "rn-1", Version: "16.0", Revision: "rev", Platform: "linux", Architecture: "amd64",
+		},
 		Paused:          &paused,
 		Locked:          &locked,
 		RunUntagged:     &runUntagged,
@@ -1373,12 +1463,31 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 		AccessLevel:     "ref_protected",
 		MaximumTimeout:  &maxTimeout,
 		MaintenanceNote: "new runner",
+		Active:          &active,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.ID != 99 {
 		t.Errorf("ID = %d, want 99", out.ID)
+	}
+	if out.Token != "glrt-new" || !out.Active || out.IPAddress != "10.1.2.3" ||
+		out.TokenExpiresAt != "2026-12-31T00:00:00Z" {
+		t.Errorf("runner output deprecated fields mismatch: %+v", out)
+	}
+}
+
+// TestBuildRegisterInfo_EmptyReturnsNil verifies buildRegisterInfo returns nil
+// for nil and all-empty inputs and a populated struct when any field is set.
+func TestBuildRegisterInfo_EmptyReturnsNil(t *testing.T) {
+	if buildRegisterInfo(nil) != nil {
+		t.Error("nil input must yield nil info")
+	}
+	if buildRegisterInfo(&RegisterInfoInput{}) != nil {
+		t.Error("all-empty input must yield nil info")
+	}
+	if info := buildRegisterInfo(&RegisterInfoInput{Revision: "r"}); info == nil || info.Revision == nil || *info.Revision != "r" {
+		t.Errorf("partial input must yield populated info: %+v", info)
 	}
 }
 
@@ -1498,7 +1607,7 @@ func TestListAll_AllFilters(t *testing.T) {
 		Type:            "instance_type",
 		Status:          "online",
 		Paused:          &paused,
-		TagList:         "docker, ci",
+		TagList:         []string{"docker", "ci"},
 		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
 	})
 	if err != nil {
@@ -1617,6 +1726,8 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 		MaximumTimeout:  7200,
 		MaintenanceNote: "under repair",
 		ContactedAt:     "2026-01-15T10:00:00Z",
+		Projects:        []RunnerDetailsProjectOutput{{ID: 1}, {ID: 2}},
+		Groups:          []RunnerDetailsGroupOutput{{ID: 5}},
 	})
 
 	for _, want := range []string{
@@ -1635,6 +1746,8 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 		"| Max Timeout | 7200s |",
 		"| Maintenance Note | under repair |",
 		"| Last Contact | 15 Jan 2026 10:00 UTC |",
+		"| Projects | 2 |",
+		"| Groups | 1 |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)

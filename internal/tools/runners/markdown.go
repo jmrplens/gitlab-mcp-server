@@ -56,6 +56,12 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	if out.ContactedAt != "" {
 		fmt.Fprintf(&b, "| Last Contact | %s |\n", toolutil.FormatTime(out.ContactedAt))
 	}
+	if len(out.Projects) > 0 {
+		fmt.Fprintf(&b, "| Projects | %d |\n", len(out.Projects))
+	}
+	if len(out.Groups) > 0 {
+		fmt.Fprintf(&b, "| Groups | %d |\n", len(out.Groups))
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use action 'update' to change runner settings",

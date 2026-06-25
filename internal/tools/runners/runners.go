@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -23,7 +22,9 @@ const hintRunnerNotFound = "runner not found \u2014 verify runner_id with gitlab
 // Output types
 // ---------------------------------------------------------------------------.
 
-// Output represents a GitLab CI Runner in responses.
+// Output represents a GitLab CI Runner in responses. Field set mirrors
+// gl.Runner one-to-one, including the deprecated Active/IPAddress fields and the
+// registration Token/TokenExpiresAt returned by create/register endpoints.
 type Output struct {
 	toolutil.HintableOutput
 	ID          int64  `json:"id"`
@@ -34,28 +35,68 @@ type Output struct {
 	RunnerType  string `json:"runner_type"`
 	Online      bool   `json:"online"`
 	Status      string `json:"status"`
+	// Active mirrors the deprecated gl.Runner.Active flag (use Paused instead).
+	Active bool `json:"active"`
+	// IPAddress mirrors the deprecated gl.Runner.IPAddress (empty from 17.0 on).
+	IPAddress string `json:"ip_address,omitempty"`
+	// Token is the authentication token returned by register/create responses.
+	Token string `json:"token,omitempty"`
+	// TokenExpiresAt is the registration token expiry returned by register.
+	TokenExpiresAt string `json:"token_expires_at,omitempty"`
 }
 
-// DetailsOutput represents detailed runner information.
+// RunnerDetailsProjectOutput mirrors gl.RunnerDetailsProject one-to-one.
+type RunnerDetailsProjectOutput struct {
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	NameWithNamespace string `json:"name_with_namespace"`
+	Path              string `json:"path"`
+	PathWithNamespace string `json:"path_with_namespace"`
+}
+
+// RunnerDetailsGroupOutput mirrors gl.RunnerDetailsGroup one-to-one.
+type RunnerDetailsGroupOutput struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	WebURL string `json:"web_url"`
+}
+
+// DetailsOutput represents detailed runner information. Field set mirrors
+// gl.RunnerDetails one-to-one, including the deprecated
+// Active/Architecture/Platform/Revision/Version/IPAddress fields and the full
+// Groups/Projects sub-object arrays.
 type DetailsOutput struct {
 	toolutil.HintableOutput
-	ID              int64    `json:"id"`
-	Description     string   `json:"description"`
-	Name            string   `json:"name"`
-	Paused          bool     `json:"paused"`
-	IsShared        bool     `json:"is_shared"`
-	RunnerType      string   `json:"runner_type"`
-	Online          bool     `json:"online"`
-	Status          string   `json:"status"`
-	ContactedAt     string   `json:"contacted_at,omitempty"`
-	MaintenanceNote string   `json:"maintenance_note,omitempty"`
-	TagList         []string `json:"tag_list,omitempty"`
-	RunUntagged     bool     `json:"run_untagged"`
-	Locked          bool     `json:"locked"`
-	AccessLevel     string   `json:"access_level"`
-	MaximumTimeout  int64    `json:"maximum_timeout,omitempty"`
-	ProjectCount    int      `json:"project_count,omitempty"`
-	GroupCount      int      `json:"group_count,omitempty"`
+	ID              int64                        `json:"id"`
+	Description     string                       `json:"description"`
+	Name            string                       `json:"name"`
+	Paused          bool                         `json:"paused"`
+	IsShared        bool                         `json:"is_shared"`
+	RunnerType      string                       `json:"runner_type"`
+	Online          bool                         `json:"online"`
+	Status          string                       `json:"status"`
+	ContactedAt     string                       `json:"contacted_at,omitempty"`
+	MaintenanceNote string                       `json:"maintenance_note,omitempty"`
+	TagList         []string                     `json:"tag_list,omitempty"`
+	RunUntagged     bool                         `json:"run_untagged"`
+	Locked          bool                         `json:"locked"`
+	AccessLevel     string                       `json:"access_level"`
+	MaximumTimeout  int64                        `json:"maximum_timeout,omitempty"`
+	Token           string                       `json:"token,omitempty"`
+	Groups          []RunnerDetailsGroupOutput   `json:"groups,omitempty"`
+	Projects        []RunnerDetailsProjectOutput `json:"projects,omitempty"`
+	// Active mirrors the deprecated gl.RunnerDetails.Active flag.
+	Active bool `json:"active"`
+	// Architecture mirrors the deprecated gl.RunnerDetails.Architecture.
+	Architecture string `json:"architecture,omitempty"`
+	// Platform mirrors the deprecated gl.RunnerDetails.Platform.
+	Platform string `json:"platform,omitempty"`
+	// Revision mirrors the deprecated gl.RunnerDetails.Revision.
+	Revision string `json:"revision,omitempty"`
+	// Version mirrors the deprecated gl.RunnerDetails.Version.
+	Version string `json:"version,omitempty"`
+	// IPAddress mirrors the deprecated gl.RunnerDetails.IPAddress.
+	IPAddress string `json:"ip_address,omitempty"`
 }
 
 // ListOutput holds a paginated list of runners.
@@ -84,8 +125,10 @@ type AuthTokenOutput struct {
 // ---------------------------------------------------------------------------.
 
 // toOutput converts the GitLab API response to the tool output format.
+//
+//nolint:staticcheck // Active and IPAddress are deprecated in client-go but mirrored 1:1.
 func toOutput(r *gl.Runner) Output {
-	return Output{
+	out := Output{
 		ID:          r.ID,
 		Description: r.Description,
 		Name:        r.Name,
@@ -94,10 +137,19 @@ func toOutput(r *gl.Runner) Output {
 		RunnerType:  r.RunnerType,
 		Online:      r.Online,
 		Status:      r.Status,
+		Active:      r.Active,
+		IPAddress:   r.IPAddress,
+		Token:       r.Token,
 	}
+	if r.TokenExpiresAt != nil {
+		out.TokenExpiresAt = r.TokenExpiresAt.Format(time.RFC3339)
+	}
+	return out
 }
 
 // toDetailsOutput converts the GitLab API response to the tool output format.
+//
+//nolint:staticcheck // Active/Architecture/Platform/Revision/Version/IPAddress are deprecated in client-go but mirrored 1:1.
 func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 	out := DetailsOutput{
 		ID:              d.ID,
@@ -114,8 +166,29 @@ func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 		Locked:          d.Locked,
 		AccessLevel:     d.AccessLevel,
 		MaximumTimeout:  d.MaximumTimeout,
-		ProjectCount:    len(d.Projects),
-		GroupCount:      len(d.Groups),
+		Token:           d.Token,
+		Active:          d.Active,
+		Architecture:    d.Architecture,
+		Platform:        d.Platform,
+		Revision:        d.Revision,
+		Version:         d.Version,
+		IPAddress:       d.IPAddress,
+	}
+	for _, g := range d.Groups {
+		out.Groups = append(out.Groups, RunnerDetailsGroupOutput{
+			ID:     g.ID,
+			Name:   g.Name,
+			WebURL: g.WebURL,
+		})
+	}
+	for _, p := range d.Projects {
+		out.Projects = append(out.Projects, RunnerDetailsProjectOutput{
+			ID:                p.ID,
+			Name:              p.Name,
+			NameWithNamespace: p.NameWithNamespace,
+			Path:              p.Path,
+			PathWithNamespace: p.PathWithNamespace,
+		})
 	}
 	if d.ContactedAt != nil {
 		out.ContactedAt = d.ContactedAt.Format(time.RFC3339)
@@ -123,81 +196,96 @@ func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 	return out
 }
 
+// runnerListRequest carries the union of filter and pagination parameters
+// supported by ListRunners, ListProjectRunners, and ListGroupsRunners. Paused
+// and Scope apply only to the owned/all/project endpoints (gl.ListRunnersOptions
+// and its gl.ListProjectRunnersOptions alias); gl.ListGroupsRunnersOptions
+// ignores them.
 type runnerListRequest struct {
 	Type    string
 	Status  string
 	Paused  *bool
-	TagList string
-	Page    int
-	PerPage int
+	TagList []string
+	Scope   string
+	OrderBy string
+	Sort    string
+	Page    toolutil.PaginationInput
+	Keyset  toolutil.KeysetPaginationInput
 }
 
-func splitRunnerTagList(raw string) *[]string {
-	if raw == "" {
+// runnerTagList returns a pointer to the request tag list, or nil when empty,
+// matching the gl options' *[]string shape.
+func runnerTagList(tags []string) *[]string {
+	if len(tags) == 0 {
 		return nil
-	}
-	tags := strings.Split(raw, ",")
-	for i := range tags {
-		tags[i] = strings.TrimSpace(tags[i])
 	}
 	return &tags
 }
 
-func applyRunnerListFields(req runnerListRequest, setType, setStatus func(*string), setTagList func(*[]string), setPage, setPerPage func(int64)) {
-	if req.Type != "" {
-		setType(&req.Type)
-	}
-	if req.Status != "" {
-		setStatus(&req.Status)
-	}
-	if tags := splitRunnerTagList(req.TagList); tags != nil {
-		setTagList(tags)
-	}
-	if req.Page > 0 {
-		setPage(int64(req.Page))
-	}
-	if req.PerPage > 0 {
-		setPerPage(int64(req.PerPage))
-	}
-}
-
 func buildListRunnersOptions(req runnerListRequest) *gl.ListRunnersOptions {
 	opts := &gl.ListRunnersOptions{Paused: req.Paused}
-	applyRunnerListFields(
-		req,
-		func(value *string) { opts.Type = value },
-		func(value *string) { opts.Status = value },
-		func(value *[]string) { opts.TagList = value },
-		func(value int64) { opts.Page = value },
-		func(value int64) { opts.PerPage = value },
-	)
+	if req.Type != "" {
+		opts.Type = &req.Type
+	}
+	if req.Status != "" {
+		opts.Status = &req.Status
+	}
+	if tags := runnerTagList(req.TagList); tags != nil {
+		opts.TagList = tags
+	}
+	if req.Scope != "" {
+		opts.Scope = &req.Scope //nolint:staticcheck // Scope is deprecated in client-go but mirrored 1:1.
+	}
+	applyRunnerListOptions(&opts.ListOptions, req)
 	return opts
 }
 
 func buildProjectRunnersOptions(req runnerListRequest) *gl.ListProjectRunnersOptions {
-	opts := &gl.ListProjectRunnersOptions{}
-	applyRunnerListFields(
-		req,
-		func(value *string) { opts.Type = value },
-		func(value *string) { opts.Status = value },
-		func(value *[]string) { opts.TagList = value },
-		func(value int64) { opts.Page = value },
-		func(value int64) { opts.PerPage = value },
-	)
+	opts := &gl.ListProjectRunnersOptions{Paused: req.Paused}
+	if req.Type != "" {
+		opts.Type = &req.Type
+	}
+	if req.Status != "" {
+		opts.Status = &req.Status
+	}
+	if tags := runnerTagList(req.TagList); tags != nil {
+		opts.TagList = tags
+	}
+	if req.Scope != "" {
+		opts.Scope = &req.Scope //nolint:staticcheck // Scope is deprecated in client-go but mirrored 1:1.
+	}
+	applyRunnerListOptions(&opts.ListOptions, req)
 	return opts
 }
 
 func buildGroupRunnersOptions(req runnerListRequest) *gl.ListGroupsRunnersOptions {
 	opts := &gl.ListGroupsRunnersOptions{}
-	applyRunnerListFields(
-		req,
-		func(value *string) { opts.Type = value },
-		func(value *string) { opts.Status = value },
-		func(value *[]string) { opts.TagList = value },
-		func(value int64) { opts.Page = value },
-		func(value int64) { opts.PerPage = value },
-	)
+	if req.Type != "" {
+		opts.Type = &req.Type
+	}
+	if req.Status != "" {
+		opts.Status = &req.Status
+	}
+	if tags := runnerTagList(req.TagList); tags != nil {
+		opts.TagList = tags
+	}
+	applyRunnerListOptions(&opts.ListOptions, req)
 	return opts
+}
+
+// applyRunnerListOptions wires order_by/sort plus offset and keyset pagination
+// onto the embedded gl.ListOptions shared by every runner list endpoint.
+func applyRunnerListOptions(opts *gl.ListOptions, req runnerListRequest) {
+	if opts == nil {
+		return
+	}
+	if req.OrderBy != "" {
+		opts.OrderBy = req.OrderBy
+	}
+	if req.Sort != "" {
+		opts.Sort = req.Sort
+	}
+	toolutil.ApplyListOptions(opts, req.Page, req.Keyset)
 }
 
 func listOutput(runners []*gl.Runner, resp *gl.Response) ListOutput {
@@ -239,17 +327,23 @@ func listScopedRunners(ctx context.Context, scopeID toolutil.StringOrInt, requir
 
 // ListInput defines parameters for listing owned runners.
 type ListInput struct {
-	Type    string `json:"type,omitempty"    jsonschema:"Runner type filter: instance_type, group_type, project_type"`
-	Status  string `json:"status,omitempty"  jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
-	Paused  *bool  `json:"paused,omitempty"  jsonschema:"Filter by paused state"`
-	TagList string `json:"tag_list,omitempty" jsonschema:"Comma-separated list of tags to filter by"`
+	Type    string   `json:"type,omitempty"     jsonschema:"Runner type filter: instance_type, group_type, project_type"`
+	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
+	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
+	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // List returns owned runners with optional filters.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	return listRunners(ctx, runnerListRequest{
-		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage,
+		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
+		Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
+		Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
 	}, "list runners", "status filter must be one of active|paused|online|offline|never_contacted|stale and type must be instance_type|group_type|project_type",
 		client.GL().Runners.ListRunners)
 }
@@ -295,6 +389,7 @@ type UpdateInput struct {
 	AccessLevel     string   `json:"access_level,omitempty"       jsonschema:"Access level: not_protected, ref_protected"`
 	MaximumTimeout  *int64   `json:"maximum_timeout,omitempty"    jsonschema:"Maximum job timeout in seconds"`
 	MaintenanceNote string   `json:"maintenance_note,omitempty"   jsonschema:"Maintenance note for the runner"`
+	Active          *bool    `json:"active,omitempty"             jsonschema:"Deprecated: runner active state; prefer paused instead"`
 }
 
 // Update modifies a runner's configuration and returns updated details.
@@ -330,6 +425,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.MaintenanceNote != "" {
 		opts.MaintenanceNote = new(input.MaintenanceNote)
+	}
+	if input.Active != nil {
+		opts.Active = input.Active //nolint:staticcheck // Active is deprecated in client-go but mirrored 1:1.
 	}
 
 	d, _, err := client.GL().Runners.UpdateRunnerDetails(int(input.RunnerID), opts, gl.WithContext(ctx))
@@ -385,6 +483,7 @@ type ListJobsInput struct {
 	OrderBy  string `json:"order_by,omitempty"  jsonschema:"Order by field: id (default)"`
 	Sort     string `json:"sort,omitempty"      jsonschema:"Sort direction: asc, desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListJobs returns jobs processed by a specific runner.
@@ -406,12 +505,7 @@ func ListJobs(ctx context.Context, client *gitlabclient.Client, input ListJobsIn
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	jobList, resp, err := client.GL().Runners.ListRunnerJobs(int(input.RunnerID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -432,18 +526,27 @@ func ListJobs(ctx context.Context, client *gitlabclient.Client, input ListJobsIn
 
 // ListProjectInput defines parameters for listing project runners.
 type ListProjectInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id"           jsonschema:"Project ID or URL-encoded path,required"`
-	Type      string               `json:"type,omitempty"       jsonschema:"Runner type filter: instance_type, group_type, project_type"`
-	Status    string               `json:"status,omitempty"     jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
-	TagList   string               `json:"tag_list,omitempty"   jsonschema:"Comma-separated list of tags to filter by"`
+	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
+	Type      string               `json:"type,omitempty"     jsonschema:"Runner type filter: instance_type, group_type, project_type"`
+	Status    string               `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
+	Paused    *bool                `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
+	TagList   []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
+	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProject returns runners assigned to a specific project.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
 	return listScopedRunners(ctx, input.ProjectID, "project_id", "list project runners",
 		"verify the project exists with gitlab_project_get - use namespace/project path or numeric ID",
-		runnerListRequest{Type: input.Type, Status: input.Status, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage},
+		runnerListRequest{
+			Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
+			Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
+			Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListProjectRunners(scopeID, buildProjectRunnersOptions(req), opts...)
 		})
@@ -521,20 +624,29 @@ func DisableProject(ctx context.Context, client *gitlabclient.Client, input Disa
 // ListGroupsRunners
 // ---------------------------------------------------------------------------.
 
-// ListGroupInput defines parameters for listing group runners.
+// ListGroupInput defines parameters for listing group runners. The group
+// runners endpoint (gl.ListGroupsRunnersOptions) does not accept paused or
+// scope filters, so they are intentionally omitted here.
 type ListGroupInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id"            jsonschema:"Group ID or URL-encoded path,required"`
-	Type    string               `json:"type,omitempty"      jsonschema:"Runner type filter: instance_type, group_type, project_type"`
-	Status  string               `json:"status,omitempty"    jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
-	TagList string               `json:"tag_list,omitempty"  jsonschema:"Comma-separated list of tags to filter by"`
+	GroupID toolutil.StringOrInt `json:"group_id"           jsonschema:"Group ID or URL-encoded path,required"`
+	Type    string               `json:"type,omitempty"     jsonschema:"Runner type filter: instance_type, group_type, project_type"`
+	Status  string               `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
+	TagList []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroup returns runners available in a specific group.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListOutput, error) {
 	return listScopedRunners(ctx, input.GroupID, "group_id", "list group runners",
 		"verify the group exists with gitlab_group_get - use group full_path or numeric ID",
-		runnerListRequest{Type: input.Type, Status: input.Status, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage},
+		runnerListRequest{
+			Type: input.Type, Status: input.Status, TagList: input.TagList,
+			OrderBy: input.OrderBy, Sort: input.Sort,
+			Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListGroupsRunners(scopeID, buildGroupRunnersOptions(req), opts...)
 		})
@@ -544,17 +656,63 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 // RegisterNewRunner
 // ---------------------------------------------------------------------------.
 
+// RegisterInfoInput mirrors gl.RegisterNewRunnerInfoOptions: the optional
+// "info" hashmap describing the runner manager registering.
+type RegisterInfoInput struct {
+	Name         string `json:"name,omitempty"         jsonschema:"Runner manager name"`
+	Version      string `json:"version,omitempty"      jsonschema:"Runner version"`
+	Revision     string `json:"revision,omitempty"     jsonschema:"Runner revision"`
+	Platform     string `json:"platform,omitempty"     jsonschema:"Runner platform (e.g. linux)"`
+	Architecture string `json:"architecture,omitempty" jsonschema:"Runner architecture (e.g. amd64)"`
+}
+
 // RegisterInput defines parameters for registering a new runner.
 type RegisterInput struct {
-	Token           string   `json:"token"                        jsonschema:"Registration token,required"`
-	Description     string   `json:"description,omitempty"        jsonschema:"Runner description"`
-	Paused          *bool    `json:"paused,omitempty"             jsonschema:"Register in paused state"`
-	Locked          *bool    `json:"locked,omitempty"             jsonschema:"Lock runner to current project"`
-	RunUntagged     *bool    `json:"run_untagged,omitempty"       jsonschema:"Whether to run untagged jobs"`
-	TagList         []string `json:"tag_list,omitempty"           jsonschema:"List of runner tags"`
-	AccessLevel     string   `json:"access_level,omitempty"       jsonschema:"Access level: not_protected, ref_protected"`
-	MaximumTimeout  *int64   `json:"maximum_timeout,omitempty"    jsonschema:"Maximum job timeout in seconds"`
-	MaintenanceNote string   `json:"maintenance_note,omitempty"   jsonschema:"Maintenance note"`
+	Token           string             `json:"token"                      jsonschema:"Registration token,required"`
+	Description     string             `json:"description,omitempty"      jsonschema:"Runner description"`
+	Info            *RegisterInfoInput `json:"info,omitempty"             jsonschema:"Runner manager info hashmap (name, version, revision, platform, architecture)"`
+	Paused          *bool              `json:"paused,omitempty"           jsonschema:"Register in paused state"`
+	Locked          *bool              `json:"locked,omitempty"           jsonschema:"Lock runner to current project"`
+	RunUntagged     *bool              `json:"run_untagged,omitempty"     jsonschema:"Whether to run untagged jobs"`
+	TagList         []string           `json:"tag_list,omitempty"         jsonschema:"List of runner tags"`
+	AccessLevel     string             `json:"access_level,omitempty"     jsonschema:"Access level: not_protected, ref_protected"`
+	MaximumTimeout  *int64             `json:"maximum_timeout,omitempty"  jsonschema:"Maximum job timeout in seconds"`
+	MaintenanceNote string             `json:"maintenance_note,omitempty" jsonschema:"Maintenance note"`
+	Active          *bool              `json:"active,omitempty"           jsonschema:"Deprecated: registration active state; prefer paused instead"`
+}
+
+// buildRegisterInfo maps the optional info hashmap input onto the client-go
+// gl.RegisterNewRunnerInfoOptions, returning nil when no field is set.
+func buildRegisterInfo(in *RegisterInfoInput) *gl.RegisterNewRunnerInfoOptions {
+	if in == nil {
+		return nil
+	}
+	info := &gl.RegisterNewRunnerInfoOptions{}
+	set := false
+	if in.Name != "" {
+		info.Name = new(in.Name)
+		set = true
+	}
+	if in.Version != "" {
+		info.Version = new(in.Version)
+		set = true
+	}
+	if in.Revision != "" {
+		info.Revision = new(in.Revision)
+		set = true
+	}
+	if in.Platform != "" {
+		info.Platform = new(in.Platform)
+		set = true
+	}
+	if in.Architecture != "" {
+		info.Architecture = new(in.Architecture)
+		set = true
+	}
+	if !set {
+		return nil
+	}
+	return info
 }
 
 // Register creates a new runner with the given registration token.
@@ -571,6 +729,9 @@ func Register(ctx context.Context, client *gitlabclient.Client, input RegisterIn
 	}
 	if input.Description != "" {
 		opts.Description = new(input.Description)
+	}
+	if info := buildRegisterInfo(input.Info); info != nil {
+		opts.Info = info
 	}
 	if input.Paused != nil {
 		opts.Paused = input.Paused
@@ -592,6 +753,9 @@ func Register(ctx context.Context, client *gitlabclient.Client, input RegisterIn
 	}
 	if input.MaintenanceNote != "" {
 		opts.MaintenanceNote = new(input.MaintenanceNote)
+	}
+	if input.Active != nil {
+		opts.Active = input.Active //nolint:staticcheck // Active is deprecated in client-go but mirrored 1:1.
 	}
 
 	r, _, err := client.GL().Runners.RegisterNewRunner(opts, gl.WithContext(ctx))
@@ -701,17 +865,23 @@ func ResetAuthToken(ctx context.Context, client *gitlabclient.Client, input Rese
 
 // ListAllInput defines parameters for listing all runners (admin).
 type ListAllInput struct {
-	Type    string `json:"type,omitempty"    jsonschema:"Runner type filter: instance_type, group_type, project_type"`
-	Status  string `json:"status,omitempty"  jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
-	Paused  *bool  `json:"paused,omitempty"  jsonschema:"Filter by paused state"`
-	TagList string `json:"tag_list,omitempty" jsonschema:"Comma-separated list of tags to filter by"`
+	Type    string   `json:"type,omitempty"     jsonschema:"Runner type filter: instance_type, group_type, project_type"`
+	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
+	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
+	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
+	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListAll returns all runners across the GitLab instance (admin endpoint).
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
 	return listRunners(ctx, runnerListRequest{
-		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage,
+		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
+		Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
+		Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
 	}, "list all runners", "listing all instance runners requires an admin token - use gitlab_runner_list (scoped to your accessible runners) instead",
 		client.GL().Runners.ListAllRunners)
 }
