@@ -95,7 +95,7 @@ type LinkEntry struct {
 type CreateBatchInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName   string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
-	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create. Each item supports only name, url, and link_type; do not include filepath or direct_asset_path; each item requires name and url,required"`
+	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create. Each item requires name and url and optionally accepts direct_asset_path, filepath (deprecated), and link_type,required"`
 }
 
 // CreateBatchOutput holds the results of a batch link creation.

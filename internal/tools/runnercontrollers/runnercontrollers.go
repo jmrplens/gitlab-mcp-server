@@ -79,6 +79,8 @@ func toDetailsOutput(rc *gl.RunnerControllerDetails) DetailsOutput {
 type ListInput struct {
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order the result set by (e.g. id, created_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 }
 
 // List retrieves all runner controllers (admin only).
@@ -89,6 +91,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	opts := &gl.ListRunnerControllersOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 
 	controllers, resp, err := client.GL().RunnerControllers.ListRunnerControllers(opts, gl.WithContext(ctx))
 	if err != nil {

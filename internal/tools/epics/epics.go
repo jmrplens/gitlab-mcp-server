@@ -92,6 +92,9 @@ type ListInput struct {
 	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
 	CreatedAfter       string   `json:"created_after,omitempty" jsonschema:"Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
 	CreatedBefore      string   `json:"created_before,omitempty" jsonschema:"Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter       string   `json:"updated_after,omitempty" jsonschema:"Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore      string   `json:"updated_before,omitempty" jsonschema:"Return epics updated on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	WithLabelsDetails  *bool    `json:"with_labels_details,omitempty" jsonschema:"If true, return more details (name, color, description) for each label in the labels field"`
 	First              *int64   `json:"first,omitempty" jsonschema:"Number of items to return (cursor-based pagination)"`
 	After              string   `json:"after,omitempty" jsonschema:"Cursor for forward pagination"`
 	IncludeAncestors   *bool    `json:"include_ancestors,omitempty" jsonschema:"Include epics from ancestor groups"`
@@ -434,6 +437,15 @@ func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
 	}
 	if t := toolutil.ParseOptionalTime(input.CreatedBefore); t != nil {
 		opts.CreatedBefore = t
+	}
+	if t := toolutil.ParseOptionalTime(input.UpdatedAfter); t != nil {
+		opts.UpdatedAfter = t
+	}
+	if t := toolutil.ParseOptionalTime(input.UpdatedBefore); t != nil {
+		opts.UpdatedBefore = t
+	}
+	if input.WithLabelsDetails != nil {
+		opts.WithLabelDetails = input.WithLabelsDetails
 	}
 	if input.IncludeAncestors != nil {
 		opts.IncludeAncestorGroups = input.IncludeAncestors

@@ -172,6 +172,7 @@ func TestList_RESTFilterOptions(t *testing.T) {
 		for _, key := range []string{
 			"state", "search", "labels", "sort", "order_by", "author_id",
 			"my_reaction_emoji", "created_after", "created_before",
+			"updated_after", "updated_before", "with_labels_details",
 			"include_ancestor_groups", "include_descendant_groups", "per_page",
 			"pagination", "page_token",
 		} {
@@ -195,6 +196,9 @@ func TestList_RESTFilterOptions(t *testing.T) {
 		Sort:                  "created_desc",
 		CreatedAfter:          "2026-01-01T00:00:00Z",
 		CreatedBefore:         "2026-12-31T23:59:59Z",
+		UpdatedAfter:          "2026-02-01T00:00:00Z",
+		UpdatedBefore:         "2026-11-30T23:59:59Z",
+		WithLabelsDetails:     &include,
 		First:                 &first,
 		IncludeAncestors:      &include,
 		IncludeDescendants:    &include,

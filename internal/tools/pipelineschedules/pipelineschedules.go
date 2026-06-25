@@ -548,6 +548,8 @@ func DeleteVariable(ctx context.Context, client *gitlabclient.Client, input Dele
 type ListTriggeredPipelinesInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	ScheduleID int                  `json:"schedule_id" jsonschema:"Pipeline schedule ID,required"`
+	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort       string               `json:"sort,omitempty"     jsonschema:"Sort direction for triggered pipelines: asc or desc (default asc)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -588,6 +590,12 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 
 	opts := &gitlab.ListPipelinesTriggeredByScheduleOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 
 	pipelines, resp, err := client.GL().PipelineSchedules.ListPipelinesTriggeredBySchedule(
 		string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx),

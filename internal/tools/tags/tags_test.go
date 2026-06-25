@@ -556,6 +556,32 @@ func TestTagProtect_Success(t *testing.T) {
 	}
 }
 
+// TestTagProtect_TagNameMapsToSDKName verifies that the MCP tag_name input is
+// forwarded to the GitLab API as the SDK `name` field (a deliberate rename: the
+// MCP surface uses tag_name throughout for clarity).
+func TestTagProtect_TagNameMapsToSDKName(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[]}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := ProtectTag(context.Background(), client, ProtectTagInput{
+		ProjectID: "42",
+		TagName:   "v*",
+	}); err != nil {
+		t.Fatalf("ProtectTag() unexpected error: %v", err)
+	}
+	if !strings.Contains(body, `"name":"v*"`) {
+		t.Errorf("request body = %q, want SDK name field carrying tag_name", body)
+	}
+}
+
 // TestTagProtect_EmptyProjectID verifies TagProtect when empty project ID.
 func TestTagProtect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

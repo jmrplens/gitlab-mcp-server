@@ -96,6 +96,26 @@ func TestList_WithKeysetPagination(t *testing.T) {
 	}
 }
 
+// TestList_WithOrderBySort verifies that List forwards the order_by and sort
+// query parameters (R-INPUT: gl.ListOptions.OrderBy/Sort).
+func TestList_WithOrderBySort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("order_by") != "created_at" {
+			t.Errorf("expected order_by=created_at, got %s", r.URL.Query().Get("order_by"))
+		}
+		if r.URL.Query().Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %s", r.URL.Query().Get("sort"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{OrderBy: "created_at", Sort: "desc"})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+}
+
 // TestList_Empty verifies that List handles empty results.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

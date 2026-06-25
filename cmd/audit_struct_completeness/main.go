@@ -342,6 +342,70 @@ func isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
 	return ok
 }
 
+// acceptedMissingInputs adjudicates R-INPUT "missing" fields that are legitimate
+// and intentional — the SDK *Options field IS exposed and wired, but the auditor's
+// tag diff cannot see it. Each entry carries an explicit rationale. Two key forms:
+//   - "<pkg>.<MCPType>"        — whole-type accept (e.g. an input that deliberately
+//     exposes only a curated subset of a very large SDK options struct).
+//   - "<pkg>.<MCPType>.<tag>"  — single-field accept (deliberate json-key rename,
+//     a param modeled on a nested object/slice element, a deprecated param the
+//     current endpoint replaced, or an SDK options field the endpoint doesn't accept).
+//
+// This makes the auditor's missing-input total fully explained: every accepted
+// miss is here with a reason, so any NEW genuine gap still surfaces.
+var acceptedMissingInputs = map[string]string{
+	// Deliberate json-key renames: the SDK param is exposed under a clearer/doc-correct
+	// MCP key and wired to the SDK field.
+	"branches.CreateInput.branch":                    "exposed as branch_name (wired to opts.Branch)",
+	"branches.ProtectInput.name":                     "exposed as branch_name (wired to opts.Name)",
+	"tags.ProtectTagInput.name":                      "exposed as tag_name (wired to opts.Name)",
+	"epics.ListInput.include_ancestor_groups":        "exposed as include_ancestors (wired to opts.IncludeAncestorGroups)",
+	"epics.ListInput.include_descendant_groups":      "exposed as include_descendants (wired to opts.IncludeDescendantGroups)",
+	"epics.ListInput.labels":                         "exposed as label_name []string (wired to opts.Labels)",
+	"workitems.ListWorkItemTypesInput.onlyAvailable": "exposed as only_available (snake_case of the SDK camelCase tag)",
+	"groupmilestones.ListInput.include_descendents":  "exposed as the doc-correct include_descendants (the SDK url tag has the include_descendents typo); wired to opts.IncludeDescendents",
+
+	// Deprecated params the current endpoint replaced.
+	"grouplabels.DeleteInput.name": "deprecated DELETE /groups/:id/labels name param; current endpoint uses label_id in path",
+	"grouplabels.UpdateInput.name": "deprecated PUT /groups/:id/labels name param; current endpoint uses label_id in path",
+
+	// SDK options fields the endpoint does not accept (generic ListOptions plumbing).
+	"groupsshcerts.ListInput.order_by": "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+	"groupsshcerts.ListInput.sort":     "group SSH certificates list accepts only id+pagination; gl.ListOptions ordering is unused plumbing",
+
+	// Params modeled on a nested object / slice element per the full-nested-object
+	// policy (the auditor flattens the SDK nested options into the parent input).
+	"snippets.ProjectCreateInput.file_path":           "modeled on the nested files[] object (CreateFileInput.FilePath)",
+	"snippets.ProjectUpdateInput.action":              "modeled on the nested files[] object (UpdateFileInput.Action)",
+	"snippets.ProjectUpdateInput.file_path":           "modeled on the nested files[] object (UpdateFileInput.FilePath)",
+	"snippets.ProjectUpdateInput.previous_path":       "modeled on the nested files[] object (UpdateFileInput.PreviousPath)",
+	"releaselinks.CreateBatchInput.name":              "modeled on the links[] slice element (LinkEntry.Name); auditor does not recurse named slice types",
+	"releaselinks.CreateBatchInput.url":               "modeled on the links[] slice element (LinkEntry.URL)",
+	"releaselinks.CreateBatchInput.direct_asset_path": "modeled on the links[] slice element (LinkEntry.DirectAssetPath)",
+	"releaselinks.CreateBatchInput.filepath":          "modeled on the links[] slice element (LinkEntry.FilePath, deprecated alias)",
+	"releaselinks.CreateBatchInput.link_type":         "modeled on the links[] slice element (LinkEntry.LinkType)",
+
+	// Param present on all public create inputs; the auditor flagged it on an
+	// unexported helper struct the &gl.Options{} literal is attributed to.
+	"awardemoji.noteEmojiRequest.name": "name is exposed + wired on every public create input; flagged on an unexported helper struct",
+
+	// Whole-type curated subset: override_params accepts the full CreateProjectOptions
+	// set (~79 fields); the import tool exposes the commonly-overridden subset — full
+	// project configuration is available via the dedicated gitlab_project create/update
+	// tools. (topics/tag_list are also excluded due to an SDK multipart []string bug.)
+	"projectimportexport.ImportOverrideParamsInput": "override_params curated subset; full project config via gitlab_project create/update tools",
+}
+
+// isAcceptedMissingInput reports whether an input pair's missing field is an
+// adjudicated legitimate omission, checking the whole-type key first then per-field.
+func isAcceptedMissingInput(pkg, mcpType, tag string) bool {
+	if _, ok := acceptedMissingInputs[pkg+"."+mcpType]; ok {
+		return true
+	}
+	_, ok := acceptedMissingInputs[pkg+"."+mcpType+"."+tag]
+	return ok
+}
+
 // gap is one diffed MCP↔SDK struct pair under a package.
 type gap struct {
 	Kind           string         `json:"kind"` // "input" or "output"
@@ -522,7 +586,7 @@ func analyzePackage(pkg *packages.Package) (packageReport, bool) {
 			continue
 		}
 		pr.InputPairs++
-		g := diffPair("input", pair)
+		g := diffPair(pr.Package, "input", pair)
 		pr.MissingInputCount += len(g.MissingFields)
 		appendGapIfAny(&pr, g)
 	}
@@ -780,7 +844,7 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 // diffOutputGroup against the union of their SDK structs (FIX A); diffPair is
 // input-only. SDK fields absent from the MCP struct are MISSING (R-INPUT);
 // fields present but type-divergent are advisory TypeMismatches.
-func diffPair(kind string, pair structPair) gap {
+func diffPair(pkg, kind string, pair structPair) gap {
 	mcpFields := flattenFields(pair.mcpType, []string{"json"})
 	sdkTagKeys := []string{"json"}
 	if pair.sdkURLTags {
@@ -805,6 +869,12 @@ func diffPair(kind string, pair structPair) gap {
 			}
 		}
 		if !present {
+			// Adjudicated legitimate input omission (deliberate rename, nested-object
+			// modeling, deprecated/non-accepted param, or curated subset) — each
+			// carries a rationale in acceptedMissingInputs.
+			if kind == "input" && isAcceptedMissingInput(pkg, pair.mcpName, tag) {
+				continue
+			}
 			g.MissingFields = append(g.MissingFields, missingField{Tag: tag, SDKType: sdkType})
 			continue
 		}

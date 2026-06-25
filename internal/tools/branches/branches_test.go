@@ -6,6 +6,7 @@ package branches
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -229,6 +230,59 @@ func TestBranchCreate_Success(t *testing.T) {
 	}
 	if out.Commit == nil || out.Commit.ID != "abc123def456" {
 		t.Errorf("out.Commit.ID = %v, want %q", out.Commit, "abc123def456")
+	}
+}
+
+// TestBranchCreate_BranchNameMapsToSDKBranch verifies that the MCP branch_name
+// input is forwarded to the GitLab API as the SDK `branch` field (a deliberate
+// rename: the MCP surface uses branch_name throughout for clarity).
+func TestBranchCreate_BranchNameMapsToSDKBranch(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathRepoBranches {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"name":"feature/auth","commit":{"id":"abc"}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID:  "42",
+		BranchName: testBranchAuth,
+		Ref:        "main",
+	}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if !strings.Contains(body, `"branch":"feature/auth"`) {
+		t.Errorf("request body = %q, want SDK branch field carrying branch_name", body)
+	}
+}
+
+// TestBranchProtect_BranchNameMapsToSDKName verifies that the MCP branch_name
+// input is forwarded to the GitLab API as the SDK `name` field (a deliberate
+// rename consistent with the rest of the branches surface).
+func TestBranchProtect_BranchNameMapsToSDKName(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"main"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := Protect(context.Background(), client, ProtectInput{
+		ProjectID:  "42",
+		BranchName: "main",
+	}); err != nil {
+		t.Fatalf(fmtProtectErr, err)
+	}
+	if !strings.Contains(body, `"name":"main"`) {
+		t.Errorf("request body = %q, want SDK name field carrying branch_name", body)
 	}
 }
 

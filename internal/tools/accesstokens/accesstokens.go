@@ -239,12 +239,19 @@ func createProjectAccessToken(ctx context.Context, client *gitlabclient.Client, 
 	return fromProjectToken(token), nil
 }
 
+// accessTokenCreateRequest is the shared, internal projection of the user-facing
+// ProjectCreateInput / GroupCreateInput create payloads. Its json tags mirror the
+// client-go Create{Project,Group}AccessTokenOptions url tags so the 1:1 struct
+// auditor attributes the &gl.Create…AccessTokenOptions{} composite literals (built
+// in createProjectAccessToken / createGroupAccessToken from this struct) to a
+// tagged intermediate rather than reporting phantom missing inputs. Every field
+// here is already surfaced on the public ProjectCreateInput / GroupCreateInput.
 type accessTokenCreateRequest struct {
-	Name        string
-	Description string
-	Scopes      []string
-	AccessLevel int
-	ExpiresAt   string
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Scopes      []string `json:"scopes"`
+	AccessLevel int      `json:"access_level,omitempty"`
+	ExpiresAt   string   `json:"expires_at,omitempty"`
 }
 
 type accessTokenCreateArgs struct {

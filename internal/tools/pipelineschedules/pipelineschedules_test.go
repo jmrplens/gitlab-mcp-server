@@ -1476,6 +1476,37 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 	}
 }
 
+// TestListTriggeredPipelines_OrderByAndSort verifies ListTriggeredPipelines
+// forwards the order_by and sort query parameters to the GitLab API.
+func TestListTriggeredPipelines_OrderByAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "id" {
+				t.Errorf("order_by = %q, want id", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"id":100,"iid":10,"project_id":42,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100"}
+			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
+		ProjectID: "42", ScheduleID: 1,
+		OrderBy: "id", Sort: "desc",
+	})
+	if err != nil {
+		t.Fatalf("ListTriggeredPipelines() error: %v", err)
+	}
+	if len(out.Pipelines) != 1 {
+		t.Fatalf("len(Pipelines) = %d, want 1", len(out.Pipelines))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // toOutput — all optional fields (owner, timestamps)
 // ---------------------------------------------------------------------------.

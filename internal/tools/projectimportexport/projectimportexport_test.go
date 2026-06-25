@@ -802,16 +802,24 @@ func TestScheduleExport_NestedUploadNoMethod(t *testing.T) {
 // TestImportFromFile_OverrideParams verifies that override_params are mapped
 // onto the SDK ImportFileOptions and forwarded in the multipart request body.
 func TestImportFromFile_OverrideParams(t *testing.T) {
+	wantParams := map[string]string{
+		"override_params[visibility]":                      "private",
+		"override_params[description]":                     "overridden",
+		"override_params[name]":                            "renamed",
+		"override_params[path]":                            "renamed-path",
+		"override_params[namespace_id]":                    "42",
+		"override_params[shared_runners_enabled]":          "true",
+		"override_params[container_registry_access_level]": "private",
+	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
 			if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
 				t.Fatalf("parse multipart: %v", err)
 			}
-			if got := r.FormValue("override_params[visibility]"); got != "private" {
-				t.Errorf("override_params[visibility] = %q, want private", got)
-			}
-			if got := r.FormValue("override_params[description]"); got != "overridden" {
-				t.Errorf("override_params[description] = %q, want overridden", got)
+			for key, want := range wantParams {
+				if got := r.FormValue(key); got != want {
+					t.Errorf("%s = %q, want %q", key, got, want)
+				}
 			}
 			testutil.RespondJSON(w, http.StatusCreated,
 				`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)
@@ -822,22 +830,28 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	lfs := true
+	nsID := int64(42)
 	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
 		Name:          "p",
 		Path:          "p",
 		OverrideParams: &ImportOverrideParamsInput{
-			Description:              "overridden",
-			Visibility:               "private",
-			DefaultBranch:            "main",
-			MergeMethod:              "ff",
-			RequestAccessEnabled:     &lfs,
-			LFSEnabled:               &lfs,
-			IssuesAccessLevel:        "enabled",
-			MergeRequestsAccessLevel: "private",
-			WikiAccessLevel:          "disabled",
-			BuildsAccessLevel:        "enabled",
-			SnippetsAccessLevel:      "private",
+			Name:                         "renamed",
+			Path:                         "renamed-path",
+			NamespaceID:                  &nsID,
+			Description:                  "overridden",
+			Visibility:                   "private",
+			DefaultBranch:                "main",
+			MergeMethod:                  "ff",
+			RequestAccessEnabled:         &lfs,
+			LFSEnabled:                   &lfs,
+			SharedRunnersEnabled:         &lfs,
+			IssuesAccessLevel:            "enabled",
+			MergeRequestsAccessLevel:     "private",
+			WikiAccessLevel:              "disabled",
+			BuildsAccessLevel:            "enabled",
+			SnippetsAccessLevel:          "private",
+			ContainerRegistryAccessLevel: "private",
 		},
 	})
 	if err != nil {

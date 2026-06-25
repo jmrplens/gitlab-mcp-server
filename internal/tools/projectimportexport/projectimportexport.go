@@ -175,21 +175,32 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 // accepts under the import-from-file `override_params` field. It maps to
 // [gl.CreateProjectOptions] (the type of [gl.ImportFileOptions.OverrideParams]).
 //
-// GitLab documents override_params as accepting the same attributes as the
-// create-project API; this struct surfaces the attributes that are meaningful
-// to override during an import. Only set fields are forwarded.
+// GitLab documents override_params as accepting the full set of create-project
+// attributes (the entire [gl.CreateProjectOptions] set, ~79 fields). Exposing
+// all of them as flat MCP input fields would bloat this tool's schema and
+// duplicate the dedicated gitlab_project create/update tools, so this struct
+// deliberately surfaces only the commonly-overridden subset a user realistically
+// changes during an import (identity, visibility, default branch, merge method,
+// access-request/LFS/shared-runner toggles, and the high-traffic feature access
+// levels). Full project configuration remains available via the dedicated
+// gitlab_project create/update tools. Only set fields are forwarded.
 type ImportOverrideParamsInput struct {
-	Description              string `json:"description,omitempty" jsonschema:"Override the imported project's description"`
-	Visibility               string `json:"visibility,omitempty" jsonschema:"Override visibility level (private, internal, public)"`
-	DefaultBranch            string `json:"default_branch,omitempty" jsonschema:"Override the default branch name"`
-	MergeMethod              string `json:"merge_method,omitempty" jsonschema:"Override merge method (merge, rebase_merge, ff)"`
-	RequestAccessEnabled     *bool  `json:"request_access_enabled,omitempty" jsonschema:"Override whether users can request access"`
-	LFSEnabled               *bool  `json:"lfs_enabled,omitempty" jsonschema:"Override Git LFS enablement"`
-	IssuesAccessLevel        string `json:"issues_access_level,omitempty" jsonschema:"Override issues access level (disabled, private, enabled)"`
-	MergeRequestsAccessLevel string `json:"merge_requests_access_level,omitempty" jsonschema:"Override merge requests access level (disabled, private, enabled)"`
-	WikiAccessLevel          string `json:"wiki_access_level,omitempty" jsonschema:"Override wiki access level (disabled, private, enabled)"`
-	BuildsAccessLevel        string `json:"builds_access_level,omitempty" jsonschema:"Override CI/CD builds access level (disabled, private, enabled)"`
-	SnippetsAccessLevel      string `json:"snippets_access_level,omitempty" jsonschema:"Override snippets access level (disabled, private, enabled)"`
+	Name                         string `json:"name,omitempty" jsonschema:"Override the imported project's name"`
+	Path                         string `json:"path,omitempty" jsonschema:"Override the imported project's URL path (slug)"`
+	NamespaceID                  *int64 `json:"namespace_id,omitempty" jsonschema:"Override the namespace ID the imported project is created in"`
+	Description                  string `json:"description,omitempty" jsonschema:"Override the imported project's description"`
+	Visibility                   string `json:"visibility,omitempty" jsonschema:"Override visibility level (private, internal, public)"`
+	DefaultBranch                string `json:"default_branch,omitempty" jsonschema:"Override the default branch name"`
+	MergeMethod                  string `json:"merge_method,omitempty" jsonschema:"Override merge method (merge, rebase_merge, ff)"`
+	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Override whether users can request access"`
+	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty" jsonschema:"Override Git LFS enablement"`
+	SharedRunnersEnabled         *bool  `json:"shared_runners_enabled,omitempty" jsonschema:"Override whether shared (instance) CI runners are enabled"`
+	IssuesAccessLevel            string `json:"issues_access_level,omitempty" jsonschema:"Override issues access level (disabled, private, enabled)"`
+	MergeRequestsAccessLevel     string `json:"merge_requests_access_level,omitempty" jsonschema:"Override merge requests access level (disabled, private, enabled)"`
+	WikiAccessLevel              string `json:"wiki_access_level,omitempty" jsonschema:"Override wiki access level (disabled, private, enabled)"`
+	BuildsAccessLevel            string `json:"builds_access_level,omitempty" jsonschema:"Override CI/CD builds access level (disabled, private, enabled)"`
+	SnippetsAccessLevel          string `json:"snippets_access_level,omitempty" jsonschema:"Override snippets access level (disabled, private, enabled)"`
+	ContainerRegistryAccessLevel string `json:"container_registry_access_level,omitempty" jsonschema:"Override container registry access level (disabled, private, enabled)"`
 }
 
 // ImportFromFileInput is the input for importing a project from an archive
@@ -392,6 +403,18 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 	}
 	opts := &gl.CreateProjectOptions{}
 	set := false
+	if in.Name != "" {
+		opts.Name = new(in.Name)
+		set = true
+	}
+	if in.Path != "" {
+		opts.Path = new(in.Path)
+		set = true
+	}
+	if in.NamespaceID != nil {
+		opts.NamespaceID = in.NamespaceID
+		set = true
+	}
 	if in.Description != "" {
 		opts.Description = new(in.Description)
 		set = true
@@ -418,6 +441,10 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 		opts.LFSEnabled = in.LFSEnabled
 		set = true
 	}
+	if in.SharedRunnersEnabled != nil {
+		opts.SharedRunnersEnabled = in.SharedRunnersEnabled
+		set = true
+	}
 	if in.IssuesAccessLevel != "" {
 		v := gl.AccessControlValue(in.IssuesAccessLevel)
 		opts.IssuesAccessLevel = &v
@@ -441,6 +468,11 @@ func buildOverrideParams(in *ImportOverrideParamsInput) *gl.CreateProjectOptions
 	if in.SnippetsAccessLevel != "" {
 		v := gl.AccessControlValue(in.SnippetsAccessLevel)
 		opts.SnippetsAccessLevel = &v
+		set = true
+	}
+	if in.ContainerRegistryAccessLevel != "" {
+		v := gl.AccessControlValue(in.ContainerRegistryAccessLevel)
+		opts.ContainerRegistryAccessLevel = &v
 		set = true
 	}
 	if !set {

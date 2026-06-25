@@ -26965,6 +26965,21 @@
         "state": {
           "description": "Filter by state (opened/closed/all)",
           "type": "string"
+        },
+        "updated_after": {
+          "description": "Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return epics updated on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
+        },
+        "with_labels_details": {
+          "description": "If true, return more details (name, color, description) for each label in the labels field",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [
@@ -60925,6 +60940,10 @@
               "description": "Override CI/CD builds access level (disabled, private, enabled)",
               "type": "string"
             },
+            "container_registry_access_level": {
+              "description": "Override container registry access level (disabled, private, enabled)",
+              "type": "string"
+            },
             "default_branch": {
               "description": "Override the default branch name",
               "type": "string"
@@ -60952,8 +60971,30 @@
               "description": "Override merge requests access level (disabled, private, enabled)",
               "type": "string"
             },
+            "name": {
+              "description": "Override the imported project's name",
+              "type": "string"
+            },
+            "namespace_id": {
+              "description": "Override the namespace ID the imported project is created in",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "path": {
+              "description": "Override the imported project's URL path (slug)",
+              "type": "string"
+            },
             "request_access_enabled": {
               "description": "Override whether users can request access",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "shared_runners_enabled": {
+              "description": "Override whether shared (instance) CI runners are enabled",
               "type": [
                 "null",
                 "boolean"
@@ -135004,6 +135045,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. id)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
@@ -135027,6 +135072,10 @@
         "schedule_id": {
           "description": "Pipeline schedule ID",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction for triggered pipelines: asc or desc (default asc)",
+          "type": "string"
         }
       },
       "required": [
@@ -176518,6 +176567,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order the result set by (e.g. id, created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
@@ -176533,6 +176586,10 @@
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
+          "type": "string"
         }
       },
       "type": "object"
@@ -177073,6 +177130,10 @@
           "description": "Runner controller ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order the result set by (e.g. id, created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
@@ -177088,6 +177149,10 @@
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
+          "type": "string"
         }
       },
       "required": [
