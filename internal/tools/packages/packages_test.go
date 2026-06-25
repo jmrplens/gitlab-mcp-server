@@ -20,6 +20,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -439,11 +440,11 @@ func TestPackageList_Success(t *testing.T) {
 	if out.Packages[0].LastDownloadedAt == "" {
 		t.Error("Packages[0].LastDownloadedAt should not be empty")
 	}
-	if len(out.Packages[0].Tags) != 1 || out.Packages[0].Tags[0] != "latest" {
+	if len(out.Packages[0].Tags) != 1 || out.Packages[0].Tags[0].Name != "latest" {
 		t.Errorf("Packages[0].Tags = %v, want [latest]", out.Packages[0].Tags)
 	}
-	if out.Packages[0].WebPath != "/project/-/packages/10" {
-		t.Errorf("Packages[0].WebPath = %q, want %q", out.Packages[0].WebPath, "/project/-/packages/10")
+	if out.Packages[0].Links == nil || out.Packages[0].Links.WebPath != "/project/-/packages/10" {
+		t.Errorf("Packages[0].Links = %+v, want WebPath=/project/-/packages/10", out.Packages[0].Links)
 	}
 }
 
@@ -494,6 +495,127 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 	}
 	if pipeline.User == nil || pipeline.User.Username != "alice" {
 		t.Fatalf("pipeline user = %+v, want alice", pipeline.User)
+	}
+}
+
+// TestPublish_SelectOverride verifies that an explicit select value is
+// forwarded to the GitLab API as the select query parameter, overriding
+// the default package_file selection.
+func TestPublish_SelectOverride(t *testing.T) {
+	var gotSelect string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			gotSelect = r.URL.Query().Get("select")
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"package_id":10,"file_name":"app.tar.gz","size":4,"file_sha256":"abc"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Publish(context.Background(), nil, client, PublishInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: "1.0.0",
+		FileName:       "app.tar.gz",
+		ContentBase64:  base64.StdEncoding.EncodeToString([]byte("data")),
+		Select:         "package_file",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if gotSelect != "package_file" {
+		t.Errorf("select query = %q, want package_file", gotSelect)
+	}
+}
+
+// TestFileList_OrderingAndKeyset verifies that order_by, sort, and
+// keyset pagination inputs are propagated to the GitLab API query.
+func TestFileList_OrderingAndKeyset(t *testing.T) {
+	var orderBy, sort, pagination, pageToken string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/packages/10/package_files" {
+			q := r.URL.Query()
+			orderBy, sort = q.Get("order_by"), q.Get("sort")
+			pagination, pageToken = q.Get("pagination"), q.Get("page_token")
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":20,"package_id":10,"file_name":"app.bin","size":1,"file_sha256":"h"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := FileList(context.Background(), client, FileListInput{
+		ProjectID:             "1",
+		PackageID:             "10",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "20"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if orderBy != "created_at" || sort != "desc" {
+		t.Errorf("order_by/sort = %q/%q, want created_at/desc", orderBy, sort)
+	}
+	if pagination != "keyset" || pageToken != "20" {
+		t.Errorf("pagination/page_token = %q/%q, want keyset/20", pagination, pageToken)
+	}
+}
+
+// TestList_KeysetPagination verifies that the package list keyset
+// pagination inputs are propagated to the GitLab API query.
+func TestList_KeysetPagination(t *testing.T) {
+	var pagination, pageToken string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathAPIPkgs1 {
+			q := r.URL.Query()
+			pagination, pageToken = q.Get("pagination"), q.Get("page_token")
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "1",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "55"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if pagination != "keyset" || pageToken != "55" {
+		t.Errorf("pagination/page_token = %q/%q, want keyset/55", pagination, pageToken)
+	}
+}
+
+// TestPackageToListItem_FullNestedObjects verifies that _links
+// (delete_api_path), tag timestamps, and the full pipeline user object
+// (state, avatar_url, created_at) are mirrored from the GitLab Package.
+func TestPackageToListItem_FullNestedObjects(t *testing.T) {
+	now := time.Date(2026, 5, 6, 11, 0, 0, 0, time.UTC)
+	item := packageToListItem(&gl.Package{
+		ID:          7,
+		Name:        "pkg",
+		PackageType: "generic",
+		Status:      "default",
+		Links:       &gl.PackageLinks{WebPath: "/p/7", DeleteAPIPath: "/api/v4/p/7"},
+		Tags:        []gl.PackageTag{{ID: 1, PackageID: 7, Name: "latest", CreatedAt: &now, UpdatedAt: &now}},
+		Pipeline: &gl.PackagePipeline{
+			ID: 9, Status: "success",
+			User: &gl.BasicUser{
+				ID: 5, Username: "alice", Name: "Alice",
+				State: "active", AvatarURL: "https://gitlab.example.com/a.png",
+				WebURL: "https://gitlab.example.com/alice", CreatedAt: &now,
+			},
+		},
+	})
+
+	if item.Links == nil || item.Links.DeleteAPIPath != "/api/v4/p/7" {
+		t.Errorf("Links = %+v, want DeleteAPIPath set", item.Links)
+	}
+	if len(item.Tags) != 1 || item.Tags[0].CreatedAt == "" || item.Tags[0].UpdatedAt == "" {
+		t.Errorf("Tags = %+v, want timestamps populated", item.Tags)
+	}
+	if item.Pipeline.User == nil || item.Pipeline.User.State != "active" ||
+		item.Pipeline.User.AvatarURL == "" || item.Pipeline.User.CreatedAt == "" {
+		t.Errorf("pipeline user = %+v, want full user fields", item.Pipeline.User)
 	}
 }
 

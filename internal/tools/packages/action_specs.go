@@ -79,6 +79,20 @@ func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 	return toolutil.NewDeleteActionSpec(name, route, packageOptions(name, individualTool))
 }
 
+// packageActionDescriptions provides the discovery-metadata
+// individual-tool descriptions (R-META "Returns: … See also: …" form)
+// for each Generic Package Registry action.
+var packageActionDescriptions = map[string]string{
+	"publish":           "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
+	"download":          "Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: gitlab_package_file_list, gitlab_package_list.",
+	"list":              "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
+	"file_list":         "List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
+	"delete":            "Delete a package permanently. Returns: a success confirmation naming the deleted package and project. See also: gitlab_package_list, gitlab_package_file_delete.",
+	"file_delete":       "Delete a single file from a package permanently. Returns: a success confirmation naming the deleted file, package, and project. See also: gitlab_package_file_list, gitlab_package_delete.",
+	"publish_and_link":  "Publish a file to the Generic Package Registry and link it to a release in one call. Returns: the published file metadata and the created release asset link. See also: gitlab_package_publish, gitlab_package_publish_directory, gitlab_release_get.",
+	"publish_directory": "Publish every regular file from a local directory to the Generic Package Registry. Returns: total files, total bytes, per-file results, and any per-file errors. See also: gitlab_package_publish, gitlab_package_publish_and_link, gitlab_package_list.",
+}
+
 // packageOptions returns the base [toolutil.ActionSpecOptions] for a
 // Generic Package Registry action and customizes the Usage,
 // ParameterGuidance, and InputSchemaOverrides for the list and
@@ -89,6 +103,9 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		OpenWorld:      true,
 		OwnerPackage:   "packages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+	if desc, ok := packageActionDescriptions[actionName]; ok {
+		options.IndividualTool.Description = desc
 	}
 	if actionName == "list" {
 		options.Usage = "List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at."
