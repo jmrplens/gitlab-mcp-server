@@ -11,15 +11,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ListInput holds pagination parameters for listing all snippet storage moves.
+// ListInput holds pagination and ordering parameters for listing all snippet
+// storage moves. Offset and keyset pagination are both supported, mirroring
+// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions).
 type ListInput struct {
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Field to order results by (for example 'id'). Maps to the GitLab order_by query parameter."`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction: 'asc' or 'desc'. Maps to the GitLab sort query parameter."`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// ListForSnippetInput holds parameters for listing storage moves for a specific snippet.
+// ListForSnippetInput holds parameters for listing storage moves for a specific
+// snippet. Offset and keyset pagination are both supported, mirroring
+// gl.RetrieveAllSnippetStorageMovesOptions (embedded gl.ListOptions).
 type ListForSnippetInput struct {
-	SnippetID int64 `json:"snippet_id" jsonschema:"Numeric ID of the snippet,required"`
+	SnippetID int64  `json:"snippet_id"         jsonschema:"Numeric ID of the snippet,required"`
+	OrderBy   string `json:"order_by,omitempty" jsonschema:"Field to order results by (for example 'id'). Maps to the GitLab order_by query parameter."`
+	Sort      string `json:"sort,omitempty"     jsonschema:"Sort direction: 'asc' or 'desc'. Maps to the GitLab sort query parameter."`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // IDInput holds parameters for getting a single storage move by ID.
@@ -56,11 +66,21 @@ type Output struct {
 	Snippet                *SnippetOutput `json:"snippet,omitempty"`
 }
 
-// SnippetOutput represents the snippet associated with a storage move.
+// SnippetOutput represents the snippet associated with a storage move. It
+// mirrors gl.RepositorySnippet exactly so the 1:1 audit surfaces every field
+// the GitLab API returns for the nested snippet reference.
 type SnippetOutput struct {
-	ID     int64  `json:"id"`
-	Title  string `json:"title"`
-	WebURL string `json:"web_url,omitempty"`
+	ID            int64      `json:"id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description,omitempty"`
+	Visibility    string     `json:"visibility,omitempty"`
+	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+	CreatedAt     *time.Time `json:"created_at,omitempty"`
+	ProjectID     int64      `json:"project_id,omitempty"`
+	WebURL        string     `json:"web_url,omitempty"`
+	RawURL        string     `json:"raw_url,omitempty"`
+	SSHURLToRepo  string     `json:"ssh_url_to_repo,omitempty"`
+	HTTPURLToRepo string     `json:"http_url_to_repo,omitempty"`
 }
 
 // ListOutput represents a paginated list of snippet storage moves.
@@ -83,11 +103,9 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	}
 
 	opts := gl.RetrieveAllSnippetStorageMovesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(in.Page),
-			PerPage: int64(in.PerPage),
-		},
+		ListOptions: gl.ListOptions{OrderBy: in.OrderBy, Sort: in.Sort},
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve all snippet storage moves", err, http.StatusForbidden,
@@ -112,11 +130,9 @@ func RetrieveForSnippet(ctx context.Context, client *gitlabclient.Client, in Lis
 	}
 
 	opts := gl.RetrieveAllSnippetStorageMovesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(in.Page),
-			PerPage: int64(in.PerPage),
-		},
+		ListOptions: gl.ListOptions{OrderBy: in.OrderBy, Sort: in.Sort},
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMovesForSnippet(in.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve snippet storage moves", err, http.StatusNotFound,
@@ -218,9 +234,17 @@ func toOutput(m *gl.SnippetRepositoryStorageMove) Output {
 	}
 	if m.Snippet != nil {
 		o.Snippet = &SnippetOutput{
-			ID:     m.Snippet.ID,
-			Title:  m.Snippet.Title,
-			WebURL: m.Snippet.WebURL,
+			ID:            m.Snippet.ID,
+			Title:         m.Snippet.Title,
+			Description:   m.Snippet.Description,
+			Visibility:    string(m.Snippet.Visibility),
+			UpdatedAt:     m.Snippet.UpdatedAt,
+			CreatedAt:     m.Snippet.CreatedAt,
+			ProjectID:     m.Snippet.ProjectID,
+			WebURL:        m.Snippet.WebURL,
+			RawURL:        m.Snippet.RawURL,
+			SSHURLToRepo:  m.Snippet.SSHURLToRepo,
+			HTTPURLToRepo: m.Snippet.HTTPURLToRepo,
 		}
 	}
 	return o

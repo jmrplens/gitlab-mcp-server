@@ -712,6 +712,107 @@ func TestFormatListMarkdown_NoPagination(t *testing.T) {
 	}
 }
 
+// fullSnippetMoveJSON is a storage move whose embedded snippet populates every
+// field of gl.RepositorySnippet so the 1:1 field mapping in toOutput is exercised.
+const fullSnippetMoveJSON = `{
+	"id": 7,
+	"created_at": "2026-01-15T10:30:00Z",
+	"state": "finished",
+	"source_storage_name": "default",
+	"destination_storage_name": "storage2",
+	"snippet": {
+		"id": 55,
+		"title": "my-snippet",
+		"description": "a snippet",
+		"visibility": "private",
+		"updated_at": "2026-02-01T08:00:00Z",
+		"created_at": "2026-01-01T08:00:00Z",
+		"project_id": 12,
+		"web_url": "https://gitlab.example.com/snippets/55",
+		"raw_url": "https://gitlab.example.com/snippets/55/raw",
+		"ssh_url_to_repo": "git@gitlab.example.com:snippets/55.git",
+		"http_url_to_repo": "https://gitlab.example.com/snippets/55.git"
+	}
+}`
+
+// TestToOutput_FullSnippetFields verifies that toOutput maps every field of the
+// embedded gl.RepositorySnippet onto SnippetOutput (1:1 audit).
+func TestToOutput_FullSnippetFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, fullSnippetMoveJSON)
+	}))
+
+	out, err := Get(context.Background(), client, IDInput{ID: 7})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := out.Snippet
+	if s == nil {
+		t.Fatal("expected snippet, got nil")
+	}
+	if s.ID != 55 || s.Title != "my-snippet" || s.Description != "a snippet" {
+		t.Errorf("unexpected core fields: %+v", s)
+	}
+	if s.Visibility != "private" {
+		t.Errorf("Visibility = %q, want private", s.Visibility)
+	}
+	if s.ProjectID != 12 {
+		t.Errorf("ProjectID = %d, want 12", s.ProjectID)
+	}
+	if s.UpdatedAt == nil || s.CreatedAt == nil {
+		t.Fatal("expected non-nil UpdatedAt/CreatedAt")
+	}
+	if s.RawURL == "" || s.SSHURLToRepo == "" || s.HTTPURLToRepo == "" {
+		t.Errorf("expected populated repo URLs, got %+v", s)
+	}
+}
+
+// TestRetrieveAll_OrderingAndKeyset verifies that order_by, sort, and keyset
+// pagination parameters are forwarded to the GitLab API.
+func TestRetrieveAll_OrderingAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "100")
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	in := ListInput{OrderBy: "id", Sort: "desc"}
+	in.Pagination = "keyset"
+	in.PageToken = "100"
+	out, err := RetrieveAll(context.Background(), client, in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("expected 1 move, got %d", len(out.Moves))
+	}
+}
+
+// TestRetrieveForSnippet_OrderingAndKeyset verifies that order_by, sort, and
+// keyset pagination parameters are forwarded for the per-snippet listing.
+func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "asc")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "42")
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	in := ListForSnippetInput{SnippetID: 55, OrderBy: "id", Sort: "asc"}
+	in.Pagination = "keyset"
+	in.PageToken = "42"
+	out, err := RetrieveForSnippet(context.Background(), client, in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("expected 1 move, got %d", len(out.Moves))
+	}
+}
+
 // TestFormatScheduleAllMarkdown verifies the schedule-all confirmation message
 // rendering.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
