@@ -35,6 +35,7 @@ type Output struct {
 	Encoding        string `json:"encoding"`
 	Content         string `json:"content"`
 	ContentCategory string `json:"content_category"`
+	SHA256          string `json:"content_sha256"`
 	Ref             string `json:"ref"`
 	BlobID          string `json:"blob_id"`
 	CommitID        string `json:"commit_id"`
@@ -108,6 +109,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		Encoding:        f.Encoding,
 		Content:         content,
 		ContentCategory: category,
+		SHA256:          f.SHA256,
 		Ref:             f.Ref,
 		BlobID:          f.BlobID,
 		CommitID:        f.CommitID,
@@ -481,13 +483,16 @@ type MetaDataInput struct {
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
 }
 
-// MetaDataOutput holds file metadata without content.
+// MetaDataOutput holds file metadata. The metadata endpoints use HEAD
+// requests, so Content mirrors gl.File.Content but is normally empty; it is
+// surfaced for 1:1 parity with the GitLab File representation.
 type MetaDataOutput struct {
 	toolutil.HintableOutput
 	FileName        string `json:"file_name"`
 	FilePath        string `json:"file_path"`
 	Size            int64  `json:"size"`
 	Encoding        string `json:"encoding"`
+	Content         string `json:"content,omitempty"`
 	Ref             string `json:"ref"`
 	BlobID          string `json:"blob_id"`
 	CommitID        string `json:"commit_id"`
@@ -529,6 +534,7 @@ func fileMetadataOutput(file *gl.File) MetaDataOutput {
 		FilePath:        file.FilePath,
 		Size:            file.Size,
 		Encoding:        file.Encoding,
+		Content:         file.Content,
 		Ref:             file.Ref,
 		BlobID:          file.BlobID,
 		CommitID:        file.CommitID,
@@ -547,6 +553,7 @@ type RawInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
+	LFS       *bool                `json:"lfs,omitempty" jsonschema:"Fetch the target of an LFS pointer instead of the pointer file itself"`
 }
 
 // RawOutput holds the raw content of a file.
@@ -574,6 +581,9 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 	opts := &gl.GetRawFileOptions{}
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
+	}
+	if input.LFS != nil {
+		opts.LFS = input.LFS
 	}
 	data, _, err := client.GL().RepositoryFiles.GetRawFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -617,6 +627,7 @@ type RawMetaDataInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	FilePath  string               `json:"file_path"  jsonschema:"URL-encoded full path of the file,required"`
 	Ref       string               `json:"ref,omitempty" jsonschema:"Branch, tag, or commit SHA (defaults to default branch)"`
+	LFS       *bool                `json:"lfs,omitempty" jsonschema:"Fetch the target of an LFS pointer instead of the pointer file itself"`
 }
 
 // GetRawFileMetaData retrieves file metadata from the raw file endpoint
@@ -628,6 +639,9 @@ func GetRawFileMetaData(ctx context.Context, client *gitlabclient.Client, input 
 			opts := &gl.GetRawFileOptions{}
 			if ref != "" {
 				opts.Ref = new(ref)
+			}
+			if input.LFS != nil {
+				opts.LFS = input.LFS
 			}
 			file, _, err := client.GL().RepositoryFiles.GetRawFileMetaData(projectID, filePath, opts, gl.WithContext(ctx))
 			return file, err
