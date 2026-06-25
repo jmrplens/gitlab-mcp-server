@@ -341,7 +341,7 @@ type BlockingMergeRequestOutput struct {
 	WorkInProgress              bool                        `json:"work_in_progress"`
 	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds"`
 	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
-	ApprovalsBeforeMerge        *int64                      `json:"approvals_before_merge,omitempty"`
+	ApprovalsBeforeMerge        *int64                      `json:"approvals_before_merge,omitempty" tier:"premium"`
 	Reference                   string                      `json:"reference"`
 	MergeStatus                 string                      `json:"merge_status"`
 }
