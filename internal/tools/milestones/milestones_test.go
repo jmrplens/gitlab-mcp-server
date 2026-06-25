@@ -1400,3 +1400,126 @@ func milestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]
 	}
 	return byTool
 }
+
+// TestList_IncludeParentMilestones verifies List forwards the deprecated
+// include_parent_milestones flag (1:1 SDK field coverage).
+func TestList_IncludeParentMilestones(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("include_parent_milestones") != "true" {
+			t.Errorf("expected include_parent_milestones=true, got %q", r.URL.Query().Get("include_parent_milestones"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
+	}))
+	_, err := List(context.Background(), client, ListInput{ProjectID: "42", IncludeParentMilestones: true})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_OrderBySortAndKeyset verifies List forwards order_by, sort, and
+// keyset pagination parameters (1:1 SDK field coverage).
+func TestList_OrderBySortAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "due_date" {
+			t.Errorf("expected order_by=due_date, got %q", q.Get("order_by"))
+		}
+		if q.Get("sort") != "asc" {
+			t.Errorf("expected sort=asc, got %q", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok123" {
+			t.Errorf("expected page_token=tok123, got %q", q.Get("page_token"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		OrderBy:               "due_date",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGetIssues_OrderBySortAndKeyset verifies GetIssues forwards order_by,
+// sort, and keyset pagination parameters (1:1 SDK field coverage).
+func TestGetIssues_OrderBySortAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones+"/1/issues" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "created_at" {
+				t.Errorf("expected order_by=created_at, got %q", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok9" {
+				t.Errorf("expected page_token=tok9, got %q", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := GetIssues(context.Background(), client, GetIssuesInput{
+		ProjectID:             "42",
+		MilestoneIID:          1,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok9"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGetMergeRequests_OrderBySortAndKeyset verifies GetMergeRequests forwards
+// order_by, sort, and keyset pagination parameters (1:1 SDK field coverage).
+func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones && r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"project_id":42,"title":"v1.0"}]`)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectMilestones+"/1/merge_requests" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "updated_at" {
+				t.Errorf("expected order_by=updated_at, got %q", q.Get("order_by"))
+			}
+			if q.Get("sort") != "asc" {
+				t.Errorf("expected sort=asc, got %q", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok42" {
+				t.Errorf("expected page_token=tok42, got %q", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{
+		ProjectID:             "42",
+		MilestoneIID:          1,
+		OrderBy:               "updated_at",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}

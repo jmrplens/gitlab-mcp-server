@@ -95,10 +95,12 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Usage = "List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews."
 		options.Aliases = []string{"list milestones", "show project milestones", "find milestones"}
 		options.RelatedActions = []string{"milestone.get", "milestone.issues", "milestone.merge_requests"}
+		options.IndividualTool.Description = "List milestones in one project with state/title/search filters, ancestor inclusion, ordering, and pagination. Returns: matching milestones with state, dates, expiry, web URL, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_create, gitlab_milestone_issues."
 	case "milestone_get":
 		options.Usage = "Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required."
 		options.Aliases = []string{"get milestone", "show milestone details", "lookup milestone"}
 		options.RelatedActions = []string{"milestone.list", "milestone.issues", "milestone.merge_requests"}
+		options.IndividualTool.Description = "Get a single milestone from a project by milestone IID. Returns: milestone title, description, state, start/due dates, expiry, group/project IDs, timestamps, and web URL. See also: gitlab_milestone_list, gitlab_milestone_update, gitlab_milestone_issues, gitlab_milestone_merge_requests."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"milestone_iid": {
 				SemanticRole:     "milestone_iid",
@@ -111,6 +113,27 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Usage = "Create a milestone in a project with title and optional description/start/due dates."
 		options.Aliases = []string{"create milestone", "new milestone", "add milestone"}
 		options.RelatedActions = []string{"milestone.get", "milestone.update", "issue.list"}
+		options.IndividualTool.Description = "Create a new milestone in a project with title and optional description, start date, and due date. Returns: the created milestone with IID, state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list."
+	case "milestone_update":
+		options.Usage = "Update an existing milestone's title, description, dates, or state (close/activate) by milestone_iid."
+		options.Aliases = []string{"update milestone", "edit milestone", "close milestone", "reopen milestone"}
+		options.RelatedActions = []string{"milestone.get", "milestone.list", "milestone.delete"}
+		options.IndividualTool.Description = "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list."
+	case "milestone_delete":
+		options.Usage = "Delete a milestone from a project by milestone_iid. Requires Maintainer or Owner role."
+		options.Aliases = []string{"delete milestone", "remove milestone"}
+		options.RelatedActions = []string{"milestone.get", "milestone.update", "milestone.list"}
+		options.IndividualTool.Description = "Delete a milestone permanently from a project by milestone IID. Returns: a success confirmation naming the milestone and project. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list."
+	case "milestone_issues":
+		options.Usage = "List the issues assigned to a milestone by milestone_iid, with ordering and pagination."
+		options.Aliases = []string{"list milestone issues", "issues in milestone", "show milestone issues"}
+		options.RelatedActions = []string{"milestone.get", "milestone.merge_requests", "issue.list"}
+		options.IndividualTool.Description = "List issues assigned to a single milestone with ordering and pagination. Returns: assigned issues with IID, title, state, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_merge_requests, gitlab_issue_list."
+	case "milestone_merge_requests":
+		options.Usage = "List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination."
+		options.Aliases = []string{"list milestone merge requests", "MRs in milestone", "show milestone merge requests"}
+		options.RelatedActions = []string{"milestone.get", "milestone.issues", "merge_request.list"}
+		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_merge_request_list."
 	}
 
 	return options
