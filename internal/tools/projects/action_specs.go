@@ -71,6 +71,9 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 			projectPremiumSpec(projectCreateSpec("push_rule_add", toolutil.RouteAction(client, AddPushRule), "gitlab_project_add_push_rule", "push_rule")),
 			projectPremiumSpec(projectMutationSpec("push_rule_edit", toolutil.RouteAction(client, EditPushRule), "gitlab_project_edit_push_rule", "push_rule")),
 			projectPremiumSpec(projectDestructiveUpdateSpec("push_rule_delete", toolutil.RouteAction(client, DeletePushRuleOutput), "gitlab_project_delete_push_rule", "push_rule")),
+			projectPremiumSpec(projectReadSpec("target_branch_rule_list", toolutil.RouteAction(client, ListTargetBranchRules), "gitlab_project_list_target_branch_rules", "target_branch_rule")),
+			projectPremiumSpec(projectCreateSpec("target_branch_rule_create", toolutil.RouteAction(client, CreateTargetBranchRule), "gitlab_project_create_target_branch_rule", "target_branch_rule")),
+			projectPremiumSpec(projectDestructiveUpdateSpec("target_branch_rule_delete", toolutil.RouteAction(client, DeleteTargetBranchRuleOutput), "gitlab_project_delete_target_branch_rule", "target_branch_rule")),
 		)
 	}
 	return specs
@@ -629,5 +632,23 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		aliases:     []string{"delete project", "remove project", "destroy repository"},
 		related:     []string{"project.restore", "project.get", "project.archive"},
 		description: "Delete a project. Returns: a deletion status; on instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.",
+	},
+	"gitlab_project_list_target_branch_rules": {
+		usage:       "List a project's target branch rules (the merge request target branch workflow that auto-selects a default target branch from the source branch pattern). Pass the full project path as project_id; the GraphQL query does not accept a numeric ID. Premium/Ultimate.",
+		aliases:     []string{"list target branch rules", "show target branch rules", "merge request target branch rules"},
+		related:     []string{"project.target_branch_rule_create", "project.target_branch_rule_delete"},
+		description: "List a project's target branch rules. Returns: each rule with id, source-branch name pattern, target_branch, and created_at. See also: gitlab_project_create_target_branch_rule, gitlab_project_delete_target_branch_rule.",
+	},
+	"gitlab_project_create_target_branch_rule": {
+		usage:       "Create a target branch rule mapping a source branch name pattern to a default target branch for new merge requests. Pass the numeric project_id, name (the source pattern, e.g. release/*), and target_branch. Premium/Ultimate.",
+		aliases:     []string{"create target branch rule", "add target branch rule", "set default target branch for source pattern"},
+		related:     []string{"project.target_branch_rule_list", "project.target_branch_rule_delete"},
+		description: "Create a target branch rule. Returns: the created rule with id, source-branch name pattern, target_branch, and created_at. See also: gitlab_project_list_target_branch_rules, gitlab_project_delete_target_branch_rule.",
+	},
+	"gitlab_project_delete_target_branch_rule": {
+		usage:       "Delete a target branch rule by its rule_id (find it via the list action). Premium/Ultimate.",
+		aliases:     []string{"delete target branch rule", "remove target branch rule", "drop merge request target branch rule"},
+		related:     []string{"project.target_branch_rule_list", "project.target_branch_rule_create"},
+		description: "Delete a target branch rule. Returns: a success confirmation naming the rule. See also: gitlab_project_list_target_branch_rules, gitlab_project_create_target_branch_rule.",
 	},
 }

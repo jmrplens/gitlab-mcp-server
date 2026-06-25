@@ -766,6 +766,96 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDeleteBySecret_Success verifies DeleteBySecret issues a DELETE to the
+// /uploads/<secret>/<filename> path and returns no error on a 204 response.
+func TestDeleteBySecret_Success(t *testing.T) {
+	var gotMethod, gotPath string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{
+		ProjectID: "42",
+		Secret:    "abc123",
+		Filename:  "file.txt",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q, want DELETE", gotMethod)
+	}
+	if !strings.HasSuffix(gotPath, "/uploads/abc123/file.txt") {
+		t.Errorf("path = %q, want suffix /uploads/abc123/file.txt", gotPath)
+	}
+}
+
+// TestDeleteBySecret_MissingProjectID verifies DeleteBySecret rejects empty project_id.
+func TestDeleteBySecret_MissingProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{Secret: "abc123", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for missing project_id")
+	}
+}
+
+// TestDeleteBySecret_MissingSecret verifies DeleteBySecret rejects empty secret.
+func TestDeleteBySecret_MissingSecret(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for missing secret")
+	}
+}
+
+// TestDeleteBySecret_MissingFilename verifies DeleteBySecret rejects empty filename.
+func TestDeleteBySecret_MissingFilename(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123"})
+	if err == nil {
+		t.Fatal("expected error for missing filename")
+	}
+}
+
+// TestDeleteBySecret_APIError verifies DeleteBySecret wraps API failures.
+func TestDeleteBySecret_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for API failure")
+	}
+	if !strings.Contains(err.Error(), "delete upload abc123/file.txt") {
+		t.Errorf("error = %v, want delete-by-secret context", err)
+	}
+}
+
+// TestDeleteBySecret_CancelledContext verifies DeleteBySecret returns early on a cancelled context.
+func TestDeleteBySecret_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	ctx := testutil.CancelledCtx(t)
+	err := DeleteBySecret(ctx, client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
 // TestUpload_Base64DecodeError validates that invalid base64 returns an error.
 func TestUpload_Base64DecodeError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

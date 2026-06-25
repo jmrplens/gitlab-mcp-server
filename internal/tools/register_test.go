@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1033
+		const expectedTools = 1053
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -184,7 +184,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 871
+		const expectedTools = 887
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -892,7 +892,7 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
 	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
 	"unshare": {}, "disable_project": {}, "import_from_file": {},
-	"group_member_unshare": {},
+	"group_member_unshare": {}, "unshare_from_group": {},
 	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
 	"transfer": {},

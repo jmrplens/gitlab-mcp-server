@@ -475,6 +475,107 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, nil
 }
 
+// List Group Packages.
+
+// GroupListInput defines input for listing packages across a group and
+// its descendant projects.
+type GroupListInput struct {
+	GroupID            toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ExcludeSubgroups   bool                 `json:"exclude_subgroups,omitempty" jsonschema:"Exclude packages from subgroups (only return packages from the group's direct projects)"`
+	PackageName        string               `json:"package_name,omitempty" jsonschema:"Filter by package name"`
+	PackageType        string               `json:"package_type,omitempty" jsonschema:"Filter by type (generic, npm, maven, etc.)"`
+	OrderBy            string               `json:"order_by,omitempty" jsonschema:"Order by: name, created_at, version, type, project_path"`
+	Sort               string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
+	IncludeVersionless bool                 `json:"include_versionless,omitempty" jsonschema:"Include versionless packages"`
+	Status             string               `json:"status,omitempty" jsonschema:"Filter by status: default, hidden, processing, error"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// GroupListItem represents a single package in the group list output.
+// It mirrors the GitLab Packages API [gl.GroupPackage] object, which
+// embeds the project-scoped [gl.Package] fields and adds the owning
+// project's ID and path.
+type GroupListItem struct {
+	ListItem
+	ProjectID   int64  `json:"project_id"`
+	ProjectPath string `json:"project_path,omitempty"`
+}
+
+// GroupListOutput contains the paginated list of group packages.
+type GroupListOutput struct {
+	toolutil.HintableOutput
+	Packages   []GroupListItem           `json:"packages"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// buildGroupListOptions assembles a [gl.ListGroupPackagesOptions] from
+// the shared [GroupListInput] filter set, mapping the MCP-friendly
+// OrderBy/Sort/Status values and the exclude_subgroups flag to the
+// GitLab group Packages API fields.
+func buildGroupListOptions(input GroupListInput) *gl.ListGroupPackagesOptions {
+	opts := &gl.ListGroupPackagesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.ExcludeSubgroups {
+		opts.ExcludeSubGroups = new(true)
+	}
+	if input.PackageName != "" {
+		opts.PackageName = &input.PackageName
+	}
+	if input.PackageType != "" {
+		opts.PackageType = &input.PackageType
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = &input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.IncludeVersionless {
+		opts.IncludeVersionless = new(true)
+	}
+	if input.Status != "" {
+		opts.Status = &input.Status
+	}
+	return opts
+}
+
+// GroupList retrieves a paginated list of packages across a group and
+// its descendant projects via the GitLab group Packages list API
+// (GET /groups/:id/packages). Each item carries the owning project's ID
+// and path in addition to the project-scoped package fields.
+func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupListInput) (GroupListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return GroupListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
+	}
+	if input.GroupID == "" {
+		return GroupListOutput{}, errors.New("packageGroupList: group_id is required")
+	}
+
+	pkgs, resp, err := client.GL().Packages.ListGroupPackages(string(input.GroupID), buildGroupListOptions(input), gl.WithContext(ctx))
+	if err != nil {
+		return GroupListOutput{}, toolutil.WrapErrWithStatusHint("packageGroupList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; the group may have no packages yet or package registry may be disabled")
+	}
+
+	items := make([]GroupListItem, 0, len(pkgs))
+	for _, p := range pkgs {
+		if p == nil {
+			continue
+		}
+		items = append(items, GroupListItem{
+			ListItem:    packageToListItem(&p.Package),
+			ProjectID:   p.ProjectID,
+			ProjectPath: p.ProjectPath,
+		})
+	}
+
+	return GroupListOutput{
+		Packages:   items,
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}, nil
+}
+
 // List Package Files.
 
 // FileListInput defines input for listing files within a package.

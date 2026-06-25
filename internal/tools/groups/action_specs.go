@@ -56,7 +56,81 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit"),
 		// gitlab_group_hook_delete — delete a group webhook (destructive).
 		groupDeleteSpec("hook_delete", toolutil.DestructiveVoidAction(client, DeleteHook), "gitlab_group_hook_delete"),
+		// gitlab_group_hook_set_custom_header — set a custom header on a group webhook.
+		groupUpdateSpec("hook_set_custom_header", toolutil.RouteAction(client, SetHookCustomHeaderOutput), "gitlab_group_hook_set_custom_header"),
+		// gitlab_group_hook_delete_custom_header — delete a custom header from a group webhook (destructive).
+		groupDeleteSpec("hook_delete_custom_header", toolutil.DestructiveVoidAction(client, DeleteHookCustomHeader), "gitlab_group_hook_delete_custom_header"),
+		// gitlab_group_hook_set_url_variable — set a templated URL variable on a group webhook.
+		groupUpdateSpec("hook_set_url_variable", toolutil.RouteAction(client, SetHookURLVariableOutput), "gitlab_group_hook_set_url_variable"),
+		// gitlab_group_hook_delete_url_variable — delete a URL variable from a group webhook (destructive).
+		groupDeleteSpec("hook_delete_url_variable", toolutil.DestructiveVoidAction(client, DeleteHookURLVariable), "gitlab_group_hook_delete_url_variable"),
+		// gitlab_group_hook_test — trigger a test group hook event.
+		groupUpdateSpec("hook_test", toolutil.RouteAction(client, TestHookOutput), "gitlab_group_hook_test"),
+		// gitlab_group_hook_resend_event — resend a specific group hook event.
+		groupUpdateSpec("hook_resend_event", toolutil.RouteAction(client, ResendHookEventOutput), "gitlab_group_hook_resend_event"),
+		// gitlab_group_share_with_group — share a group with another group (Groups API).
+		groupCreateSpec("share_with_group", toolutil.RouteAction(client, ShareGroupWithGroup), "gitlab_group_share_with_group"),
+		// gitlab_group_unshare_from_group — revoke a group-to-group share (Groups API, destructive).
+		groupDeleteSpec("unshare_from_group", toolutil.DestructiveVoidAction(client, UnshareGroupFromGroup), "gitlab_group_unshare_from_group"),
+		// gitlab_group_shared_projects_list — list projects shared with a group.
+		groupReadSpec("shared_projects", toolutil.RouteAction(client, ListSharedProjects), "gitlab_group_shared_projects_list"),
+		// gitlab_group_transfer — move a group under a new parent group or to top level.
+		groupUpdateSpec("transfer", toolutil.RouteAction(client, TransferSubGroup), "gitlab_group_transfer"),
+		// gitlab_group_get_push_rules — get a group's push-rule configuration (Premium/Ultimate).
+		groupPremiumSpec(groupReadSpec("push_rule_get", toolutil.RouteAction(client, GetPushRules), "gitlab_group_get_push_rules")),
+		// gitlab_group_add_push_rule — add push rules to a group (Premium/Ultimate).
+		groupPremiumSpec(groupCreateSpec("push_rule_add", toolutil.RouteAction(client, AddPushRule), "gitlab_group_add_push_rule")),
+		// gitlab_group_edit_push_rule — edit a group's push rules (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("push_rule_edit", toolutil.RouteAction(client, EditPushRule), "gitlab_group_edit_push_rule")),
+		// gitlab_group_delete_push_rule — delete a group's push rules (Premium/Ultimate, destructive).
+		groupPremiumSpec(groupDeleteSpec("push_rule_delete", toolutil.RouteAction(client, DeletePushRuleOutput), "gitlab_group_delete_push_rule")),
 	}
+}
+
+// groupPremiumSpec marks a spec as a GitLab Premium/Ultimate (Enterprise) action.
+func groupPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
+}
+
+// SetHookCustomHeaderOutput sets a group webhook custom header and returns the legacy success message shape.
+func SetHookCustomHeaderOutput(ctx context.Context, client *gitlabclient.Client, input SetHookCustomHeaderInput) (toolutil.VoidOutput, error) {
+	if err := SetHookCustomHeader(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("Custom header %q set on group webhook %d in group %s", input.Key, input.HookID, input.GroupID)}, nil
+}
+
+// SetHookURLVariableOutput sets a group webhook URL variable and returns the legacy success message shape.
+func SetHookURLVariableOutput(ctx context.Context, client *gitlabclient.Client, input SetHookURLVariableInput) (toolutil.VoidOutput, error) {
+	if err := SetHookURLVariable(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("URL variable %q set on group webhook %d in group %s", input.Key, input.HookID, input.GroupID)}, nil
+}
+
+// TestHookOutput triggers a test group hook event and returns the legacy success message shape.
+func TestHookOutput(ctx context.Context, client *gitlabclient.Client, input TestHookInput) (toolutil.VoidOutput, error) {
+	if err := TestHook(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("Test %s event triggered for group webhook %d in group %s", input.Trigger, input.HookID, input.GroupID)}, nil
+}
+
+// ResendHookEventOutput resends a group hook event and returns the legacy success message shape.
+func ResendHookEventOutput(ctx context.Context, client *gitlabclient.Client, input ResendHookEventInput) (toolutil.VoidOutput, error) {
+	if err := ResendHookEvent(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("Hook event %d resent for group webhook %d in group %s", input.HookEventID, input.HookID, input.GroupID)}, nil
+}
+
+// DeletePushRuleOutput deletes a group's push rules and returns the legacy success message shape.
+func DeletePushRuleOutput(ctx context.Context, client *gitlabclient.Client, input DeletePushRuleInput) (toolutil.DeleteOutput, error) {
+	if err := DeletePushRule(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted push rules for group %s.", input.GroupID)}, nil
 }
 
 func groupGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
@@ -273,10 +347,112 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 		options.IndividualTool.Description = "Unarchive a GitLab group (restore write access). Returns: a success confirmation. See also: gitlab_group_archive, gitlab_group_get, gitlab_group_update."
 	default:
-		applyGroupRelationMetadata(individualTool, &options)
+		if !applyGroupShareTransferMetadata(individualTool, &options) {
+			applyGroupRelationMetadata(individualTool, &options)
+		}
 	}
 
 	return options
+}
+
+// applyGroupShareTransferMetadata fills in discovery metadata for the group
+// sharing, shared-project listing, subgroup transfer, and push-rule tools.
+// Returns true when it handled individualTool.
+func applyGroupShareTransferMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
+	switch individualTool {
+	case "gitlab_group_share_with_group":
+		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)"
+		options.Aliases = []string{"share group via groups api", "grant another group access to this group", "create group-to-group share link"}
+		options.RelatedActions = []string{"group.shared_with", "group.unshare_from_group", actionGroupGet}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"shared_group_id": {
+				ValueSource:      "Numeric ID of the group to grant access to.",
+				ExampleBinding:   `params.shared_group_id:123`,
+				CommonConfusions: []string{"group_id is the group being shared; shared_group_id is the group receiving access."},
+			},
+			"group_access": {
+				ValueSource:    "Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).",
+				ExampleBinding: `params.group_access:30`,
+			},
+		}
+		options.IndividualTool.Description = "Share a GitLab group with another group (Groups API). Returns: a confirmation with the granted access role. See also: gitlab_group_shared_with_list, gitlab_group_unshare_from_group, gitlab_group_get."
+	case "gitlab_group_unshare_from_group":
+		options.Usage = "Revoke a group-to-group share via the Groups API, removing the shared group's access. Destructive. Send group_id and shared_group_id. Requires Owner role. (gitlab_group_unshare is the GroupMembers-API equivalent.)"
+		options.Aliases = []string{"unshare group from group via groups api", "revoke group-to-group share link", "remove shared group access link"}
+		options.RelatedActions = []string{"group.shared_with", "group.share_with_group", actionGroupGet}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"shared_group_id": {
+				ValueSource:      "Numeric ID of the group whose share is removed.",
+				ExampleBinding:   `params.shared_group_id:123`,
+				CommonConfusions: []string{"Use gitlab_group_shared_with_list to find the shared group IDs first."},
+			},
+		}
+		options.IndividualTool.Description = "Revoke a group-to-group share (Groups API). Returns: a success confirmation. See also: gitlab_group_share_with_group, gitlab_group_shared_with_list, gitlab_group_get."
+	case "gitlab_group_shared_projects_list":
+		options.Usage = "List the projects shared *into* this group from elsewhere (not the group's own projects). Use when the user asks which external projects a group can access via sharing."
+		options.Aliases = []string{"list group shared projects", "projects shared with group", "show externally shared projects"}
+		options.RelatedActions = []string{"group.projects", "group.shared_with", actionGroupGet}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path whose shared projects are listed.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Lists projects shared *into* the group; use gitlab_group_projects for the group's own projects."},
+			},
+		}
+		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: shared projects with path, visibility, and archived status. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
+	case "gitlab_group_transfer":
+		options.Usage = "Move this group under a new parent group, or omit parent_id to promote a subgroup to a top-level group. Use gitlab_group_transfer_locations first to find valid parents. Requires Owner role on both ends."
+		options.Aliases = []string{"transfer group", "move group to new parent", "promote subgroup to top level", "change group parent"}
+		options.RelatedActions = []string{"group.transfer_locations", actionGroupGet, "group.subgroups"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"parent_id": {
+				ValueSource:      "Numeric ID of the destination parent group; omit to promote to top level.",
+				ExampleBinding:   `params.parent_id:42`,
+				CommonConfusions: []string{"parent_id is the destination; group_id is the group being moved. Omit parent_id to make the group top-level."},
+			},
+		}
+		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level). Returns: the updated group metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
+	default:
+		return applyGroupPushRuleMetadata(individualTool, options)
+	}
+	return true
+}
+
+// applyGroupPushRuleMetadata fills in discovery metadata for the group push-rule
+// tools. Returns true when it handled individualTool.
+func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
+	options.Tags = []string{"group", "push_rule"}
+	options.RelatedActions = []string{"group.get_push_rules", "group.add_push_rule", "group.edit_push_rule", "group.delete_push_rule"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"group_id": {
+			SemanticRole:     "scope_group",
+			ValueSource:      "Group that owns the singleton push rule.",
+			ExampleBinding:   `params.group_id:"my-org/platform"`,
+			CommonConfusions: []string{"Group push rules are a group-scoped singleton; there is no push_rule_id parameter."},
+		},
+	}
+	switch individualTool {
+	case "gitlab_group_get_push_rules":
+		options.Usage = "Get a group's push rules. Returns the singleton push-rule configuration such as commit_message_regex and reject_unsigned_commits. Premium/Ultimate, Owner role."
+		options.Aliases = []string{"get group push rules", "show group push rule configuration"}
+		options.IndividualTool.Description = "Get a GitLab group's push rules. Returns: the singleton push-rule configuration. See also: gitlab_group_add_push_rule, gitlab_group_edit_push_rule."
+	case "gitlab_group_add_push_rule":
+		options.Usage = "Add push rules to a group. Include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with group_id alone. Premium/Ultimate, Owner role."
+		options.Aliases = []string{"add group push rule", "create group push rules"}
+		options.IndividualTool.Description = "Add push rules to a GitLab group. Returns: the created push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_edit_push_rule."
+	case "gitlab_group_edit_push_rule":
+		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role."
+		options.Aliases = []string{"edit group push rule", "update group push rules"}
+		options.IndividualTool.Description = "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
+	case "gitlab_group_delete_push_rule":
+		options.Usage = "Delete a group's push rules. Destructive. Send group_id. Premium/Ultimate, Owner role."
+		options.Aliases = []string{"delete group push rule", "remove group push rules"}
+		options.IndividualTool.Description = "Delete a GitLab group's push rules. Returns: a success confirmation. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
+	default:
+		return false
+	}
+	return true
 }
 
 // applyGroupRelationMetadata fills in discovery metadata for the group-relation
@@ -386,10 +562,52 @@ func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecO
 		options.IndividualTool.Description = "Delete a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_add."
 	case "gitlab_group_hook_add", "gitlab_group_hook_edit":
 		applyGroupHookAddEditMetadata(individualTool, options)
+	case "gitlab_group_hook_set_custom_header", "gitlab_group_hook_delete_custom_header",
+		"gitlab_group_hook_set_url_variable", "gitlab_group_hook_delete_url_variable",
+		"gitlab_group_hook_test", "gitlab_group_hook_resend_event":
+		applyGroupHookSubOpMetadata(individualTool, options)
 	default:
 		return false
 	}
 	return true
+}
+
+// applyGroupHookSubOpMetadata fills in discovery metadata for the group-webhook
+// sub-operation tools (custom headers, URL variables, test triggers, resends).
+func applyGroupHookSubOpMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
+	options.RelatedActions = []string{"group.hook_get", "group.hook_list", "group.hook_edit"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"hook_id": {
+			ValueSource:    "Numeric hook ID from gitlab_group_hook_list.",
+			ExampleBinding: `params.hook_id:42`,
+		},
+	}
+	switch individualTool {
+	case "gitlab_group_hook_set_custom_header":
+		options.Usage = "Set (create or update) a custom HTTP header on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role."
+		options.Aliases = []string{"set group hook custom header", "add webhook header to group hook", "configure group webhook header"}
+		options.IndividualTool.Description = "Set a custom header on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get."
+	case "gitlab_group_hook_delete_custom_header":
+		options.Usage = "Delete a custom HTTP header from a group webhook by hook_id and key. Destructive. Requires Owner role."
+		options.Aliases = []string{"delete group hook custom header", "remove webhook header from group hook"}
+		options.IndividualTool.Description = "Delete a custom header from a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_set_custom_header, gitlab_group_hook_get."
+	case "gitlab_group_hook_set_url_variable":
+		options.Usage = "Set (create or update) a templated URL variable on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role."
+		options.Aliases = []string{"set group hook url variable", "add url variable to group webhook"}
+		options.IndividualTool.Description = "Set a URL variable on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get."
+	case "gitlab_group_hook_delete_url_variable":
+		options.Usage = "Delete a templated URL variable from a group webhook by hook_id and key. Destructive. Requires Owner role."
+		options.Aliases = []string{"delete group hook url variable", "remove url variable from group webhook"}
+		options.IndividualTool.Description = "Delete a URL variable from a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_set_url_variable, gitlab_group_hook_get."
+	case "gitlab_group_hook_test":
+		options.Usage = "Trigger a test event for a group webhook by hook_id and trigger event type (push_events, pipeline_events, etc.). Use to verify webhook delivery. Requires Owner role."
+		options.Aliases = []string{"test group webhook", "trigger group hook test", "send test event to group webhook"}
+		options.IndividualTool.Description = "Trigger a test event for a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_get, gitlab_group_hook_resend_event."
+	case "gitlab_group_hook_resend_event":
+		options.Usage = "Resend a specific previously-delivered group hook event by hook_id and hook_event_id. Use to retry a failed webhook delivery. Requires Owner role."
+		options.Aliases = []string{"resend group hook event", "retry group webhook delivery", "redeliver group hook event"}
+		options.IndividualTool.Description = "Resend a GitLab group hook event. Returns: a success confirmation. See also: gitlab_group_hook_test, gitlab_group_hook_get."
+	}
 }
 
 // applyGroupHookAddEditMetadata fills in shared and per-tool metadata for the

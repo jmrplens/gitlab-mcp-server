@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	actionUpload       = "upload"
-	actionUploadList   = "upload_list"
-	actionUploadDelete = "upload_delete"
+	actionUpload               = "upload"
+	actionUploadList           = "upload_list"
+	actionUploadDelete         = "upload_delete"
+	actionUploadDeleteBySecret = "upload_delete_by_secret"
 )
 
 // ActionSpecs returns canonical specs for project upload actions.
@@ -32,6 +33,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Use to permanently remove a project Markdown upload identified by its numeric upload ID.",
 			"Delete a project Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_project_upload_list, gitlab_project_upload, gitlab_project_get.",
 			[]string{actionUploadList, "project.get"}),
+		// gitlab_project_upload_delete_by_secret — delete a markdown upload by its secret and filename (destructive).
+		uploadDeleteSpec(actionUploadDeleteBySecret, toolutil.DestructiveAction(client, deleteBySecretOutput), "gitlab_project_upload_delete_by_secret",
+			"Use to permanently remove a project Markdown upload identified by the secret and filename from its /uploads/<secret>/<filename> URL when the numeric upload ID is unknown.",
+			"Delete a project Markdown upload by its 32-character secret and filename (the /uploads/<secret>/<filename> reference). Returns: a success confirmation. See also: gitlab_project_upload_delete, gitlab_project_upload_list, gitlab_project_upload.",
+			[]string{actionUploadList, actionUploadDelete, "project.get"}),
 	}
 }
 
@@ -42,6 +48,17 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 		return toolutil.DeleteOutput{}, err
 	}
 	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("upload %d from project %s", input.UploadID, input.ProjectID))
+	return out, nil
+}
+
+// deleteBySecretOutput adapts the void [DeleteBySecret] handler into the catalog
+// DeleteOutput contract so it composes with [toolutil.DestructiveAction] and
+// surfaces a confirmation message that names the secret/filename reference.
+func deleteBySecretOutput(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteBySecret(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("upload %s/%s from project %s", input.Secret, input.Filename, input.ProjectID))
 	return out, nil
 }
 
@@ -106,5 +123,11 @@ var uploadActionAliases = map[string][]string{
 		"delete project markdown attachment",
 		"remove project uploaded file",
 		"purge project upload by id",
+	},
+	"gitlab_project_upload_delete_by_secret": {
+		"delete project markdown attachment by secret",
+		"remove project uploaded file by secret and filename",
+		"purge project upload by secret",
+		"delete project upload from uploads url",
 	},
 }

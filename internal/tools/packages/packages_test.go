@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -666,6 +667,109 @@ func TestPackageList_MissingProjectID(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
+	}
+}
+
+// TestPackageGroupList_Success verifies GroupList returns packages across a
+// group with the owning project id/path and the embedded project-scoped fields
+// (pipeline, tags, _links) fully preserved.
+func TestPackageGroupList_Success(t *testing.T) {
+	var gotPath string
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/99/packages" {
+			gotPath = r.URL.Path
+			gotQuery = r.URL.Query()
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[null,{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","project_id":7,"project_path":"grp/proj","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/grp/proj/-/packages/10"}}]`,
+				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GroupList(context.Background(), client, GroupListInput{
+		GroupID:            "99",
+		ExcludeSubgroups:   true,
+		PackageName:        testPackageName,
+		PackageType:        "generic",
+		OrderBy:            "project_path",
+		Sort:               "desc",
+		IncludeVersionless: true,
+		Status:             "default",
+	})
+	if err != nil {
+		t.Fatalf("GroupList() unexpected error: %v", err)
+	}
+	if gotPath != "/api/v4/groups/99/packages" {
+		t.Fatalf("request path = %q, want group packages path", gotPath)
+	}
+	if gotQuery.Get("exclude_subgroups") != "true" {
+		t.Errorf("exclude_subgroups query = %q, want true", gotQuery.Get("exclude_subgroups"))
+	}
+	if gotQuery.Get("order_by") != "project_path" {
+		t.Errorf("order_by query = %q, want project_path", gotQuery.Get("order_by"))
+	}
+	if len(out.Packages) != 1 {
+		t.Fatalf("len(Packages) = %d, want 1", len(out.Packages))
+	}
+	pkg := out.Packages[0]
+	if pkg.ID != 10 || pkg.Name != testPackageName {
+		t.Errorf("Packages[0] = {ID:%d Name:%q}, want {10 %q}", pkg.ID, pkg.Name, testPackageName)
+	}
+	if pkg.ProjectID != 7 || pkg.ProjectPath != "grp/proj" {
+		t.Errorf("Packages[0] project = {ID:%d Path:%q}, want {7 grp/proj}", pkg.ProjectID, pkg.ProjectPath)
+	}
+	if len(pkg.Tags) != 1 || pkg.Tags[0].Name != "latest" {
+		t.Errorf("Packages[0].Tags = %v, want [latest]", pkg.Tags)
+	}
+	if pkg.Links == nil || pkg.Links.WebPath != "/grp/proj/-/packages/10" {
+		t.Errorf("Packages[0].Links = %+v, want WebPath=/grp/proj/-/packages/10", pkg.Links)
+	}
+}
+
+// TestPackageGroupList_MissingGroupID verifies GroupList rejects an empty group_id.
+func TestPackageGroupList_MissingGroupID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+
+	_, err := GroupList(context.Background(), client, GroupListInput{})
+	if err == nil {
+		t.Fatal("expected error for empty group_id")
+	}
+	if !strings.Contains(err.Error(), "group_id is required") {
+		t.Errorf("error = %v, want group_id required", err)
+	}
+}
+
+// TestPackageGroupList_ContextCancelled verifies GroupList returns early when
+// the context is already cancelled.
+func TestPackageGroupList_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := GroupList(ctx, client, GroupListInput{GroupID: "99"})
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+}
+
+// TestPackageGroupList_APIError verifies GroupList wraps API failures with a hint.
+func TestPackageGroupList_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
+	}))
+
+	_, err := GroupList(context.Background(), client, GroupListInput{GroupID: "missing"})
+	if err == nil {
+		t.Fatal("expected API error")
+	}
+	if !strings.Contains(err.Error(), "packageGroupList") {
+		t.Errorf("error = %v, want packageGroupList prefix", err)
 	}
 }
 

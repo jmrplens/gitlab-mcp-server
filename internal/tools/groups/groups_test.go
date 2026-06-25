@@ -2271,8 +2271,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := groupSpecsByTool(t, specs)
 
-	if len(specs) != 21 {
-		t.Fatalf("len(ActionSpecs) = %d, want 21", len(specs))
+	if len(specs) != 35 {
+		t.Fatalf("len(ActionSpecs) = %d, want 35", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
@@ -2320,6 +2320,20 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"hook_add", "gitlab_group_hook_add", map[string]any{"group_id": "99", "url": "https://example.com/hook"}},
 		{"hook_edit", "gitlab_group_hook_edit", map[string]any{"group_id": "99", "hook_id": 10, "url": "https://example.com/hook2"}},
 		{"hook_delete", "gitlab_group_hook_delete", map[string]any{"group_id": "99", "hook_id": 10}},
+		{"hook_set_custom_header", "gitlab_group_hook_set_custom_header", map[string]any{"group_id": "99", "hook_id": 10, "key": "X-Token", "value": "secret"}},
+		{"hook_delete_custom_header", "gitlab_group_hook_delete_custom_header", map[string]any{"group_id": "99", "hook_id": 10, "key": "X-Token"}},
+		{"hook_set_url_variable", "gitlab_group_hook_set_url_variable", map[string]any{"group_id": "99", "hook_id": 10, "key": "env", "value": "prod"}},
+		{"hook_delete_url_variable", "gitlab_group_hook_delete_url_variable", map[string]any{"group_id": "99", "hook_id": 10, "key": "env"}},
+		{"hook_test", "gitlab_group_hook_test", map[string]any{"group_id": "99", "hook_id": 10, "trigger": "push_events"}},
+		{"hook_resend_event", "gitlab_group_hook_resend_event", map[string]any{"group_id": "99", "hook_id": 10, "hook_event_id": 5}},
+		{"share_with_group", "gitlab_group_share_with_group", map[string]any{"group_id": "99", "shared_group_id": 123, "group_access": 30}},
+		{"unshare_from_group", "gitlab_group_unshare_from_group", map[string]any{"group_id": "99", "shared_group_id": 123}},
+		{"shared_projects_list", "gitlab_group_shared_projects_list", map[string]any{"group_id": "99"}},
+		{"transfer", "gitlab_group_transfer", map[string]any{"group_id": "99", "parent_id": 42}},
+		{"push_rule_get", "gitlab_group_get_push_rules", map[string]any{"group_id": "99"}},
+		{"push_rule_add", "gitlab_group_add_push_rule", map[string]any{"group_id": "99", "commit_message_regex": "^JIRA-"}},
+		{"push_rule_edit", "gitlab_group_edit_push_rule", map[string]any{"group_id": "99", "prevent_secrets": true}},
+		{"push_rule_delete", "gitlab_group_delete_push_rule", map[string]any{"group_id": "99"}},
 	}
 
 	for _, tt := range tools {
@@ -2450,6 +2464,67 @@ func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 
 	// Delete group hook
 	handler.HandleFunc("DELETE /api/v4/groups/99/hooks/10", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Hook custom header set/delete
+	handler.HandleFunc("PUT /api/v4/groups/99/hooks/10/custom_headers/X-Token", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/99/hooks/10/custom_headers/X-Token", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Hook URL variable set/delete
+	handler.HandleFunc("PUT /api/v4/groups/99/hooks/10/url_variables/env", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/99/hooks/10/url_variables/env", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Hook test trigger
+	handler.HandleFunc("POST /api/v4/groups/99/hooks/10/test/push_events", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+
+	// Hook event resend
+	handler.HandleFunc("POST /api/v4/groups/99/hooks/10/events/5/resend", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+
+	// Share group with group
+	handler.HandleFunc("POST /api/v4/groups/99/share", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, groupJSON)
+	})
+
+	// Unshare group from group
+	handler.HandleFunc("DELETE /api/v4/groups/99/share/123", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// List shared projects
+	handler.HandleFunc("GET /api/v4/groups/99/projects/shared", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, projectJSON)
+	})
+
+	// Transfer subgroup
+	handler.HandleFunc("POST /api/v4/groups/99/transfer", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, groupJSON)
+	})
+
+	// Group push rules get/add/edit/delete (singleton at /push_rule)
+	pushRuleJSON := `{"id":1,"commit_message_regex":"^JIRA-","branch_name_regex":"","max_file_size":100,"prevent_secrets":true,"reject_unsigned_commits":false,"created_at":"2026-01-15T10:00:00Z"}`
+	handler.HandleFunc("GET /api/v4/groups/99/push_rule", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, pushRuleJSON)
+	})
+	handler.HandleFunc("POST /api/v4/groups/99/push_rule", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, pushRuleJSON)
+	})
+	handler.HandleFunc("PUT /api/v4/groups/99/push_rule", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, pushRuleJSON)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/99/push_rule", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 

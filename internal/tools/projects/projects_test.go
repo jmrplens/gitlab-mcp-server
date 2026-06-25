@@ -4261,8 +4261,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client, true)
 	byTool := projectSpecsByTool(t, specs)
 
-	if len(specs) != 54 {
-		t.Fatalf("len(ActionSpecs) = %d, want 54", len(specs))
+	if len(specs) != 57 {
+		t.Fatalf("len(ActionSpecs) = %d, want 57", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))

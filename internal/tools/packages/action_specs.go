@@ -23,6 +23,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		packageReadSpec("download", toolutil.RouteActionWithRequest(client, Download), "gitlab_package_download"),
 		// gitlab_package_list — list project packages with optional filters and ordering.
 		packageReadSpec("list", toolutil.RouteAction(client, List), "gitlab_package_list"),
+		// gitlab_list_group_packages — list packages across a group and its descendant projects.
+		packageReadSpec("group_list", toolutil.RouteAction(client, GroupList), "gitlab_list_group_packages"),
 		// gitlab_package_file_list — list files within a single package.
 		packageReadSpec("file_list", toolutil.RouteAction(client, FileList), "gitlab_package_file_list"),
 		// gitlab_package_delete — delete a package (destructive).
@@ -112,6 +114,12 @@ var packageActionMetadata = map[string]packageActionMeta{
 		related:     []string{"package.file_list", "package.publish", "package.delete"},
 		description: "List packages in a project with optional filters and ordering. Returns: matching packages with type, status, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_file_list, gitlab_package_publish, gitlab_package_delete.",
 	},
+	"group_list": {
+		// usage is set in packageOptions with extra ordering guidance.
+		aliases:     []string{"list group packages", "browse group package registry", "list packages across group projects", "enumerate packages in a group"},
+		related:     []string{"package.list", "package.file_list", "package.delete"},
+		description: "List packages across a group and its descendant projects with optional filters and ordering. Returns: matching packages with type, status, owning project id/path, pipeline metadata, tags, _links, and pagination metadata. See also: gitlab_package_list, gitlab_package_file_list, gitlab_package_delete.",
+	},
 	"file_list": {
 		usage:       "List the individual files belonging to one package. Provide project_id and the package_id returned by package.list to enumerate every asset, its size, and checksums.",
 		aliases:     []string{"list package files", "show package assets", "enumerate files in package", "browse package version files"},
@@ -183,6 +191,29 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
 				"enum":        []any{"created_at", "name", "version", "type"},
 				"description": "Order by package registry field: created_at, name, version, or type.",
+			}),
+			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum":        []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"},
+				"description": "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
+			}),
+		}
+	}
+	if actionName == "group_list" {
+		options.Usage = "List package registry packages across a group and its descendant projects. Set exclude_subgroups=true to limit results to the group's direct projects. If ordering is requested, use order_by with one of created_at, name, version, type, or project_path."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"order_by": {
+				SemanticRole: "group_package_list_sort_field",
+				ValueSource:  "Use only GitLab group Package Registry ordering fields accepted by the group packages API.",
+				CommonConfusions: []string{
+					"Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.",
+				},
+			},
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum":        []any{"created_at", "name", "version", "type", "project_path"},
+				"description": "Order by group package registry field: created_at, name, version, type, or project_path.",
 			}),
 			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
 			toolutil.SchemaPropertyOverride("status", map[string]any{

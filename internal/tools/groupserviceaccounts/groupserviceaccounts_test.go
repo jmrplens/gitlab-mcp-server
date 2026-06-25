@@ -625,6 +625,94 @@ func TestRevokePAT(t *testing.T) {
 	}
 }
 
+// TestRotatePAT validates the RotatePAT handler covering success with and
+// without an explicit expires_at, all validation branches, invalid date format,
+// and API errors. It asserts the rotated token value is surfaced in the output.
+func TestRotatePAT(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      RotatePATInput
+		handler    http.HandlerFunc
+		wantErr    bool
+		wantToken  string
+		errContain string
+	}{
+		{
+			name:  "rotates PAT with expires_at",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10, ExpiresAt: "2026-12-31"},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, pathServiceAccount42PAT+"/10/rotate")
+				testutil.RespondJSON(w, http.StatusOK, `{"id":11,"name":"tok","scopes":["api"],"user_id":42,"active":true,"revoked":false,"token":"glpat-rotated","expires_at":"2026-12-31"}`)
+			},
+			wantToken: "glpat-rotated",
+		},
+		{
+			name:  "rotates PAT without expires_at",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":12,"name":"tok","scopes":["api"],"user_id":42,"active":true,"revoked":false,"token":"glpat-new"}`)
+			},
+			wantToken: "glpat-new",
+		},
+		{
+			name:       "returns error when group_id is empty",
+			input:      RotatePATInput{ServiceAccountID: 42, TokenID: 10},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "group_id",
+		},
+		{
+			name:       "returns error when service_account_id is zero",
+			input:      RotatePATInput{GroupID: "mygroup", TokenID: 10},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "service_account_id",
+		},
+		{
+			name:       "returns error when token_id is zero",
+			input:      RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "token_id",
+		},
+		{
+			name:       "returns error for invalid expires_at format",
+			input:      RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10, ExpiresAt: "not-a-date"},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "invalid expires_at format",
+		},
+		{
+			name:  "returns error on API failure",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"rotation error"}`)
+			},
+			wantErr:    true,
+			errContain: "rotate service account PAT",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			out, err := RotatePAT(context.Background(), client, tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("RotatePAT() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContain)
+				}
+				return
+			}
+			if out.Token != tt.wantToken {
+				t.Errorf("Token = %q, want %q", out.Token, tt.wantToken)
+			}
+		})
+	}
+}
+
 // TestToPATOutput_TimeFields verifies the ToPATOutput_TimeFields handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

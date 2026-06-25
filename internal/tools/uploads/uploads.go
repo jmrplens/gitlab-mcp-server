@@ -268,6 +268,46 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
+// DeleteBySecretInput defines input for deleting a project markdown upload
+// identified by its 32-character secret and filename, as returned in an
+// upload's url/markdown reference (/uploads/:secret/:filename).
+type DeleteBySecretInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Secret    string               `json:"secret" jsonschema:"32-character upload secret from the upload URL (/uploads/<secret>/<filename>),required"`
+	Filename  string               `json:"filename" jsonschema:"Filename of the upload as it appears in the upload URL,required"`
+}
+
+// DeleteBySecret deletes a markdown upload from a GitLab project by its
+// secret and filename. This is the alternative to deleting by numeric
+// upload ID and matches the /uploads/:secret/:filename reference embedded
+// in an upload's Markdown link.
+func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretInput) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf(fmtContextCanceled, err)
+	}
+	if input.ProjectID == "" {
+		return errors.New("projectUploadDeleteBySecret: project_id is required")
+	}
+	if input.Secret == "" {
+		return errors.New("projectUploadDeleteBySecret: secret is required")
+	}
+	if input.Filename == "" {
+		return errors.New("projectUploadDeleteBySecret: filename is required")
+	}
+
+	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadBySecretAndFilename(
+		string(input.ProjectID),
+		input.Secret,
+		input.Filename,
+		gl.WithContext(ctx),
+	)
+	if err != nil {
+		return fmt.Errorf("delete upload %s/%s from project %s: %w", input.Secret, input.Filename, input.ProjectID, err)
+	}
+
+	return nil
+}
+
 // UploadToolResult builds a CallToolResult for upload operations. For image
 // files it appends a Markdown image embed with the full URL so capable MCP
 // clients can render the image inline. Non-image uploads return text only.

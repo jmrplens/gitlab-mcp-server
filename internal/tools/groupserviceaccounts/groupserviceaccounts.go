@@ -365,6 +365,42 @@ func RevokePAT(ctx context.Context, client *gitlabclient.Client, input RevokePAT
 	return nil
 }
 
+// RotatePATInput holds parameters for rotating a service account PAT.
+type RotatePATInput struct {
+	GroupID          string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account user ID,required"`
+	TokenID          int64  `json:"token_id" jsonschema:"Personal access token ID to rotate,required"`
+	ExpiresAt        string `json:"expires_at,omitempty" jsonschema:"Expiration date for the new token (YYYY-MM-DD)"`
+}
+
+// RotatePAT rotates a personal access token for a group service account,
+// revoking the old token and returning a newly generated replacement token.
+func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePATInput) (PATOutput, error) {
+	if input.GroupID == "" {
+		return PATOutput{}, toolutil.ErrFieldRequired("group_id")
+	}
+	if input.ServiceAccountID == 0 {
+		return PATOutput{}, toolutil.ErrFieldRequired("service_account_id")
+	}
+	if input.TokenID == 0 {
+		return PATOutput{}, toolutil.ErrFieldRequired("token_id")
+	}
+	opts := &gl.RotateServiceAccountPersonalAccessTokenOptions{}
+	if input.ExpiresAt != "" {
+		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
+		if err != nil {
+			return PATOutput{}, fmt.Errorf("invalid expires_at format (expected YYYY-MM-DD): %w", err)
+		}
+		isoT := gl.ISOTime(t)
+		opts.ExpiresAt = &isoT
+	}
+	pat, _, err := client.GL().Groups.RotateServiceAccountPersonalAccessToken(input.GroupID, input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return PATOutput{}, fmt.Errorf("rotate service account PAT: %w", err)
+	}
+	return toPATOutput(pat), nil
+}
+
 // FormatOutputMarkdown renders a single service account as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder

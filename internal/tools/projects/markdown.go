@@ -567,6 +567,50 @@ func FormatRepositoryStorageMarkdown(out RepositoryStorageOutput) string {
 	return b.String()
 }
 
+// FormatListTargetBranchRulesMarkdown renders a project's target branch rules
+// as a Markdown table.
+func FormatListTargetBranchRulesMarkdown(out ListTargetBranchRulesOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Target Branch Rules (%d)\n\n", len(out.TargetBranchRules))
+	if len(out.TargetBranchRules) == 0 {
+		b.WriteString("No target branch rules found.\n")
+		return b.String()
+	}
+	b.WriteString("| ID | Source Pattern | Target Branch | Created |\n")
+	b.WriteString("| --- | --- | --- | --- |\n")
+	for _, r := range out.TargetBranchRules {
+		created := "-"
+		if r.CreatedAt != "" {
+			created = toolutil.FormatTime(r.CreatedAt)
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			r.ID, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.TargetBranch), created)
+	}
+	toolutil.WriteHints(
+		&b,
+		"Use action 'target_branch_rule_create' to add a rule",
+		"Use action 'target_branch_rule_delete' with a rule_id to remove a rule",
+	)
+	return b.String()
+}
+
+// FormatTargetBranchRuleMarkdown renders a single target branch rule as Markdown.
+func FormatTargetBranchRuleMarkdown(out TargetBranchRuleOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Target Branch Rule: %s\n\n", toolutil.EscapeMdHeading(out.Name))
+	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
+	fmt.Fprintf(&b, "- **Source Pattern**: %s\n", out.Name)
+	fmt.Fprintf(&b, "- **Target Branch**: %s\n", out.TargetBranch)
+	if out.CreatedAt != "" {
+		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
+	}
+	toolutil.WriteHints(
+		&b,
+		"Use action 'target_branch_rule_list' to see all rules for the project",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatProjectNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
@@ -589,4 +633,6 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListApprovalRulesMarkdown)
 	toolutil.RegisterMarkdown(FormatPullMirrorMarkdown)
 	toolutil.RegisterMarkdown(FormatRepositoryStorageMarkdown)
+	toolutil.RegisterMarkdown(FormatListTargetBranchRulesMarkdown)
+	toolutil.RegisterMarkdown(FormatTargetBranchRuleMarkdown)
 }

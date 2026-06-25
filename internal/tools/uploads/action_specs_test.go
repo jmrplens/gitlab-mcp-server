@@ -26,6 +26,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"gitlab_project_upload", map[string]any{"project_id": "42", "filename": "file.txt", "content_base64": base64.StdEncoding.EncodeToString([]byte("hello"))}},
 		{"gitlab_project_upload_list", map[string]any{"project_id": "42"}},
 		{"gitlab_project_upload_delete", map[string]any{"project_id": "42", "upload_id": 1}},
+		{"gitlab_project_upload_delete_by_secret", map[string]any{"project_id": "42", "secret": "abc123", "filename": "file.txt"}},
 	}
 
 	for _, tt := range tests {
@@ -54,6 +55,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_project_upload", map[string]any{"project_id": "p", "content_base64": base64.StdEncoding.EncodeToString([]byte("data")), "filename": "f.txt"}},
 		{"gitlab_project_upload_list", map[string]any{"project_id": "p"}},
 		{"gitlab_project_upload_delete", map[string]any{"project_id": "p", "upload_id": 1}},
+		{"gitlab_project_upload_delete_by_secret", map[string]any{"project_id": "p", "secret": "abc123", "filename": "f.txt"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
@@ -81,6 +83,20 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 	if out.Message != "Successfully deleted upload 1 from project 42." {
 		t.Fatalf("delete message = %q", out.Message)
+	}
+
+	secretResult, err := byTool["gitlab_project_upload_delete_by_secret"].Route.Handler(t.Context(), map[string]any{
+		"project_id": "42", "secret": "abc123", "filename": "file.txt",
+	})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_project_upload_delete_by_secret) error: %v", err)
+	}
+	secretOut, ok := secretResult.(toolutil.DeleteOutput)
+	if !ok {
+		t.Fatalf("Route.Handler(gitlab_project_upload_delete_by_secret) returned %T, want toolutil.DeleteOutput", secretResult)
+	}
+	if secretOut.Message != "Successfully deleted upload abc123/file.txt from project 42." {
+		t.Fatalf("delete-by-secret message = %q", secretOut.Message)
 	}
 }
 

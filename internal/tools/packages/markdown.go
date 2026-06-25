@@ -2,6 +2,7 @@ package packages
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -61,15 +62,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Name | Version | Type | Status | Pipeline |\n")
 	b.WriteString(toolutil.TblSep6Col)
 	for _, p := range out.Packages {
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s | %s | %s |\n",
-			p.ID,
-			toolutil.EscapeMdTableCell(p.Name),
-			toolutil.EscapeMdTableCell(p.Version),
-			p.PackageType,
-			p.Status,
-			toolutil.EscapeMdTableCell(pipelineSummary(p)),
-		)
+		writePackageRow(&b, p, pipelineSummary(p))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -80,6 +73,21 @@ func FormatListMarkdown(out ListOutput) string {
 		"Use action 'publish' or 'publish_directory' to upload new packages",
 	)
 	return b.String()
+}
+
+// writePackageRow writes one package table row, sharing the common
+// ID/name/version/type/status columns between the project and group
+// package list renderers and appending the caller-supplied final column.
+func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
+	fmt.Fprintf(
+		b, "| %d | %s | %s | %s | %s | %s |\n",
+		p.ID,
+		toolutil.EscapeMdTableCell(p.Name),
+		toolutil.EscapeMdTableCell(p.Version),
+		p.PackageType,
+		p.Status,
+		toolutil.EscapeMdTableCell(lastColumn),
+	)
 }
 
 func pipelineSummary(pkg ListItem) string {
@@ -102,6 +110,43 @@ func pipelineItemSummary(pipeline PipelineItem) string {
 		return summary
 	}
 	return toolutil.MdTitleLink(summary, pipeline.WebURL)
+}
+
+// FormatGroupListMarkdown renders a paginated list of group packages as a Markdown table.
+func FormatGroupListMarkdown(out GroupListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Group Packages (%d)\n\n", out.Pagination.TotalItems)
+	toolutil.WriteListSummary(&b, len(out.Packages), out.Pagination)
+	if len(out.Packages) == 0 {
+		b.WriteString("No packages found.\n")
+		return b.String()
+	}
+	b.WriteString("| ID | Name | Version | Type | Status | Project |\n")
+	b.WriteString(toolutil.TblSep6Col)
+	for _, p := range out.Packages {
+		writePackageRow(&b, p.ListItem, groupProjectSummary(p))
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"Use action 'list' to scope packages to a single project",
+		"Use action 'file_list' with a package_id to see individual files",
+		"Use action 'delete' to remove a package",
+	)
+	return b.String()
+}
+
+// groupProjectSummary renders the owning project for a group package
+// row, preferring the human-readable project path over the numeric ID.
+func groupProjectSummary(pkg GroupListItem) string {
+	if pkg.ProjectPath != "" {
+		return pkg.ProjectPath
+	}
+	if pkg.ProjectID != 0 {
+		return strconv.FormatInt(pkg.ProjectID, 10)
+	}
+	return ""
 }
 
 // FormatFileListMarkdown renders a paginated list of package files as a Markdown table.
@@ -203,6 +248,7 @@ func init() {
 	toolutil.RegisterMarkdown(FormatPublishMarkdown)
 	toolutil.RegisterMarkdown(FormatDownloadMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatGroupListMarkdown)
 	toolutil.RegisterMarkdown(FormatFileListMarkdown)
 	toolutil.RegisterMarkdown(FormatPublishAndLinkMarkdown)
 	toolutil.RegisterMarkdown(FormatPublishDirMarkdown)

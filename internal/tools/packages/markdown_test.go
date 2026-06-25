@@ -191,6 +191,61 @@ func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 	}
 }
 
+// TestFormatGroupListMarkdown_EmptyPackages verifies the group package list
+// markdown renders the empty-state message.
+func TestFormatGroupListMarkdown_EmptyPackages(t *testing.T) {
+	got := FormatGroupListMarkdown(GroupListOutput{
+		Packages:   nil,
+		Pagination: toolutil.PaginationOutput{TotalItems: 0},
+	})
+	if !strings.Contains(got, "No packages found.") {
+		t.Error("missing 'No packages found.' message")
+	}
+}
+
+// TestFormatGroupListMarkdown_RendersProjectAndHint verifies the group package
+// list markdown renders the owning project path, the project id fallback, and
+// the preserve-links hint.
+func TestFormatGroupListMarkdown_RendersProjectAndHint(t *testing.T) {
+	got := FormatGroupListMarkdown(GroupListOutput{
+		Packages: []GroupListItem{
+			{ListItem: ListItem{ID: 1, Name: "pkg-a", Version: "1.0.0", PackageType: "generic", Status: "default"}, ProjectID: 7, ProjectPath: "grp/proj"},
+			{ListItem: ListItem{ID: 2, Name: "pkg-b", Version: "2.0.0", PackageType: "npm", Status: "default"}, ProjectID: 8},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+	if !strings.Contains(got, "grp/proj") {
+		t.Errorf("FormatGroupListMarkdown() = %q, want project path", got)
+	}
+	if !strings.Contains(got, "| 8 |") && !strings.Contains(got, " 8 |") {
+		t.Errorf("FormatGroupListMarkdown() = %q, want project id fallback 8", got)
+	}
+	if !strings.Contains(got, toolutil.HintPreserveLinks) {
+		t.Errorf("FormatGroupListMarkdown() = %q, want preserve-links hint", got)
+	}
+}
+
+// TestGroupProjectSummary_Variants verifies the owning-project summary prefers
+// the project path, falls back to the project id, and returns empty otherwise.
+func TestGroupProjectSummary_Variants(t *testing.T) {
+	tests := []struct {
+		name string
+		pkg  GroupListItem
+		want string
+	}{
+		{name: "path", pkg: GroupListItem{ProjectID: 7, ProjectPath: "grp/proj"}, want: "grp/proj"},
+		{name: "id fallback", pkg: GroupListItem{ProjectID: 7}, want: "7"},
+		{name: "none", pkg: GroupListItem{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := groupProjectSummary(tt.pkg); got != tt.want {
+				t.Fatalf("groupProjectSummary() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPipelineSummary_Variants verifies package pipeline summaries for primary,
 // historical, linked, and empty pipeline data.
 func TestPipelineSummary_Variants(t *testing.T) {
