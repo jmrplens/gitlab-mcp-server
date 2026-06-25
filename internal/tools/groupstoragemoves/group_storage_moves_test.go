@@ -764,3 +764,61 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		}
 	}
 }
+
+// TestRetrieveAll_KeysetAndSort verifies that RetrieveAll forwards keyset
+// pagination (pagination, page_token) and ordering (order_by, sort) parameters
+// to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that every keyset and ordering query parameter is sent.
+func TestRetrieveAll_KeysetAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, "/api/v4/group_repository_storage_moves")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "99")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	out, err := RetrieveAll(context.Background(), client, ListInput{
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		OrderBy:               "id",
+		Sort:                  "desc",
+	})
+	if err != nil {
+		t.Fatalf("RetrieveAll() error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("expected 1 move, got %d", len(out.Moves))
+	}
+}
+
+// TestRetrieveForGroup_KeysetAndSort verifies that RetrieveForGroup forwards
+// keyset pagination and ordering parameters to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that every keyset and ordering query parameter is sent.
+func TestRetrieveForGroup_KeysetAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/10/repository_storage_moves")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "7")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "asc")
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
+		GroupID:               10,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		OrderBy:               "id",
+		Sort:                  "asc",
+	})
+	if err != nil {
+		t.Fatalf("RetrieveForGroup() error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("expected 1 move, got %d", len(out.Moves))
+	}
+}
