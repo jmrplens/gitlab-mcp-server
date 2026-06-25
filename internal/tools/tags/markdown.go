@@ -30,11 +30,16 @@ func FormatOutputMarkdownString(t Output) string {
 	if t.Message != "" {
 		fmt.Fprintf(&b, "- **Message**: %s\n", t.Message)
 	}
-	if t.CommitSHA != "" {
-		fmt.Fprintf(&b, "- **Commit SHA**: %s\n", t.CommitSHA)
+	if t.Commit != nil {
+		if t.Commit.ID != "" {
+			fmt.Fprintf(&b, "- **Commit SHA**: %s\n", t.Commit.ID)
+		}
+		if t.Commit.Message != "" {
+			fmt.Fprintf(&b, "- **Commit Message**: %s\n", t.Commit.Message)
+		}
 	}
-	if t.CommitMessage != "" {
-		fmt.Fprintf(&b, "- **Commit Message**: %s\n", t.CommitMessage)
+	if t.Release != nil && t.Release.Description != "" {
+		fmt.Fprintf(&b, "- **Release**: %s\n", t.Release.Description)
 	}
 	if t.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(t.CreatedAt))

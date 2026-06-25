@@ -231,8 +231,8 @@ func TestTagGet_Success(t *testing.T) {
 	}
 }
 
-// TestTagGet_SuccessEnrichedFields verifies that Get maps enriched fields:
-// CommitSHA, CommitMessage, CreatedAt from the commit sub-object.
+// TestTagGet_SuccessEnrichedFields verifies that Get maps the full nested commit
+// object, the release note, and CreatedAt from the tag payload.
 func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTags+"/v2.0.0" {
@@ -240,7 +240,16 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 				"name":"v2.0.0",
 				"message":"Annotated tag",
 				"target":"aaa111",
-				"commit":{"id":"aaa111bbb222","message":"feat: new feature"},
+				"commit":{
+					"id":"aaa111bbb222","short_id":"aaa111b","title":"feat",
+					"message":"feat: new feature","author_name":"Dev","author_email":"dev@example.com",
+					"authored_date":"2026-06-15T08:00:00Z","committed_date":"2026-06-15T08:10:00Z",
+					"created_at":"2026-06-15T08:00:00Z","web_url":"https://gitlab.example.com/-/commit/aaa111bbb222",
+					"parent_ids":["zzz000"],"project_id":42,"status":"success",
+					"trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":"Dev"},
+					"stats":{"additions":3,"deletions":1,"total":4}
+				},
+				"release":{"tag_name":"v2.0.0","description":"Second major release"},
 				"protected":true,
 				"created_at":"2026-06-15T08:30:00Z"
 			}`)
@@ -256,14 +265,46 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	if out.CommitSHA != "aaa111bbb222" {
-		t.Errorf("out.CommitSHA = %q, want %q", out.CommitSHA, "aaa111bbb222")
+	if out.Commit == nil {
+		t.Fatal("out.Commit is nil, want commit object")
 	}
-	if out.CommitMessage != "feat: new feature" {
-		t.Errorf("out.CommitMessage = %q, want %q", out.CommitMessage, "feat: new feature")
+	if out.Release == nil {
+		t.Fatal("out.Release is nil, want release object")
 	}
-	if out.CreatedAt == "" {
-		t.Error("out.CreatedAt is empty, want timestamp")
+	stringChecks := map[string][2]string{
+		"Commit.ID":          {out.Commit.ID, "aaa111bbb222"},
+		"Commit.Message":     {out.Commit.Message, "feat: new feature"},
+		"Commit.ShortID":     {out.Commit.ShortID, "aaa111b"},
+		"Commit.AuthorEmail": {out.Commit.AuthorEmail, "dev@example.com"},
+		"Commit.Status":      {out.Commit.Status, "success"},
+		"Commit.Trailers":    {out.Commit.Trailers["Signed-off-by"], "Dev"},
+		"Commit.ExtTrailers": {out.Commit.ExtendedTrailers["Signed-off-by"], "Dev"},
+		"Release.TagName":    {out.Release.TagName, "v2.0.0"},
+		"Release.Desc":       {out.Release.Description, "Second major release"},
+	}
+	for field, pair := range stringChecks {
+		if pair[0] != pair[1] {
+			t.Errorf("%s = %q, want %q", field, pair[0], pair[1])
+		}
+	}
+	for field, ts := range map[string]string{
+		"AuthoredDate":  out.Commit.AuthoredDate,
+		"CommittedDate": out.Commit.CommittedDate,
+		"CommitCreated": out.Commit.CreatedAt,
+		"CreatedAt":     out.CreatedAt,
+	} {
+		if ts == "" {
+			t.Errorf("%s is empty, want timestamp", field)
+		}
+	}
+	if out.Commit.ProjectID != 42 {
+		t.Errorf("out.Commit.ProjectID = %d, want 42", out.Commit.ProjectID)
+	}
+	if len(out.Commit.ParentIDs) != 1 || out.Commit.ParentIDs[0] != "zzz000" {
+		t.Errorf("out.Commit.ParentIDs = %v, want [zzz000]", out.Commit.ParentIDs)
+	}
+	if out.Commit.Stats == nil || out.Commit.Stats.Total != 4 {
+		t.Errorf("out.Commit.Stats = %+v, want total 4", out.Commit.Stats)
 	}
 }
 
@@ -845,6 +886,74 @@ func TestTagListProtected_Pagination(t *testing.T) {
 	}
 }
 
+// TestTagListProtected_KeysetOrderingParams verifies that order_by, sort, and
+// keyset pagination parameters are forwarded onto the request query.
+func TestTagListProtected_KeysetOrderingParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags {
+			q := r.URL.Query()
+			if got := q.Get("order_by"); got != "name" {
+				t.Errorf("query param order_by = %q, want %q", got, "name")
+			}
+			if got := q.Get("sort"); got != "desc" {
+				t.Errorf("query param sort = %q, want %q", got, "desc")
+			}
+			if got := q.Get("pagination"); got != "keyset" {
+				t.Errorf("query param pagination = %q, want %q", got, "keyset")
+			}
+			if got := q.Get("page_token"); got != "tok123" {
+				t.Errorf("query param page_token = %q, want %q", got, "tok123")
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"name":"v*","create_access_levels":[]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListProtectedTags(context.Background(), client, ListProtectedTagsInput{
+		ProjectID:             "42",
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf("ListProtectedTags() unexpected error: %v", err)
+	}
+	if len(out.Tags) != 1 {
+		t.Fatalf("len(out.Tags) = %d, want 1", len(out.Tags))
+	}
+}
+
+// TestTagList_KeysetParams verifies that the tag list forwards keyset pagination
+// parameters (pagination, page_token) onto the request query.
+func TestTagList_KeysetParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoTags {
+			q := r.URL.Query()
+			if got := q.Get("pagination"); got != "keyset" {
+				t.Errorf("query param pagination = %q, want %q", got, "keyset")
+			}
+			if got := q.Get("page_token"); got != "cursor9" {
+				t.Errorf("query param page_token = %q, want %q", got, "cursor9")
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"name":"v1.0.0","target":"abc"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor9"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Tags) != 1 {
+		t.Fatalf("len(out.Tags) = %d, want 1", len(out.Tags))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Converter edge cases
 // ---------------------------------------------------------------------------.
@@ -852,8 +961,11 @@ func TestTagListProtected_Pagination(t *testing.T) {
 // TestToOutput_NilCommitAndZeroTime verifies ToOutput when nil commit and zero time.
 func TestToOutput_NilCommitAndZeroTime(t *testing.T) {
 	out := toOutput(&gl.Tag{Name: "v0.0.1", Target: "abc"})
-	if out.CommitSHA != "" {
-		t.Errorf("out.CommitSHA = %q, want empty for nil commit", out.CommitSHA)
+	if out.Commit != nil {
+		t.Errorf("out.Commit = %+v, want nil for nil commit", out.Commit)
+	}
+	if out.Release != nil {
+		t.Errorf("out.Release = %+v, want nil for nil release", out.Release)
 	}
 	if out.CreatedAt != "" {
 		t.Errorf("out.CreatedAt = %q, want empty for zero time", out.CreatedAt)
@@ -875,19 +987,25 @@ func TestProtectedTagOutput_FromGLEmptyLevels(t *testing.T) {
 // TestFormatOutputMarkdownString verifies FormatOutputMarkdownString.
 func TestFormatOutputMarkdownString(t *testing.T) {
 	md := FormatOutputMarkdownString(Output{
-		Name:          testTagV100,
-		Target:        "abc123",
-		Protected:     true,
-		Message:       testReleaseName,
-		CommitSHA:     "abc123def456",
-		CommitMessage: "feat: init",
-		CreatedAt:     "2026-01-01T00:00:00Z",
+		Name:      testTagV100,
+		Target:    "abc123",
+		Protected: true,
+		Message:   testReleaseName,
+		Commit:    &CommitOutput{ID: "abc123def456", Message: "feat: init"},
+		Release:   &ReleaseNoteOutput{TagName: testTagV100, Description: "Initial release"},
+		CreatedAt: "2026-01-01T00:00:00Z",
 	})
 	if !strings.Contains(md, "## Tag: v1.0.0") {
 		t.Error("expected heading with tag name")
 	}
 	if !strings.Contains(md, "abc123def456") {
 		t.Error("expected commit SHA")
+	}
+	if !strings.Contains(md, "feat: init") {
+		t.Error("expected commit message")
+	}
+	if !strings.Contains(md, "Initial release") {
+		t.Error("expected release description")
 	}
 	if !strings.Contains(md, testReleaseName) {
 		t.Error("expected message")
