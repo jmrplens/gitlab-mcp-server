@@ -187,9 +187,51 @@ type StatusComponent struct {
 	Metrics any `json:"metrics,omitempty"`
 }
 
+// StatusUser mirrors the user-level access object returned in the new
+// nested shape of the Orbit status response. It is present only when
+// the server emits the nested shape; nil for the old flat shape.
+type StatusUser struct {
+	// Available reports whether the calling user has access to the
+	// Knowledge Graph.
+	Available bool `json:"available"`
+}
+
+// StatusSystem mirrors the cluster health object returned in the new
+// nested shape of the Orbit status response. It carries the same
+// health fields as the flat shape, plus an Error field emitted when
+// the backend cannot reach the gRPC cluster (Status is "unknown" in
+// that case). Present only for the nested shape; nil otherwise.
+type StatusSystem struct {
+	// FormattedText is the pre-formatted text body, when present.
+	FormattedText string `json:"formatted_text,omitempty"`
+	// Status is the cluster-level health label.
+	Status string `json:"status,omitempty"`
+	// Timestamp is the server-side snapshot time, RFC3339.
+	Timestamp string `json:"timestamp,omitempty"`
+	// Version is the Orbit service version.
+	Version string `json:"version,omitempty"`
+	// Error is the backend error message emitted when the gRPC
+	// cluster is unreachable, or empty otherwise.
+	Error string `json:"error,omitempty"`
+	// Components are the per-subsystem status entries.
+	Components []StatusComponent `json:"components,omitempty"`
+}
+
 // StatusOutput is the Orbit cluster health response.
+//
+// The flat fields (FormattedText, Status, Timestamp, Version,
+// Components) are always populated: the SDK promotes the nested
+// system object's fields into them for backward compatibility. User
+// and System carry the new nested shape directly when the server
+// emits it, and are nil for the old flat shape.
 type StatusOutput struct {
 	toolutil.HintableOutput
+	// User mirrors the user-level access object from the nested
+	// response shape, or nil for the flat shape.
+	User *StatusUser `json:"user,omitempty"`
+	// System mirrors the cluster health object from the nested
+	// response shape, or nil for the flat shape.
+	System *StatusSystem `json:"system,omitempty"`
 	// FormattedText is the pre-formatted text body returned by the
 	// server when the caller selected the "llm" response format.
 	FormattedText string `json:"formatted_text,omitempty"`
@@ -652,8 +694,35 @@ func convertStatus(status *gl.OrbitStatus) StatusOutput {
 	if status == nil {
 		return StatusOutput{}
 	}
-	components := make([]StatusComponent, 0, len(status.Components))
-	for _, component := range status.Components {
+	out := StatusOutput{
+		FormattedText: status.FormattedText,
+		Status:        status.Status,
+		Timestamp:     status.Timestamp,
+		Version:       status.Version,
+		Components:    convertStatusComponents(status.Components),
+	}
+	if status.User != nil {
+		out.User = &StatusUser{Available: status.User.Available}
+	}
+	if status.System != nil {
+		out.System = &StatusSystem{
+			FormattedText: status.System.FormattedText,
+			Status:        status.System.Status,
+			Timestamp:     status.System.Timestamp,
+			Version:       status.System.Version,
+			Error:         status.System.Error,
+			Components:    convertStatusComponents(status.System.Components),
+		}
+	}
+	return out
+}
+
+// convertStatusComponents projects a slice of SDK status components
+// into the MCP-tool [StatusComponent] mirror, dropping nil entries
+// and decoding raw JSON metrics for friendlier Markdown rendering.
+func convertStatusComponents(in []*gl.OrbitStatusComponent) []StatusComponent {
+	components := make([]StatusComponent, 0, len(in))
+	for _, component := range in {
 		if component == nil {
 			continue
 		}
@@ -668,13 +737,7 @@ func convertStatus(status *gl.OrbitStatus) StatusOutput {
 			Metrics:  decodeRaw(component.Metrics),
 		})
 	}
-	return StatusOutput{
-		FormattedText: status.FormattedText,
-		Status:        status.Status,
-		Timestamp:     status.Timestamp,
-		Version:       status.Version,
-		Components:    components,
-	}
+	return components
 }
 
 // convertSchema projects a GitLab SDK [gl.OrbitSchema] into the
