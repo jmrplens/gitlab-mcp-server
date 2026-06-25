@@ -52,7 +52,6 @@ func deployTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := deployTokenOptions("deploy_token_delete_project", "gitlab_deploy_token_delete_project")
-	options.Usage = "Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type."
 	options.RelatedActions = []string{"access.deploy_token_list_project", "access.deploy_token_get_project", "access.deploy_token_create_project"}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
@@ -69,7 +68,6 @@ func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSp
 }
 
 func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
-	aliases := []string{individualTool}
 	usage := "Manage deploy tokens across instance, project, and group scopes."
 	relatedActions := []string{"access.deploy_key_list_project", "project.get", "group.get"}
 	guidance := map[string]toolutil.ParameterGuidance{}
@@ -81,7 +79,6 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ValueSource:    "Project ID or path owning the deploy token.",
 			ExampleBinding: `params.project_id:"group/project"`,
 		}
-		usage = "Manage project deploy tokens/credentials (list/get/create/delete)."
 		relatedActions = []string{"access.deploy_token_list_project", "project.get"}
 	case "deploy_token_list_group", "deploy_token_get_group", "deploy_token_create_group", "deploy_token_delete_group":
 		guidance["group_id"] = toolutil.ParameterGuidance{
@@ -89,7 +86,6 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ValueSource:    "Group ID or path owning the deploy token.",
 			ExampleBinding: `params.group_id:"my-group"`,
 		}
-		usage = "Manage group deploy tokens (list/get/create/delete)."
 		relatedActions = []string{"access.deploy_token_list_group", "group.get"}
 	}
 
@@ -104,8 +100,8 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 	}
 
-	return toolutil.ActionSpecOptions{
-		Aliases:           aliases,
+	options := toolutil.ActionSpecOptions{
+		Aliases:           []string{individualTool},
 		Tags:              []string{"access", "deploy_token"},
 		Usage:             usage,
 		RelatedActions:    relatedActions,
@@ -118,6 +114,78 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			Description: deployTokenDescription(actionName),
 		},
 	}
+
+	decorateDeployTokenMeta(&options, actionName)
+	return options
+}
+
+// deployTokenActionMetaEntry is the discovery metadata for one deploy-token
+// action: an action-specific Usage line and 2-4 distinctive natural-language
+// aliases. Deploy-token phrasing is deliberately distinct from the
+// accesstokens ("access token") and deploykeys ("deploy key") domains so the
+// dynamic find surface does not collide across these neighboring resources.
+type deployTokenActionMetaEntry struct {
+	usage   string
+	aliases []string
+}
+
+// deployTokenActionMeta maps each deploy-token action name to its non-generic
+// Usage and distinctive aliases (1:1 audit R-META). RelatedActions and the
+// "Returns: … See also: …" individual-tool description are set elsewhere
+// (deployTokenOptions / deployTokenDescription).
+var deployTokenActionMeta = map[string]deployTokenActionMetaEntry{
+	"deploy_token_list_all": {
+		usage:   "List every deploy token across the whole GitLab instance (admin only). Use this for an instance-wide audit of deploy tokens, not for a single project or group.",
+		aliases: []string{"list all deploy tokens", "instance deploy tokens", "audit deploy tokens instance-wide"},
+	},
+	"deploy_token_list_project": {
+		usage:   "List the deploy tokens owned by one project. Use this to inventory a project's registry/repository deploy credentials before creating or revoking one.",
+		aliases: []string{"list project deploy tokens", "show deploy tokens for project", "project deploy credentials"},
+	},
+	"deploy_token_list_group": {
+		usage:   "List the deploy tokens owned by one group. Use this to inventory a group's shared deploy credentials across its projects.",
+		aliases: []string{"list group deploy tokens", "show deploy tokens for group", "group deploy credentials"},
+	},
+	"deploy_token_get_project": {
+		usage:   "Get one project deploy token by its deploy_token_id. Use this after listing to inspect a single token's scopes, expiry, and revoked state.",
+		aliases: []string{"get project deploy token", "show project deploy token", "fetch project deploy token by id"},
+	},
+	"deploy_token_get_group": {
+		usage:   "Get one group deploy token by its deploy_token_id. Use this after listing to inspect a single token's scopes, expiry, and revoked state.",
+		aliases: []string{"get group deploy token", "show group deploy token", "fetch group deploy token by id"},
+	},
+	"deploy_token_create_project": {
+		usage:   "Create a deploy token for a project so CI or external clients can pull/push the registry or repository. Provide name, scopes, and optional expires_at; the secret token value is returned only once.",
+		aliases: []string{"create project deploy token", "issue project deploy token", "generate deploy token for project"},
+	},
+	"deploy_token_create_group": {
+		usage:   "Create a deploy token for a group so its projects share one set of pull/push credentials. Provide name, scopes, and optional expires_at; the secret token value is returned only once.",
+		aliases: []string{"create group deploy token", "issue group deploy token", "generate deploy token for group"},
+	},
+	"deploy_token_delete_project": {
+		usage:   "Delete (revoke) a project deploy token by deploy_token_id. Use this to immediately invalidate leaked or unused project pull/push credentials; pass the deploy token ID, not another token type.",
+		aliases: []string{"delete project deploy token", "revoke project deploy token", "remove deploy token from project"},
+	},
+	"deploy_token_delete_group": {
+		usage:   "Delete (revoke) a group deploy token by deploy_token_id. Use this to immediately invalidate leaked or unused group pull/push credentials.",
+		aliases: []string{"delete group deploy token", "revoke group deploy token", "remove deploy token from group"},
+	},
+}
+
+// decorateDeployTokenMeta overrides the placeholder Usage and the
+// tool-name-only Aliases with action-specific discovery metadata for every
+// deploy-token action (1:1 audit R-META). The canonical individual-tool name
+// is preserved as the first alias so individual-mode lookups keep working.
+func decorateDeployTokenMeta(options *toolutil.ActionSpecOptions, actionName string) {
+	meta, ok := deployTokenActionMeta[actionName]
+	if !ok {
+		return
+	}
+	options.Usage = meta.usage
+	aliases := make([]string, 0, len(options.Aliases)+len(meta.aliases))
+	aliases = append(aliases, options.Aliases...)
+	aliases = append(aliases, meta.aliases...)
+	options.Aliases = aliases
 }
 
 // deployTokenDescription returns the "Returns: … See also: …" individual-tool

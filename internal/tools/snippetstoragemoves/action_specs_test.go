@@ -4,6 +4,7 @@ package snippetstoragemoves
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -28,9 +29,35 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(specs) != 6 {
 		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
 	}
+	const genericUsage = "Use to execute snippetstoragemoves domain action."
 	for _, spec := range specs {
-		if spec.OwnerPackage != "snippetstoragemoves" || spec.IndividualTool.Name == "" {
+		tool := spec.IndividualTool.Name
+		if spec.OwnerPackage != "snippetstoragemoves" || tool == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+		if spec.Usage == "" || spec.Usage == genericUsage {
+			t.Fatalf("%s: Usage must be non-generic, got %q", tool, spec.Usage)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Fatalf("%s: RelatedActions must be non-empty", tool)
+		}
+		if !strings.Contains(spec.IndividualTool.Description, "Returns:") ||
+			!strings.Contains(spec.IndividualTool.Description, "See also:") {
+			t.Fatalf("%s: Description must use Returns/See also form, got %q", tool, spec.IndividualTool.Description)
+		}
+		// Aliases must carry distinctive natural-language phrasing beyond the
+		// tool name (at least two extra entries) and include the tool name.
+		if len(spec.Aliases) < 3 {
+			t.Fatalf("%s: want >=2 distinctive aliases plus tool name, got %v", tool, spec.Aliases)
+		}
+		var hasTool bool
+		for _, a := range spec.Aliases {
+			if a == tool {
+				hasTool = true
+			}
+		}
+		if !hasTool {
+			t.Fatalf("%s: Aliases must include the tool name, got %v", tool, spec.Aliases)
 		}
 	}
 }
