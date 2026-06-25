@@ -186,12 +186,141 @@ func usageFor(usage map[string]*serviceUsage, named *types.Named) *serviceUsage 
 	return use
 }
 
+// acceptedMissingMethods adjudicates SDK service methods that the call-expression
+// scanner reports as uncovered but which are legitimately handled another way (so
+// they are NOT genuine R-ACTION gaps). The scanner only sees direct
+// client.GL().Svc.Method(...) calls, so it misses: methods passed as VALUES into a
+// generic helper, RAW REST handlers (client.GL().NewRequest+Do with a path string),
+// GraphQL handlers (ADR-0006), and capabilities covered by a superseding/generic
+// variant. It also can't know which endpoints are INTENTIONALLY not exposed (binary
+// file transfer, CI-job-token self-lookup). Each entry carries a category+rationale.
+// Key = "<Service>.<Method>" (service name without the ServiceInterface suffix).
+// Methods NOT listed here and still uncovered are the genuine new-tool backlog.
+var acceptedMissingMethods = map[string]string{
+	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
+	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC — method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
+	"AwardEmoji.CreateIssuesAwardEmojiOnNote":       "COVERED_GENERIC — method-value -> createNoteAwardEmoji",
+	"AwardEmoji.DeleteIssuesAwardEmojiOnNote":       "COVERED_GENERIC — method-value -> deleteNoteAwardEmoji",
+	"AwardEmoji.ListMergeRequestAwardEmojiOnNote":   "COVERED_GENERIC — method-value (gitlab_mr_note_emoji_list)",
+	"AwardEmoji.CreateMergeRequestAwardEmojiOnNote": "COVERED_GENERIC — method-value",
+	"AwardEmoji.DeleteMergeRequestAwardEmojiOnNote": "COVERED_GENERIC — method-value",
+	"AwardEmoji.ListSnippetAwardEmojiOnNote":        "COVERED_GENERIC — method-value (gitlab_snippet_note_emoji_list)",
+	"AwardEmoji.CreateSnippetAwardEmojiOnNote":      "COVERED_GENERIC — method-value",
+	"AwardEmoji.DeleteSnippetAwardEmojiOnNote":      "COVERED_GENERIC — method-value",
+	"Search.Commits":                "COVERED_GENERIC — method-value in runScopedSearch (gitlab_search_commits)",
+	"Search.CommitsByGroup":         "COVERED_GENERIC — method-value scoped search",
+	"Search.CommitsByProject":       "COVERED_GENERIC — method-value scoped search",
+	"Search.Issues":                 "COVERED_GENERIC — method-value scoped search",
+	"Search.IssuesByGroup":          "COVERED_GENERIC — method-value scoped search",
+	"Search.IssuesByProject":        "COVERED_GENERIC — method-value scoped search",
+	"Search.MergeRequests":          "COVERED_GENERIC — method-value scoped search",
+	"Search.MergeRequestsByGroup":   "COVERED_GENERIC — method-value scoped search",
+	"Search.MergeRequestsByProject": "COVERED_GENERIC — method-value scoped search",
+	"Search.Milestones":             "COVERED_GENERIC — method-value scoped search",
+	"Search.MilestonesByGroup":      "COVERED_GENERIC — method-value scoped search",
+	"Search.MilestonesByProject":    "COVERED_GENERIC — method-value scoped search",
+	"Runners.ListRunners":           "COVERED_GENERIC — method-value (gitlab_runner_list)",
+	"Runners.ListAllRunners":        "COVERED_GENERIC — method-value (gitlab_runner_list_all)",
+
+	// COVERED_GRAPHQL — ADR-0006 GraphQL handlers (no SDK service call).
+	"Epics.CreateEpic":                     "COVERED_GRAPHQL — epics pkg",
+	"Epics.DeleteEpic":                     "COVERED_GRAPHQL — epics pkg",
+	"Epics.GetEpic":                        "COVERED_GRAPHQL — epics pkg",
+	"Epics.UpdateEpic":                     "COVERED_GRAPHQL — epics pkg",
+	"Notes.CreateEpicNote":                 "COVERED_GRAPHQL — epicnotes pkg",
+	"Notes.DeleteEpicNote":                 "COVERED_GRAPHQL — epicnotes pkg",
+	"Notes.GetEpicNote":                    "COVERED_GRAPHQL — epicnotes pkg",
+	"Notes.ListEpicNotes":                  "COVERED_GRAPHQL — epicnotes pkg",
+	"Notes.UpdateEpicNote":                 "COVERED_GRAPHQL — epicnotes pkg",
+	"Discussions.AddEpicDiscussionNote":    "COVERED_GRAPHQL — epicdiscussions pkg",
+	"Discussions.CreateEpicDiscussion":     "COVERED_GRAPHQL — epicdiscussions pkg",
+	"Discussions.DeleteEpicDiscussionNote": "COVERED_GRAPHQL — epicdiscussions pkg",
+	"Discussions.GetEpicDiscussion":        "COVERED_GRAPHQL — epicdiscussions pkg",
+	"Discussions.ListGroupEpicDiscussions": "COVERED_GRAPHQL — epicdiscussions pkg",
+	"Discussions.UpdateEpicDiscussionNote": "COVERED_GRAPHQL — epicdiscussions pkg",
+
+	// COVERED_RAW — raw REST (NewRequest/Do or URL-built); SDK method not called.
+	"Commits.GetGPGSignature":                           "COVERED_RAW — gitlab_commit_signature",
+	"Deployments.GetProjectDeployment":                  "COVERED_RAW — gitlab_deployment_get",
+	"Deployments.ListProjectDeployments":                "COVERED_RAW — gitlab_deployment_list",
+	"Jobs.ListPipelineJobs":                             "COVERED_RAW — gitlab_job_list",
+	"Jobs.ListProjectJobs":                              "COVERED_RAW — gitlab_job_list_project",
+	"MergeRequestApprovals.ChangeApprovalConfiguration": "COVERED_RAW — gitlab_mr_approval_config",
+	"MergeRequestApprovals.CreateApprovalRule":          "COVERED_RAW — gitlab_mr_approval_rule_create",
+	"MergeRequestApprovals.GetApprovalRules":            "COVERED_RAW — gitlab_mr_approval_rules",
+	"MergeRequestApprovals.GetApprovalState":            "COVERED_RAW — gitlab_mr_approval_state",
+	"MergeRequestApprovals.UpdateApprovalRule":          "COVERED_RAW — gitlab_mr_approval_rule_update",
+	"PipelineSchedules.GetPipelineSchedule":             "COVERED_RAW — gitlab_pipeline_schedule_get",
+	"IssueBoards.GetIssueBoard":                         "COVERED_RAW — gitlab_board_get",
+	"IssueBoards.GetIssueBoardLists":                    "COVERED_RAW — gitlab_board_list_lists",
+	"GroupIssueBoards.CreateGroupIssueBoard":            "COVERED_RAW — groupboards raw",
+	"GroupIssueBoards.GetGroupIssueBoard":               "COVERED_RAW — gitlab_group_board_get",
+	"GroupIssueBoards.ListGroupIssueBoards":             "COVERED_RAW — gitlab_group_board_list",
+	"GroupIssueBoards.UpdateIssueBoard":                 "COVERED_RAW — gitlab_group_board_update",
+	"Projects.AddProjectHook":                           "COVERED_RAW — gitlab_project_hook_add",
+	"Projects.EditProjectHook":                          "COVERED_RAW — gitlab_project_hook_edit",
+	"Projects.GetProjectHook":                           "COVERED_RAW — gitlab_project_hook_get",
+	"Projects.ListProjectHooks":                         "COVERED_RAW — gitlab_project_hook_list",
+	"Projects.ListUserContributedProjects":              "COVERED_RAW — gitlab_project_list_user_contributed",
+	"Projects.ListUserProjects":                         "COVERED_RAW — gitlab_project_list_user_projects",
+	"Projects.ListUserStarredProjects":                  "COVERED_RAW — gitlab_project_list_user_starred",
+	"ProjectImportExport.ImportFromFile":                "COVERED_RAW — gitlab_import_project_from_file",
+	"ProjectImportExport.ImportStatus":                  "COVERED_RAW — gitlab_get_project_import_status",
+	"Features.SetFeatureFlag":                           "COVERED_RAW — gitlab_set_feature_flag (raw POST)",
+	"Repositories.Archive":                              "COVERED_RAW — gitlab_repository_archive (URL-built)",
+	"GenericPackages.DownloadPackageFile":               "COVERED_RAW — gitlab_package_download (streamed)",
+
+	// COVERED_GENERIC — superseding/generic variant covers the same capability.
+	"MergeRequests.GetMergeRequestApprovals":                      "COVERED_GENERIC — mrapprovals config/state",
+	"MergeRequests.GetMergeRequestChanges":                        "COVERED_GENERIC — gitlab_mr_changes_get (ListMergeRequestDiffs)",
+	"ProjectMembers.ListProjectMembers":                           "COVERED_GENERIC — gitlab_project_members_list (ListAllProjectMembers)",
+	"Groups.ListGroupMembers":                                     "COVERED_GENERIC — gitlab_group_members_list (ListAllGroupMembers)",
+	"Groups.ListSubGroups":                                        "COVERED_GENERIC — gitlab_subgroups_list (ListDescendantGroups)",
+	"Groups.DeleteGroupLDAPLink":                                  "COVERED_GENERIC — groupldap ForProvider/WithCNOrFilter variants",
+	"PersonalAccessTokens.RotatePersonalAccessTokenByID":          "COVERED_GENERIC — gitlab_personal_access_token_rotate",
+	"ExternalStatusChecks.CreateExternalStatusCheck":              "COVERED_GENERIC — deprecated; project variant",
+	"ExternalStatusChecks.DeleteExternalStatusCheck":              "COVERED_GENERIC — deprecated; project variant",
+	"ExternalStatusChecks.ListMergeStatusChecks":                  "COVERED_GENERIC — deprecated; ListProjectMergeRequestExternalStatusChecks",
+	"ExternalStatusChecks.RetryFailedStatusCheckForAMergeRequest": "COVERED_GENERIC — deprecated; project variant",
+	"ExternalStatusChecks.SetExternalStatusCheckStatus":           "COVERED_GENERIC — deprecated; SetProjectMergeRequestExternalStatusCheckStatus",
+	"ExternalStatusChecks.UpdateExternalStatusCheck":              "COVERED_GENERIC — deprecated; project variant",
+	"ErrorTracking.EnableDisableErrorTracking":                    "COVERED_GENERIC — deprecated; gitlab_enable_disable_error_tracking",
+	"ErrorTracking.CreateErrorTrackingSettings":                   "COVERED_GENERIC — same settings resource as UpdateErrorTrackingSettings",
+
+	// INTENTIONAL_SKIP_BINARY — raw file/archive/state bytes, unsuitable for JSON tools.
+	"GroupMarkdownUploads.DownloadGroupMarkdownUploadByID":                    "INTENTIONAL_SKIP_BINARY — file bytes",
+	"GroupMarkdownUploads.DownloadGroupMarkdownUploadBySecretAndFilename":     "INTENTIONAL_SKIP_BINARY — file bytes",
+	"ProjectMarkdownUploads.DownloadProjectMarkdownUploadByID":                "INTENTIONAL_SKIP_BINARY — file bytes",
+	"ProjectMarkdownUploads.DownloadProjectMarkdownUploadBySecretAndFilename": "INTENTIONAL_SKIP_BINARY — file bytes",
+	"GroupRelationsExport.ExportDownload":                                     "INTENTIONAL_SKIP_BINARY — export archive bytes",
+	"SecureFiles.DownloadSecureFile":                                          "INTENTIONAL_SKIP_BINARY — secure file bytes",
+	"TerraformStates.Download":                                                "INTENTIONAL_SKIP_BINARY — tfstate bytes",
+	"TerraformStates.DownloadLatest":                                          "INTENTIONAL_SKIP_BINARY — tfstate bytes",
+
+	// INTENTIONAL_SKIP_OTHER
+	"Jobs.GetJobTokensJob":       "INTENTIONAL_SKIP_OTHER — CI-job-token self-lookup; not usable with a PAT",
+	"Repositories.StreamArchive": "INTENTIONAL_SKIP_OTHER — streaming dup of Repositories.Archive (gitlab_repository_archive)",
+}
+
+// isAcceptedMissingMethod reports whether an uncovered SDK method is adjudicated as
+// covered-another-way or intentionally not exposed (so not a genuine R-ACTION gap).
+func isAcceptedMissingMethod(service, method string) bool {
+	_, ok := acceptedMissingMethods[service+"."+method]
+	return ok
+}
+
 func coverageForService(use *serviceUsage) serviceCoverage {
 	apiMethods := apiMethodNames(use.named)
+	service := strings.TrimSuffix(use.named.Obj().Name(), "ServiceInterface")
 	covered := 0
 	var missing []string
 	for _, method := range apiMethods {
 		if _, ok := use.called[method]; ok {
+			covered++
+			continue
+		}
+		// Adjudicated: covered via raw/GraphQL/generic, or intentionally not exposed.
+		if isAcceptedMissingMethod(service, method) {
 			covered++
 			continue
 		}
