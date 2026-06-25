@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -121,16 +122,29 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 	return out
 }
 
-// pruneSpecFieldsByTier returns spec with its input-schema properties that
-// require a higher tier than the instance tier removed. Field tiers come from
-// the input type's `tier:"premium|ultimate"` struct tags via
-// [toolutil.FieldTiers]. The cached shared input schema is never mutated: a
-// clone is produced only when at least one field must be dropped, so a Free
-// instance never advertises Premium/Ultimate-only parameters.
+// pruneSpecFieldsByTier returns spec with input- and output-schema properties
+// that require a higher tier than the instance tier removed. Field tiers come
+// from the input/output type's `tier:"premium|ultimate"` struct tags via
+// [toolutil.FieldTiers]. The cached shared schemas are never mutated: a clone is
+// produced only when at least one field must be dropped, so a Free instance
+// never advertises Premium/Ultimate-only parameters or result fields.
 func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil.ActionSpec {
-	fieldTiers := toolutil.FieldTiers(spec.Route.InputType)
-	if len(fieldTiers) == 0 || spec.Route.InputSchema == nil {
-		return spec
+	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier)
+	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier)
+	return spec
+}
+
+// pruneSchemaFieldsByTier removes from schema the top-level properties whose
+// per-field tier (from rt's `tier:` struct tags) exceeds the instance tier. The
+// input schema is returned unchanged when nothing must be dropped, avoiding an
+// allocation and preserving the cached shared map.
+func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier edition.Tier) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	fieldTiers := toolutil.FieldTiers(rt)
+	if len(fieldTiers) == 0 {
+		return schema
 	}
 	drop := make(map[string]bool, len(fieldTiers))
 	for name, fieldTier := range fieldTiers {
@@ -139,10 +153,9 @@ func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil
 		}
 	}
 	if len(drop) == 0 {
-		return spec
+		return schema
 	}
-	spec.Route.InputSchema = pruneSchemaProperties(spec.Route.InputSchema, drop)
-	return spec
+	return pruneSchemaProperties(schema, drop)
 }
 
 // pruneSchemaProperties returns a shallow clone of a JSON Schema object with the

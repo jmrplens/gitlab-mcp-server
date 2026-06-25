@@ -58,6 +58,7 @@ type ActionRoute struct {
 	Handler           ActionFunc
 	Destructive       bool
 	InputType         reflect.Type
+	OutputType        reflect.Type
 	InputSchema       map[string]any
 	OutputSchema      map[string]any
 	ParameterGuidance map[string]ParameterGuidance
@@ -340,6 +341,7 @@ func RouteFunc[T, R any](fn func(ctx context.Context, input T) (R, error)) Actio
 		Destructive:  false,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -360,6 +362,7 @@ func RouteRequestFunc[T, R any](fn func(ctx context.Context, req *mcp.CallToolRe
 		Destructive:  false,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -2089,6 +2092,7 @@ func RouteAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Cont
 		Destructive:  false,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -2103,6 +2107,7 @@ func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Con
 		Destructive:  false,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[VoidOutput](),
 		OutputSchema: schemaForType(reflect.TypeFor[VoidOutput]()),
 	}
 }
@@ -2116,6 +2121,7 @@ func RouteActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx c
 		Destructive:  false,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -2129,6 +2135,7 @@ func DestructiveAction[T, R any](client *gitlabclient.Client, fn func(ctx contex
 		Destructive:  true,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -2143,6 +2150,7 @@ func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 		Destructive:  true,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[DeleteOutput](),
 		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }
@@ -2156,6 +2164,7 @@ func DestructiveActionWithRequest[T, R any](client *gitlabclient.Client, fn func
 		Destructive:  true,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[R](),
 		OutputSchema: schemaForType(reflect.TypeFor[R]()),
 	}
 }
@@ -2170,6 +2179,7 @@ func DestructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn fun
 		Destructive:  true,
 		InputType:    inputType,
 		InputSchema:  inputSchemaForType(inputType),
+		OutputType:   reflect.TypeFor[DeleteOutput](),
 		OutputSchema: schemaForType(reflect.TypeFor[DeleteOutput]()),
 	}
 }

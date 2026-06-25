@@ -81,25 +81,25 @@ type Output struct {
 	Confidential      bool               `json:"confidential"`
 	DiscussionLocked  bool               `json:"discussion_locked"`
 	ProjectID         int64              `json:"project_id"`
-	Weight            int64              `json:"weight,omitempty"`
+	Weight            int64              `json:"weight,omitempty" tier:"premium"`
 	IssueType         string             `json:"issue_type,omitempty"`
-	HealthStatus      string             `json:"health_status,omitempty"`
+	HealthStatus      string             `json:"health_status,omitempty" tier:"ultimate"`
 	MergeRequestCount int64              `json:"merge_requests_count,omitempty"`
 	UserNotesCount    int64              `json:"user_notes_count,omitempty"`
 	Upvotes           int64              `json:"upvotes,omitempty"`
 	Downvotes         int64              `json:"downvotes,omitempty"`
 	Subscribed        bool               `json:"subscribed"`
 	MovedToID         int64              `json:"moved_to_id,omitempty"`
-	EpicIssueID       int64              `json:"epic_issue_id,omitempty"`
+	EpicIssueID       int64              `json:"epic_issue_id,omitempty" tier:"premium"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
 	ExternalID           string                      `json:"external_id,omitempty"`
 	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
 	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
 	References           *ReferencesOutput           `json:"references,omitempty"`
-	Epic                 *EpicOutput                 `json:"epic,omitempty"`
+	Epic                 *EpicOutput                 `json:"epic,omitempty" tier:"premium"`
 	LabelDetails         []*LabelDetailsOutput       `json:"label_details,omitempty"`
-	Iteration            *IterationOutput            `json:"iteration,omitempty"`
+	Iteration            *IterationOutput            `json:"iteration,omitempty" tier:"premium"`
 	Links                *LinksOutput                `json:"_links,omitempty"`
 	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
 	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
