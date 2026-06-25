@@ -21,12 +21,12 @@ type GroupGetInput struct {
 
 // GroupUpdateInput defines parameters for updating group-level MR approval settings.
 type GroupUpdateInput struct {
-	GroupID                                     toolutil.StringOrInt `json:"group_id"                                        jsonschema:"Group ID or URL-encoded path,required"`
-	AllowAuthorApproval                         *bool                `json:"allow_author_approval,omitempty"                  jsonschema:"Allow merge request authors to approve their own MRs"`
-	AllowCommitterApproval                      *bool                `json:"allow_committer_approval,omitempty"               jsonschema:"Allow committers to approve MRs they contributed to"`
-	AllowOverridesToApproverListPerMergeRequest *bool                `json:"allow_overrides_approver_list_per_mr,omitempty"    jsonschema:"Allow overriding approver list per merge request"`
-	RetainApprovalsOnPush                       *bool                `json:"retain_approvals_on_push,omitempty"               jsonschema:"Retain approvals when new commits are pushed"`
-	RequireReauthenticationToApprove            *bool                `json:"require_reauthentication_to_approve,omitempty"    jsonschema:"Require password re-entry to approve"`
+	GroupID                                     toolutil.StringOrInt `json:"group_id"                                                  jsonschema:"Group ID or URL-encoded path,required"`
+	AllowAuthorApproval                         *bool                `json:"allow_author_approval,omitempty"                           jsonschema:"Allow merge request authors to approve their own MRs"`
+	AllowCommitterApproval                      *bool                `json:"allow_committer_approval,omitempty"                        jsonschema:"Allow committers to approve MRs they contributed to"`
+	AllowOverridesToApproverListPerMergeRequest *bool                `json:"allow_overrides_to_approver_list_per_merge_request,omitempty" jsonschema:"Allow overriding the approver list per merge request"`
+	RetainApprovalsOnPush                       *bool                `json:"retain_approvals_on_push,omitempty"                        jsonschema:"Retain approvals when new commits are pushed"`
+	RequireReauthenticationToApprove            *bool                `json:"require_reauthentication_to_approve,omitempty"             jsonschema:"Require password re-entry to approve"`
 }
 
 // ProjectGetInput defines parameters for retrieving project-level MR approval settings.
@@ -36,13 +36,13 @@ type ProjectGetInput struct {
 
 // ProjectUpdateInput defines parameters for updating project-level MR approval settings.
 type ProjectUpdateInput struct {
-	ProjectID                                   toolutil.StringOrInt `json:"project_id"                                      jsonschema:"Project ID or URL-encoded path,required"`
-	AllowAuthorApproval                         *bool                `json:"allow_author_approval,omitempty"                  jsonschema:"Allow merge request authors to approve their own MRs"`
-	AllowCommitterApproval                      *bool                `json:"allow_committer_approval,omitempty"               jsonschema:"Allow committers to approve MRs they contributed to"`
-	AllowOverridesToApproverListPerMergeRequest *bool                `json:"allow_overrides_approver_list_per_mr,omitempty"    jsonschema:"Allow overriding approver list per merge request"`
-	RetainApprovalsOnPush                       *bool                `json:"retain_approvals_on_push,omitempty"               jsonschema:"Retain approvals when new commits are pushed"`
-	RequireReauthenticationToApprove            *bool                `json:"require_reauthentication_to_approve,omitempty"    jsonschema:"Require password re-entry to approve"`
-	SelectiveCodeOwnerRemovals                  *bool                `json:"selective_code_owner_removals,omitempty"          jsonschema:"Only remove Code Owner approvals for changed files (project-only)"`
+	ProjectID                                   toolutil.StringOrInt `json:"project_id"                                                jsonschema:"Project ID or URL-encoded path,required"`
+	AllowAuthorApproval                         *bool                `json:"allow_author_approval,omitempty"                           jsonschema:"Allow merge request authors to approve their own MRs"`
+	AllowCommitterApproval                      *bool                `json:"allow_committer_approval,omitempty"                        jsonschema:"Allow committers to approve MRs they contributed to"`
+	AllowOverridesToApproverListPerMergeRequest *bool                `json:"allow_overrides_to_approver_list_per_merge_request,omitempty" jsonschema:"Allow overriding the approver list per merge request"`
+	RetainApprovalsOnPush                       *bool                `json:"retain_approvals_on_push,omitempty"                        jsonschema:"Retain approvals when new commits are pushed"`
+	RequireReauthenticationToApprove            *bool                `json:"require_reauthentication_to_approve,omitempty"             jsonschema:"Require password re-entry to approve"`
+	SelectiveCodeOwnerRemovals                  *bool                `json:"selective_code_owner_removals,omitempty"                   jsonschema:"Only remove Code Owner approvals for changed files (project-only)"`
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ type Output struct {
 	toolutil.HintableOutput
 	AllowAuthorApproval                         SettingOutput `json:"allow_author_approval"`
 	AllowCommitterApproval                      SettingOutput `json:"allow_committer_approval"`
-	AllowOverridesToApproverListPerMergeRequest SettingOutput `json:"allow_overrides_approver_list_per_mr"`
+	AllowOverridesToApproverListPerMergeRequest SettingOutput `json:"allow_overrides_to_approver_list_per_merge_request"`
 	RetainApprovalsOnPush                       SettingOutput `json:"retain_approvals_on_push"`
 	SelectiveCodeOwnerRemovals                  SettingOutput `json:"selective_code_owner_removals"`
 	RequirePasswordToApprove                    SettingOutput `json:"require_password_to_approve"`
