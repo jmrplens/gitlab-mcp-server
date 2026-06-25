@@ -46,7 +46,7 @@ func TestListProjectEvents_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListProjectEvents(context.Background(), client, ListProjectEventsInput{ProjectID: "42", Page: 1, PerPage: 20})
+	out, err := ListProjectEvents(context.Background(), client, ListProjectEventsInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -176,7 +176,7 @@ func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListCurrentUserContributionEvents(context.Background(), client, ListContributionEventsInput{Page: 1, PerPage: 20})
+	out, err := ListCurrentUserContributionEvents(context.Background(), client, ListContributionEventsInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
