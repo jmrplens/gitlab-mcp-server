@@ -71,6 +71,29 @@ func ParseTier(s string) (tier Tier, ok bool) {
 	}
 }
 
+// TierFromEdition maps an action's Edition metadata string to the minimum
+// licensing [Tier] required to use that action. Edition is the per-action
+// minimum-tier annotation carried on the canonical action catalog. The mapping
+// is case-insensitive and whitespace-trimmed:
+//
+//   - "premium"                          → [Premium]
+//   - "ultimate"                         → [Ultimate]
+//   - "", "free", "ce", "core", unknown  → [Free]
+//
+// "core" is the legacy CE/Free marker and maps to [Free]. An empty Edition is
+// the common case (Free) and the zero value, so an unannotated action is
+// available in every tier.
+func TierFromEdition(edition string) Tier {
+	switch strings.ToLower(strings.TrimSpace(edition)) {
+	case "premium":
+		return Premium
+	case "ultimate":
+		return Ultimate
+	default:
+		return Free
+	}
+}
+
 // TierFromPlan maps a GitLab license plan name (as returned by the License API's
 // Plan field) to a [Tier]. The mapping follows GitLab's tier model, including
 // legacy plan names:

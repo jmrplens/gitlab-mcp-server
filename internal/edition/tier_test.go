@@ -61,6 +61,32 @@ func TestTierFromPlan(t *testing.T) {
 	}
 }
 
+// TestTierFromEdition verifies the per-action Edition metadata string maps to
+// the correct minimum tier, including the legacy "core" marker and the Free
+// default for empty/unknown values.
+func TestTierFromEdition(t *testing.T) {
+	tests := []struct {
+		edition string
+		want    Tier
+	}{
+		{edition: "premium", want: Premium},
+		{edition: "Premium", want: Premium},
+		{edition: " ultimate ", want: Ultimate},
+		{edition: "core", want: Free},
+		{edition: "free", want: Free},
+		{edition: "ce", want: Free},
+		{edition: "", want: Free},
+		{edition: "unknown", want: Free},
+	}
+	for _, tc := range tests {
+		t.Run(tc.edition, func(t *testing.T) {
+			if got := TierFromEdition(tc.edition); got != tc.want {
+				t.Errorf("TierFromEdition(%q) = %v, want %v", tc.edition, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestTierOrderingHelpers verifies AtLeast, IsEnterprise, and String for each
 // tier value.
 func TestTierOrderingHelpers(t *testing.T) {
