@@ -54,20 +54,22 @@ func fromGL(s *gl.IssuesStatistics) StatisticsOutput {
 // [gl.GetProjectIssuesStatisticsOptions] so the option-builder helpers stay in
 // lockstep across the three scopes.
 type statisticsFilters struct {
-	Labels           []string
-	Milestone        string
-	Scope            string
-	Search           string
-	AssigneeID       *int64
-	AssigneeUsername []string
-	AuthorID         *int64
-	AuthorUsername   string
-	Confidential     *bool
-	CreatedAfter     string
-	CreatedBefore    string
-	IIDs             []int64
-	In               string
-	MyReactionEmoji  string
+	Labels           []string `json:"labels,omitempty"`
+	Milestone        string   `json:"milestone,omitempty"`
+	Scope            string   `json:"scope,omitempty"`
+	Search           string   `json:"search,omitempty"`
+	AssigneeID       *int64   `json:"assignee_id,omitempty"`
+	AssigneeUsername []string `json:"assignee_username,omitempty"`
+	AuthorID         *int64   `json:"author_id,omitempty"`
+	AuthorUsername   string   `json:"author_username,omitempty"`
+	Confidential     *bool    `json:"confidential,omitempty"`
+	CreatedAfter     string   `json:"created_after,omitempty"`
+	CreatedBefore    string   `json:"created_before,omitempty"`
+	UpdatedAfter     string   `json:"updated_after,omitempty"`
+	UpdatedBefore    string   `json:"updated_before,omitempty"`
+	IIDs             []int64  `json:"iids[],omitempty"`
+	In               string   `json:"in,omitempty"`
+	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty"`
 }
 
 // labelOptions converts a label-name slice into a [*gl.LabelOptions], or nil
@@ -120,6 +122,8 @@ type GetInput struct {
 	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
 	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
 	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
 	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
 	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
@@ -143,6 +147,8 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 		Confidential:     input.Confidential,
 		CreatedAfter:     toolutil.ParseOptionalTime(input.CreatedAfter),
 		CreatedBefore:    toolutil.ParseOptionalTime(input.CreatedBefore),
+		UpdatedAfter:     toolutil.ParseOptionalTime(input.UpdatedAfter),
+		UpdatedBefore:    toolutil.ParseOptionalTime(input.UpdatedBefore),
 	}
 	stats, _, err := client.GL().IssuesStatistics.GetIssuesStatistics(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -167,6 +173,8 @@ type GetGroupInput struct {
 	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
 	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
 	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
 	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
 	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
@@ -180,6 +188,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
 		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
 		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
 		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
 	}), gl.WithContext(ctx))
 	if err != nil {
@@ -204,6 +213,8 @@ func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatist
 		Search:           optStr(filters.Search),
 		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
 		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
+		UpdatedAfter:     toolutil.ParseOptionalTime(filters.UpdatedAfter),
+		UpdatedBefore:    toolutil.ParseOptionalTime(filters.UpdatedBefore),
 		Confidential:     filters.Confidential,
 	}
 }
@@ -224,6 +235,8 @@ type GetProjectInput struct {
 	Confidential     *bool    `json:"confidential,omitempty"      jsonschema:"Filter by confidential status"`
 	CreatedAfter     string   `json:"created_after,omitempty"     jsonschema:"Return issues created after date (ISO 8601)"`
 	CreatedBefore    string   `json:"created_before,omitempty"    jsonschema:"Return issues created before date (ISO 8601)"`
+	UpdatedAfter     string   `json:"updated_after,omitempty"     jsonschema:"Return issues updated after date (ISO 8601)"`
+	UpdatedBefore    string   `json:"updated_before,omitempty"    jsonschema:"Return issues updated before date (ISO 8601)"`
 	IIDs             []int64  `json:"iids,omitempty"              jsonschema:"Filter by issue internal IDs"`
 	MyReactionEmoji  string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by issues you reacted to with this emoji (or None/Any)"`
 }
@@ -237,6 +250,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 		AssigneeID: input.AssigneeID, AssigneeUsername: input.AssigneeUsername,
 		AuthorID: input.AuthorID, AuthorUsername: input.AuthorUsername,
 		Confidential: input.Confidential, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore,
+		UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
 		IIDs: input.IIDs, MyReactionEmoji: input.MyReactionEmoji,
 	}), gl.WithContext(ctx))
 	if err != nil {
@@ -261,6 +275,8 @@ func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesSta
 		Search:           optStr(filters.Search),
 		CreatedAfter:     toolutil.ParseOptionalTime(filters.CreatedAfter),
 		CreatedBefore:    toolutil.ParseOptionalTime(filters.CreatedBefore),
+		UpdatedAfter:     toolutil.ParseOptionalTime(filters.UpdatedAfter),
+		UpdatedBefore:    toolutil.ParseOptionalTime(filters.UpdatedBefore),
 		Confidential:     filters.Confidential,
 	}
 }

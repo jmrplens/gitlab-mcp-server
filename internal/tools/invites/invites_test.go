@@ -882,6 +882,76 @@ func TestGroupInvites_WithID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Invite — full create-body parameter fidelity (1:1 audit R-INPUT)
+// ---------------------------------------------------------------------------.
+
+// TestProjectInvites_CreateBodyParams asserts that every documented create
+// parameter (email, access_level, expires_at) is serialized into the POST body
+// exactly as the GitLab add-a-member endpoint expects.
+func TestProjectInvites_CreateBodyParams(t *testing.T) {
+	var body struct {
+		Email       string `json:"email"`
+		AccessLevel int    `json:"access_level"`
+		ExpiresAt   string `json:"expires_at"`
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+	}))
+	if _, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+		ProjectID:   "42",
+		Email:       "dev@example.com",
+		AccessLevel: 30,
+		ExpiresAt:   "2026-12-31",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if body.Email != "dev@example.com" {
+		t.Errorf("email = %q, want %q", body.Email, "dev@example.com")
+	}
+	if body.AccessLevel != 30 {
+		t.Errorf("access_level = %d, want 30", body.AccessLevel)
+	}
+	if body.ExpiresAt != "2026-12-31" {
+		t.Errorf("expires_at = %q, want %q", body.ExpiresAt, "2026-12-31")
+	}
+}
+
+// TestGroupInvites_CreateBodyParams asserts that the user_id and access_level
+// create parameters are serialized into the group invitation POST body.
+func TestGroupInvites_CreateBodyParams(t *testing.T) {
+	var body struct {
+		UserID      int64 `json:"user_id"`
+		AccessLevel int   `json:"access_level"`
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+	}))
+	if _, err := GroupInvites(context.Background(), client, GroupInvitesInput{
+		GroupID:     "10",
+		UserID:      77,
+		AccessLevel: 40,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if body.UserID != 77 {
+		t.Errorf("user_id = %d, want 77", body.UserID)
+	}
+	if body.AccessLevel != 40 {
+		t.Errorf("access_level = %d, want 40", body.AccessLevel)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Metadata — decorateInviteMeta guards and discovery completeness (R-META)
 // ---------------------------------------------------------------------------.
 

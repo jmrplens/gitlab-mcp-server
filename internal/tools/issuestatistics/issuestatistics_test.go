@@ -804,6 +804,12 @@ func assertExtendedStatsParams(t *testing.T, q map[string][]string, getParam fun
 	if getParam("created_before") == "" {
 		t.Error("expected created_before query param")
 	}
+	if getParam("updated_after") == "" {
+		t.Error("expected updated_after query param")
+	}
+	if getParam("updated_before") == "" {
+		t.Error("expected updated_before query param")
+	}
 }
 
 // TestGet_ExtendedFilters verifies that global statistics serializes every
@@ -826,6 +832,8 @@ func TestGet_ExtendedFilters(t *testing.T) {
 		Confidential:     new(true),
 		CreatedAfter:     "2025-01-01T00:00:00Z",
 		CreatedBefore:    "2025-12-31T23:59:59Z",
+		UpdatedAfter:     "2025-02-01T00:00:00Z",
+		UpdatedBefore:    "2025-11-30T23:59:59Z",
 		IIDs:             []int64{1, 2},
 		In:               "title",
 		MyReactionEmoji:  "thumbsup",
@@ -853,6 +861,8 @@ func TestGetGroup_ExtendedFilters(t *testing.T) {
 		Confidential:     new(true),
 		CreatedAfter:     "2025-01-01T00:00:00Z",
 		CreatedBefore:    "2025-12-31T23:59:59Z",
+		UpdatedAfter:     "2025-02-01T00:00:00Z",
+		UpdatedBefore:    "2025-11-30T23:59:59Z",
 		IIDs:             []int64{1, 2},
 		MyReactionEmoji:  "thumbsup",
 	})
@@ -879,6 +889,8 @@ func TestGetProject_ExtendedFilters(t *testing.T) {
 		Confidential:     new(true),
 		CreatedAfter:     "2025-01-01T00:00:00Z",
 		CreatedBefore:    "2025-12-31T23:59:59Z",
+		UpdatedAfter:     "2025-02-01T00:00:00Z",
+		UpdatedBefore:    "2025-11-30T23:59:59Z",
 		IIDs:             []int64{1, 2},
 		MyReactionEmoji:  "thumbsup",
 	})

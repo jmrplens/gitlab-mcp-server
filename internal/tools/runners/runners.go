@@ -202,15 +202,15 @@ func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 // and its gl.ListProjectRunnersOptions alias); gl.ListGroupsRunnersOptions
 // ignores them.
 type runnerListRequest struct {
-	Type    string
-	Status  string
-	Paused  *bool
-	TagList []string
-	Scope   string
-	OrderBy string
-	Sort    string
-	Page    toolutil.PaginationInput
-	Keyset  toolutil.KeysetPaginationInput
+	Type    string   `json:"type,omitempty"`
+	Status  string   `json:"status,omitempty"`
+	Paused  *bool    `json:"paused,omitempty"`
+	TagList []string `json:"tag_list,omitempty"`
+	Scope   string   `json:"scope,omitempty"`
+	OrderBy string   `json:"order_by,omitempty"`
+	Sort    string   `json:"sort,omitempty"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // runnerTagList returns a pointer to the request tag list, or nil when empty,
@@ -285,7 +285,7 @@ func applyRunnerListOptions(opts *gl.ListOptions, req runnerListRequest) {
 	if req.Sort != "" {
 		opts.Sort = req.Sort
 	}
-	toolutil.ApplyListOptions(opts, req.Page, req.Keyset)
+	toolutil.ApplyListOptions(opts, req.PaginationInput, req.KeysetPaginationInput)
 }
 
 func listOutput(runners []*gl.Runner, resp *gl.Response) ListOutput {
@@ -340,11 +340,7 @@ type ListInput struct {
 
 // List returns owned runners with optional filters.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	return listRunners(ctx, runnerListRequest{
-		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
-		Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
-		Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
-	}, "list runners", "status filter must be one of active|paused|online|offline|never_contacted|stale and type must be instance_type|group_type|project_type",
+	return listRunners(ctx, runnerListRequest(input), "list runners", "status filter must be one of active|paused|online|offline|never_contacted|stale and type must be instance_type|group_type|project_type",
 		client.GL().Runners.ListRunners)
 }
 
@@ -545,7 +541,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
 			Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
-			Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+			PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListProjectRunners(scopeID, buildProjectRunnersOptions(req), opts...)
@@ -645,7 +641,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, TagList: input.TagList,
 			OrderBy: input.OrderBy, Sort: input.Sort,
-			Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+			PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 		},
 		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
 			return client.GL().Runners.ListGroupsRunners(scopeID, buildGroupRunnersOptions(req), opts...)
@@ -878,11 +874,7 @@ type ListAllInput struct {
 
 // ListAll returns all runners across the GitLab instance (admin endpoint).
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
-	return listRunners(ctx, runnerListRequest{
-		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
-		Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
-		Page: input.PaginationInput, Keyset: input.KeysetPaginationInput,
-	}, "list all runners", "listing all instance runners requires an admin token - use gitlab_runner_list (scoped to your accessible runners) instead",
+	return listRunners(ctx, runnerListRequest(input), "list all runners", "listing all instance runners requires an admin token - use gitlab_runner_list (scoped to your accessible runners) instead",
 		client.GL().Runners.ListAllRunners)
 }
 

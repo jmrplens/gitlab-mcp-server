@@ -33211,6 +33211,14 @@
         "search": {
           "description": "Search string for title and description",
           "type": "string"
+        },
+        "updated_after": {
+          "description": "Return issues updated after date (ISO 8601)",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return issues updated before date (ISO 8601)",
+          "type": "string"
         }
       },
       "required": [
@@ -34234,6 +34242,14 @@
         },
         "search": {
           "description": "Search string for title and description",
+          "type": "string"
+        },
+        "updated_after": {
+          "description": "Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
           "type": "string"
         }
       },
@@ -35964,6 +35980,14 @@
         },
         "search": {
           "description": "Search string for title and description",
+          "type": "string"
+        },
+        "updated_after": {
+          "description": "Return issues updated after date (ISO 8601)",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return issues updated before date (ISO 8601)",
           "type": "string"
         }
       },
@@ -89865,6 +89889,38 @@
           "description": "Modify the scope of the search attribute (title, description, or title,description)",
           "type": "string"
         },
+        "labels": {
+          "description": "Label names to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "milestone": {
+          "description": "Milestone title to filter by",
+          "type": "string"
+        },
+        "my_reaction_emoji": {
+          "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
+          "type": "string"
+        },
+        "not_author_username": {
+          "description": "Exclude MRs authored by this username",
+          "type": "string"
+        },
+        "not_labels": {
+          "description": "Label names to exclude",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "order_by": {
           "description": "Order by: created_at or updated_at",
           "type": "string"
@@ -89889,13 +89945,67 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "reviewer_id": {
+          "description": "Filter by reviewer user ID",
+          "type": "integer"
+        },
+        "reviewer_username": {
+          "description": "Filter by reviewer username",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "type": "string"
+        },
+        "search": {
+          "description": "Search in title and description",
+          "type": "string"
+        },
         "sort": {
           "description": "Sort order: asc or desc",
+          "type": "string"
+        },
+        "source_branch": {
+          "description": "Filter by source branch name",
           "type": "string"
         },
         "state": {
           "description": "Filter by state: opened, closed, merged, all",
           "type": "string"
+        },
+        "target_branch": {
+          "description": "Filter by target branch name",
+          "type": "string"
+        },
+        "updated_after": {
+          "description": "Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
+        },
+        "view": {
+          "description": "Set to 'simple' to return only basic MR fields",
+          "type": "string"
+        },
+        "wip": {
+          "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "type": "string"
+        },
+        "with_labels_details": {
+          "description": "Include full label details (color, description) in the response",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "with_merge_status_recheck": {
+          "description": "Asynchronously recalculate each MR's merge_status before returning",
+          "type": [
+            "null",
+            "boolean"
+          ]
         }
       },
       "required": [

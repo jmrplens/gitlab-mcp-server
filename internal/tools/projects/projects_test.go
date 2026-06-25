@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -4200,7 +4201,7 @@ func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	opts := buildUserProjectOpts(userProjectFilter{
 		Search: "query", Visibility: testPrivate, Archived: &archived,
 		OrderBy: "name", Sort: "desc", Simple: true,
-		Pagination: toolutil.PaginationInput{Page: 2, PerPage: 25},
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 25},
 	})
 
 	if opts.Search == nil || *opts.Search != "query" {
@@ -4558,6 +4559,45 @@ func TestListUserProjects_AllFilters(t *testing.T) {
 	}
 	if len(out.Projects) != 1 {
 		t.Fatalf(fmtLenProjectsWant1, len(out.Projects))
+	}
+}
+
+// TestListUserProjects_FilterQueryParams verifies that the user-scoped project
+// list endpoint forwards the full ListProjectsOptions filter surface — keyset
+// pagination (pagination, page_token, id_after) and the documented filters
+// (min_access_level, membership) — onto the GitLab request URL.
+func TestListUserProjects_FilterQueryParams(t *testing.T) {
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/users/john/projects" {
+			gotQuery = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"name":"proj"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListUserProjects(context.Background(), client, ListUserProjectsInput{
+		UserID: testUserJohn,
+		userProjectFilterInput: userProjectFilterInput{
+			MinAccessLevel:        30,
+			Membership:            new(true),
+			IDAfter:               100,
+			KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for tag, want := range map[string]string{
+		"min_access_level": "30",
+		"membership":       "true",
+		"id_after":         "100",
+		"pagination":       "keyset",
+		"page_token":       "tok-1",
+	} {
+		if got := gotQuery.Get(tag); got != want {
+			t.Errorf("query param %s = %q, want %q", tag, got, want)
+		}
 	}
 }
 

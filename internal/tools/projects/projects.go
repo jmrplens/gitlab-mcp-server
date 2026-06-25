@@ -1119,7 +1119,7 @@ func (input ListInput) toFilter() userProjectFilter {
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		Pagination: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
 
@@ -1935,7 +1935,7 @@ func (input ListForksInput) toFilter() userProjectFilter {
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		Pagination: input.PaginationInput, Keyset: input.KeysetPaginationInput,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
 
@@ -3014,60 +3014,57 @@ type userProjectFilterInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// toFilter copies the embeddable input into the internal userProjectFilter
-// consumed by buildUserProjectOpts.
-//
-//nolint:dupl // Field-by-field copy into the shared filter; structurally parallel to the ListInput/ListForksInput copies by design (distinct top-level MCP input structs, no shared embeddable without flattening JSON schemas).
+// toFilter converts the embeddable input into the internal userProjectFilter
+// consumed by buildUserProjectOpts. The two structs are field-identical (same
+// names, types, and json tags) so a direct conversion suffices.
 func (f userProjectFilterInput) toFilter() userProjectFilter {
-	return userProjectFilter{
-		Search: f.Search, Visibility: f.Visibility, Archived: f.Archived,
-		OrderBy: f.OrderBy, Sort: f.Sort, Simple: f.Simple, Owned: f.Owned,
-		Topic: f.Topic, MinAccessLevel: f.MinAccessLevel, Starred: f.Starred,
-		Membership: f.Membership, WithIssuesEnabled: f.WithIssuesEnabled,
-		WithMergeRequestsEnabled: f.WithMergeRequestsEnabled, SearchNamespaces: f.SearchNamespaces,
-		Statistics: f.Statistics, WithProgrammingLanguage: f.WithProgrammingLanguage,
-		LastActivityAfter: f.LastActivityAfter, LastActivityBefore: f.LastActivityBefore,
-		IDAfter: f.IDAfter, IDBefore: f.IDBefore, IncludePendingDelete: f.IncludePendingDelete,
-		IncludeHidden: f.IncludeHidden, Active: f.Active, Imported: f.Imported,
-		RepositoryChecksumFailed: f.RepositoryChecksumFailed, WikiChecksumFailed: f.WikiChecksumFailed,
-		RepositoryStorage: f.RepositoryStorage, WithCustomAttributes: f.WithCustomAttributes,
-		Pagination: f.PaginationInput, Keyset: f.KeysetPaginationInput,
-	}
+	return userProjectFilter(f)
 }
 
 // userProjectFilter holds the resolved filter parameters for user-scoped
 // project listings, mirroring the full ListProjectsOptions filter set.
+//
+// The json tags mirror the SDK url tags on gl.ListProjectsOptions so the
+// struct-completeness auditor (R-INPUT) can confirm 1:1 parity against the SDK
+// options this struct is translated into by buildUserProjectOpts. This struct is
+// internal plumbing — the model-facing schema is carried by userProjectFilterInput
+// (and ListInput / ListForksInput) — so the tags are documentation/audit metadata
+// only and never affect serialization.
 type userProjectFilter struct {
-	Search                   string
-	Visibility               string
-	Archived                 *bool
-	OrderBy                  string
-	Sort                     string
-	Simple                   bool
-	Owned                    bool
-	Topic                    string
-	MinAccessLevel           int
-	Starred                  *bool
-	Membership               *bool
-	WithIssuesEnabled        *bool
-	WithMergeRequestsEnabled *bool
-	SearchNamespaces         *bool
-	Statistics               *bool
-	WithProgrammingLanguage  string
-	LastActivityAfter        string
-	LastActivityBefore       string
-	IDAfter                  int64
-	IDBefore                 int64
-	IncludePendingDelete     *bool
-	IncludeHidden            *bool
-	Active                   *bool
-	Imported                 *bool
-	RepositoryChecksumFailed *bool
-	WikiChecksumFailed       *bool
-	RepositoryStorage        string
-	WithCustomAttributes     *bool
-	Pagination               toolutil.PaginationInput
-	Keyset                   toolutil.KeysetPaginationInput
+	Search                   string `json:"search,omitempty"`
+	Visibility               string `json:"visibility,omitempty"`
+	Archived                 *bool  `json:"archived,omitempty"`
+	OrderBy                  string `json:"order_by,omitempty"`
+	Sort                     string `json:"sort,omitempty"`
+	Simple                   bool   `json:"simple,omitempty"`
+	Owned                    bool   `json:"owned,omitempty"`
+	Topic                    string `json:"topic,omitempty"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty"`
+	Starred                  *bool  `json:"starred,omitempty"`
+	Membership               *bool  `json:"membership,omitempty"`
+	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"`
+	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty"`
+	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"`
+	Statistics               *bool  `json:"statistics,omitempty"`
+	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"`
+	LastActivityAfter        string `json:"last_activity_after,omitempty"`
+	LastActivityBefore       string `json:"last_activity_before,omitempty"`
+	IDAfter                  int64  `json:"id_after,omitempty"`
+	IDBefore                 int64  `json:"id_before,omitempty"`
+	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"`
+	IncludeHidden            *bool  `json:"include_hidden,omitempty"`
+	Active                   *bool  `json:"active,omitempty"`
+	Imported                 *bool  `json:"imported,omitempty"`
+	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"`
+	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"`
+	RepositoryStorage        string `json:"repository_storage,omitempty"`
+	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"`
+
+	// Pagination and Keyset are embedded (not named) so their page/per_page/
+	// page_token/pagination json tags are promoted, matching the embedded
+	// ListOptions on gl.ListProjectsOptions for the R-INPUT tag diff.
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // buildUserProjectOpts centralizes option building for user-scoped project listings.
@@ -3103,7 +3100,7 @@ func buildUserProjectOpts(f userProjectFilter) *gl.ListProjectsOptions {
 	opts.LastActivityAfter = toolutil.ParseOptionalTime(f.LastActivityAfter)
 	opts.LastActivityBefore = toolutil.ParseOptionalTime(f.LastActivityBefore)
 	applyUserProjectFilterPtrs(opts, f)
-	toolutil.ApplyListOptions(&opts.ListOptions, f.Pagination, f.Keyset)
+	toolutil.ApplyListOptions(&opts.ListOptions, f.PaginationInput, f.KeysetPaginationInput)
 	return opts
 }
 

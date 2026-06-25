@@ -400,6 +400,73 @@ func TestList_MergeRequestFilters(t *testing.T) {
 	}
 }
 
+// TestList_AdditionalMergeRequestFilters verifies the merge-request filters added
+// for 1:1 parity with gl.ListMergeRequestsOptions (labels, not_labels, milestone,
+// scope, search, branch, reviewer, reaction, view, wip, label-detail toggles, and
+// updated-date bounds) are each forwarded to the GitLab API query string under
+// their canonical parameter names.
+func TestList_AdditionalMergeRequestFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"not[author_username]":      "bob",
+			"reviewer_id":               "21",
+			"reviewer_username":         "carol",
+			"milestone":                 "v1.0",
+			"scope":                     "all",
+			"search":                    "fix bug",
+			"source_branch":             "feature",
+			"target_branch":             "main",
+			"my_reaction_emoji":         "thumbsup",
+			"view":                      "simple",
+			"wip":                       "no",
+			"labels":                    "bug,urgent",
+			"not[labels]":               "wontfix",
+			"with_labels_details":       "true",
+			"with_merge_status_recheck": "true",
+		}
+		for key, want := range checks {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		if got := q.Get("updated_after"); !strings.HasPrefix(got, "2025-02-01") {
+			t.Errorf("updated_after = %q, want 2025-02-01 prefix", got)
+		}
+		if got := q.Get("updated_before"); !strings.HasPrefix(got, "2025-11-30") {
+			t.Errorf("updated_before = %q, want 2025-11-30 prefix", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	withDetails := true
+	withRecheck := true
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:              "1",
+		DeploymentID:           2,
+		NotAuthorUsername:      "bob",
+		ReviewerID:             21,
+		ReviewerUsername:       "carol",
+		Milestone:              "v1.0",
+		Scope:                  "all",
+		Search:                 "fix bug",
+		SourceBranch:           "feature",
+		TargetBranch:           "main",
+		MyReactionEmoji:        "thumbsup",
+		View:                   "simple",
+		WIP:                    "no",
+		Labels:                 []string{"bug", "urgent"},
+		NotLabels:              []string{"wontfix"},
+		WithLabelsDetails:      &withDetails,
+		WithMergeStatusRecheck: &withRecheck,
+		UpdatedAfter:           "2025-02-01T00:00:00Z",
+		UpdatedBefore:          "2025-11-30T23:59:59Z",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
 // TestList_FullPayload verifies that List projects every sub-object of a fully
 // populated gl.MergeRequest onto the local Output mirror.
 // The mock GitLab API responds with a merge request carrying author, assignees,
