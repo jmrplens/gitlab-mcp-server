@@ -135,6 +135,68 @@ func TestGroupProtectedEnvDescription(t *testing.T) {
 	}
 }
 
+// TestGroupProtectedEnvActionMeta asserts each group-protected-environment
+// action carries non-generic action-specific Usage, distinctive group-scoped
+// natural-language Aliases beyond the tool name, and canonical RelatedActions,
+// so none is flagged by the R-META metadata-completeness audit.
+func TestGroupProtectedEnvActionMeta(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(client))
+
+	for tool := range groupProtectedEnvActionMeta {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("meta tool %q has no projected ActionSpec", tool)
+		}
+
+		if strings.TrimSpace(spec.Usage) == "" || strings.Contains(strings.ToLower(spec.Usage), "use group protected environment actions for group-level deployment gates") {
+			t.Errorf("%s: Usage is empty or still the generic shared sentence: %q", tool, spec.Usage)
+		}
+
+		distinctive := 0
+		for _, alias := range spec.Aliases {
+			normalized := strings.ToLower(strings.TrimSpace(alias))
+			if normalized == "" || normalized == tool || normalized == strings.ToLower(spec.Name) {
+				continue
+			}
+			if !strings.Contains(normalized, "group") {
+				t.Errorf("%s: alias %q is not group-scoped", tool, alias)
+			}
+			distinctive++
+		}
+		if distinctive < 2 || distinctive > 4 {
+			t.Errorf("%s: want 2-4 distinctive aliases beyond the tool name, got %d (%v)", tool, distinctive, spec.Aliases)
+		}
+
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: RelatedActions is empty", tool)
+		}
+		for _, related := range spec.RelatedActions {
+			if strings.TrimSpace(related) == "" {
+				t.Errorf("%s: RelatedActions contains an empty entry", tool)
+			}
+		}
+	}
+}
+
+// TestDecorateGroupProtectedEnvMeta_UnknownToolNoOp verifies the decorator
+// leaves the shared default Usage, Aliases, and RelatedActions untouched for a
+// tool name absent from the metadata map.
+func TestDecorateGroupProtectedEnvMeta_UnknownToolNoOp(t *testing.T) {
+	options := groupProtectedEnvOptions("gitlab_unknown_tool")
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_unknown_tool" {
+		t.Errorf("unknown tool Aliases = %v, want shared default [gitlab_unknown_tool]", options.Aliases)
+	}
+	if !strings.Contains(options.Usage, "Use group protected environment actions") {
+		t.Errorf("unknown tool Usage = %q, want shared default", options.Usage)
+	}
+	if len(options.RelatedActions) != 1 || options.RelatedActions[0] != "group.get" {
+		t.Errorf("unknown tool RelatedActions = %v, want shared default [group.get]", options.RelatedActions)
+	}
+}
+
 func groupProtectedEnvSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

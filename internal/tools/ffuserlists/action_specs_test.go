@@ -210,6 +210,74 @@ func TestActionSpecs_Descriptions(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_MetadataHelpers verifies that every feature flag user list
+// action exposes non-generic, action-specific usage, distinctive
+// natural-language aliases beyond the canonical tool name, and non-empty
+// canonical related actions (1:1 audit R-META). It also exercises the default
+// branch of each helper for unknown action names.
+func TestActionSpecs_MetadataHelpers(t *testing.T) {
+	for _, action := range []string{
+		"ff_user_list_list",
+		"ff_user_list_get",
+		"ff_user_list_create",
+		"ff_user_list_update",
+		"ff_user_list_delete",
+	} {
+		assertUserListMetadata(t, action)
+	}
+
+	if got := userListUsage("unknown_action"); got != "" {
+		t.Errorf("userListUsage(unknown) = %q, want empty", got)
+	}
+	if got := userListAliases("unknown_action", "gitlab_x"); len(got) != 1 || got[0] != "gitlab_x" {
+		t.Errorf("userListAliases(unknown) = %v, want only the tool name", got)
+	}
+	if got := userListRelatedActions("unknown_action"); len(got) == 0 {
+		t.Errorf("userListRelatedActions(unknown) = %v, want default related actions", got)
+	}
+}
+
+// assertUserListMetadata checks that one feature flag user list action has
+// non-generic usage, distinctive aliases beyond the tool name, and canonical
+// related actions (1:1 audit R-META).
+func assertUserListMetadata(t *testing.T, action string) {
+	t.Helper()
+	const generic = "Use to execute ffuserlists domain action."
+	tool := "gitlab_" + action
+
+	if usage := userListUsage(action); usage == "" || usage == generic {
+		t.Errorf("%s usage = %q, want non-generic action-specific text", action, usage)
+	}
+
+	aliases := userListAliases(action, tool)
+	if len(aliases) < 3 || aliases[0] != tool {
+		t.Errorf("%s aliases = %v, want canonical tool name plus 2-4 distinctive aliases", action, aliases)
+	}
+	for _, alias := range aliases[1:] {
+		if alias == tool || !isDistinctiveUserListAlias(alias) {
+			t.Errorf("%s alias %q is not a distinctive feature-flag-user-list phrase", action, alias)
+		}
+	}
+
+	related := userListRelatedActions(action)
+	if len(related) == 0 {
+		t.Errorf("%s related actions empty, want canonical IDs", action)
+	}
+	for _, id := range related {
+		if !strings.HasPrefix(id, "feature_flags.") {
+			t.Errorf("%s related action %q missing feature_flags. domain prefix", action, id)
+		}
+	}
+}
+
+// isDistinctiveUserListAlias reports whether an alias uses user-list/cohort
+// vocabulary that distinguishes it from the feature flag domain.
+func isDistinctiveUserListAlias(alias string) bool {
+	return strings.Contains(alias, "user list") ||
+		strings.Contains(alias, "cohort") ||
+		strings.Contains(alias, "user_xids")
+}
+
 func userListSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

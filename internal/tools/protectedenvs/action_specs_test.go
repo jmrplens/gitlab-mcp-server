@@ -212,3 +212,49 @@ func TestProtectedEnvironmentDescription_AllActions(t *testing.T) {
 		t.Errorf("unknown tool description = %q, want empty", got)
 	}
 }
+
+// TestProtectedEnvironmentMeta_PerToolDiscovery verifies every protected
+// environment tool carries action-specific Usage, at least two
+// natural-language Aliases beyond the bare tool name, and non-empty
+// RelatedActions (R-META). It also covers decorateProtectedEnvironmentMeta's
+// no-op path for an unknown tool name, which keeps the shared defaults.
+func TestProtectedEnvironmentMeta_PerToolDiscovery(t *testing.T) {
+	const sharedUsagePrefix = "Use project protected environment actions for project deployment gates."
+
+	tools := []string{
+		"gitlab_protected_environment_list",
+		"gitlab_protected_environment_get",
+		"gitlab_protected_environment_protect",
+		"gitlab_protected_environment_update",
+		"gitlab_protected_environment_unprotect",
+	}
+	for _, name := range tools {
+		opts := protectedEnvironmentOptions(name)
+		if strings.HasPrefix(opts.Usage, sharedUsagePrefix) {
+			t.Errorf("%s still uses generic shared Usage: %q", name, opts.Usage)
+		}
+		if len(opts.Aliases) < 2 {
+			t.Errorf("%s has %d aliases, want >= 2", name, len(opts.Aliases))
+		}
+		for _, alias := range opts.Aliases {
+			if alias == name {
+				t.Errorf("%s alias list still contains the bare tool name", name)
+			}
+			if strings.Contains(alias, "group") {
+				t.Errorf("%s alias %q overlaps group-level wording", name, alias)
+			}
+		}
+		if len(opts.RelatedActions) == 0 {
+			t.Errorf("%s has empty RelatedActions", name)
+		}
+	}
+
+	// Unknown tool: decorator is a no-op, so the shared defaults remain.
+	def := protectedEnvironmentOptions("gitlab_unknown_tool")
+	if !strings.HasPrefix(def.Usage, sharedUsagePrefix) {
+		t.Errorf("unknown tool Usage = %q, want shared default", def.Usage)
+	}
+	if len(def.Aliases) != 1 || def.Aliases[0] != "gitlab_unknown_tool" {
+		t.Errorf("unknown tool Aliases = %v, want only the tool name", def.Aliases)
+	}
+}

@@ -34,14 +34,15 @@ func userListDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute ffuserlists domain action.", Tags: []string{"feature_flags", "user_list", "rollout"},
-		RelatedActions: []string{"feature_flags.feature_flag_get", "feature_flags.feature_flag_update"},
+		Aliases:        userListAliases(actionName, individualTool),
+		Usage:          userListUsage(actionName),
+		Tags:           []string{"feature_flags", "user_list", "rollout"},
+		RelatedActions: userListRelatedActions(actionName),
 		OpenWorld:      true,
 		OwnerPackage:   "ffuserlists",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if actionName == "ff_user_list_get" || actionName == "ff_user_list_update" || actionName == "ff_user_list_delete" {
-		options.Usage = "Read, update, or delete a feature flag user list by its user_list_iid returned from list or create operations."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"user_list_iid": {
 				SemanticRole: "feature_flag_user_list_iid",
@@ -55,6 +56,67 @@ func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	}
 	options.IndividualTool.Description = userListDescription(actionName)
 	return options
+}
+
+// userListUsage returns the non-generic, action-specific usage guidance for
+// each feature flag user list tool so the discovery surface explains exactly
+// when to pick the action (1:1 audit R-META).
+func userListUsage(actionName string) string {
+	switch actionName {
+	case "ff_user_list_list":
+		return "List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset or keyset pagination; use it to discover a list's user_list_iid before getting, updating, or deleting it."
+	case "ff_user_list_get":
+		return "Get one feature flag user list by its user_list_iid to inspect the cohort name and the exact set of user_xids it targets for percentage or user-id rollout strategies."
+	case "ff_user_list_create":
+		return "Create a named feature flag user list of user_xids in a project so feature flag strategies can roll a flag out to that explicit cohort of users."
+	case "ff_user_list_update":
+		return "Update a feature flag user list's name or its set of user_xids by user_list_iid to change which users a rollout cohort targets without recreating the list."
+	case "ff_user_list_delete":
+		return "Delete a feature flag user list by its user_list_iid; only do this once no feature flag strategy references the cohort, since the user_xids it groups are removed permanently."
+	default:
+		return ""
+	}
+}
+
+// userListAliases returns 2-4 distinctive natural-language aliases for each
+// feature flag user list tool, phrased around user-list/cohort vocabulary so
+// they stay distinct from the feature flag domain (1:1 audit R-META). The
+// canonical tool name is always included as the first alias.
+func userListAliases(actionName, individualTool string) []string {
+	switch actionName {
+	case "ff_user_list_list":
+		return []string{individualTool, "list feature flag user lists", "show rollout user cohorts", "browse feature flag user lists"}
+	case "ff_user_list_get":
+		return []string{individualTool, "get feature flag user list", "show rollout cohort members", "fetch user list user_xids"}
+	case "ff_user_list_create":
+		return []string{individualTool, "create feature flag user list", "add rollout user cohort", "define feature flag user_xids list"}
+	case "ff_user_list_update":
+		return []string{individualTool, "update feature flag user list", "edit rollout cohort user_xids", "rename feature flag user list"}
+	case "ff_user_list_delete":
+		return []string{individualTool, "delete feature flag user list", "remove rollout user cohort", "drop feature flag user list"}
+	default:
+		return []string{individualTool}
+	}
+}
+
+// userListRelatedActions returns the canonical related-action IDs for each
+// feature flag user list tool so the discovery surface links sibling user-list
+// operations and the feature flag actions that consume the cohort (R-META).
+func userListRelatedActions(actionName string) []string {
+	switch actionName {
+	case "ff_user_list_list":
+		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_create", "feature_flags.feature_flag_update"}
+	case "ff_user_list_get":
+		return []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}
+	case "ff_user_list_create":
+		return []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update", "feature_flags.feature_flag_update"}
+	case "ff_user_list_update":
+		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list", "feature_flags.ff_user_list_delete"}
+	case "ff_user_list_delete":
+		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"}
+	default:
+		return []string{"feature_flags.feature_flag_get", "feature_flags.feature_flag_update"}
+	}
 }
 
 // userListDescription returns the non-generic "Returns: … See also: …"

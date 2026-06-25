@@ -33,7 +33,7 @@ func groupProtectedEnvDeleteSpec(name string, route toolutil.ActionRoute, indivi
 }
 
 func groupProtectedEnvOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Tags: []string{"group", "protected-environment"},
 		Usage:          "Use group protected environment actions for group-level deployment gates. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.",
 		RelatedActions: []string{"group.get"},
@@ -46,6 +46,72 @@ func groupProtectedEnvOptions(individualTool string) toolutil.ActionSpecOptions 
 			Description: groupProtectedEnvDescription(individualTool),
 		},
 	}
+	decorateGroupProtectedEnvMeta(&options, individualTool)
+	return options
+}
+
+// decorateGroupProtectedEnvMeta replaces the generic shared Usage, the
+// tool-name-only Aliases, and the default RelatedActions with action-specific
+// discovery metadata so no group-protected-environment action is flagged as
+// generic_usage, aliases_only_toolname, or empty_related (R-META). Aliases are
+// group-scoped natural-language phrases kept distinct from the project-level
+// protected-environment tools (protectedenvs). It is a no-op for unknown tool
+// names so the shared defaults remain in place.
+func decorateGroupProtectedEnvMeta(options *toolutil.ActionSpecOptions, individualTool string) {
+	meta, ok := groupProtectedEnvActionMeta[individualTool]
+	if !ok {
+		return
+	}
+	if meta.usage != "" {
+		options.Usage = meta.usage
+	}
+	if len(meta.aliases) > 0 {
+		options.Aliases = append([]string(nil), meta.aliases...)
+	}
+	if len(meta.related) > 0 {
+		options.RelatedActions = append([]string(nil), meta.related...)
+	}
+}
+
+// groupProtectedEnvActionMetaEntry is the discovery metadata for one
+// group-protected-environment action.
+type groupProtectedEnvActionMetaEntry struct {
+	usage   string
+	aliases []string
+	related []string
+}
+
+// groupProtectedEnvActionMeta maps each individual group-protected-environment
+// tool to its action-specific Usage, natural-language Aliases, and canonical
+// RelatedActions. Aliases avoid the bare tool name and use group-scoped wording
+// ("group", "across subgroups", "subgroup projects") to stay distinct from the
+// project-level protected-environment surface (protectedenvs).
+var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
+	"gitlab_group_protected_environment_list": {
+		usage:   "List the protected environment tiers configured on a group, including their deploy access levels and approval rules. Use this when the prompt asks which group-level environment tiers are gated or who can deploy across the group's subgroup projects.",
+		aliases: []string{"list group protected environments", "show group deployment gates", "which group environment tiers are protected"},
+		related: []string{"groupprotectedenvs.protected_env_get", "groupprotectedenvs.protected_env_protect", "group.get"},
+	},
+	"gitlab_group_protected_environment_get": {
+		usage:   "Fetch a single group-level protected environment tier by name. Use after a group list result or when the prompt names a concrete group environment tier and you need its deploy access levels and approval rules.",
+		aliases: []string{"get group protected environment", "show group deployment gate for a tier", "view group environment protection settings"},
+		related: []string{"groupprotectedenvs.protected_env_list", "groupprotectedenvs.protected_env_update", "groupprotectedenvs.protected_env_unprotect"},
+	},
+	"gitlab_group_protected_environment_protect": {
+		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules; the gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]; require approvals via approval_rules with required_approvals.",
+		aliases: []string{"protect a group environment tier", "gate deployments across a group", "restrict group-wide deployment access", "require group deployment approvals"},
+		related: []string{"groupprotectedenvs.protected_env_get", "groupprotectedenvs.protected_env_update", "groupprotectedenvs.protected_env_unprotect"},
+	},
+	"gitlab_group_protected_environment_update": {
+		usage:   "Change the deploy access levels or approval rules on an already-protected group environment tier. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy across subgroup projects or how many approvals a group-level gate needs.",
+		aliases: []string{"update group protected environment rules", "change group deployment access levels", "adjust group environment approval rules", "edit group deployment gate"},
+		related: []string{"groupprotectedenvs.protected_env_get", "groupprotectedenvs.protected_env_protect", "groupprotectedenvs.protected_env_unprotect"},
+	},
+	"gitlab_group_protected_environment_unprotect": {
+		usage:   "Remove protection from a group-level environment tier, deleting its deployment gates from the group and its subgroup projects. Destructive; confirm the group id and the environment tier name before calling.",
+		aliases: []string{"unprotect a group environment tier", "remove group deployment gate", "stop gating a group environment across subgroups"},
+		related: []string{"groupprotectedenvs.protected_env_list", "groupprotectedenvs.protected_env_protect"},
+	},
 }
 
 // groupProtectedEnvDescription returns the "Returns: … See also: …" tool
