@@ -16012,7 +16012,7 @@
   },
   {
     "name": "gitlab_deploy_token_create_group",
-    "description": "Create a deploy token for a group with name, scopes, optional username and expiry date.\n\nSee also: gitlab_deploy_token_list_group, gitlab_deploy_token_create_project\n\nReturns: JSON with the created deploy token including the token value (shown only once).",
+    "description": "Create a deploy token for a group. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_delete_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16110,7 +16110,7 @@
   },
   {
     "name": "gitlab_deploy_token_create_project",
-    "description": "Create a deploy token for a project with name, scopes, optional username and expiry date.\n\nSee also: gitlab_deploy_token_list_project, gitlab_deploy_token_create_group\n\nReturns: JSON with the created deploy token including the token value (shown only once).",
+    "description": "Create a deploy token for a project. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_delete_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16208,7 +16208,7 @@
   },
   {
     "name": "gitlab_deploy_token_delete_group",
-    "description": "Delete a deploy token from a group. This action cannot be undone.\n\nSee also: gitlab_deploy_token_list_group, gitlab_deploy_token_create_group\n\nReturns: confirmation message.",
+    "description": "Permanently delete a group deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16265,7 +16265,7 @@
   },
   {
     "name": "gitlab_deploy_token_delete_project",
-    "description": "Delete a deploy token from a project. This action cannot be undone.\n\nSee also: gitlab_deploy_token_list_project, gitlab_deploy_token_create_project\n\nReturns: confirmation message.",
+    "description": "Permanently delete a project deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16322,7 +16322,7 @@
   },
   {
     "name": "gitlab_deploy_token_get_group",
-    "description": "Get a specific deploy token for a group.\n\nSee also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_project\n\nReturns: JSON with deploy token details including ID, name, scopes, and expiration.",
+    "description": "Get a single group deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_create_group, gitlab_deploy_token_delete_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16403,7 +16403,7 @@
   },
   {
     "name": "gitlab_deploy_token_get_project",
-    "description": "Get a specific deploy token for a project.\n\nSee also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_group\n\nReturns: JSON with deploy token details including ID, name, scopes, and expiration.",
+    "description": "Get a single project deploy token by ID. Returns: the deploy token with id, name, username, scopes, revoked/expired state, and expiry. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16484,7 +16484,7 @@
   },
   {
     "name": "gitlab_deploy_token_list_all",
-    "description": "List all instance-level deploy tokens. Requires admin access.\n\nSee also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group\n\nReturns: JSON array of deploy tokens with pagination.",
+    "description": "List all deploy tokens across the GitLab instance (admin only). Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -16613,7 +16613,7 @@
   },
   {
     "name": "gitlab_deploy_token_list_group",
-    "description": "List all deploy tokens for a GitLab group.\n\nSee also: gitlab_deploy_token_create_group, gitlab_deploy_token_list_project\n\nReturns: JSON array of deploy tokens with pagination.",
+    "description": "List deploy tokens owned by a group. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_group, gitlab_deploy_token_create_group, gitlab_deploy_token_delete_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16621,13 +16621,29 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Results per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "type": "string"
         }
       },
       "required": [
@@ -16758,20 +16774,36 @@
   },
   {
     "name": "gitlab_deploy_token_list_project",
-    "description": "List all deploy tokens for a GitLab project.\n\nSee also: gitlab_deploy_token_create_project, gitlab_deploy_key_list_project\n\nReturns: JSON array of deploy tokens with pagination.",
+    "description": "List deploy tokens owned by a project. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Results per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
           "type": "string"
         }
       },
@@ -38689,7 +38721,7 @@
   },
   {
     "name": "gitlab_group_milestone_burndown_events",
-    "description": "List all burndown chart events for a group milestone. Returns event timestamps, weights, and actions with pagination.\n\nReturns: JSON array of burndown chart events. See also: gitlab_group_milestone_get.",
+    "description": "List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -38701,13 +38733,29 @@
           "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -38806,7 +38854,7 @@
   },
   {
     "name": "gitlab_group_milestone_create",
-    "description": "Create a new milestone in a GitLab group with a title, optional description, start date and due date (YYYY-MM-DD).\n\nReturns: JSON with the created milestone details. See also: gitlab_group_milestone_get.",
+    "description": "Create a new group milestone. Returns: the created milestone with ID, IID, state, start and due dates. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -38854,9 +38902,6 @@
         },
         "group_id": {
           "type": "integer"
-        },
-        "group_path": {
-          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -38908,7 +38953,7 @@
   },
   {
     "name": "gitlab_group_milestone_delete",
-    "description": "Delete a group milestone by IID.\n\nReturns: confirmation message. See also: gitlab_group_milestone_list.",
+    "description": "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -38965,7 +39010,7 @@
   },
   {
     "name": "gitlab_group_milestone_get",
-    "description": "Get details of a single group milestone by IID, including title, state, start/due dates, and timestamps.\n\nReturns: JSON with group milestone details. See also: gitlab_group_milestone_list.",
+    "description": "Get a single group milestone by IID. Returns: milestone metadata, state, start and due dates, expiry, and timestamps. See also: gitlab_group_milestone_list, gitlab_group_milestone_update, gitlab_group_milestone_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39001,9 +39046,6 @@
         },
         "group_id": {
           "type": "integer"
-        },
-        "group_path": {
-          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -39057,7 +39099,7 @@
   },
   {
     "name": "gitlab_group_milestone_issues",
-    "description": "List all issues assigned to a group milestone. Returns issue ID, IID, title, state, and web URL with pagination.\n\nReturns: JSON array of issues for the milestone with pagination. See also: gitlab_group_milestone_get, gitlab_issue_list.",
+    "description": "List issues assigned to a group milestone. Returns: assigned issues with state, web URL, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39069,13 +39111,29 @@
           "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -39186,12 +39244,16 @@
   },
   {
     "name": "gitlab_group_milestone_list",
-    "description": "List all milestones for a GitLab group. Supports filtering by state, title, search, IIDs, date ranges, and ancestor/descendant groups. Returns milestone title, state, dates, and pagination.\n\nReturns: JSON array of group milestones with pagination. See also: gitlab_group_milestone_get.",
+    "description": "List milestones in a group with filtering and pagination. Returns: matching group milestones with state, dates, expiry, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_create, gitlab_milestone_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "containing_date": {
           "description": "Return milestones containing this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "end_date": {
+          "description": "Return milestones with a due date on or before this date (YYYY-MM-DD)",
           "type": "string"
         },
         "group_id": {
@@ -39216,9 +39278,25 @@
           "description": "Include milestones from descendant groups",
           "type": "boolean"
         },
+        "include_parent_milestones": {
+          "description": "Deprecated (GitLab 16.7): use include_ancestors instead. Include milestones from parent groups",
+          "type": "boolean"
+        },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at, due_date, title)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -39230,6 +39308,14 @@
         },
         "search_title": {
           "description": "Search milestones by title only",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Return milestones with a start date on or after this date (YYYY-MM-DD)",
           "type": "string"
         },
         "state": {
@@ -39275,9 +39361,6 @@
               },
               "group_id": {
                 "type": "integer"
-              },
-              "group_path": {
-                "type": "string"
               },
               "id": {
                 "type": "integer"
@@ -39388,7 +39471,7 @@
   },
   {
     "name": "gitlab_group_milestone_merge_requests",
-    "description": "List all merge requests assigned to a group milestone. Returns MR ID, IID, title, state, source/target branches with pagination.\n\nReturns: JSON array of merge requests for the milestone with pagination. See also: gitlab_group_milestone_get, gitlab_mr_list.",
+    "description": "List merge requests assigned to a group milestone. Returns: assigned merge requests with state, source and target branches, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39400,13 +39483,29 @@
           "description": "Milestone IID (group-scoped). Use gitlab_group_milestone_list to find IIDs",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Order results by field (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -39525,7 +39624,7 @@
   },
   {
     "name": "gitlab_group_milestone_update",
-    "description": "Update an existing group milestone. Can change title, description, dates, or state (activate/close). Only specified fields are modified.\n\nReturns: JSON with the updated milestone details. See also: gitlab_group_milestone_get.",
+    "description": "Update an existing group milestone. Returns: the updated milestone with state, dates, and expiry. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -39581,9 +39680,6 @@
         },
         "group_id": {
           "type": "integer"
-        },
-        "group_path": {
-          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -49856,7 +49952,7 @@
   },
   {
     "name": "gitlab_issue_emoji_create",
-    "description": "Add an award emoji reaction to a project issue.\n\nSee also: gitlab_issue_emoji_list, gitlab_issue_emoji_delete\n\nReturns: JSON with the created award emoji.",
+    "description": "Add an emoji reaction to an issue. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49907,21 +50003,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -49934,7 +50057,7 @@
   },
   {
     "name": "gitlab_issue_emoji_delete",
-    "description": "Delete an award emoji from a project issue.\n\nSee also: gitlab_issue_emoji_list, gitlab_issue_emoji_create\n\nReturns: confirmation message.",
+    "description": "Remove an emoji reaction from an issue by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49996,7 +50119,7 @@
   },
   {
     "name": "gitlab_issue_emoji_get",
-    "description": "Get a single award emoji on a project issue.\n\nSee also: gitlab_issue_emoji_list, gitlab_issue_emoji_create\n\nReturns: JSON with award emoji details including id, name, user, and created_at.",
+    "description": "Get a single emoji reaction on an issue by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50047,21 +50170,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -50076,7 +50226,7 @@
   },
   {
     "name": "gitlab_issue_emoji_list",
-    "description": "List all award emoji on a project issue.\n\nSee also: gitlab_issue_emoji_create, gitlab_mr_emoji_list\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.",
+    "description": "List all emoji reactions on an issue. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_issue_emoji_get, gitlab_issue_emoji_create, gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50084,16 +50234,32 @@
           "description": "Issue IID (project-scoped internal ID)",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
           "type": "string"
         }
       },
@@ -50134,21 +50300,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -60829,7 +61022,7 @@
   },
   {
     "name": "gitlab_issue_note_emoji_create",
-    "description": "Add an award emoji reaction to a project issue note.\n\nSee also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_delete\n\nReturns: JSON with the created award emoji.",
+    "description": "Add an emoji reaction to an issue note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -60885,21 +61078,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -60912,7 +61132,7 @@
   },
   {
     "name": "gitlab_issue_note_emoji_delete",
-    "description": "Delete an award emoji from a project issue note.\n\nSee also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_create\n\nReturns: confirmation message.",
+    "description": "Remove an emoji reaction from an issue note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -60979,7 +61199,7 @@
   },
   {
     "name": "gitlab_issue_note_emoji_get",
-    "description": "Get a single award emoji on a project issue note.\n\nSee also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_create\n\nReturns: JSON with award emoji details including id, name, user, and created_at.",
+    "description": "Get a single emoji reaction on an issue note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61035,21 +61255,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -61064,7 +61311,7 @@
   },
   {
     "name": "gitlab_issue_note_emoji_list",
-    "description": "List all award emoji on a project issue note.\n\nSee also: gitlab_issue_note_emoji_create, gitlab_issue_emoji_list\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.",
+    "description": "List all emoji reactions on an issue note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_issue_note_emoji_get, gitlab_issue_note_emoji_create, gitlab_issue_note_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61076,16 +61323,32 @@
           "description": "Note ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
           "type": "string"
         }
       },
@@ -61127,21 +61390,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -94019,7 +94309,7 @@
   },
   {
     "name": "gitlab_mr_emoji_create",
-    "description": "Add an award emoji reaction to a merge request.\n\nSee also: gitlab_mr_emoji_list, gitlab_mr_emoji_delete\n\nReturns: JSON with the created award emoji.",
+    "description": "Add an emoji reaction to a merge request. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -94070,21 +94360,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -94097,7 +94414,7 @@
   },
   {
     "name": "gitlab_mr_emoji_delete",
-    "description": "Delete an award emoji from a merge request.\n\nSee also: gitlab_mr_emoji_list, gitlab_mr_emoji_create\n\nReturns: confirmation message.",
+    "description": "Remove an emoji reaction from a merge request by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -94159,7 +94476,7 @@
   },
   {
     "name": "gitlab_mr_emoji_get",
-    "description": "Get a single award emoji on a merge request.\n\nSee also: gitlab_mr_emoji_list, gitlab_mr_emoji_create\n\nReturns: JSON with award emoji details including id, name, user, and created_at.",
+    "description": "Get a single emoji reaction on a merge request by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -94210,21 +94527,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -94239,7 +94583,7 @@
   },
   {
     "name": "gitlab_mr_emoji_list",
-    "description": "List all award emoji on a merge request.\n\nSee also: gitlab_mr_emoji_create, gitlab_issue_emoji_list\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.",
+    "description": "List all emoji reactions on a merge request. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_mr_emoji_get, gitlab_mr_emoji_create, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -94247,16 +94591,32 @@
           "description": "Merge request IID (project-scoped, not 'merge_request_id')",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
           "type": "string"
         }
       },
@@ -94297,21 +94657,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -101485,7 +101872,7 @@
   },
   {
     "name": "gitlab_mr_note_emoji_create",
-    "description": "Add an award emoji reaction to a merge request note.\n\nSee also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_delete\n\nReturns: JSON with the created award emoji.",
+    "description": "Add an emoji reaction to a merge request note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -101541,21 +101928,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -101568,7 +101982,7 @@
   },
   {
     "name": "gitlab_mr_note_emoji_delete",
-    "description": "Delete an award emoji from a merge request note.\n\nSee also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_create\n\nReturns: confirmation message.",
+    "description": "Remove an emoji reaction from a merge request note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -101635,7 +102049,7 @@
   },
   {
     "name": "gitlab_mr_note_emoji_get",
-    "description": "Get a single award emoji on a merge request note.\n\nSee also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_create\n\nReturns: JSON with award emoji details including id, name, user, and created_at.",
+    "description": "Get a single emoji reaction on a merge request note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -101691,21 +102105,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -101720,7 +102161,7 @@
   },
   {
     "name": "gitlab_mr_note_emoji_list",
-    "description": "List all award emoji on a merge request note.\n\nSee also: gitlab_mr_note_emoji_create, gitlab_mr_emoji_list\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.",
+    "description": "List all emoji reactions on a merge request note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_mr_note_emoji_get, gitlab_mr_note_emoji_create, gitlab_mr_note_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -101732,16 +102173,32 @@
           "description": "Note ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
           "type": "string"
         }
       },
@@ -101783,21 +102240,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -137342,7 +137826,7 @@
   },
   {
     "name": "gitlab_project_snippet_content",
-    "description": "Get the raw content of a project snippet.\n\nReturns: raw snippet content. See also: gitlab_project_snippet_get.",
+    "description": "Read a project snippet's raw content. Returns: the snippet ID and raw text content. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -137395,7 +137879,7 @@
   },
   {
     "name": "gitlab_project_snippet_create",
-    "description": "Create a new snippet in a GitLab project. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_project_snippet_get.",
+    "description": "Create a project snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_update, gitlab_project_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "anyOf": [
@@ -137475,6 +137959,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -137494,11 +137984,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -137552,6 +138045,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -137574,7 +138070,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
@@ -137587,7 +138082,7 @@
   },
   {
     "name": "gitlab_project_snippet_delete",
-    "description": "Delete a project snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_project_snippet_list.",
+    "description": "Delete a project snippet permanently. Returns: a success confirmation. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -137644,7 +138139,7 @@
   },
   {
     "name": "gitlab_project_snippet_get",
-    "description": "Get a single project snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_project_snippet_update.",
+    "description": "Get a single project snippet. Returns: snippet metadata, visibility, author, files, and web URL. See also: gitlab_project_snippet_list, gitlab_project_snippet_content, gitlab_project_snippet_update, gitlab_project_snippet_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -137669,6 +138164,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -137688,11 +138189,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -137746,6 +138250,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -137768,7 +138275,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
@@ -137783,13 +138289,25 @@
   },
   {
     "name": "gitlab_project_snippet_list",
-    "description": "List snippets for a GitLab project.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_project_snippet_get, gitlab_project_snippet_create.",
+    "description": "List a project's snippets. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_project_snippet_get, gitlab_project_snippet_create, gitlab_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -137797,6 +138315,10 @@
         },
         "project_id": {
           "description": "Project ID or path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -137860,6 +138382,12 @@
               "author": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
                   "email": {
                     "type": "string"
                   },
@@ -137879,11 +138407,14 @@
                 "required": [
                   "id",
                   "username",
-                  "name",
                   "email",
+                  "name",
                   "state"
                 ],
-                "type": "object"
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "created_at": {
                 "type": [
@@ -137937,6 +138468,9 @@
               "raw_url": {
                 "type": "string"
               },
+              "repository_storage": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -137959,7 +138493,6 @@
               "file_name",
               "description",
               "visibility",
-              "author",
               "web_url",
               "raw_url"
             ],
@@ -137986,7 +138519,7 @@
   },
   {
     "name": "gitlab_project_snippet_update",
-    "description": "Update an existing project snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_project_snippet_get.",
+    "description": "Update a project snippet. Returns: the updated snippet with metadata, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_delete, gitlab_project_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -138064,6 +138597,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -138083,11 +138622,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -138141,6 +138683,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -138163,7 +138708,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
@@ -154094,7 +154638,7 @@
   },
   {
     "name": "gitlab_runner_delete_by_token",
-    "description": "Delete a registered CI/CD runner using its authentication token. This action cannot be undone.\n\nSee also: gitlab_runner_delete_registered, gitlab_runner_verify\n\nReturns: confirmation message.",
+    "description": "Delete a registered runner by its authentication token. Returns: a success confirmation. See also: gitlab_runner_delete_registered, gitlab_runner_remove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154147,7 +154691,7 @@
   },
   {
     "name": "gitlab_runner_delete_registered",
-    "description": "Delete a registered CI/CD runner by its ID. This action cannot be undone.\n\nSee also: gitlab_runner_register, gitlab_runner_list\n\nReturns: confirmation message.",
+    "description": "Delete a registered runner by its numeric runner_id. Returns: a success confirmation. See also: gitlab_runner_delete_by_token, gitlab_runner_remove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154199,7 +154743,7 @@
   },
   {
     "name": "gitlab_runner_disable_project",
-    "description": "Remove a CI/CD runner from a project. The runner itself is not deleted.\n\nSee also: gitlab_runner_enable_project, gitlab_runner_list_project\n\nReturns: confirmation message.",
+    "description": "Remove a runner assignment from a project by project_id and runner_id. Returns: a success confirmation. See also: gitlab_runner_enable_project, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154256,7 +154800,7 @@
   },
   {
     "name": "gitlab_runner_enable_project",
-    "description": "Assign an existing CI/CD runner to a project. Requires project_id and runner_id.\n\nSee also: gitlab_runner_disable_project, gitlab_runner_list_project\n\nReturns: JSON with the runner assignment details.",
+    "description": "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154278,11 +154822,17 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "active": {
+          "type": "boolean"
+        },
         "description": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "ip_address": {
+          "type": "string"
         },
         "is_shared": {
           "type": "boolean"
@@ -154310,6 +154860,12 @@
         },
         "status": {
           "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "token_expires_at": {
+          "type": "string"
         }
       },
       "required": [
@@ -154320,7 +154876,8 @@
         "is_shared",
         "runner_type",
         "online",
-        "status"
+        "status",
+        "active"
       ],
       "type": "object"
     },
@@ -154331,7 +154888,7 @@
   },
   {
     "name": "gitlab_runner_get",
-    "description": "Get detailed information about a specific CI/CD runner by its ID. Returns description, status, tags, access level, projects, and groups.\n\nSee also: gitlab_runner_list, gitlab_runner_jobs\n\nReturns: JSON with runner details including id, description, status, architecture, and platform.",
+    "description": "Get full configuration for one runner by numeric runner_id. Returns: runner details including tags, locked, access level, maximum timeout, contact time, and associated groups/projects. See also: gitlab_runner_list, gitlab_runner_update, gitlab_runner_jobs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154351,17 +154908,49 @@
         "access_level": {
           "type": "string"
         },
+        "active": {
+          "type": "boolean"
+        },
+        "architecture": {
+          "type": "string"
+        },
         "contacted_at": {
           "type": "string"
         },
         "description": {
           "type": "string"
         },
-        "group_count": {
-          "type": "integer"
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "web_url"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "id": {
           "type": "integer"
+        },
+        "ip_address": {
+          "type": "string"
         },
         "is_shared": {
           "type": "boolean"
@@ -154393,8 +154982,45 @@
         "paused": {
           "type": "boolean"
         },
-        "project_count": {
-          "type": "integer"
+        "platform": {
+          "type": "string"
+        },
+        "projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "name_with_namespace",
+              "path",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "revision": {
+          "type": "string"
         },
         "run_untagged": {
           "type": "boolean"
@@ -154413,6 +155039,12 @@
             "null",
             "array"
           ]
+        },
+        "token": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
         }
       },
       "required": [
@@ -154426,7 +155058,8 @@
         "status",
         "run_untagged",
         "locked",
-        "access_level"
+        "access_level",
+        "active"
       ],
       "type": "object"
     },
@@ -154439,7 +155072,7 @@
   },
   {
     "name": "gitlab_runner_jobs",
-    "description": "List jobs processed by a specific CI/CD runner. Filter by status (running, success, failed, canceled). Supports sorting and pagination.\n\nSee also: gitlab_runner_get, gitlab_runner_list\n\nReturns: JSON array of jobs run by the runner with pagination.",
+    "description": "List jobs processed by a runner, with status/order/sort filters and pagination. Returns: jobs with id, name, status, stage, ref, and duration, plus pagination metadata. See also: gitlab_runner_get, gitlab_job_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -154450,6 +155083,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -154913,13 +155554,25 @@
   },
   {
     "name": "gitlab_runner_list",
-    "description": "List owned CI/CD runners. Filter by type (instance_type, group_type, project_type), status (online, offline, stale, never_contacted), paused state, and tags.\n\nSee also: gitlab_runner_get, gitlab_runner_list_project\n\nReturns: JSON array of runners with pagination. Fields include id, description, status, and runner_type.",
+    "description": "List runners owned by the authenticated user, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, paused/shared/online flags, plus pagination metadata. See also: gitlab_runner_get, gitlab_runner_list_all, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Field to order keyset-paginated results by, e.g. id",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "paused": {
           "description": "Filter by paused state",
@@ -154932,13 +155585,27 @@
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "scope": {
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
         "status": {
           "description": "Runner status filter: online, offline, stale, never_contacted",
           "type": "string"
         },
         "tag_list": {
-          "description": "Comma-separated list of tags to filter by",
-          "type": "string"
+          "description": "List of tags to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "type": {
           "description": "Runner type filter: instance_type, group_type, project_type",
@@ -154999,11 +155666,17 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "active": {
+                "type": "boolean"
+              },
               "description": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "ip_address": {
+                "type": "string"
               },
               "is_shared": {
                 "type": "boolean"
@@ -155031,6 +155704,12 @@
               },
               "status": {
                 "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "token_expires_at": {
+                "type": "string"
               }
             },
             "required": [
@@ -155041,7 +155720,8 @@
               "is_shared",
               "runner_type",
               "online",
-              "status"
+              "status",
+              "active"
             ],
             "type": "object"
           },
@@ -155066,13 +155746,25 @@
   },
   {
     "name": "gitlab_runner_list_all",
-    "description": "List all CI/CD runners in the GitLab instance (admin). Filter by type, status, paused state, and tags.\n\nSee also: gitlab_runner_list, gitlab_runner_list_project\n\nReturns: JSON array of runners with pagination. Fields include id, description, status, and runner_type.",
+    "description": "List every runner on the instance (admin token required), with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_list, gitlab_runner_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Field to order keyset-paginated results by, e.g. id",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "paused": {
           "description": "Filter by paused state",
@@ -155085,13 +155777,27 @@
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "scope": {
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
         "status": {
           "description": "Runner status filter: online, offline, stale, never_contacted",
           "type": "string"
         },
         "tag_list": {
-          "description": "Comma-separated list of tags to filter by",
-          "type": "string"
+          "description": "List of tags to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "type": {
           "description": "Runner type filter: instance_type, group_type, project_type",
@@ -155152,11 +155858,17 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "active": {
+                "type": "boolean"
+              },
               "description": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "ip_address": {
+                "type": "string"
               },
               "is_shared": {
                 "type": "boolean"
@@ -155184,6 +155896,12 @@
               },
               "status": {
                 "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "token_expires_at": {
+                "type": "string"
               }
             },
             "required": [
@@ -155194,7 +155912,8 @@
               "is_shared",
               "runner_type",
               "online",
-              "status"
+              "status",
+              "active"
             ],
             "type": "object"
           },
@@ -155219,7 +155938,7 @@
   },
   {
     "name": "gitlab_runner_list_group",
-    "description": "List CI/CD runners available in a specific group. Filter by type, status, and tags.\n\nSee also: gitlab_runner_list_project, gitlab_runner_list\n\nReturns: JSON array of runners with pagination. Fields include id, description, status, and runner_type.",
+    "description": "List runners available in a group (specific and shared), with type/status/tag filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_list, gitlab_runner_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155227,21 +155946,43 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Field to order keyset-paginated results by, e.g. id",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
         },
         "status": {
           "description": "Runner status filter: online, offline, stale, never_contacted",
           "type": "string"
         },
         "tag_list": {
-          "description": "Comma-separated list of tags to filter by",
-          "type": "string"
+          "description": "List of tags to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "type": {
           "description": "Runner type filter: instance_type, group_type, project_type",
@@ -155305,11 +156046,17 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "active": {
+                "type": "boolean"
+              },
               "description": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "ip_address": {
+                "type": "string"
               },
               "is_shared": {
                 "type": "boolean"
@@ -155337,6 +156084,12 @@
               },
               "status": {
                 "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "token_expires_at": {
+                "type": "string"
               }
             },
             "required": [
@@ -155347,7 +156100,8 @@
               "is_shared",
               "runner_type",
               "online",
-              "status"
+              "status",
+              "active"
             ],
             "type": "object"
           },
@@ -155372,7 +156126,7 @@
   },
   {
     "name": "gitlab_runner_list_managers",
-    "description": "List all managers (executors) for a specific CI/CD runner. Returns system ID, version, platform, architecture, IP address, and status.\n\nSee also: gitlab_runner_get, gitlab_runner_list\n\nReturns: JSON array of runner managers.",
+    "description": "List the managers of a runner by runner_id. Returns: runner managers with system id, version, revision, platform, architecture, status, and IP. See also: gitlab_runner_get, gitlab_runner_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155465,13 +156219,32 @@
   },
   {
     "name": "gitlab_runner_list_project",
-    "description": "List CI/CD runners available in a specific project. Filter by type, status, and tags.\n\nSee also: gitlab_runner_enable_project, gitlab_runner_list_group\n\nReturns: JSON array of runners with pagination. Fields include id, description, status, and runner_type.",
+    "description": "List runners assigned to a project, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_enable_project, gitlab_runner_disable_project, gitlab_runner_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Field to order keyset-paginated results by, e.g. id",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "paused": {
+          "description": "Filter by paused state",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -155481,13 +156254,27 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "scope": {
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
         "status": {
           "description": "Runner status filter: online, offline, stale, never_contacted",
           "type": "string"
         },
         "tag_list": {
-          "description": "Comma-separated list of tags to filter by",
-          "type": "string"
+          "description": "List of tags to filter by",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "type": {
           "description": "Runner type filter: instance_type, group_type, project_type",
@@ -155551,11 +156338,17 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "active": {
+                "type": "boolean"
+              },
               "description": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "ip_address": {
+                "type": "string"
               },
               "is_shared": {
                 "type": "boolean"
@@ -155583,6 +156376,12 @@
               },
               "status": {
                 "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "token_expires_at": {
+                "type": "string"
               }
             },
             "required": [
@@ -155593,7 +156392,8 @@
               "is_shared",
               "runner_type",
               "online",
-              "status"
+              "status",
+              "active"
             ],
             "type": "object"
           },
@@ -155618,7 +156418,7 @@
   },
   {
     "name": "gitlab_runner_register",
-    "description": "Register a new CI/CD runner with a registration token. Optionally set description, tags, access level, and timeout.\n\nSee also: gitlab_runner_list, gitlab_runner_delete_registered\n\nReturns: JSON with the registered runner details including token.",
+    "description": "Register a new runner with a registration token, optional info hashmap, tags, and configuration. Returns: the created runner including its authentication token. See also: gitlab_runner_verify, gitlab_runner_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155626,9 +156426,46 @@
           "description": "Access level: not_protected, ref_protected",
           "type": "string"
         },
+        "active": {
+          "description": "Deprecated: registration active state; prefer paused instead",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "description": {
           "description": "Runner description",
           "type": "string"
+        },
+        "info": {
+          "additionalProperties": false,
+          "description": "Runner manager info hashmap (name, version, revision, platform, architecture)",
+          "properties": {
+            "architecture": {
+              "description": "Runner architecture (e.g. amd64)",
+              "type": "string"
+            },
+            "name": {
+              "description": "Runner manager name",
+              "type": "string"
+            },
+            "platform": {
+              "description": "Runner platform (e.g. linux)",
+              "type": "string"
+            },
+            "revision": {
+              "description": "Runner revision",
+              "type": "string"
+            },
+            "version": {
+              "description": "Runner version",
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "locked": {
           "description": "Lock runner to current project",
@@ -155686,11 +156523,17 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "active": {
+          "type": "boolean"
+        },
         "description": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "ip_address": {
+          "type": "string"
         },
         "is_shared": {
           "type": "boolean"
@@ -155718,6 +156561,12 @@
         },
         "status": {
           "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "token_expires_at": {
+          "type": "string"
         }
       },
       "required": [
@@ -155728,7 +156577,8 @@
         "is_shared",
         "runner_type",
         "online",
-        "status"
+        "status",
+        "active"
       ],
       "type": "object"
     },
@@ -155739,7 +156589,7 @@
   },
   {
     "name": "gitlab_runner_remove",
-    "description": "Remove a CI/CD runner by its ID. This action cannot be undone.\n\nSee also: gitlab_runner_list, gitlab_runner_delete_registered\n\nReturns: confirmation message.",
+    "description": "Remove (unregister) a runner by numeric runner_id. Returns: a success confirmation. See also: gitlab_runner_disable_project, gitlab_runner_delete_registered, gitlab_runner_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155791,7 +156641,7 @@
   },
   {
     "name": "gitlab_runner_reset_group_reg_token",
-    "description": "Reset a group's runner registration token. Deprecated: scheduled for removal in GitLab 20.0.\n\nSee also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token\n\nReturns: JSON with the new registration token.",
+    "description": "Reset a group's runner registration token by group_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155837,7 +156687,7 @@
   },
   {
     "name": "gitlab_runner_reset_instance_reg_token",
-    "description": "Reset the instance-level runner registration token. Deprecated: scheduled for removal in GitLab 20.0.\n\nSee also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token\n\nReturns: JSON with the new registration token.",
+    "description": "Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -155875,7 +156725,7 @@
   },
   {
     "name": "gitlab_runner_reset_project_reg_token",
-    "description": "Reset a project's runner registration token. Deprecated: scheduled for removal in GitLab 20.0.\n\nSee also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token\n\nReturns: JSON with the new registration token.",
+    "description": "Reset a project's runner registration token by project_id (deprecated). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_instance_reg_token, gitlab_runner_reset_group_reg_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155921,7 +156771,7 @@
   },
   {
     "name": "gitlab_runner_reset_token",
-    "description": "Reset the authentication token for a CI/CD runner. Returns the new token and expiry.\n\nSee also: gitlab_runner_verify, gitlab_runner_get\n\nReturns: JSON with the new authentication token and expiry.",
+    "description": "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155967,13 +156817,20 @@
   },
   {
     "name": "gitlab_runner_update",
-    "description": "Update a CI/CD runner's configuration. Modify description, paused state, tags, access level, maximum timeout, and maintenance note.\n\nSee also: gitlab_runner_get, gitlab_runner_list\n\nReturns: JSON with the updated runner details.",
+    "description": "Update a runner's configuration (description, pause state, tags, locked, access level, timeout) by runner_id. Returns: the updated runner details. See also: gitlab_runner_get, gitlab_runner_remove.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "access_level": {
           "description": "Access level: not_protected, ref_protected",
           "type": "string"
+        },
+        "active": {
+          "description": "Deprecated: runner active state; prefer paused instead",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "description": {
           "description": "Runner description",
@@ -156037,17 +156894,49 @@
         "access_level": {
           "type": "string"
         },
+        "active": {
+          "type": "boolean"
+        },
+        "architecture": {
+          "type": "string"
+        },
         "contacted_at": {
           "type": "string"
         },
         "description": {
           "type": "string"
         },
-        "group_count": {
-          "type": "integer"
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "web_url"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "id": {
           "type": "integer"
+        },
+        "ip_address": {
+          "type": "string"
         },
         "is_shared": {
           "type": "boolean"
@@ -156079,8 +156968,45 @@
         "paused": {
           "type": "boolean"
         },
-        "project_count": {
-          "type": "integer"
+        "platform": {
+          "type": "string"
+        },
+        "projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "name_with_namespace",
+              "path",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "revision": {
+          "type": "string"
         },
         "run_untagged": {
           "type": "boolean"
@@ -156099,6 +157025,12 @@
             "null",
             "array"
           ]
+        },
+        "token": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
         }
       },
       "required": [
@@ -156112,7 +157044,8 @@
         "status",
         "run_untagged",
         "locked",
-        "access_level"
+        "access_level",
+        "active"
       ],
       "type": "object"
     },
@@ -156124,7 +157057,7 @@
   },
   {
     "name": "gitlab_runner_verify",
-    "description": "Verify a CI/CD runner authentication token. Returns success if the token is valid.\n\nSee also: gitlab_runner_reset_token, gitlab_runner_register\n\nReturns: confirmation that the runner token is valid.",
+    "description": "Verify that a runner authentication token is valid. Returns: a success confirmation when the token authenticates. See also: gitlab_runner_register, gitlab_runner_reset_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161634,7 +162567,7 @@
   },
   {
     "name": "gitlab_snippet_content",
-    "description": "Get the raw content of a personal snippet.\n\nReturns: raw snippet content. See also: gitlab_snippet_get.",
+    "description": "Read a personal snippet's raw content. Returns: the snippet ID and raw text content. See also: gitlab_snippet_get, gitlab_snippet_file_content.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161682,7 +162615,7 @@
   },
   {
     "name": "gitlab_snippet_create",
-    "description": "Create a new personal snippet. Use 'files' for multi-file snippets or 'file_name'+'content' for single-file.\n\nReturns: JSON with the created snippet details. See also: gitlab_snippet_get.",
+    "description": "Create a personal snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_update, gitlab_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "anyOf": [
@@ -161757,6 +162690,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -161776,11 +162715,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -161834,6 +162776,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -161856,7 +162801,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
@@ -161869,7 +162813,7 @@
   },
   {
     "name": "gitlab_snippet_delete",
-    "description": "Delete a personal snippet. This action cannot be undone.\n\nReturns: confirmation message. See also: gitlab_snippet_list.",
+    "description": "Delete a personal snippet permanently. Returns: a success confirmation. See also: gitlab_snippet_get, gitlab_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161921,7 +162865,7 @@
   },
   {
     "name": "gitlab_snippet_emoji_create",
-    "description": "Add an award emoji reaction to a project snippet.\n\nSee also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_delete\n\nReturns: JSON with the created award emoji.",
+    "description": "Add an emoji reaction to a project snippet. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -161972,21 +162916,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -161999,7 +162970,7 @@
   },
   {
     "name": "gitlab_snippet_emoji_delete",
-    "description": "Delete an award emoji from a project snippet.\n\nSee also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_create\n\nReturns: confirmation message.",
+    "description": "Remove an emoji reaction from a project snippet by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162061,7 +163032,7 @@
   },
   {
     "name": "gitlab_snippet_emoji_get",
-    "description": "Get a single award emoji on a project snippet.\n\nSee also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_create\n\nReturns: JSON with award emoji details including id, name, user, and created_at.",
+    "description": "Get a single emoji reaction on a project snippet by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162112,21 +163083,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -162141,16 +163139,28 @@
   },
   {
     "name": "gitlab_snippet_emoji_list",
-    "description": "List all award emoji on a project snippet.\n\nSee also: gitlab_snippet_emoji_create, gitlab_issue_emoji_list\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.",
+    "description": "List all emoji reactions on a project snippet. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_snippet_emoji_get, gitlab_snippet_emoji_create, gitlab_project_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
@@ -162160,6 +163170,10 @@
         "snippet_id": {
           "description": "Snippet ID",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
+          "type": "string"
         }
       },
       "required": [
@@ -162199,21 +163213,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -162285,17 +163326,33 @@
   },
   {
     "name": "gitlab_snippet_explore",
-    "description": "List all public snippets on the GitLab instance.\n\nReturns: JSON array of public snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_list.",
+    "description": "List public snippets across the instance. Returns: public snippets with author, visibility, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -162355,6 +163412,12 @@
               "author": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
                   "email": {
                     "type": "string"
                   },
@@ -162374,11 +163437,14 @@
                 "required": [
                   "id",
                   "username",
-                  "name",
                   "email",
+                  "name",
                   "state"
                 ],
-                "type": "object"
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "created_at": {
                 "type": [
@@ -162432,6 +163498,9 @@
               "raw_url": {
                 "type": "string"
               },
+              "repository_storage": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -162454,7 +163523,6 @@
               "file_name",
               "description",
               "visibility",
-              "author",
               "web_url",
               "raw_url"
             ],
@@ -162481,7 +163549,7 @@
   },
   {
     "name": "gitlab_snippet_file_content",
-    "description": "Get the raw content of a specific file in a snippet by ref and filename.\n\nReturns: raw snippet file content. See also: gitlab_snippet_get.",
+    "description": "Read one file from a multi-file personal snippet at a ref. Returns: the snippet ID, ref, file name, and raw content. See also: gitlab_snippet_content, gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162547,7 +163615,7 @@
   },
   {
     "name": "gitlab_snippet_get",
-    "description": "Get a single personal snippet by ID.\n\nReturns: JSON with snippet details. See also: gitlab_snippet_update.",
+    "description": "Get a single personal snippet by ID. Returns: snippet metadata, visibility, author, files, and web URL. See also: gitlab_snippet_list, gitlab_snippet_content, gitlab_snippet_update, gitlab_snippet_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162567,6 +163635,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -162586,11 +163660,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -162644,6 +163721,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -162666,7 +163746,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
@@ -162681,17 +163760,33 @@
   },
   {
     "name": "gitlab_snippet_list",
-    "description": "List all snippets for the current authenticated user.\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create.",
+    "description": "List snippets owned by the authenticated user. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_snippet_get, gitlab_snippet_create, gitlab_snippet_explore.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -162751,6 +163846,12 @@
               "author": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
                   "email": {
                     "type": "string"
                   },
@@ -162770,11 +163871,14 @@
                 "required": [
                   "id",
                   "username",
-                  "name",
                   "email",
+                  "name",
                   "state"
                 ],
-                "type": "object"
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "created_at": {
                 "type": [
@@ -162828,6 +163932,9 @@
               "raw_url": {
                 "type": "string"
               },
+              "repository_storage": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -162850,7 +163957,6 @@
               "file_name",
               "description",
               "visibility",
-              "author",
               "web_url",
               "raw_url"
             ],
@@ -162877,7 +163983,7 @@
   },
   {
     "name": "gitlab_snippet_list_all",
-    "description": "List all snippets across the GitLab instance (admin endpoint).\n\nReturns: JSON array of snippets with pagination. See also: gitlab_snippet_get, gitlab_snippet_create.",
+    "description": "List all snippets on the instance (admin). Returns: snippets with author, visibility, repository storage, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_explore, gitlab_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162889,13 +163995,33 @@
           "description": "Filter snippets created before (ISO 8601)",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "repository_storage": {
+          "description": "Filter by repository storage name (admin only)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -162955,6 +164081,12 @@
               "author": {
                 "additionalProperties": false,
                 "properties": {
+                  "created_at": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
                   "email": {
                     "type": "string"
                   },
@@ -162974,11 +164106,14 @@
                 "required": [
                   "id",
                   "username",
-                  "name",
                   "email",
+                  "name",
                   "state"
                 ],
-                "type": "object"
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "created_at": {
                 "type": [
@@ -163032,6 +164167,9 @@
               "raw_url": {
                 "type": "string"
               },
+              "repository_storage": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -163054,7 +164192,6 @@
               "file_name",
               "description",
               "visibility",
-              "author",
               "web_url",
               "raw_url"
             ],
@@ -163220,7 +164357,7 @@
   },
   {
     "name": "gitlab_snippet_note_emoji_create",
-    "description": "Add an award emoji reaction to a project snippet note.\n\nReturns: JSON with the created award emoji.\n\nSee also: gitlab_snippet_note_emoji_list.",
+    "description": "Add an emoji reaction to a project snippet note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163276,21 +164413,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -163303,7 +164467,7 @@
   },
   {
     "name": "gitlab_snippet_note_emoji_delete",
-    "description": "Delete an award emoji from a project snippet note.\n\nReturns: confirmation message.\n\nSee also: gitlab_snippet_note_emoji_list.",
+    "description": "Remove an emoji reaction from a project snippet note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163370,7 +164534,7 @@
   },
   {
     "name": "gitlab_snippet_note_emoji_get",
-    "description": "Get a single award emoji on a project snippet note.\n\nReturns: JSON with award emoji details including id, name, user, and created_at.\n\nSee also: gitlab_snippet_note_emoji_list.",
+    "description": "Get a single emoji reaction on a project snippet note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163426,21 +164590,48 @@
             "array"
           ]
         },
-        "user_id": {
-          "type": "integer"
-        },
-        "user_web_url": {
+        "updated_at": {
           "type": "string"
         },
-        "username": {
-          "type": "string"
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         }
       },
       "required": [
         "id",
         "name",
-        "user_id",
-        "username",
         "awardable_id",
         "awardable_type"
       ],
@@ -163455,7 +164646,7 @@
   },
   {
     "name": "gitlab_snippet_note_emoji_list",
-    "description": "List all award emoji on a project snippet note.\n\nReturns: JSON array of award emoji with pagination. Fields include id, name, user, and awardable_type.\n\nSee also: gitlab_snippet_note_emoji_create.",
+    "description": "List all emoji reactions on a project snippet note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_snippet_note_emoji_get, gitlab_snippet_note_emoji_create, gitlab_snippet_note_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163463,12 +164654,24 @@
           "description": "Note ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order results by (e.g. created_at, updated_at, id). Used with keyset pagination.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
@@ -163478,6 +164681,10 @@
         "snippet_id": {
           "description": "Snippet ID",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order: 'asc' or 'desc'.",
+          "type": "string"
         }
       },
       "required": [
@@ -163518,21 +164725,48 @@
                   "array"
                 ]
               },
-              "user_id": {
-                "type": "integer"
-              },
-              "user_web_url": {
+              "updated_at": {
                 "type": "string"
               },
-              "username": {
-                "type": "string"
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "name",
-              "user_id",
-              "username",
               "awardable_id",
               "awardable_type"
             ],
@@ -163917,7 +165151,7 @@
   },
   {
     "name": "gitlab_snippet_update",
-    "description": "Update an existing personal snippet.\n\nReturns: JSON with the updated snippet details. See also: gitlab_snippet_get.",
+    "description": "Update a personal snippet. Returns: the updated snippet with metadata, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_delete, gitlab_snippet_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -163990,6 +165224,12 @@
         "author": {
           "additionalProperties": false,
           "properties": {
+            "created_at": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "email": {
               "type": "string"
             },
@@ -164009,11 +165249,14 @@
           "required": [
             "id",
             "username",
-            "name",
             "email",
+            "name",
             "state"
           ],
-          "type": "object"
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "created_at": {
           "type": [
@@ -164067,6 +165310,9 @@
         "raw_url": {
           "type": "string"
         },
+        "repository_storage": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -164089,7 +165335,6 @@
         "file_name",
         "description",
         "visibility",
-        "author",
         "web_url",
         "raw_url"
       ],
