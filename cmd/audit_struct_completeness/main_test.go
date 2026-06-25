@@ -209,7 +209,7 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 		"-":               "string",   // sentinel → not extra
 	}
 
-	extras := extraOutputFields("SomeOutput", mcpFields, sdkFields)
+	extras := extraOutputFields("testpkg", "SomeOutput", mcpFields, sdkFields)
 
 	gotTags := map[string]bool{}
 	for _, e := range extras {
@@ -312,7 +312,7 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 	}
 
 	// Scoped to "Output": branch_name is suppressed.
-	extras := extraOutputFields("Output", mcpFields, sdkFields)
+	extras := extraOutputFields("testpkg", "Output", mcpFields, sdkFields)
 	gotTags := map[string]bool{}
 	for _, e := range extras {
 		gotTags[e.Tag] = true
@@ -329,7 +329,7 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 
 	// On a non-allowlisted MCP type, branch_name IS reported (proves it is the
 	// allowlist, not a generic suppression, that hides it above).
-	other := extraOutputFields("UnlistedOutput", mcpFields, sdkFields)
+	other := extraOutputFields("testpkg", "UnlistedOutput", mcpFields, sdkFields)
 	otherTags := map[string]bool{}
 	for _, e := range other {
 		otherTags[e.Tag] = true

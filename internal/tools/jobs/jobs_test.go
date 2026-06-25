@@ -165,6 +165,184 @@ func TestJobGet_Success(t *testing.T) {
 	}
 }
 
+// jobFullJSON is a single-job fixture that includes the documented fields
+// gl.Job does not expose: top-level archived/source, the runner_manager object,
+// and the full runner object (with ip_address, paused, runner_type, online,
+// status). Used to assert the raw-fetch handlers surface these 1:1.
+const jobFullJSON = `{
+	"id":100,
+	"name":"build",
+	"stage":"build",
+	"status":"failed",
+	"ref":"main",
+	"tag":false,
+	"archived":true,
+	"source":"push",
+	"runner":{
+		"id":32,
+		"description":"shared-runner",
+		"ip_address":null,
+		"active":true,
+		"paused":false,
+		"is_shared":true,
+		"runner_type":"instance_type",
+		"name":null,
+		"online":false,
+		"status":"offline"
+	},
+	"runner_manager":{
+		"id":1,
+		"system_id":"s_89e5e9956577",
+		"version":"16.11.1",
+		"revision":"535ced5f",
+		"platform":"linux",
+		"architecture":"amd64",
+		"created_at":"2024-05-01T10:12:02.507Z",
+		"contacted_at":"2024-05-07T06:30:09.355Z",
+		"ip_address":"127.0.0.1",
+		"status":"offline"
+	}
+}`
+
+// assertJobFullFields asserts that the raw-fetched documented fields surfaced.
+func assertJobFullFields(t *testing.T, out Output) {
+	t.Helper()
+	if !out.Archived {
+		t.Error("Archived = false, want true")
+	}
+	if out.Source != "push" {
+		t.Errorf("Source = %q, want %q", out.Source, "push")
+	}
+	if out.Runner == nil {
+		t.Fatal("Runner = nil, want populated")
+	}
+	if out.Runner.RunnerType != "instance_type" {
+		t.Errorf("Runner.RunnerType = %q, want %q", out.Runner.RunnerType, "instance_type")
+	}
+	if out.Runner.Status != "offline" {
+		t.Errorf("Runner.Status = %q, want %q", out.Runner.Status, "offline")
+	}
+	if out.Runner.Paused {
+		t.Error("Runner.Paused = true, want false")
+	}
+	if out.Runner.Online {
+		t.Error("Runner.Online = true, want false")
+	}
+	if out.RunnerManager == nil {
+		t.Fatal("RunnerManager = nil, want populated")
+	}
+	if out.RunnerManager.SystemID != "s_89e5e9956577" {
+		t.Errorf("RunnerManager.SystemID = %q, want %q", out.RunnerManager.SystemID, "s_89e5e9956577")
+	}
+	if out.RunnerManager.Version != "16.11.1" {
+		t.Errorf("RunnerManager.Version = %q, want %q", out.RunnerManager.Version, "16.11.1")
+	}
+	if out.RunnerManager.Platform != "linux" {
+		t.Errorf("RunnerManager.Platform = %q, want %q", out.RunnerManager.Platform, "linux")
+	}
+	if out.RunnerManager.IPAddress != "127.0.0.1" {
+		t.Errorf("RunnerManager.IPAddress = %q, want %q", out.RunnerManager.IPAddress, "127.0.0.1")
+	}
+	if out.RunnerManager.Status != "offline" {
+		t.Errorf("RunnerManager.Status = %q, want %q", out.RunnerManager.Status, "offline")
+	}
+}
+
+// TestJobGet_FullFields verifies that Get surfaces the documented archived,
+// source, runner_manager, and runner-extra fields fetched via the raw REST path.
+func TestJobGet_FullFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathJobGet {
+			testutil.RespondJSON(w, http.StatusOK, jobFullJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	assertJobFullFields(t, out)
+}
+
+// TestJobList_FullFields verifies that List surfaces the documented archived,
+// source, runner_manager, and runner-extra fields via the raw REST path.
+func TestJobList_FullFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf("[%s]", jobFullJSON))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", PipelineID: 10})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Jobs) != 1 {
+		t.Fatalf("len(Jobs) = %d, want 1", len(out.Jobs))
+	}
+	assertJobFullFields(t, out.Jobs[0])
+}
+
+// TestListProject_FullFields verifies that ListProject surfaces the documented
+// archived, source, runner_manager, and runner-extra fields via the raw REST path.
+func TestListProject_FullFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf("[%s]", jobFullJSON))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("ListProject() unexpected error: %v", err)
+	}
+	if len(out.Jobs) != 1 {
+		t.Fatalf("len(Jobs) = %d, want 1", len(out.Jobs))
+	}
+	assertJobFullFields(t, out.Jobs[0])
+}
+
+// TestJobGet_OlderInstanceOmitsFields verifies version tolerance: when an older
+// GitLab instance returns a job response WITHOUT archived, source, or
+// runner_manager, the raw-fetch handler still succeeds and simply omits those
+// fields (they stay zero-valued / nil) rather than failing.
+func TestJobGet_OlderInstanceOmitsFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathJobGet {
+			// jobJSON has no archived/source/runner_manager and a minimal runner.
+			testutil.RespondJSON(w, http.StatusOK, jobJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.ID != 100 {
+		t.Errorf("out.ID = %d, want 100", out.ID)
+	}
+	if out.Archived {
+		t.Error("Archived = true, want false (field absent on older instance)")
+	}
+	if out.Source != "" {
+		t.Errorf("Source = %q, want empty (field absent on older instance)", out.Source)
+	}
+	if out.RunnerManager != nil {
+		t.Errorf("RunnerManager = %+v, want nil (field absent on older instance)", out.RunnerManager)
+	}
+	if out.Runner == nil || out.Runner.ID != 1 {
+		t.Errorf("Runner = %+v, want minimal runner with ID 1", out.Runner)
+	}
+}
+
 // TestJobGet_EmptyProjectID verifies JobGet when empty project ID.
 func TestJobGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -54,6 +55,43 @@ func applyListOpts(opts *gl.ListJobsOptions, page toolutil.PaginationInput, keys
 	}
 }
 
+// rawListJobs issues a raw REST GET against a jobs list path, decoding the full
+// documented response (including the SDK-missing archived/source/runner_manager
+// and runner extras) into a slice of [jobAPI]. The supplied opts encode scope,
+// include_retried, and pagination via their url struct tags, and the returned
+// gl.Response preserves the pagination headers for [toolutil.PaginationFromResponse].
+func rawListJobs(ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListJobsOptions) ([]*jobAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var jobs []*jobAPI
+	resp, err := client.GL().Do(req, &jobs)
+	return jobs, resp, err
+}
+
+// rawGetJob issues a raw REST GET against a single-job path, decoding the full
+// documented response into a [jobAPI].
+func rawGetJob(ctx context.Context, client *gitlabclient.Client, path string) (*jobAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var job jobAPI
+	resp, err := client.GL().Do(req, &job)
+	return &job, resp, err
+}
+
+// rawJobsOutput maps a slice of raw-fetch jobs and the response pagination into
+// a [ListOutput].
+func rawJobsOutput(jobs []*jobAPI, resp *gl.Response) ListOutput {
+	out := make([]Output, len(jobs))
+	for i, j := range jobs {
+		out[i] = toOutputAPI(j)
+	}
+	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}
+}
+
 // ListInput defines parameters for listing jobs in a pipeline.
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
@@ -87,10 +125,13 @@ type Output struct {
 	Coverage          float64              `json:"coverage,omitempty"`
 	TagList           []string             `json:"tag_list,omitempty"`
 	ErasedAt          string               `json:"erased_at,omitempty"`
+	Archived          bool                 `json:"archived,omitempty"`
+	Source            string               `json:"source,omitempty"`
 	Commit            *CommitObject        `json:"commit,omitempty"`
 	Pipeline          *PipelineObject      `json:"pipeline,omitempty"`
 	Project           *ProjectObject       `json:"project,omitempty"`
 	Runner            *RunnerObject        `json:"runner,omitempty"`
+	RunnerManager     *RunnerManagerObject `json:"runner_manager,omitempty"`
 	User              *UserObject          `json:"user,omitempty"`
 	Artifacts         []ArtifactObject     `json:"artifacts,omitempty"`
 	ArtifactsFile     *ArtifactsFileObject `json:"artifacts_file,omitempty"`
@@ -107,8 +148,6 @@ type ListOutput struct {
 // via the GitLab Jobs API (GET /projects/:id/pipelines/:pipeline_id/jobs).
 // Optional filters narrow by job status (scope) and whether to include
 // retried jobs.
-//
-//nolint:dupl // structurally parallel to ListBridges by design (distinct SDK call, output type, and not-found hint; no shared return type without erasing the typed []Output vs []BridgeOutput shapes).
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -127,17 +166,16 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
-	jobs, resp, err := client.GL().Jobs.ListPipelineJobs(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
+	path := fmt.Sprintf("projects/%s/pipelines/%d/jobs", gl.PathEscape(string(input.ProjectID)), input.PipelineID)
+	jobs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobList", err, http.StatusNotFound,
 			"verify pipeline_id with gitlab_pipeline_list and that you have Reporter+ role on the project")
 	}
 
-	out := make([]Output, len(jobs))
-	for i, j := range jobs {
-		out[i] = ToOutput(j)
-	}
-	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return rawJobsOutput(jobs, resp), nil
 }
 
 // GetInput defines parameters for retrieving a single job.
@@ -160,12 +198,16 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrRequiredInt64("jobGet", "job_id")
 	}
 
-	j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API. A single
+	// unmarshal is naturally tolerant of older instances that omit these fields.
+	path := fmt.Sprintf("projects/%s/jobs/%d", gl.PathEscape(string(input.ProjectID)), input.JobID)
+	j, _, err := rawGetJob(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("jobGet", err, http.StatusNotFound,
 			"verify job_id with gitlab_job_list \u2014 job_id is the global database ID, not the per-pipeline index")
 	}
-	return ToOutput(j), nil
+	return toOutputAPI(j), nil
 }
 
 // TraceInput defines parameters for retrieving a job's trace log.
@@ -385,16 +427,15 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	}
 	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
-	jbs, resp, err := client.GL().Jobs.ListProjectJobs(string(input.ProjectID), opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
+	path := fmt.Sprintf("projects/%s/jobs", gl.PathEscape(string(input.ProjectID)))
+	jbs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobListProject", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get and that you have Reporter+ role")
 	}
-	out := make([]Output, len(jbs))
-	for i, j := range jbs {
-		out[i] = ToOutput(j)
-	}
-	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return rawJobsOutput(jbs, resp), nil
 }
 
 // BridgeListInput defines parameters for listing pipeline bridge (trigger) jobs.
@@ -483,8 +524,6 @@ func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 // jobs for a pipeline via the GitLab Jobs API
 // (GET /projects/:id/pipelines/:pipeline_id/bridges). Bridges only
 // exist on pipelines that trigger downstream or multi-project pipelines.
-//
-//nolint:dupl // structurally parallel to List by design (distinct SDK call, output type, and not-found hint; no shared return type without erasing the typed []Output vs []BridgeOutput shapes).
 func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeListInput) (BridgeListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return BridgeListOutput{}, err

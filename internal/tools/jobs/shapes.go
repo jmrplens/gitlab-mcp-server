@@ -123,23 +123,33 @@ func pipelineInfoValueObject(p gl.PipelineInfo) *PipelineInfoObject {
 	return pipelineInfoObject(&p)
 }
 
-// RunnerObject mirrors gl.JobRunner (the compact runner object embedded on a
-// job's `runner` key).
+// RunnerObject mirrors the `runner` object embedded on a job, holding the full
+// field set the Jobs API documents for that sub-object.
 //
 // Documented reference subset per doc/api/jobs.md
-// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `runner`). The doc
-// `runner` also lists ip_address, paused, runner_type, online, and status,
-// but gl.JobRunner does not carry those fields, so they are not surfaced.
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `runner`):
+// id, description, ip_address, active, paused, is_shared, runner_type, name,
+// online, status. The ip_address, paused, runner_type, online, and status
+// fields are not exposed by gl.JobRunner, so the GET-single-job and list-jobs
+// handlers fetch them via a raw REST call into a superset struct (see
+// [runnerAPI]); the SDK-backed paths (Bridge, mutating actions) surface only the
+// fields gl.JobRunner carries.
 type RunnerObject struct {
 	ID          int64  `json:"id"`
 	Description string `json:"description"`
+	IPAddress   string `json:"ip_address,omitempty"`
 	Active      bool   `json:"active"`
+	Paused      bool   `json:"paused"`
 	IsShared    bool   `json:"is_shared"`
+	RunnerType  string `json:"runner_type,omitempty"`
 	Name        string `json:"name"`
+	Online      bool   `json:"online"`
+	Status      string `json:"status,omitempty"`
 }
 
 // runnerObject converts a gl.JobRunner value to its output shape, returning nil
-// when the runner is empty (zero-valued).
+// when the runner is empty (zero-valued). Only the fields gl.JobRunner carries
+// are populated; raw-fetch paths use [runnerAPIObject] to surface the full set.
 func runnerObject(r gl.JobRunner) *RunnerObject {
 	if r == (gl.JobRunner{}) {
 		return nil
@@ -148,6 +158,27 @@ func runnerObject(r gl.JobRunner) *RunnerObject {
 		ID: r.ID, Description: r.Description, Active: r.Active,
 		IsShared: r.IsShared, Name: r.Name,
 	}
+}
+
+// RunnerManagerObject mirrors the `runner_manager` object embedded on a job,
+// holding the field set the Jobs API documents for that sub-object.
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `runner_manager`):
+// id, system_id, version, revision, platform, architecture, created_at,
+// contacted_at, ip_address, status. gl.Job does not carry this object, so it is
+// surfaced only on the raw-fetch (GET-single-job and list-jobs) paths.
+type RunnerManagerObject struct {
+	ID           int64  `json:"id"`
+	SystemID     string `json:"system_id,omitempty"`
+	Version      string `json:"version,omitempty"`
+	Revision     string `json:"revision,omitempty"`
+	Platform     string `json:"platform,omitempty"`
+	Architecture string `json:"architecture,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	ContactedAt  string `json:"contacted_at,omitempty"`
+	IPAddress    string `json:"ip_address,omitempty"`
+	Status       string `json:"status,omitempty"`
 }
 
 // ArtifactObject mirrors gl.JobArtifact (one entry of a job's `artifacts`
@@ -253,4 +284,110 @@ func projectObject(p *gl.Project) *ProjectObject {
 	return &ProjectObject{
 		CIJobTokenScopeEnabled: p.CIJobTokenScopeEnabled,
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Raw-fetch superset types
+//
+// client-go's gl.Job does not expose the documented top-level `archived` and
+// `source` fields, the `runner_manager` object, or the `runner` extras
+// (ip_address, paused, runner_type, online, status). To keep MCP output 1:1
+// with the official Jobs API (doc/api/jobs.md), the GET-single-job and
+// list-jobs handlers issue a raw REST request that unmarshals into [jobAPI] —
+// gl.Job embedded for the shared field set, with the SDK-missing documented
+// fields added (and `runner` shadowed by the richer [runnerAPI]).
+// ---------------------------------------------------------------------------.
+
+// jobAPI is the raw-fetch superset of a single job. It embeds gl.Job for the
+// fields the SDK already models and adds the documented fields gl.Job omits:
+// top-level archived/source, the runner_manager object, and the full runner
+// object (which shadows the embedded gl.Job.Runner during JSON decoding).
+type jobAPI struct {
+	gl.Job
+	Archived      bool              `json:"archived"`
+	Source        string            `json:"source"`
+	Runner        *runnerAPI        `json:"runner"`
+	RunnerManager *runnerManagerAPI `json:"runner_manager"`
+}
+
+// runnerAPI mirrors the documented `runner` object including the fields
+// gl.JobRunner does not carry.
+type runnerAPI struct {
+	ID          int64  `json:"id"`
+	Description string `json:"description"`
+	IPAddress   string `json:"ip_address"`
+	Active      bool   `json:"active"`
+	Paused      bool   `json:"paused"`
+	IsShared    bool   `json:"is_shared"`
+	RunnerType  string `json:"runner_type"`
+	Name        string `json:"name"`
+	Online      bool   `json:"online"`
+	Status      string `json:"status"`
+}
+
+// runnerManagerAPI mirrors the documented `runner_manager` object.
+type runnerManagerAPI struct {
+	ID           int64  `json:"id"`
+	SystemID     string `json:"system_id"`
+	Version      string `json:"version"`
+	Revision     string `json:"revision"`
+	Platform     string `json:"platform"`
+	Architecture string `json:"architecture"`
+	CreatedAt    string `json:"created_at"`
+	ContactedAt  string `json:"contacted_at"`
+	IPAddress    string `json:"ip_address"`
+	Status       string `json:"status"`
+}
+
+// runnerAPIObject converts a raw-fetch runner into the output shape, returning
+// nil when the runner was absent (null) in the response.
+func runnerAPIObject(r *runnerAPI) *RunnerObject {
+	if r == nil {
+		return nil
+	}
+	return &RunnerObject{
+		ID:          r.ID,
+		Description: r.Description,
+		IPAddress:   r.IPAddress,
+		Active:      r.Active,
+		Paused:      r.Paused,
+		IsShared:    r.IsShared,
+		RunnerType:  r.RunnerType,
+		Name:        r.Name,
+		Online:      r.Online,
+		Status:      r.Status,
+	}
+}
+
+// runnerManagerObject converts a raw-fetch runner_manager into the output
+// shape, returning nil when it was absent (null) in the response.
+func runnerManagerObject(r *runnerManagerAPI) *RunnerManagerObject {
+	if r == nil {
+		return nil
+	}
+	return &RunnerManagerObject{
+		ID:           r.ID,
+		SystemID:     r.SystemID,
+		Version:      r.Version,
+		Revision:     r.Revision,
+		Platform:     r.Platform,
+		Architecture: r.Architecture,
+		CreatedAt:    r.CreatedAt,
+		ContactedAt:  r.ContactedAt,
+		IPAddress:    r.IPAddress,
+		Status:       r.Status,
+	}
+}
+
+// toOutputAPI maps a raw-fetch [jobAPI] into the package [Output]. It reuses
+// [ToOutput] for the SDK-modeled fields, then overlays the documented fields
+// only the raw response carries (archived, source, runner_manager, and the
+// runner extras).
+func toOutputAPI(j *jobAPI) Output {
+	out := ToOutput(&j.Job)
+	out.Archived = j.Archived
+	out.Source = j.Source
+	out.Runner = runnerAPIObject(j.Runner)
+	out.RunnerManager = runnerManagerObject(j.RunnerManager)
+	return out
 }

@@ -174,6 +174,34 @@ func isDocOmittedField(pkg, mcpType, tag string) bool {
 	return ok
 }
 
+// docAddedFields is the symmetric carve-out to docOmittedFields: documented API
+// response fields the client-go SDK struct does NOT expose, which we surface via a
+// raw-REST/GraphQL fetch (client.GL().NewRequest+Do into a superset struct, per
+// ADR-0006). Because the SDK struct lacks them, they would otherwise be flagged as
+// R-OUTPUT-EXTRA ("invented"); they are NOT invented — the official API doc returns
+// them. Each entry cites the doc/api/<file>. Key = "<pkg>.<MCPType>.<tag>". These
+// fields carry `omitempty` so they degrade gracefully on older GitLab versions that
+// don't return them.
+var docAddedFields = map[string]string{
+	// jobs — documented in doc/api/jobs.md but absent from gl.Job / gl.JobRunner;
+	// fetched via raw REST (rawGetJob/rawListJobs into the jobAPI superset).
+	"jobs.Output.archived":          "jobs.md#get-a-single-job",
+	"jobs.Output.source":            "jobs.md#get-a-single-job",
+	"jobs.Output.runner_manager":    "jobs.md#get-a-single-job",
+	"jobs.RunnerObject.ip_address":  "jobs.md#get-a-single-job",
+	"jobs.RunnerObject.online":      "jobs.md#get-a-single-job",
+	"jobs.RunnerObject.paused":      "jobs.md#get-a-single-job",
+	"jobs.RunnerObject.runner_type": "jobs.md#get-a-single-job",
+	"jobs.RunnerObject.status":      "jobs.md#get-a-single-job",
+}
+
+// isDocAddedField reports whether an MCP output field is a doc-justified field we
+// surface via raw-API fetch despite the SDK struct lacking it.
+func isDocAddedField(pkg, mcpType, tag string) bool {
+	_, ok := docAddedFields[pkg+"."+mcpType+"."+tag]
+	return ok
+}
+
 // gap is one diffed MCP↔SDK struct pair under a package.
 type gap struct {
 	Kind           string         `json:"kind"` // "input" or "output"
@@ -461,7 +489,7 @@ func diffOutputGroup(pkg string, group outputGroup) gap {
 			g.TypeMismatches = append(g.TypeMismatches, typeMismatch{Tag: tag, MCPType: mcpType, SDKType: sdk})
 		}
 	}
-	g.ExtraFields = extraOutputFields(group.mcpName, mcpFields, unionSDK)
+	g.ExtraFields = extraOutputFields(pkg, group.mcpName, mcpFields, unionSDK)
 	return g
 }
 
@@ -718,7 +746,7 @@ func disjointPhantomInput(pair structPair, all map[[2]string]structPair) bool {
 // extra when it is neither a key of sdkFields nor the normalizeSDKTag image of
 // any SDK key, is not the MCP-envelope carve-out, is not the "-" sentinel, and
 // is not an allowlisted deliberate rename (per the 1:1 data-fidelity policy).
-func extraOutputFields(mcpType string, mcpFields, sdkFields map[string]string) []extraField {
+func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]string) []extraField {
 	sdkNorm := make(map[string]struct{}, len(sdkFields))
 	for sdkTag := range sdkFields {
 		sdkNorm[normalizeSDKTag(sdkTag)] = struct{}{}
@@ -743,6 +771,11 @@ func extraOutputFields(mcpType string, mcpFields, sdkFields map[string]string) [
 			continue
 		}
 		if isAcceptedRename(mcpType, tag) {
+			continue
+		}
+		// Documented field surfaced via raw-API fetch (SDK struct lacks it): not
+		// invented — the official API doc returns it.
+		if isDocAddedField(pkg, mcpType, tag) {
 			continue
 		}
 		extras = append(extras, extraField{Tag: tag, MCPType: mcpFields[tag]})

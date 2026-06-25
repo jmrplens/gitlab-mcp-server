@@ -82622,6 +82622,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -82807,10 +82810,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -82818,13 +82836,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -83280,6 +83345,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -83465,10 +83533,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -83476,13 +83559,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -83616,6 +83746,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -83801,10 +83934,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -83812,13 +83960,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -83953,6 +84148,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -84138,10 +84336,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -84149,13 +84362,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -84329,6 +84589,9 @@
             "additionalProperties": false,
             "properties": {
               "allow_failure": {
+                "type": "boolean"
+              },
+              "archived": {
                 "type": "boolean"
               },
               "artifacts": {
@@ -84516,10 +84779,25 @@
                   "id": {
                     "type": "integer"
                   },
+                  "ip_address": {
+                    "type": "string"
+                  },
                   "is_shared": {
                     "type": "boolean"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "online": {
+                    "type": "boolean"
+                  },
+                  "paused": {
+                    "type": "boolean"
+                  },
+                  "runner_type": {
+                    "type": "string"
+                  },
+                  "status": {
                     "type": "string"
                   }
                 },
@@ -84527,13 +84805,60 @@
                   "id",
                   "description",
                   "active",
+                  "paused",
                   "is_shared",
-                  "name"
+                  "name",
+                  "online"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
+              },
+              "runner_manager": {
+                "additionalProperties": false,
+                "properties": {
+                  "architecture": {
+                    "type": "string"
+                  },
+                  "contacted_at": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "ip_address": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "system_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "source": {
+                "type": "string"
               },
               "stage": {
                 "type": "string"
@@ -85131,6 +85456,9 @@
               "allow_failure": {
                 "type": "boolean"
               },
+              "archived": {
+                "type": "boolean"
+              },
               "artifacts": {
                 "items": {
                   "additionalProperties": false,
@@ -85316,10 +85644,25 @@
                   "id": {
                     "type": "integer"
                   },
+                  "ip_address": {
+                    "type": "string"
+                  },
                   "is_shared": {
                     "type": "boolean"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "online": {
+                    "type": "boolean"
+                  },
+                  "paused": {
+                    "type": "boolean"
+                  },
+                  "runner_type": {
+                    "type": "string"
+                  },
+                  "status": {
                     "type": "string"
                   }
                 },
@@ -85327,13 +85670,60 @@
                   "id",
                   "description",
                   "active",
+                  "paused",
                   "is_shared",
-                  "name"
+                  "name",
+                  "online"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
+              },
+              "runner_manager": {
+                "additionalProperties": false,
+                "properties": {
+                  "architecture": {
+                    "type": "string"
+                  },
+                  "contacted_at": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "ip_address": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "system_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "source": {
+                "type": "string"
               },
               "stage": {
                 "type": "string"
@@ -85554,6 +85944,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -85739,10 +86132,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -85750,13 +86158,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -85890,6 +86345,9 @@
         "allow_failure": {
           "type": "boolean"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "artifacts": {
           "items": {
             "additionalProperties": false,
@@ -86075,10 +86533,25 @@
             "id": {
               "type": "integer"
             },
+            "ip_address": {
+              "type": "string"
+            },
             "is_shared": {
               "type": "boolean"
             },
             "name": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "runner_type": {
+              "type": "string"
+            },
+            "status": {
               "type": "string"
             }
           },
@@ -86086,13 +86559,60 @@
             "id",
             "description",
             "active",
+            "paused",
             "is_shared",
-            "name"
+            "name",
+            "online"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "runner_manager": {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "type": "string"
+            },
+            "contacted_at": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "ip_address": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "system_id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "source": {
+          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -86304,6 +86824,9 @@
             "allow_failure": {
               "type": "boolean"
             },
+            "archived": {
+              "type": "boolean"
+            },
             "artifacts": {
               "items": {
                 "additionalProperties": false,
@@ -86489,10 +87012,25 @@
                 "id": {
                   "type": "integer"
                 },
+                "ip_address": {
+                  "type": "string"
+                },
                 "is_shared": {
                   "type": "boolean"
                 },
                 "name": {
+                  "type": "string"
+                },
+                "online": {
+                  "type": "boolean"
+                },
+                "paused": {
+                  "type": "boolean"
+                },
+                "runner_type": {
+                  "type": "string"
+                },
+                "status": {
                   "type": "string"
                 }
               },
@@ -86500,13 +87038,60 @@
                 "id",
                 "description",
                 "active",
+                "paused",
                 "is_shared",
-                "name"
+                "name",
+                "online"
               ],
               "type": [
                 "null",
                 "object"
               ]
+            },
+            "runner_manager": {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "type": "string"
+                },
+                "contacted_at": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "ip_address": {
+                  "type": "string"
+                },
+                "platform": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "system_id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "source": {
+              "type": "string"
             },
             "stage": {
               "type": "string"
@@ -178067,6 +178652,9 @@
               "allow_failure": {
                 "type": "boolean"
               },
+              "archived": {
+                "type": "boolean"
+              },
               "artifacts": {
                 "items": {
                   "additionalProperties": false,
@@ -178252,10 +178840,25 @@
                   "id": {
                     "type": "integer"
                   },
+                  "ip_address": {
+                    "type": "string"
+                  },
                   "is_shared": {
                     "type": "boolean"
                   },
                   "name": {
+                    "type": "string"
+                  },
+                  "online": {
+                    "type": "boolean"
+                  },
+                  "paused": {
+                    "type": "boolean"
+                  },
+                  "runner_type": {
+                    "type": "string"
+                  },
+                  "status": {
                     "type": "string"
                   }
                 },
@@ -178263,13 +178866,60 @@
                   "id",
                   "description",
                   "active",
+                  "paused",
                   "is_shared",
-                  "name"
+                  "name",
+                  "online"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
+              },
+              "runner_manager": {
+                "additionalProperties": false,
+                "properties": {
+                  "architecture": {
+                    "type": "string"
+                  },
+                  "contacted_at": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "ip_address": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "system_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "source": {
+                "type": "string"
               },
               "stage": {
                 "type": "string"
