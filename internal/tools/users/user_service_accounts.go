@@ -39,8 +39,8 @@ type CreateServiceAccountInput struct {
 type ListServiceAccountsInput struct {
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Field to order by (id/username/name)"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction (asc/desc)"`
-	Page    int    `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int    `json:"per_page,omitempty" jsonschema:"Items per page (max 100)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // CurrentUserPATOutput represents a personal access token.
@@ -91,17 +91,12 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 // ListServiceAccounts lists all service accounts.
 func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input ListServiceAccountsInput) (ServiceAccountListOutput, error) {
 	opts := &gl.ListServiceAccountsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
 		opts.OrderBy = new(input.OrderBy)
 	}
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
 	}
 	accounts, _, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
 	if err != nil {

@@ -43,8 +43,10 @@ type UserActivitiesOutput struct {
 // GetUserActivitiesInput holds parameters for listing user activities (admin only).
 type GetUserActivitiesInput struct {
 	From    string `json:"from,omitempty" jsonschema:"Only activities after this date (YYYY-MM-DD)"`
-	Page    int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetUserActivities retrieves user activity entries (admin only).
@@ -53,9 +55,9 @@ func GetUserActivities(ctx context.Context, client *gitlabclient.Client, input G
 		return UserActivitiesOutput{}, err
 	}
 
-	opts := &gl.GetUserActivitiesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.GetUserActivitiesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.From != "" {
 		d := gl.ISOTime(parseDate(input.From))
 		opts.From = &d
@@ -99,8 +101,10 @@ type UserMembershipsOutput struct {
 type GetUserMembershipsInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
 	Type    string `json:"type,omitempty" jsonschema:"Filter by membership type: Project or Namespace"`
-	Page    int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetUserMemberships retrieves a user's project and group memberships.
@@ -112,9 +116,9 @@ func GetUserMemberships(ctx context.Context, client *gitlabclient.Client, input 
 		return UserMembershipsOutput{}, err
 	}
 
-	opts := &gl.GetUserMembershipOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.GetUserMembershipOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Type != "" {
 		opts.Type = new(input.Type)
 	}

@@ -12,39 +12,68 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Output represents the current authenticated GitLab user.
+// Output mirrors the top-level fields of gl.User. The GitLab user endpoints
+// return full User objects, so this shape reflects gl.User as completely as
+// practical: every top-level scalar plus the nested identities, SCIM
+// identities, custom attributes, and created_by sub-objects. It is kept in
+// sync with the enterpriseusers package UserOutput for cross-domain
+// consistency.
 type Output struct {
 	toolutil.HintableOutput
-	ID               int64                `json:"id"`
-	Username         string               `json:"username"`
-	Email            string               `json:"email"`
-	Name             string               `json:"name"`
-	State            string               `json:"state"`
-	WebURL           string               `json:"web_url"`
-	AvatarURL        string               `json:"avatar_url"`
-	IsAdmin          bool                 `json:"is_admin"`
-	Bot              bool                 `json:"bot"`
-	Bio              string               `json:"bio,omitempty"`
-	Location         string               `json:"location,omitempty"`
-	JobTitle         string               `json:"job_title,omitempty"`
-	Organization     string               `json:"organization,omitempty"`
-	CreatedAt        string               `json:"created_at,omitempty"`
-	PublicEmail      string               `json:"public_email,omitempty"`
-	WebsiteURL       string               `json:"website_url,omitempty"`
-	LastActivityOn   string               `json:"last_activity_on,omitempty"`
-	TwoFactorEnabled bool                 `json:"two_factor_enabled"`
-	External         bool                 `json:"external"`
-	Locked           bool                 `json:"locked"`
-	PrivateProfile   bool                 `json:"private_profile"`
-	CurrentSignInAt  string               `json:"current_sign_in_at,omitempty"`
-	ProjectsLimit    int64                `json:"projects_limit"`
-	CanCreateProject bool                 `json:"can_create_project"`
-	CanCreateGroup   bool                 `json:"can_create_group"`
-	Note             string               `json:"note,omitempty"`
-	UsingLicenseSeat bool                 `json:"using_license_seat"`
-	ThemeID          int64                `json:"theme_id,omitempty"`
-	ColorSchemeID    int64                `json:"color_scheme_id,omitempty"`
-	SCIMIdentities   []SCIMIdentityOutput `json:"scim_identities,omitempty"`
+	ID                             int64                   `json:"id"`
+	Username                       string                  `json:"username"`
+	Email                          string                  `json:"email"`
+	Name                           string                  `json:"name"`
+	State                          string                  `json:"state"`
+	WebURL                         string                  `json:"web_url"`
+	AvatarURL                      string                  `json:"avatar_url"`
+	IsAdmin                        bool                    `json:"is_admin"`
+	IsAuditor                      bool                    `json:"is_auditor"`
+	Bot                            bool                    `json:"bot"`
+	Bio                            string                  `json:"bio,omitempty"`
+	Location                       string                  `json:"location,omitempty"`
+	JobTitle                       string                  `json:"job_title,omitempty"`
+	Organization                   string                  `json:"organization,omitempty"`
+	CreatedAt                      string                  `json:"created_at,omitempty"`
+	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
+	PublicEmail                    string                  `json:"public_email,omitempty"`
+	Skype                          string                  `json:"skype,omitempty"`
+	Linkedin                       string                  `json:"linkedin,omitempty"`
+	Twitter                        string                  `json:"twitter,omitempty"`
+	WebsiteURL                     string                  `json:"website_url,omitempty"`
+	ExternUID                      string                  `json:"extern_uid,omitempty"`
+	Provider                       string                  `json:"provider,omitempty"`
+	LastActivityOn                 string                  `json:"last_activity_on,omitempty"`
+	TwoFactorEnabled               bool                    `json:"two_factor_enabled"`
+	External                       bool                    `json:"external"`
+	Locked                         bool                    `json:"locked"`
+	PrivateProfile                 bool                    `json:"private_profile"`
+	CurrentSignInAt                string                  `json:"current_sign_in_at,omitempty"`
+	CurrentSignInIP                string                  `json:"current_sign_in_ip,omitempty"`
+	LastSignInAt                   string                  `json:"last_sign_in_at,omitempty"`
+	LastSignInIP                   string                  `json:"last_sign_in_ip,omitempty"`
+	ProjectsLimit                  int64                   `json:"projects_limit"`
+	CanCreateProject               bool                    `json:"can_create_project"`
+	CanCreateGroup                 bool                    `json:"can_create_group"`
+	CanCreateOrganization          bool                    `json:"can_create_organization"`
+	Note                           string                  `json:"note,omitempty"`
+	UsingLicenseSeat               bool                    `json:"using_license_seat"`
+	ThemeID                        int64                   `json:"theme_id,omitempty"`
+	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
+	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty"`
+	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty"`
+	NamespaceID                    int64                   `json:"namespace_id,omitempty"`
+	Identities                     []IdentityOutput        `json:"identities,omitempty"`
+	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
+	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
+	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
+}
+
+// IdentityOutput mirrors gl.UserIdentity, a provider/extern_uid pair linking a
+// user to an external authentication source.
+type IdentityOutput struct {
+	Provider  string `json:"provider"`
+	ExternUID string `json:"extern_uid"`
 }
 
 // SCIMIdentityOutput represents a SCIM identity associated with a user.
@@ -52,6 +81,25 @@ type SCIMIdentityOutput struct {
 	ExternUID string `json:"extern_uid"`
 	GroupID   int64  `json:"group_id"`
 	Active    bool   `json:"active"`
+}
+
+// CustomAttributeOutput mirrors gl.CustomAttribute, a key/value custom
+// attribute attached to a user.
+type CustomAttributeOutput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// BasicUserOutput mirrors gl.BasicUser, the compact user object referenced by
+// gl.User.CreatedBy.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // CurrentInput is an empty struct for the current user tool (no parameters needed).
@@ -75,15 +123,30 @@ func Current(ctx context.Context, client *gitlabclient.Client, _ CurrentInput) (
 
 // ListInput holds parameters for listing GitLab users.
 type ListInput struct {
-	Search   string `json:"search,omitempty" jsonschema:"Search users by name or username or email"`
-	Username string `json:"username,omitempty" jsonschema:"Filter by exact username"`
-	Active   *bool  `json:"active,omitempty" jsonschema:"Filter for active users only"`
-	Blocked  *bool  `json:"blocked,omitempty" jsonschema:"Filter for blocked users only"`
-	External *bool  `json:"external,omitempty" jsonschema:"Filter for external users only"`
-	OrderBy  string `json:"order_by,omitempty" jsonschema:"Order by: id | name | username | created_at | updated_at"`
-	Sort     string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
-	Page     int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage  int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	Search               string `json:"search,omitempty" jsonschema:"Search users by name or username or email"`
+	Username             string `json:"username,omitempty" jsonschema:"Filter by exact username"`
+	Active               *bool  `json:"active,omitempty" jsonschema:"Filter for active users only"`
+	Blocked              *bool  `json:"blocked,omitempty" jsonschema:"Filter for blocked users only"`
+	External             *bool  `json:"external,omitempty" jsonschema:"Filter for external users only"`
+	Admins               *bool  `json:"admins,omitempty" jsonschema:"Filter for administrators only"`
+	Humans               *bool  `json:"humans,omitempty" jsonschema:"Filter for human (non-bot, non-internal) users only"`
+	ExcludeActive        *bool  `json:"exclude_active,omitempty" jsonschema:"Exclude active users from the result"`
+	ExcludeExternal      *bool  `json:"exclude_external,omitempty" jsonschema:"Exclude external users from the result"`
+	ExcludeHumans        *bool  `json:"exclude_humans,omitempty" jsonschema:"Exclude human users from the result"`
+	ExcludeInternal      *bool  `json:"exclude_internal,omitempty" jsonschema:"Exclude internal (bot/system) users from the result"`
+	WithoutProjects      *bool  `json:"without_projects,omitempty" jsonschema:"Filter for users without any projects"`
+	WithoutProjectBots   *bool  `json:"without_project_bots,omitempty" jsonschema:"Exclude project bot users from the result"`
+	WithCustomAttributes *bool  `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
+	TwoFactor            string `json:"two_factor,omitempty" jsonschema:"Filter by 2FA status: enabled or disabled"`
+	ExternUID            string `json:"extern_uid,omitempty" jsonschema:"Filter by external UID (use with provider)"`
+	Provider             string `json:"provider,omitempty" jsonschema:"Filter by external provider name (use with extern_uid)"`
+	PublicEmail          string `json:"public_email,omitempty" jsonschema:"Filter by exact public email address"`
+	CreatedAfter         string `json:"created_after,omitempty" jsonschema:"Filter users created after this date (RFC3339)"`
+	CreatedBefore        string `json:"created_before,omitempty" jsonschema:"Filter users created before this date (RFC3339)"`
+	OrderBy              string `json:"order_by,omitempty" jsonschema:"Order by: id | name | username | created_at | updated_at"`
+	Sort                 string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of users.
@@ -95,30 +158,7 @@ type ListOutput struct {
 
 // List retrieves a paginated list of GitLab users.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListUsersOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.Username != "" {
-		opts.Username = new(input.Username)
-	}
-	if input.Active != nil {
-		opts.Active = input.Active
-	}
-	if input.Blocked != nil {
-		opts.Blocked = input.Blocked
-	}
-	if input.External != nil {
-		opts.External = input.External
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
+	opts := buildListUsersOptions(input)
 
 	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -136,11 +176,56 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, nil
 }
 
+// buildListUsersOptions maps a ListInput onto the client-go ListUsersOptions,
+// including offset and keyset pagination. All optional filters use omitempty
+// pointers, so nil values are simply omitted from the request.
+func buildListUsersOptions(input ListInput) *gl.ListUsersOptions {
+	opts := &gl.ListUsersOptions{
+		Active:               input.Active,
+		Blocked:              input.Blocked,
+		External:             input.External,
+		Admins:               input.Admins,
+		Humans:               input.Humans,
+		ExcludeActive:        input.ExcludeActive,
+		ExcludeExternal:      input.ExcludeExternal,
+		ExcludeHumans:        input.ExcludeHumans,
+		ExcludeInternal:      input.ExcludeInternal,
+		WithoutProjects:      input.WithoutProjects,
+		WithoutProjectBots:   input.WithoutProjectBots,
+		WithCustomAttributes: input.WithCustomAttributes,
+		Search:               strPtr(input.Search),
+		Username:             strPtr(input.Username),
+		TwoFactor:            strPtr(input.TwoFactor),
+		ExternalUID:          strPtr(input.ExternUID),
+		Provider:             strPtr(input.Provider),
+		PublicEmail:          strPtr(input.PublicEmail),
+		CreatedAfter:         toolutil.ParseOptionalTime(input.CreatedAfter),
+		CreatedBefore:        toolutil.ParseOptionalTime(input.CreatedBefore),
+		OrderBy:              strPtr(input.OrderBy),
+		Sort:                 strPtr(input.Sort),
+	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	return opts
+}
+
+// applyOrderSort copies the optional order_by and sort parameters onto a
+// gl.ListOptions, which exposes these for both offset and keyset pagination on
+// endpoints whose options embed ListOptions without dedicated fields.
+func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
+
 // Get User.
 
 // GetInput holds parameters for retrieving a single user.
 type GetInput struct {
-	UserID int64 `json:"user_id" jsonschema:"The ID of the user to retrieve,required"`
+	UserID               int64 `json:"user_id" jsonschema:"The ID of the user to retrieve,required"`
+	WithCustomAttributes *bool `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
 }
 
 // Get retrieves a single GitLab user by ID.
@@ -149,7 +234,11 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("get_user: user_id is required")
 	}
 
-	u, _, err := client.GL().Users.GetUser(input.UserID, &gl.GetUserOptions{}, gl.WithContext(ctx))
+	opts := &gl.GetUserOptions{}
+	if input.WithCustomAttributes != nil {
+		opts.WithCustomAttributes = input.WithCustomAttributes
+	}
+	u, _, err := client.GL().Users.GetUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_user", err, http.StatusNotFound,
 			"verify user_id with gitlab_list_users (search by username); user_id must be a positive integer")
@@ -251,15 +340,17 @@ type SSHKeyListOutput struct {
 
 // ListSSHKeysInput holds parameters for listing SSH keys.
 type ListSSHKeysInput struct {
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListSSHKeys retrieves SSH keys for the current authenticated user.
 func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, input ListSSHKeysInput) (SSHKeyListOutput, error) {
-	opts := &gl.ListSSHKeysOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.ListSSHKeysOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	keys, resp, err := client.GL().Users.ListSSHKeys(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -344,9 +435,11 @@ type ListContributionEventsInput struct {
 	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by target type: Issue | Milestone | MergeRequest | Note | Project | Snippet | User"`
 	Before     string `json:"before,omitempty" jsonschema:"Only events before this date (YYYY-MM-DD)"`
 	After      string `json:"after,omitempty" jsonschema:"Only events after this date (YYYY-MM-DD)"`
+	Scope      string `json:"scope,omitempty" jsonschema:"Include all events across a user's projects (e.g. 'all')"`
+	OrderBy    string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
 	Sort       string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
-	Page       int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage    int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListContributionEvents retrieves contribution events for a user.
@@ -355,8 +448,10 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 		return ContributionEventsOutput{}, errors.New("list_contribution_events: user_id is required")
 	}
 
-	opts := &gl.ListContributionEventsOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
+	opts := &gl.ListContributionEventsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
 	if input.Action != "" {
 		a := gl.EventTypeValue(input.Action)
@@ -377,6 +472,9 @@ func ListContributionEvents(ctx context.Context, client *gitlabclient.Client, in
 			d := gl.ISOTime(t)
 			opts.After = &d
 		}
+	}
+	if input.Scope != "" {
+		opts.Scope = new(input.Scope)
 	}
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
@@ -483,45 +581,125 @@ func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Clien
 
 // toOutput converts a GitLab User to our Output type.
 func toOutput(u *gl.User) Output {
+	if u == nil {
+		return Output{}
+	}
 	out := Output{
-		ID:               u.ID,
-		Username:         u.Username,
-		Email:            u.Email,
-		Name:             u.Name,
-		State:            u.State,
-		WebURL:           u.WebURL,
-		AvatarURL:        u.AvatarURL,
-		IsAdmin:          u.IsAdmin,
-		Bot:              u.Bot,
-		Bio:              u.Bio,
-		Location:         u.Location,
-		JobTitle:         u.JobTitle,
-		Organization:     u.Organization,
-		PublicEmail:      u.PublicEmail,
-		WebsiteURL:       u.WebsiteURL,
-		TwoFactorEnabled: u.TwoFactorEnabled,
-		External:         u.External,
-		Locked:           u.Locked,
+		ID:                             u.ID,
+		Username:                       u.Username,
+		Email:                          u.Email,
+		Name:                           u.Name,
+		State:                          u.State,
+		WebURL:                         u.WebURL,
+		AvatarURL:                      u.AvatarURL,
+		IsAdmin:                        u.IsAdmin,
+		IsAuditor:                      u.IsAuditor,
+		Bot:                            u.Bot,
+		Bio:                            u.Bio,
+		Location:                       u.Location,
+		JobTitle:                       u.JobTitle,
+		Organization:                   u.Organization,
+		PublicEmail:                    u.PublicEmail,
+		Skype:                          u.Skype,
+		Linkedin:                       u.Linkedin,
+		Twitter:                        u.Twitter,
+		WebsiteURL:                     u.WebsiteURL,
+		ExternUID:                      u.ExternUID,
+		Provider:                       u.Provider,
+		TwoFactorEnabled:               u.TwoFactorEnabled,
+		External:                       u.External,
+		Locked:                         u.Locked,
+		PrivateProfile:                 u.PrivateProfile,
+		ProjectsLimit:                  u.ProjectsLimit,
+		CanCreateProject:               u.CanCreateProject,
+		CanCreateGroup:                 u.CanCreateGroup,
+		CanCreateOrganization:          u.CanCreateOrganization,
+		Note:                           u.Note,
+		UsingLicenseSeat:               u.UsingLicenseSeat,
+		ThemeID:                        u.ThemeID,
+		ColorSchemeID:                  u.ColorSchemeID,
+		SharedRunnersMinutesLimit:      u.SharedRunnersMinutesLimit,
+		ExtraSharedRunnersMinutesLimit: u.ExtraSharedRunnersMinutesLimit,
+		NamespaceID:                    u.NamespaceID,
+		Identities:                     toIdentityOutputs(u.Identities),
+		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
+		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
+		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
 	}
 	if u.CreatedAt != nil {
 		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)
 	}
+	if u.ConfirmedAt != nil {
+		out.ConfirmedAt = u.ConfirmedAt.Format(time.RFC3339)
+	}
 	if u.LastActivityOn != nil {
 		out.LastActivityOn = time.Time(*u.LastActivityOn).Format(toolutil.DateFormatISO)
 	}
-	out.PrivateProfile = u.PrivateProfile
 	if u.CurrentSignInAt != nil {
 		out.CurrentSignInAt = u.CurrentSignInAt.Format(time.RFC3339)
 	}
-	out.ProjectsLimit = u.ProjectsLimit
-	out.CanCreateProject = u.CanCreateProject
-	out.CanCreateGroup = u.CanCreateGroup
-	out.Note = u.Note
-	out.UsingLicenseSeat = u.UsingLicenseSeat
-	out.ThemeID = u.ThemeID
-	out.ColorSchemeID = u.ColorSchemeID
-	out.SCIMIdentities = toSCIMIdentityOutputs(u.SCIMIdentities)
+	if u.LastSignInAt != nil {
+		out.LastSignInAt = u.LastSignInAt.Format(time.RFC3339)
+	}
+	if u.CurrentSignInIP != nil {
+		out.CurrentSignInIP = u.CurrentSignInIP.String()
+	}
+	if u.LastSignInIP != nil {
+		out.LastSignInIP = u.LastSignInIP.String()
+	}
 	return out
+}
+
+func toIdentityOutputs(identities []*gl.UserIdentity) []IdentityOutput {
+	if len(identities) == 0 {
+		return nil
+	}
+	out := make([]IdentityOutput, 0, len(identities))
+	for _, id := range identities {
+		if id == nil {
+			continue
+		}
+		out = append(out, IdentityOutput{Provider: id.Provider, ExternUID: id.ExternUID})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make([]CustomAttributeOutput, 0, len(attrs))
+	for _, a := range attrs {
+		if a == nil {
+			continue
+		}
+		out = append(out, CustomAttributeOutput{Key: a.Key, Value: a.Value})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	if u == nil {
+		return nil
+	}
+	o := &BasicUserOutput{
+		ID:        u.ID,
+		Username:  u.Username,
+		Name:      u.Name,
+		State:     u.State,
+		AvatarURL: u.AvatarURL,
+		WebURL:    u.WebURL,
+	}
+	if u.CreatedAt != nil {
+		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
+	}
+	return o
 }
 
 func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
