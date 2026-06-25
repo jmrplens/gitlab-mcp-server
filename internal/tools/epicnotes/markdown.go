@@ -7,11 +7,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// noteAuthorUsername returns the note author's username, read from the
+// canonical author object (nil-guarded).
+func noteAuthorUsername(n Output) string {
+	if n.Author != nil {
+		return n.Author.Username
+	}
+	return ""
+}
+
 // FormatOutputMarkdown renders a single epic note as a Markdown summary.
 func FormatOutputMarkdown(n Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Epic Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, n.Author)
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, noteAuthorUsername(n))
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	if n.System {
 		b.WriteString("- **System note**\n")
@@ -36,7 +45,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Author | Created | System |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, n := range out.Notes {
-		fmt.Fprintf(&b, "| %d | %s | %s | %v |\n", n.ID, toolutil.EscapeMdTableCell(n.Author), toolutil.FormatTime(n.CreatedAt), n.System)
+		fmt.Fprintf(&b, "| %d | %s | %s | %v |\n", n.ID, toolutil.EscapeMdTableCell(noteAuthorUsername(n)), toolutil.FormatTime(n.CreatedAt), n.System)
 	}
 	b.WriteString("\n")
 	b.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Notes)))
