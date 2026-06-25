@@ -22494,7 +22494,7 @@
   },
   {
     "name": "gitlab_download_ml_model_package",
-    "description": "Download a machine learning model package file from the GitLab model registry.\n\nReturns: JSON with base64-encoded file content, filename, and size.\n\nSee also: gitlab_package_list",
+    "description": "Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61063,6 +61063,37 @@
           "description": "New name for the imported project",
           "type": "string"
         },
+        "optional_stages": {
+          "additionalProperties": false,
+          "description": "Optional import stages to enable (each defaults to disabled when omitted)",
+          "properties": {
+            "attachments_import": {
+              "description": "Import Markdown attachments (images, files) referenced in descriptions and comments",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "collaborators_import": {
+              "description": "Import collaborators (project members) from the GitHub repository",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "single_endpoint_notes_import": {
+              "description": "Import notes (comments) using the single-endpoint strategy for large repositories",
+              "type": [
+                "null",
+                "boolean"
+              ]
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "personal_access_token": {
           "description": "GitHub personal access token. Treat as secret: do not log or store it, and redact it in telemetry/errors",
           "type": "string"
@@ -61108,10 +61139,16 @@
         "import_status": {
           "type": "string"
         },
+        "import_warning": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
         "provider_link": {
+          "type": "string"
+        },
+        "refs_url": {
           "type": "string"
         },
         "relation_type": {
@@ -93426,7 +93463,7 @@
   },
   {
     "name": "gitlab_list_group_iterations",
-    "description": "List iterations for a group. Iterations provide time-boxed planning periods.\n\nReturns: JSON array of iterations with pagination. Fields include id, iid, title, state, start_date, due_date, web_url.\n\nSee also: gitlab_list_project_iterations",
+    "description": "List a group's iterations (sprints), optionally filtered by state, search term, or ancestor groups. Returns: iterations with sequence, title, description, state, start and due dates, web URL, and pagination metadata. See also: gitlab_group_get, gitlab_issue_list_group, gitlab_list_project_iterations.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93438,9 +93475,21 @@
           "description": "Include ancestor iterations",
           "type": "boolean"
         },
+        "order_by": {
+          "description": "For keyset pagination, the column to order results by",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -93448,6 +93497,10 @@
         },
         "search": {
           "description": "Search by title",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
           "type": "string"
         },
         "state": {
@@ -173674,7 +173727,7 @@
   },
   {
     "name": "gitlab_render_markdown",
-    "description": "Render arbitrary markdown text to HTML using the GitLab API. Supports GitLab Flavored Markdown (GFM) and project-scoped references.\n\nReturns: JSON with the rendered HTML output.\n\nSee also: gitlab_wiki_create.",
+    "description": "Render arbitrary Markdown text to HTML using the GitLab Markdown API. Optionally apply GitLab Flavored Markdown and resolve references within a project's context. Returns: the rendered HTML string. See also: gitlab_file_get, gitlab_wiki_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -192350,6 +192403,14 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "additional_properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Additional event properties forwarded to the tracking endpoint",
+          "properties": {},
+          "type": "object"
+        },
         "event": {
           "description": "Event name to track",
           "type": "string"
@@ -192418,6 +192479,14 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "additional_properties": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Additional event properties forwarded to the tracking endpoint",
+                "properties": {},
+                "type": "object"
+              },
               "event": {
                 "description": "Event name to track",
                 "type": "string"
