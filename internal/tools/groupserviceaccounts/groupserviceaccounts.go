@@ -38,6 +38,7 @@ type PATOutput struct {
 	Description string   `json:"description,omitempty"`
 	Scopes      []string `json:"scopes"`
 	UserID      int64    `json:"user_id"`
+	LastUsedAt  string   `json:"last_used_at,omitempty"`
 	Active      bool     `json:"active"`
 	ExpiresAt   string   `json:"expires_at,omitempty"`
 	Token       string   `json:"token,omitempty"`
@@ -76,6 +77,9 @@ func toPATOutput(pat *gl.PersonalAccessToken) PATOutput {
 	if pat.CreatedAt != nil {
 		out.CreatedAt = pat.CreatedAt.Format("2006-01-02T15:04:05Z")
 	}
+	if pat.LastUsedAt != nil {
+		out.LastUsedAt = pat.LastUsedAt.Format("2006-01-02T15:04:05Z")
+	}
 	if pat.ExpiresAt != nil {
 		out.ExpiresAt = time.Time(*pat.ExpiresAt).Format(toolutil.DateFormatISO)
 	}
@@ -86,6 +90,7 @@ func toPATOutput(pat *gl.PersonalAccessToken) PATOutput {
 type ListInput struct {
 	GroupID string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Order by id or username"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 }
@@ -95,9 +100,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := &gl.ListServiceAccountsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListServiceAccountsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
 		opts.OrderBy = &input.OrderBy
 	}
@@ -213,6 +217,19 @@ type ListPATInput struct {
 	GroupID          string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account user ID,required"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+	OrderBy        string `json:"order_by,omitempty" jsonschema:"Order tokens by a supported column (e.g. id, created_at, expires_at, last_used_at)"`
+	Sort           string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
+	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state: true returns only revoked tokens, false only active ones"`
+	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by the user ID that owns the token"`
+	Search         string `json:"search,omitempty" jsonschema:"Filter tokens whose name contains this text"`
+	State          string `json:"state,omitempty" jsonschema:"Filter by token state: active or inactive"`
+	CreatedAfter   string `json:"created_after,omitempty" jsonschema:"Return tokens created after this RFC3339 timestamp"`
+	CreatedBefore  string `json:"created_before,omitempty" jsonschema:"Return tokens created before this RFC3339 timestamp"`
+	ExpiresAfter   string `json:"expires_after,omitempty" jsonschema:"Return tokens expiring after this date (YYYY-MM-DD)"`
+	ExpiresBefore  string `json:"expires_before,omitempty" jsonschema:"Return tokens expiring before this date (YYYY-MM-DD)"`
+	LastUsedAfter  string `json:"last_used_after,omitempty" jsonschema:"Return tokens last used after this RFC3339 timestamp"`
+	LastUsedBefore string `json:"last_used_before,omitempty" jsonschema:"Return tokens last used before this RFC3339 timestamp"`
 }
 
 // ListPATs retrieves personal access tokens for a group service account.
@@ -223,8 +240,45 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, input ListPATInp
 	if input.ServiceAccountID == 0 {
 		return ListPATOutput{}, toolutil.ErrFieldRequired("service_account_id")
 	}
-	opts := &gl.ListServiceAccountPersonalAccessTokensOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
+	opts := &gl.ListServiceAccountPersonalAccessTokensOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.Revoked != nil {
+		opts.Revoked = input.Revoked
+	}
+	if input.UserID != 0 {
+		opts.UserID = &input.UserID
+	}
+	if input.Search != "" {
+		opts.Search = &input.Search
+	}
+	if input.State != "" {
+		opts.State = &input.State
+	}
+	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
+	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
+	opts.LastUsedAfter = toolutil.ParseOptionalTime(input.LastUsedAfter)
+	opts.LastUsedBefore = toolutil.ParseOptionalTime(input.LastUsedBefore)
+	if input.ExpiresAfter != "" {
+		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAfter)
+		if err != nil {
+			return ListPATOutput{}, fmt.Errorf("invalid expires_after format (expected YYYY-MM-DD): %w", err)
+		}
+		iso := gl.ISOTime(t)
+		opts.ExpiresAfter = &iso
+	}
+	if input.ExpiresBefore != "" {
+		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresBefore)
+		if err != nil {
+			return ListPATOutput{}, fmt.Errorf("invalid expires_before format (expected YYYY-MM-DD): %w", err)
+		}
+		iso := gl.ISOTime(t)
+		opts.ExpiresBefore = &iso
 	}
 	tokens, resp, err := client.GL().Groups.ListServiceAccountPersonalAccessTokens(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
