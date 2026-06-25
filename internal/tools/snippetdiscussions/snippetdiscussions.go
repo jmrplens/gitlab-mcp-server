@@ -17,8 +17,12 @@ import (
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SnippetID int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	// OrderBy names the column used to order keyset-paginated results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// Sort selects the sort direction for ordered results.
+	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single snippet discussion.
@@ -33,6 +37,8 @@ type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SnippetID int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	Body      string               `json:"body" jsonschema:"Discussion body (Markdown supported),required"`
+	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // AddNoteInput defines parameters for adding a note to a snippet discussion.
@@ -41,6 +47,8 @@ type AddNoteInput struct {
 	SnippetID    int64                `json:"snippet_id" jsonschema:"Snippet ID,required"`
 	DiscussionID string               `json:"discussion_id" jsonschema:"Discussion ID to reply to,required"`
 	Body         string               `json:"body" jsonschema:"Note body (Markdown supported),required"`
+	// CreatedAt backdates the note; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // UpdateNoteInput defines parameters for updating a snippet discussion note.
@@ -50,6 +58,8 @@ type UpdateNoteInput struct {
 	DiscussionID string               `json:"discussion_id" jsonschema:"Discussion ID,required"`
 	NoteID       int64                `json:"note_id" jsonschema:"Note ID to update,required"`
 	Body         string               `json:"body" jsonschema:"Updated note body,required"`
+	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
 // DeleteNoteInput defines parameters for deleting a snippet discussion note.
@@ -79,6 +89,9 @@ type ListOutput struct {
 
 // List lists snippet discussions.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
 	if input.ProjectID == "" {
 		return ListOutput{}, errors.New("snippet_discussion_list: project_id is required")
 	}
@@ -86,8 +99,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_list", "snippet_id")
 	}
 	opts := &gl.ListSnippetDiscussionsOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
+		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListSnippetDiscussions(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_list", err, http.StatusNotFound,
@@ -98,11 +112,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // Get gets a single snippet discussion.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	if err := ctx.Err(); err != nil {
+		return Output{}, err
+	}
 	if input.ProjectID == "" {
 		return Output{}, errors.New("snippet_discussion_get: project_id is required")
 	}
 	if input.SnippetID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippet_discussion_get", "snippet_id")
+	}
+	if input.DiscussionID == "" {
+		return Output{}, errors.New("snippet_discussion_get: discussion_id is required")
 	}
 	d, _, err := client.GL().Discussions.GetSnippetDiscussion(string(input.ProjectID), input.SnippetID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
@@ -114,6 +134,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 
 // Create creates a new snippet discussion thread.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+	if err := ctx.Err(); err != nil {
+		return Output{}, err
+	}
 	if input.ProjectID == "" {
 		return Output{}, errors.New("snippet_discussion_create: project_id is required")
 	}
@@ -121,7 +144,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.ErrRequiredInt64("snippet_discussion_create", "snippet_id")
 	}
 	opts := &gl.CreateSnippetDiscussionOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	d, _, err := client.GL().Discussions.CreateSnippetDiscussion(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -133,14 +157,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 // AddNote adds a note to an existing snippet discussion.
 func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInput) (NoteOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return NoteOutput{}, err
+	}
 	if input.ProjectID == "" {
 		return NoteOutput{}, errors.New("snippet_discussion_add_note: project_id is required")
 	}
 	if input.SnippetID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_add_note", "snippet_id")
 	}
+	if input.DiscussionID == "" {
+		return NoteOutput{}, errors.New("snippet_discussion_add_note: discussion_id is required")
+	}
 	opts := &gl.AddSnippetDiscussionNoteOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -152,17 +183,24 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 
 // UpdateNote updates an existing snippet discussion note.
 func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNoteInput) (NoteOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return NoteOutput{}, err
+	}
 	if input.ProjectID == "" {
 		return NoteOutput{}, errors.New("snippet_discussion_update_note: project_id is required")
 	}
 	if input.SnippetID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_update_note", "snippet_id")
 	}
+	if input.DiscussionID == "" {
+		return NoteOutput{}, errors.New("snippet_discussion_update_note: discussion_id is required")
+	}
 	if input.NoteID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("snippet_discussion_update_note", "note_id")
 	}
 	opts := &gl.UpdateSnippetDiscussionNoteOptions{
-		Body: new(input.Body),
+		Body:      new(input.Body),
+		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
 	note, _, err := client.GL().Discussions.UpdateSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -174,11 +212,17 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 
 // DeleteNote deletes a snippet discussion note.
 func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNoteInput) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if input.ProjectID == "" {
 		return errors.New("snippet_discussion_delete_note: project_id is required")
 	}
 	if input.SnippetID <= 0 {
 		return toolutil.ErrRequiredInt64("snippet_discussion_delete_note", "snippet_id")
+	}
+	if input.DiscussionID == "" {
+		return errors.New("snippet_discussion_delete_note: discussion_id is required")
 	}
 	if input.NoteID <= 0 {
 		return toolutil.ErrRequiredInt64("snippet_discussion_delete_note", "note_id")

@@ -5,6 +5,7 @@ package snippetdiscussions
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -201,6 +202,172 @@ func TestSnippetIDRequired_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assertContains(t, tt.fn(), "snippet_id")
 		})
+	}
+}
+
+// TestDiscussionIDRequired_Validation ensures discussion-scoped handlers reject an empty discussion_id.
+func TestDiscussionIDRequired_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when discussion_id is empty")
+	}))
+	ctx := context.Background()
+	const pid = "my/project"
+
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"Get", func() error {
+			_, e := Get(ctx, client, GetInput{ProjectID: pid, SnippetID: 10, DiscussionID: ""})
+			return e
+		}},
+		{"AddNote", func() error {
+			_, e := AddNote(ctx, client, AddNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "", Body: "x"})
+			return e
+		}},
+		{"UpdateNote", func() error {
+			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "", NoteID: 1, Body: "x"})
+			return e
+		}},
+		{"DeleteNote", func() error {
+			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "", NoteID: 1})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertContains(t, tt.fn(), "discussion_id")
+		})
+	}
+}
+
+// TestContextCancelled_Validation ensures every handler returns early when the context is already cancelled.
+func TestContextCancelled_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when context is cancelled")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	const pid = "my/project"
+
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"List", func() error { _, e := List(ctx, client, ListInput{ProjectID: pid, SnippetID: 10}); return e }},
+		{"Get", func() error {
+			_, e := Get(ctx, client, GetInput{ProjectID: pid, SnippetID: 10, DiscussionID: "d1"})
+			return e
+		}},
+		{"Create", func() error {
+			_, e := Create(ctx, client, CreateInput{ProjectID: pid, SnippetID: 10, Body: "x"})
+			return e
+		}},
+		{"AddNote", func() error {
+			_, e := AddNote(ctx, client, AddNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "d1", Body: "x"})
+			return e
+		}},
+		{"UpdateNote", func() error {
+			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "d1", NoteID: 1, Body: "x"})
+			return e
+		}},
+		{"DeleteNote", func() error {
+			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "d1", NoteID: 1})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fn(); err == nil {
+				t.Fatal("expected context error, got nil")
+			}
+		})
+	}
+}
+
+// TestList_KeysetAndOrdering verifies that ordering and keyset pagination inputs are forwarded as query parameters.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "created_at" {
+			t.Errorf("order_by=%q, want created_at", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort=%q, want desc", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination=%q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok99" {
+			t.Errorf("page_token=%q, want tok99", q.Get("page_token"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[`+covDiscussionJSON+`]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := List(t.Context(), client, ListInput{
+		ProjectID:             "1",
+		SnippetID:             5,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Discussions) != 1 {
+		t.Fatalf("got %d discussions, want 1", len(out.Discussions))
+	}
+}
+
+// TestCreate_CreatedAt verifies the created_at backdate field is forwarded to the API.
+func TestCreate_CreatedAt(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "2025-01-01T00:00:00Z") {
+			t.Errorf("created_at not forwarded; body=%s", body)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, covDiscussionJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: "1", SnippetID: 5, Body: "x", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestAddNote_CreatedAt verifies the created_at backdate field is forwarded on add-note.
+func TestAddNote_CreatedAt(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "2025-01-01T00:00:00Z") {
+			t.Errorf("created_at not forwarded; body=%s", body)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, covNoteJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", Body: "x", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestUpdateNote_CreatedAt verifies the created_at override field is forwarded on update-note.
+func TestUpdateNote_CreatedAt(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "2025-01-01T00:00:00Z") {
+			t.Errorf("created_at not forwarded; body=%s", body)
+		}
+		testutil.RespondJSON(w, http.StatusOK, covNoteJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", NoteID: 1, Body: "x", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
