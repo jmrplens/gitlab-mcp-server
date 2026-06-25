@@ -2,10 +2,8 @@ package pipelinetriggers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -17,17 +15,19 @@ import (
 // Output types
 // ──────────────────────────────────────────────.
 
-// Output represents a single pipeline trigger token.
+// Output mirrors gl.PipelineTrigger, a single pipeline trigger token. Per the
+// 1:1 audit policy the owner is surfaced as the full nested user object on the
+// canonical owner key.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Description string `json:"description"`
-	Token       string `json:"token"`
-	OwnerName   string `json:"owner_name,omitempty"`
-	OwnerID     int64  `json:"owner_id,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	LastUsed    string `json:"last_used,omitempty"`
+	ID          int64       `json:"id"`
+	Description string      `json:"description"`
+	Token       string      `json:"token"`
+	Owner       *UserOutput `json:"owner,omitempty"`
+	CreatedAt   string      `json:"created_at,omitempty"`
+	UpdatedAt   string      `json:"updated_at,omitempty"`
+	DeletedAt   string      `json:"deleted_at,omitempty"`
+	LastUsed    string      `json:"last_used,omitempty"`
 }
 
 // ListOutput represents a paginated list of pipeline triggers.
@@ -37,25 +37,48 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// RunOutput represents the result of triggering a pipeline.
+// RunOutput mirrors gl.Pipeline, the result of triggering a pipeline. Per the
+// 1:1 audit policy every Pipeline field is surfaced, with the user and
+// detailed_status sub-objects preserved as full nested objects.
 type RunOutput struct {
 	toolutil.HintableOutput
-	PipelineID int64  `json:"pipeline_id"`
-	SHA        string `json:"sha"`
-	Ref        string `json:"ref"`
-	Status     string `json:"status"`
-	WebURL     string `json:"web_url"`
-	CreatedAt  string `json:"created_at,omitempty"`
+	ID             int64                 `json:"id"`
+	IID            int64                 `json:"iid,omitempty"`
+	ProjectID      int64                 `json:"project_id,omitempty"`
+	Status         string                `json:"status"`
+	Source         string                `json:"source,omitempty"`
+	Ref            string                `json:"ref"`
+	Name           string                `json:"name,omitempty"`
+	SHA            string                `json:"sha"`
+	BeforeSHA      string                `json:"before_sha,omitempty"`
+	Tag            bool                  `json:"tag,omitempty"`
+	YamlErrors     string                `json:"yaml_errors,omitempty"`
+	User           *BasicUserOutput      `json:"user,omitempty"`
+	Duration       int64                 `json:"duration,omitempty"`
+	QueuedDuration int64                 `json:"queued_duration,omitempty"`
+	Coverage       string                `json:"coverage,omitempty"`
+	WebURL         string                `json:"web_url"`
+	DetailedStatus *DetailedStatusOutput `json:"detailed_status,omitempty"`
+	CreatedAt      string                `json:"created_at,omitempty"`
+	UpdatedAt      string                `json:"updated_at,omitempty"`
+	StartedAt      string                `json:"started_at,omitempty"`
+	FinishedAt     string                `json:"finished_at,omitempty"`
+	CommittedAt    string                `json:"committed_at,omitempty"`
 }
 
 // ──────────────────────────────────────────────
 // Input types
 // ──────────────────────────────────────────────.
 
-// ListInput contains parameters for listing pipeline triggers.
+// ListInput contains parameters for listing pipeline triggers. It embeds both
+// offset (PaginationInput) and keyset (KeysetPaginationInput) pagination plus
+// the order_by/sort controls accepted by gl.ListOptions.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field by which to order results when using keyset pagination (e.g. id)."`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc. Defaults to the API ordering."`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a pipeline trigger.
@@ -83,12 +106,16 @@ type DeleteInput struct {
 	TriggerID int64                `json:"trigger_id" jsonschema:"Pipeline trigger ID,required"`
 }
 
-// RunInput contains parameters for triggering a pipeline.
+// RunInput contains parameters for triggering a pipeline. It mirrors
+// gl.RunPipelineTriggerOptions: variables maps directly to the SDK's
+// map[string]string CI/CD variable shape, and inputs carries typed pipeline
+// input parameters.
 type RunInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Ref       string               `json:"ref" jsonschema:"Branch or tag name to run pipeline on"`
 	Token     string               `json:"token" jsonschema:"Pipeline trigger token"`
-	Variables string               `json:"variables,omitempty" jsonschema:"JSON object of key-value variable pairs"`
+	Variables map[string]string    `json:"variables,omitempty" jsonschema:"Map of CI/CD variable name to value injected into the triggered pipeline."`
+	Inputs    map[string]any       `json:"inputs,omitempty" jsonschema:"Map of pipeline input name to value (string, number, boolean, or array of strings) for inputs declared in the pipeline spec."`
 }
 
 // ──────────────────────────────────────────────
@@ -100,11 +127,13 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_list", toolutil.ErrFieldRequired("project_id"))
 	}
-	opts := &gl.ListPipelineTriggersOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListPipelineTriggersOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	triggers, resp, err := client.GL().PipelineTriggers.ListPipelineTriggers(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -229,12 +258,15 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 		Ref:   new(input.Ref),
 		Token: new(input.Token),
 	}
-	if input.Variables != "" {
-		vars := make(map[string]string)
-		if err := json.Unmarshal([]byte(input.Variables), &vars); err != nil {
-			return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", fmt.Errorf("invalid variables JSON: %w", err))
+	if len(input.Variables) > 0 {
+		opts.Variables = input.Variables
+	}
+	if len(input.Inputs) > 0 {
+		inputs, err := buildPipelineInputs(input.Inputs)
+		if err != nil {
+			return RunOutput{}, toolutil.WrapErrWithMessage("pipeline_trigger_run", err)
 		}
-		opts.Variables = vars
+		opts.Inputs = inputs
 	}
 	p, _, err := client.GL().PipelineTriggers.RunPipelineTrigger(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -258,42 +290,87 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertTrigger maps a GitLab pipeline trigger into the MCP output shape.
+// convertTrigger maps a GitLab pipeline trigger into the MCP output shape,
+// surfacing the full owner user object on the canonical owner key.
 func convertTrigger(t *gl.PipelineTrigger) Output {
-	out := Output{
+	return Output{
 		ID:          t.ID,
 		Description: t.Description,
 		Token:       t.Token,
+		Owner:       userOutput(t.Owner),
+		CreatedAt:   formatTimePtr(t.CreatedAt),
+		UpdatedAt:   formatTimePtr(t.UpdatedAt),
+		DeletedAt:   formatTimePtr(t.DeletedAt),
+		LastUsed:    formatTimePtr(t.LastUsed),
 	}
-	if t.Owner != nil {
-		out.OwnerName = t.Owner.Name
-		out.OwnerID = t.Owner.ID
-	}
-	if t.CreatedAt != nil {
-		out.CreatedAt = t.CreatedAt.Format(time.RFC3339)
-	}
-	if t.UpdatedAt != nil {
-		out.UpdatedAt = t.UpdatedAt.Format(time.RFC3339)
-	}
-	if t.LastUsed != nil {
-		out.LastUsed = t.LastUsed.Format(time.RFC3339)
-	}
-	return out
 }
 
-// convertPipeline maps a triggered GitLab pipeline into the run output shape.
+// convertPipeline maps a triggered GitLab pipeline into the run output shape,
+// surfacing every gl.Pipeline field plus the nested user and detailed_status
+// sub-objects.
 func convertPipeline(p *gl.Pipeline) RunOutput {
-	out := RunOutput{
-		PipelineID: p.ID,
-		SHA:        p.SHA,
-		Ref:        p.Ref,
-		Status:     p.Status,
-		WebURL:     p.WebURL,
+	return RunOutput{
+		ID:             p.ID,
+		IID:            p.IID,
+		ProjectID:      p.ProjectID,
+		Status:         p.Status,
+		Source:         string(p.Source),
+		Ref:            p.Ref,
+		Name:           p.Name,
+		SHA:            p.SHA,
+		BeforeSHA:      p.BeforeSHA,
+		Tag:            p.Tag,
+		YamlErrors:     p.YamlErrors,
+		User:           basicUserOutput(p.User),
+		Duration:       p.Duration,
+		QueuedDuration: p.QueuedDuration,
+		Coverage:       p.Coverage,
+		WebURL:         p.WebURL,
+		DetailedStatus: detailedStatusOutput(p.DetailedStatus),
+		CreatedAt:      formatTimePtr(p.CreatedAt),
+		UpdatedAt:      formatTimePtr(p.UpdatedAt),
+		StartedAt:      formatTimePtr(p.StartedAt),
+		FinishedAt:     formatTimePtr(p.FinishedAt),
+		CommittedAt:    formatTimePtr(p.CommittedAt),
 	}
-	if p.CreatedAt != nil {
-		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
+}
+
+// buildPipelineInputs converts a generic inputs map into the SDK's
+// gl.PipelineInputsOption, wrapping each value with the type-safe
+// gl.NewPipelineInputValue constructor. Supported value types are string,
+// bool, number (float64/int from JSON), and arrays of strings. JSON numbers
+// arrive as float64, so they are forwarded as float64.
+func buildPipelineInputs(raw map[string]any) (gl.PipelineInputsOption, error) {
+	inputs := make(gl.PipelineInputsOption, len(raw))
+	for key, val := range raw {
+		switch v := val.(type) {
+		case string:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case bool:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case float64:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case int:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case int64:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case []string:
+			inputs[key] = gl.NewPipelineInputValue(v)
+		case []any:
+			strs := make([]string, 0, len(v))
+			for _, item := range v {
+				s, ok := item.(string)
+				if !ok {
+					return nil, fmt.Errorf("input %q: array elements must be strings", key)
+				}
+				strs = append(strs, s)
+			}
+			inputs[key] = gl.NewPipelineInputValue(strs)
+		default:
+			return nil, fmt.Errorf("input %q: unsupported value type %T (use string, number, boolean, or array of strings)", key, val)
+		}
 	}
-	return out
+	return inputs, nil
 }
 
 // ──────────────────────────────────────────────

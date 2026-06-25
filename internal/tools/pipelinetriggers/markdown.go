@@ -15,8 +15,8 @@ func FormatTriggerMarkdown(out Output) string {
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
 	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	fmt.Fprintf(&b, "| Token | %s |\n", toolutil.EscapeMdTableCell(out.Token))
-	if out.OwnerName != "" {
-		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(out.OwnerName))
+	if out.Owner != nil && out.Owner.Name != "" {
+		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(out.Owner.Name))
 	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(out.CreatedAt))
@@ -44,11 +44,15 @@ func FormatListTriggersMarkdown(out ListOutput) string {
 	}
 	b.WriteString("| ID | Description | Token | Owner | Last Used |\n|---|---|---|---|---|\n")
 	for _, t := range out.Triggers {
+		owner := ""
+		if t.Owner != nil {
+			owner = t.Owner.Name
+		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
 			t.ID,
 			toolutil.EscapeMdTableCell(t.Description),
 			toolutil.EscapeMdTableCell(t.Token),
-			toolutil.EscapeMdTableCell(t.OwnerName),
+			toolutil.EscapeMdTableCell(owner),
 			toolutil.FormatTime(t.LastUsed))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -66,17 +70,17 @@ func FormatRunOutputMarkdown(out RunOutput) string {
 	var b strings.Builder
 	b.WriteString("## Pipeline Triggered\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| Pipeline ID | %d |\n", out.PipelineID)
+	fmt.Fprintf(&b, "| Pipeline ID | %d |\n", out.ID)
 	fmt.Fprintf(&b, "| SHA | %s |\n", out.SHA)
 	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(out.Ref))
 	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
 	if out.WebURL != "" {
-		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.PipelineID), out.WebURL))
+		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.ID), out.WebURL))
 	}
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's pipeline get action with pipeline_id to monitor progress",
+		"Use the selected tool surface's pipeline get action with the returned id to monitor progress",
 	)
 	return b.String()
 }
