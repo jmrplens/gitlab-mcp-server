@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -82,14 +83,14 @@ func TestTodoList_Success(t *testing.T) {
 	if out.Todos[0].ActionName != "assigned" {
 		t.Errorf("expected action assigned, got %s", out.Todos[0].ActionName)
 	}
-	if out.Todos[0].TargetTitle != "Fix bug" {
-		t.Errorf("expected target title 'Fix bug', got %s", out.Todos[0].TargetTitle)
+	if out.Todos[0].Target == nil || out.Todos[0].Target.Title != "Fix bug" {
+		t.Errorf("expected target title 'Fix bug', got %+v", out.Todos[0].Target)
 	}
-	if out.Todos[0].ProjectName != "my-project" {
-		t.Errorf("expected project 'my-project', got %s", out.Todos[0].ProjectName)
+	if out.Todos[0].Project == nil || out.Todos[0].Project.Name != "my-project" {
+		t.Errorf("expected project 'my-project', got %+v", out.Todos[0].Project)
 	}
-	if out.Todos[0].AuthorName != "alice" {
-		t.Errorf("expected author 'alice', got %s", out.Todos[0].AuthorName)
+	if out.Todos[0].Author == nil || out.Todos[0].Author.Username != "alice" {
+		t.Errorf("expected author 'alice', got %+v", out.Todos[0].Author)
 	}
 	if out.Pagination.TotalItems != 2 {
 		t.Errorf("expected 2 total items, got %d", out.Pagination.TotalItems)
@@ -307,14 +308,14 @@ func TestTodoList_AllFilters(t *testing.T) {
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
 	out := toOutput(&todo)
-	if out.TargetTitle != "" {
-		t.Errorf("expected empty TargetTitle, got %q", out.TargetTitle)
+	if out.Target != nil {
+		t.Errorf("expected nil Target, got %+v", out.Target)
 	}
-	if out.ProjectName != "" {
-		t.Errorf("expected empty ProjectName, got %q", out.ProjectName)
+	if out.Project != nil {
+		t.Errorf("expected nil Project, got %+v", out.Project)
 	}
-	if out.AuthorName != "" {
-		t.Errorf("expected empty AuthorName, got %q", out.AuthorName)
+	if out.Author != nil {
+		t.Errorf("expected nil Author, got %+v", out.Author)
 	}
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
@@ -344,8 +345,8 @@ func todoWithNils() gl.Todo {
 // TestFormatOutputMarkdownString_Full verifies FormatOutputMarkdownString when full.
 func TestFormatOutputMarkdownString_Full(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue",
-		State: "pending", ProjectName: "proj", AuthorName: "alice", CreatedAt: "2026-01-01",
+		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
+		State: "pending", Project: &BasicProjectOut{Name: "proj"}, Author: &BasicUserOut{Username: "alice"}, CreatedAt: "2026-01-01",
 		TargetURL: "https://x", Body: "Some body",
 	})
 	if !strings.Contains(s, "To-Do #1") {
@@ -390,8 +391,8 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
-			{ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue", State: "pending", ProjectName: "proj"},
-			{ID: 2, ActionName: "mentioned", TargetTitle: "Add", TargetType: "MergeRequest", State: "pending", ProjectName: "proj"},
+			{ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue", State: "pending", Project: &BasicProjectOut{Name: "proj"}},
+			{ID: 2, ActionName: "mentioned", Target: &TodoTargetOut{Title: "Add"}, TargetType: "MergeRequest", State: "pending", Project: &BasicProjectOut{Name: "proj"}},
 		},
 	})
 	if !strings.Contains(s, "assigned") {
@@ -408,8 +409,8 @@ func TestFormatListMarkdownString_ClickableTargetLinks(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
 			{
-				ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
-				State: "pending", ProjectName: "proj", TargetURL: "https://gitlab.example.com/issues/1",
+				ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix bug"}, TargetType: "Issue",
+				State: "pending", Project: &BasicProjectOut{Name: "proj"}, TargetURL: "https://gitlab.example.com/issues/1",
 			},
 		},
 	})
@@ -424,8 +425,8 @@ func TestFormatListMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
 			{
-				ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
-				State: "pending", ProjectName: "proj",
+				ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix bug"}, TargetType: "Issue",
+				State: "pending", Project: &BasicProjectOut{Name: "proj"},
 			},
 		},
 	})
@@ -441,8 +442,8 @@ func TestFormatListMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
 // renders target as clickable link when TargetURL is present.
 func TestFormatOutputMarkdownString_ClickableTarget(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue",
-		State: "pending", ProjectName: "proj",
+		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
+		State: "pending", Project: &BasicProjectOut{Name: "proj"},
 		TargetURL: "https://gitlab.example.com/issues/1",
 	})
 	if !strings.Contains(s, "[Fix](https://gitlab.example.com/issues/1)") {
@@ -454,8 +455,8 @@ func TestFormatOutputMarkdownString_ClickableTarget(t *testing.T) {
 // target appears as plain text when TargetURL is empty.
 func TestFormatOutputMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
 	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", TargetTitle: "Fix", TargetType: "Issue",
-		State: "pending", ProjectName: "proj",
+		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
+		State: "pending", Project: &BasicProjectOut{Name: "proj"},
 	})
 	if strings.Contains(s, "[Fix](") {
 		t.Errorf("should not contain link without TargetURL, got:\n%s", s)
@@ -508,6 +509,199 @@ func TestFormatMarkAllDoneMarkdown(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ActionSpec route tests
 // ---------------------------------------------------------------------------.
+
+// ---------------------------------------------------------------------------
+// Full nested target object mapping (1:1 audit policy)
+// ---------------------------------------------------------------------------.
+
+// TestToOutput_FullNestedTarget verifies that toOutput surfaces every nested
+// to-do sub-object (project, author, and a fully populated issue/MR target with
+// its milestone, time stats, links, task completion, assignees and reviewers).
+func TestToOutput_FullNestedTarget(t *testing.T) {
+	created := mustTime(t, "2026-01-15T10:00:00Z")
+	merged := mustTime(t, "2026-01-20T10:00:00Z")
+	start := mustISO(t, "2026-01-01")
+	due := mustISO(t, "2026-02-01")
+	expired := true
+	todo := &gl.Todo{
+		ID:         7,
+		ActionName: gl.TodoAssigned,
+		TargetType: gl.TodoTargetIssue,
+		TargetURL:  "https://x/issues/7",
+		Body:       "body",
+		State:      "pending",
+		CreatedAt:  &created,
+		Project: &gl.BasicProject{
+			ID: 3, Name: "proj", Description: "d", NameWithNamespace: "g / proj",
+			Path: "proj", PathWithNamespace: "g/proj", CreatedAt: &created,
+		},
+		Author: &gl.BasicUser{ID: 1, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a", WebURL: "w", CreatedAt: &created},
+		Target: &gl.TodoTarget{
+			Assignees:            []*gl.BasicUser{{ID: 2, Username: "bob"}, nil},
+			Assignee:             &gl.BasicUser{ID: 2, Username: "bob"},
+			Author:               &gl.BasicUser{ID: 1, Username: "alice"},
+			CreatedAt:            &created,
+			Description:          "desc",
+			Downvotes:            1,
+			ID:                   float64(42),
+			IID:                  42,
+			Labels:               []string{"bug"},
+			Milestone:            &gl.Milestone{ID: 9, IID: 1, Title: "M1", StartDate: start, DueDate: due, CreatedAt: &created, UpdatedAt: &created, Expired: &expired},
+			ProjectID:            3,
+			State:                "opened",
+			Subscribed:           true,
+			TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 4, CompletedCount: 2},
+			Title:                "Fix bug",
+			UpdatedAt:            &created,
+			Upvotes:              5,
+			UserNotesCount:       3,
+			WebURL:               "https://x/issues/7",
+			Confidential:         true,
+			DueDate:              "2026-02-01",
+			HasTasks:             true,
+			Links:                &gl.IssueLinks{Self: "s", Notes: "n", AwardEmoji: "ae", Project: "p"},
+			MovedToID:            8,
+			TimeStats:            &gl.TimeStats{HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m", TimeEstimate: 3600, TotalTimeSpent: 1800},
+			Weight:               2,
+			MergedAt:             &merged,
+			ApprovalsBeforeMerge: 1,
+			MergeStatus:          "can_be_merged",
+			Reference:            "!1",
+			Reviewers:            []*gl.BasicUser{{ID: 4, Username: "carol"}, nil},
+			SHA:                  "abc",
+			SourceBranch:         "feat",
+			TargetBranch:         "main",
+			SourceProjectID:      3,
+			TargetProjectID:      3,
+			Squash:               true,
+			WorkInProgress:       false,
+			FileName:             "design.png",
+			ImageURL:             "https://x/design.png",
+		},
+	}
+	out := toOutput(todo)
+	if out.Project == nil || out.Project.PathWithNamespace != "g/proj" || out.Project.CreatedAt == "" {
+		t.Fatalf("project not mapped: %+v", out.Project)
+	}
+	if out.Author == nil || out.Author.Name != "Alice" {
+		t.Fatalf("author not mapped: %+v", out.Author)
+	}
+	assertFullTarget(t, out.Target)
+}
+
+// assertFullTarget verifies the fully populated to-do target sub-objects,
+// including nil-element skipping in slices and nested object mapping.
+func assertFullTarget(t *testing.T, tgt *TodoTargetOut) {
+	t.Helper()
+	if tgt == nil {
+		t.Fatal("expected non-nil target")
+	}
+	if len(tgt.Assignees) != 1 || tgt.Assignees[0].Username != "bob" {
+		t.Errorf("assignees not mapped (nil skipped): %+v", tgt.Assignees)
+	}
+	if len(tgt.Reviewers) != 1 || tgt.Reviewers[0].Username != "carol" {
+		t.Errorf("reviewers not mapped (nil skipped): %+v", tgt.Reviewers)
+	}
+	if tgt.Assignee == nil || tgt.Author == nil {
+		t.Errorf("assignee/author not mapped: %+v", tgt)
+	}
+	if tgt.MergedAt == "" {
+		t.Errorf("merged_at not mapped: %+v", tgt)
+	}
+	assertTargetNested(t, tgt)
+}
+
+// assertTargetNested verifies the deeper nested objects on a to-do target
+// (milestone, task completion, links, and time stats).
+func assertTargetNested(t *testing.T, tgt *TodoTargetOut) {
+	t.Helper()
+	if tgt.Milestone == nil || tgt.Milestone.StartDate != "2026-01-01" || tgt.Milestone.DueDate != "2026-02-01" {
+		t.Errorf("milestone not mapped: %+v", tgt.Milestone)
+	}
+	if tgt.Milestone == nil || tgt.Milestone.Expired == nil || !*tgt.Milestone.Expired {
+		t.Errorf("milestone expired not mapped: %+v", tgt.Milestone)
+	}
+	if tgt.TaskCompletionStatus == nil || tgt.TaskCompletionStatus.Count != 4 {
+		t.Errorf("task completion not mapped: %+v", tgt.TaskCompletionStatus)
+	}
+	if tgt.Links == nil || tgt.Links.Self != "s" {
+		t.Errorf("links not mapped: %+v", tgt.Links)
+	}
+	if tgt.TimeStats == nil || tgt.TimeStats.TimeEstimate != 3600 {
+		t.Errorf("time stats not mapped: %+v", tgt.TimeStats)
+	}
+}
+
+// TestMilestoneOut_NilDates verifies milestoneOut renders empty ISO dates when
+// the SDK milestone has nil start/due dates (formatISOTimePtr nil branch).
+func TestMilestoneOut_NilDates(t *testing.T) {
+	out := toOutput(&gl.Todo{
+		Target: &gl.TodoTarget{Milestone: &gl.Milestone{ID: 1, Title: "M"}},
+	})
+	if out.Target == nil || out.Target.Milestone == nil {
+		t.Fatal("expected milestone")
+	}
+	if out.Target.Milestone.StartDate != "" || out.Target.Milestone.DueDate != "" {
+		t.Errorf("expected empty dates, got start=%q due=%q", out.Target.Milestone.StartDate, out.Target.Milestone.DueDate)
+	}
+}
+
+// TestList_OrderBySort verifies that order_by and sort are forwarded as query
+// parameters on the list request.
+func TestList_OrderBySort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "created_at" {
+			t.Errorf("expected order_by=created_at, got %q", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %q", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", Total: "0", TotalPages: "1", PerPage: "20"})
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestDecorateTodoMeta_UnknownTool verifies the no-op path for an unmapped tool.
+func TestDecorateTodoMeta_UnknownTool(t *testing.T) {
+	opts := userTodoOptions("gitlab_unknown")
+	before := opts.Usage
+	decorateTodoMeta(&opts, "gitlab_unknown")
+	if opts.Usage != before {
+		t.Errorf("expected unchanged usage for unknown tool, got %q", opts.Usage)
+	}
+}
+
+// mustTime parses an RFC 3339 timestamp or fails the test.
+func mustTime(t *testing.T, s string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("parse time %q: %v", s, err)
+	}
+	return parsed
+}
+
+// mustISO parses a YYYY-MM-DD date into a gl.ISOTime pointer or fails the test.
+func mustISO(t *testing.T, s string) *gl.ISOTime {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, s+"T00:00:00Z")
+	if err != nil {
+		t.Fatalf("parse iso %q: %v", s, err)
+	}
+	iso := gl.ISOTime(parsed)
+	return &iso
+}
 
 // TestActionSpecs_Metadata verifies todo action spec metadata.
 func TestActionSpecs_Metadata(t *testing.T) {

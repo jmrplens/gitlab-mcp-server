@@ -9,20 +9,36 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// targetTitle returns the to-do target's title, or "" when no target is set.
+func targetTitle(t Output) string {
+	if t.Target == nil {
+		return ""
+	}
+	return t.Target.Title
+}
+
+// projectName returns the to-do project's name, or "" when no project is set.
+func projectName(t Output) string {
+	if t.Project == nil {
+		return ""
+	}
+	return t.Project.Name
+}
+
 // FormatOutputMarkdownString formats a single to-do item as Markdown.
 func FormatOutputMarkdownString(t Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## To-Do #%d\n\n", t.ID)
 	fmt.Fprintf(&b, "**Action:** %s\n", t.ActionName)
 	if t.TargetURL != "" {
-		fmt.Fprintf(&b, "**Target:** [%s](%s) (type: %s)\n", t.TargetTitle, t.TargetURL, t.TargetType)
+		fmt.Fprintf(&b, "**Target:** [%s](%s) (type: %s)\n", targetTitle(t), t.TargetURL, t.TargetType)
 	} else {
-		fmt.Fprintf(&b, "**Target:** %s (type: %s)\n", t.TargetTitle, t.TargetType)
+		fmt.Fprintf(&b, "**Target:** %s (type: %s)\n", targetTitle(t), t.TargetType)
 	}
 	fmt.Fprintf(&b, "**State:** %s\n", t.State)
-	fmt.Fprintf(&b, "**Project:** %s\n", t.ProjectName)
-	if t.AuthorName != "" {
-		fmt.Fprintf(&b, "**Author:** %s (created: %s)\n", t.AuthorName, toolutil.FormatTime(t.CreatedAt))
+	fmt.Fprintf(&b, "**Project:** %s\n", projectName(t))
+	if t.Author != nil {
+		fmt.Fprintf(&b, "**Author:** %s (created: %s)\n", t.Author.Username, toolutil.FormatTime(t.CreatedAt))
 	}
 	if t.Body != "" {
 		fmt.Fprintf(&b, "\n---\n\n%s\n", t.Body)
@@ -49,18 +65,18 @@ func FormatListMarkdownString(v ListOutput) string {
 	b.WriteString("| ID | Action | Target | Type | State | Project |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, t := range v.Todos {
-		target := toolutil.EscapeMdTableCell(t.TargetTitle)
+		target := toolutil.EscapeMdTableCell(targetTitle(t))
 		if t.TargetURL != "" {
 			target = fmt.Sprintf("[%s](%s)", target, t.TargetURL)
 		}
 		fmt.Fprintf(
 			&b, "| %d | %s | %s | %s | %s | %s |\n",
 			t.ID,
-			toolutil.EscapeMdTableCell(t.ActionName),
+			toolutil.EscapeMdTableCell(string(t.ActionName)),
 			target,
-			toolutil.EscapeMdTableCell(t.TargetType),
+			toolutil.EscapeMdTableCell(string(t.TargetType)),
 			toolutil.EscapeMdTableCell(t.State),
-			toolutil.EscapeMdTableCell(t.ProjectName),
+			toolutil.EscapeMdTableCell(projectName(t)),
 		)
 	}
 	b.WriteString(toolutil.FormatPagination(v.Pagination))
