@@ -300,6 +300,48 @@ func isDocAddedField(pkg, mcpType, tag string) bool {
 	return ok
 }
 
+// acceptedExtraOutputs adjudicates the remaining R-OUTPUT-EXTRA fields that are
+// legitimate but are NOT raw-fetched REST fields (so they don't belong in
+// docAddedFields). Each entry carries an explicit rationale. Two key forms:
+//   - "<pkg>.<MCPType>"        — whole-type accept (every field of a GraphQL-sourced
+//     output whose SDK struct carries no json tags, so a REST-tag diff flags all
+//     fields; the data is real and documented by the GraphQL schema).
+//   - "<pkg>.<MCPType>.<tag>"  — single-field accept (a server-composed/derived field
+//     that is not an API field, or an SDK field the SDK struct leaves json-untagged).
+//
+// This makes the auditor's extra-output total fully explained: every accepted extra
+// is here with a reason, so any NEW extra surfaces as a genuine finding.
+var acceptedExtraOutputs = map[string]string{
+	// GraphQL-sourced output types: workitems/epics map GraphQL response structs
+	// (gl.WorkItem/gl.Epic) that carry no REST json tags, so the REST-tag diff flags
+	// every documented GraphQL field as extra. The fields are real and documented by
+	// the GraphQL schema (https://docs.gitlab.com/api/graphql/reference/).
+	"workitems.WorkItemItem": "GraphQL-sourced work item fields (gl.WorkItem GraphQL struct has no REST json tags); documented by the GraphQL schema",
+	"epics.Output":           "GraphQL work-item-era epic fields (gl.Epic/gl.WorkItem GraphQL structs); documented by the GraphQL schema",
+
+	// Server-composed convenience fields (not API fields): we derive these for the
+	// model, they are additive and intentional.
+	"events.ContributionEventOutput.target_url": "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
+	"events.ProjectEventOutput.target_url":      "server-composed clickable URL via toolutil.BuildTargetURL; not an API field",
+	"orbit.QueryOutput.formatted_text":          "server-formatted convenience rendering of the Orbit query result; not an API field",
+
+	// SDK-sourced field the SDK leaves json-untagged: gl.Feature.Gates exists and is
+	// the documented feature-flag `gates` array; the SDK struct field carries no json
+	// tag so the REST-tag diff flags the snake_case output key as extra.
+	"features.FeatureItem.gates": "documented feature-flag gates array, sourced from gl.Feature.Gates (SDK field is json-untagged)",
+}
+
+// isAcceptedExtraOutput reports whether an extra MCP output field/type is an
+// adjudicated legitimate extra (GraphQL-sourced, server-derived, or SDK-untagged),
+// checking the whole-type key first then the per-field key.
+func isAcceptedExtraOutput(pkg, mcpType, tag string) bool {
+	if _, ok := acceptedExtraOutputs[pkg+"."+mcpType]; ok {
+		return true
+	}
+	_, ok := acceptedExtraOutputs[pkg+"."+mcpType+"."+tag]
+	return ok
+}
+
 // gap is one diffed MCP↔SDK struct pair under a package.
 type gap struct {
 	Kind           string         `json:"kind"` // "input" or "output"
@@ -882,6 +924,11 @@ func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]stri
 		// Documented field surfaced via raw-API fetch (SDK struct lacks it): not
 		// invented — the official API doc returns it.
 		if isDocAddedField(pkg, mcpType, tag) {
+			continue
+		}
+		// Adjudicated legitimate extra (GraphQL-sourced type, server-derived field,
+		// or SDK-untagged field) — each carries a rationale in acceptedExtraOutputs.
+		if isAcceptedExtraOutput(pkg, mcpType, tag) {
 			continue
 		}
 		extras = append(extras, extraField{Tag: tag, MCPType: mcpFields[tag]})
