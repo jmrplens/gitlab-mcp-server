@@ -94,3 +94,32 @@ func TestActionSpecs_UnsubscribeError(t *testing.T) {
 		t.Fatal("expected error from unsubscribe with failing backend")
 	}
 }
+
+// TestDecorateGroupLabelMeta_UnknownTool verifies the no-op branch leaves the
+// generic placeholder metadata untouched for a tool with no meta entry.
+func TestDecorateGroupLabelMeta_UnknownTool(t *testing.T) {
+	options := groupLabelOptions("gitlab_unknown_tool")
+	decorateGroupLabelMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != "Use to execute grouplabels domain action." {
+		t.Errorf("Usage = %q, want generic placeholder unchanged", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want empty for unknown tool", options.IndividualTool.Description)
+	}
+}
+
+// TestGroupLabelActionMeta_AllToolsDecorated verifies every projected group-label
+// tool carries non-generic R-META discovery metadata (Usage, aliases, related,
+// and a "Returns: … See also: …" individual-tool description).
+func TestGroupLabelActionMeta_AllToolsDecorated(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	for _, spec := range ActionSpecs(client) {
+		name := spec.IndividualTool.Name
+		if spec.IndividualTool.Description == "" {
+			t.Errorf("%s: missing individual-tool description", name)
+		}
+		if spec.Usage == "Use to execute grouplabels domain action." {
+			t.Errorf("%s: Usage still generic placeholder", name)
+		}
+	}
+}
