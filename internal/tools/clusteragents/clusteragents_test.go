@@ -479,7 +479,10 @@ func TestListAgents_WithPagination(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := ListAgents(t.Context(), client, ListAgentsInput{ProjectID: "1", Page: 1, PerPage: 10})
+	out, err := ListAgents(t.Context(), client, ListAgentsInput{
+		ProjectID:       "1",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -503,12 +506,103 @@ func TestListAgentTokens_WithPagination(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{ProjectID: "1", AgentID: 5, Page: 1, PerPage: 10})
+	out, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{
+		ProjectID:       "1",
+		AgentID:         5,
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if len(out.Tokens) != 1 {
 		t.Errorf("expected 1 token, got %d", len(out.Tokens))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListAgents — keyset pagination + ordering forwarded; full output mirror
+// ---------------------------------------------------------------------------.
+
+// TestListAgents_KeysetAndOrdering verifies that ListAgents forwards keyset
+// pagination (pagination, page_token) and ordering (order_by, sort) parameters
+// to the GitLab API and that the full gl.Agent shape (created_at, config_project)
+// is mirrored on the output.
+func TestListAgents_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/cluster_agents" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		for key, want := range map[string]string{
+			"pagination": "keyset", "page_token": "42", "order_by": "id", "sort": "desc",
+		} {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
+	}))
+	out, err := ListAgents(t.Context(), client, ListAgentsInput{
+		ProjectID:             "1",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		OrderBy:               "id",
+		Sort:                  "desc",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(out.Agents))
+	}
+	a := out.Agents[0]
+	if a.CreatedAt != "2024-01-02T03:04:05Z" {
+		t.Errorf("CreatedAt = %q", a.CreatedAt)
+	}
+	if a.ConfigProject.ID != 99 || a.ConfigProject.PathWithNamespace != "grp/cfg" || a.ConfigProject.CreatedAt == "" {
+		t.Errorf("ConfigProject = %#v", a.ConfigProject)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListAgentTokens — keyset pagination + ordering forwarded; full output mirror
+// ---------------------------------------------------------------------------.
+
+// TestListAgentTokens_KeysetAndOrdering verifies that ListAgentTokens forwards
+// keyset pagination and ordering parameters and mirrors the full gl.AgentToken
+// shape (created_at, created_by_user_id, last_used_at) on the output.
+func TestListAgentTokens_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/cluster_agents/5/tokens" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		for key, want := range map[string]string{
+			"pagination": "keyset", "page_token": "7", "order_by": "id", "sort": "asc",
+		} {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"tok","agent_id":5,"status":"active","created_at":"2024-02-03T04:05:06Z","created_by_user_id":11,"last_used_at":"2024-03-04T05:06:07Z"}]`)
+	}))
+	out, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{
+		ProjectID:             "1",
+		AgentID:               5,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		OrderBy:               "id",
+		Sort:                  "asc",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(out.Tokens))
+	}
+	tok := out.Tokens[0]
+	if tok.CreatedAt == "" || tok.CreatedByUserID != 11 || tok.LastUsedAt == "" {
+		t.Errorf("token mirror incomplete: %#v", tok)
 	}
 }
 
@@ -540,9 +634,40 @@ func TestFormatTokensListMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAgentMarkdown_Content(t *testing.T) {
-	md := FormatAgentMarkdown(AgentItem{ID: 5, Name: "test-agent"})
-	if !strings.Contains(md, "test-agent") {
-		t.Errorf("expected agent name, got: %s", md)
+	md := FormatAgentMarkdown(AgentItem{
+		ID:              5,
+		Name:            "test-agent",
+		CreatedAt:       "2024-01-02T03:04:05Z",
+		CreatedByUserID: 10,
+		ConfigProject:   ConfigProjectOutput{ID: 99, Name: "cfg", PathWithNamespace: "grp/cfg"},
+	})
+	for _, want := range []string{"test-agent", "2024-01-02T03:04:05Z", "grp/cfg", "Created By User ID"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected %q in markdown, got: %s", want, md)
+		}
+	}
+}
+
+// TestFormatAgentMarkdown_ConfigProjectNameFallback verifies the config project
+// label falls back to Name when PathWithNamespace is empty.
+func TestFormatAgentMarkdown_ConfigProjectNameFallback(t *testing.T) {
+	md := FormatAgentMarkdown(AgentItem{ID: 5, Name: "a", ConfigProject: ConfigProjectOutput{ID: 7, Name: "fallback"}})
+	if !strings.Contains(md, "fallback") {
+		t.Errorf("expected fallback name, got: %s", md)
+	}
+}
+
+// TestFormatTokenMarkdown_AllFields verifies the token detail formatter renders
+// description, created_at, and last_used_at when present.
+func TestFormatTokenMarkdown_AllFields(t *testing.T) {
+	md := FormatTokenMarkdown(AgentTokenItem{
+		ID: 1, Name: "tok", Status: "active",
+		Description: "desc", CreatedAt: "2024-02-03T04:05:06Z", LastUsedAt: "2024-03-04T05:06:07Z",
+	})
+	for _, want := range []string{"desc", "2024-02-03T04:05:06Z", "2024-03-04T05:06:07Z"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected %q in markdown, got: %s", want, md)
+		}
 	}
 }
 
