@@ -532,8 +532,10 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 }
 
 const (
-	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
-	expectedBaseDynamicCatalogActions = 897
+	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
+	// dynamic catalog actions. 874 = 897 baseline − 23 premium-tagged actions now
+	// gated out of Free by the central tier filter (see cmd/audit_edition_tier).
+	expectedBaseDynamicCatalogActions = 874
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
 	expectedEnterpriseDynamicCatalogActions = 1065
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.

@@ -23,6 +23,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -368,7 +369,7 @@ func listMetaToolsFromCatalog(client *gitlabclient.Client, catalog *actioncatalo
 
 func listIndividualTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 	server := newReadmeMCPServer()
-	gitlabtools.RegisterAll(server, client, false)
+	gitlabtools.RegisterAll(server, client, edition.Free)
 	return listToolsFromServer(server)
 }
 

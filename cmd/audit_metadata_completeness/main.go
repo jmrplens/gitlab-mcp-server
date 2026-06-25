@@ -33,6 +33,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -183,7 +184,7 @@ func weakIndividualDescription(spec toolutil.ActionSpec, projected map[string]st
 // the exact text the model consumes.
 func projectIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
-	tools.RegisterAll(server, client, true)
+	tools.RegisterAll(server, client, edition.Ultimate)
 	toolutil.LockdownInputSchemas(server)
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()

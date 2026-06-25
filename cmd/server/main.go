@@ -233,7 +233,7 @@ func main() {
 			exitProcess(1)
 			return
 		}
-		runToolSearch(toolSearch, toolSurface, searchTier.IsEnterprise())
+		runToolSearch(toolSearch, toolSurface, searchTier)
 		return
 	}
 
@@ -877,7 +877,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 	case config.ToolSurfaceMeta:
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
-			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Enterprise: cfg.Enterprise(), IncludeMCP: true, Updater: updater})
+			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true, Updater: updater})
 			if catalogErr != nil {
 				slog.Warn("failed to build meta action catalog", "error", catalogErr)
 				actionCatalog = actioncatalog.NewCatalog()
@@ -892,7 +892,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
 	default:
-		gitlabtools.RegisterAll(server, client, cfg.Enterprise())
+		gitlabtools.RegisterAll(server, client, cfg.Tier)
 		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
 		return serverSurfaceRegistration{}, nil
 	}
@@ -1689,7 +1689,7 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 // token scopes, and read-only mode cannot leave hidden catalog actions behind.
 func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
-		Enterprise: cfg.Enterprise(),
+		Tier:       cfg.Tier,
 		IncludeMCP: true,
 		Updater:    updater,
 	})
@@ -1826,8 +1826,8 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 // runToolSearch creates an in-memory MCP server, lists all tools, and
 // prints those matching every space-separated search term (AND logic,
 // case-insensitive match on name + description). Then it exits.
-func runToolSearch(query, toolSurface string, enterprise bool) {
-	if err := toolSearchRunner(query, toolSurface, enterprise); err != nil {
+func runToolSearch(query, toolSurface string, tier edition.Tier) {
+	if err := toolSearchRunner(query, toolSurface, tier); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		exitProcess(1)
 	}
@@ -1843,7 +1843,7 @@ var (
 // doToolSearch builds the selected MCP tool catalog, searches tool names and
 // descriptions with case-insensitive AND matching, and prints matching tool
 // names with the first description line.
-func doToolSearch(query, toolSurface string, enterprise bool) error {
+func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
 		return nil
@@ -1853,13 +1853,13 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 
 	switch config.EffectiveToolSurface(true, toolSurface) {
 	case config.ToolSurfaceMeta:
-		if err := gitlabtools.RegisterAllMeta(server, nil, enterprise); err != nil {
+		if err := gitlabtools.RegisterAllMeta(server, nil, tier); err != nil {
 			return err
 		}
 	case config.ToolSurfaceIndividual:
-		gitlabtools.RegisterAll(server, nil, enterprise)
+		gitlabtools.RegisterAll(server, nil, tier)
 	case config.ToolSurfaceDynamic:
-		catalog, err := buildToolSearchCatalog(enterprise)
+		catalog, err := buildToolSearchCatalog(tier)
 		if err != nil {
 			return err
 		}
@@ -1922,9 +1922,9 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 	return nil
 }
 
-func buildToolSearchCatalog(enterprise bool) (*actioncatalog.Catalog, error) {
+func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
-		Enterprise: enterprise,
+		Tier:       tier,
 		IncludeMCP: true,
 	})
 	if err != nil {

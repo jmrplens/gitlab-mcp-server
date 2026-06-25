@@ -12,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -255,7 +256,7 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	if err := RegisterAllMeta(server, client, false); err != nil {
+	if err := RegisterAllMeta(server, client, edition.Free); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}
 

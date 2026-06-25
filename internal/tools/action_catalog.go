@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -14,16 +15,35 @@ import (
 // ActionCatalogOptions controls which action groups are included in the
 // canonical catalog.
 //
-// Enterprise toggles Premium/Ultimate-only domain groups; IncludeMCP adds
-// the gitlab_server maintenance group; Updater enables the
-// apply_update/check_update actions inside that group; SpecGroups injects
-// additional [ActionSpecGroup] overrides that merge on top of the
-// collected domain specs.
+// Tier is the effective instance licensing tier; an action is included only
+// when its per-action minimum tier (derived from [toolutil.ActionSpec.Edition]
+// via [edition.TierFromEdition]) is at most Tier. Enterprise is a deprecated
+// back-compat selector retained for callers and tests that predate the 3-tier
+// model: when Tier is the zero value ([edition.Free]) and Enterprise is true,
+// the effective tier is [edition.Ultimate] (all tools), preserving the historical
+// "enterprise = show everything" behavior. IncludeMCP adds the gitlab_server
+// maintenance group; Updater enables the apply_update/check_update actions
+// inside that group; SpecGroups injects additional [ActionSpecGroup] overrides
+// that merge on top of the collected domain specs.
 type ActionCatalogOptions struct {
+	Tier       edition.Tier
 	Enterprise bool
 	IncludeMCP bool
 	Updater    *autoupdate.Updater
 	SpecGroups []ActionSpecGroup
+}
+
+// effectiveTier resolves the licensing tier used to gate catalog actions.
+// An explicit Tier wins; otherwise the deprecated Enterprise flag maps true to
+// [edition.Ultimate] and false to [edition.Free].
+func (opts ActionCatalogOptions) effectiveTier() edition.Tier {
+	if opts.Tier != edition.Free {
+		return opts.Tier
+	}
+	if opts.Enterprise {
+		return edition.Ultimate
+	}
+	return edition.Free
 }
 
 // BuildActionCatalog builds the canonical action catalog for catalog-backed
@@ -43,7 +63,9 @@ type ActionCatalogOptions struct {
 // validation failure so callers can present a clear "build catalog
 // group" / "add catalog group" / "validate action catalog" message.
 func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups)
+	tier := opts.effectiveTier()
+	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, tier.IsEnterprise()), opts.SpecGroups)
+	specGroups = filterActionSpecGroupsByTier(specGroups, tier)
 	catalog := actioncatalog.NewCatalog()
 	for _, specGroup := range specGroups {
 		group, groupErr := groupFromActionSpecGroup(specGroup)
@@ -63,6 +85,39 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 		return nil, fmt.Errorf("validate action catalog: %w", validateErr)
 	}
 	return catalog, nil
+}
+
+// filterActionSpecGroupsByTier drops every action whose minimum required tier
+// (from [toolutil.ActionSpec.Edition] via [edition.TierFromEdition]) exceeds the
+// instance tier, and drops any group left with no actions. This is the single
+// central tier gate: an instance at a given tier sees exactly the actions
+// available at that tier or below (Free ⊂ Premium ⊂ Ultimate). Input groups are
+// cloned so the shared spec slices returned by [CollectActionSpecs] are not
+// mutated.
+func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) []ActionSpecGroup {
+	out := make([]ActionSpecGroup, 0, len(groups))
+	for _, group := range groups {
+		// Pass through groups that were already empty so catalog validation can
+		// still report them (e.g. malformed explicit-group overrides); only the
+		// tier filter is allowed to remove a group here.
+		if len(group.Actions) == 0 {
+			out = append(out, group)
+			continue
+		}
+		kept := make([]toolutil.ActionSpec, 0, len(group.Actions))
+		for _, spec := range group.Actions {
+			if edition.TierFromEdition(spec.Edition) <= tier {
+				kept = append(kept, spec)
+			}
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		group = actioncatalog.CloneCatalogGroupSpec(group)
+		group.Actions = kept
+		out = append(out, group)
+	}
+	return out
 }
 
 // mergeActionSpecGroupOverrides folds overrideGroups into baseGroups by tool

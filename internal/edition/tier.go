@@ -49,6 +49,17 @@ func (t Tier) AtLeast(other Tier) bool { return t >= other }
 // existing positional gating continues to behave identically.
 func (t Tier) IsEnterprise() bool { return t >= Premium }
 
+// TierForEnterprise bridges the legacy binary "enterprise" notion to the 3-tier
+// model: true maps to [Ultimate] (show all Premium/Ultimate tools) and false to
+// [Free]. It is used by tooling and tests that predate explicit tier selection
+// and only distinguish CE from "all enterprise".
+func TierForEnterprise(enterprise bool) Tier {
+	if enterprise {
+		return Ultimate
+	}
+	return Free
+}
+
 // ParseTier maps a configuration string to a [Tier]. It is case-insensitive and
 // trims surrounding whitespace. Accepted values:
 //

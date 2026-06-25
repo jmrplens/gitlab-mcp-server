@@ -29,6 +29,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -232,9 +233,9 @@ func newSession(setupServer func(*mcp.Server) error) (session *mcp.ClientSession
 func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
 	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		if meta {
-			return tools.RegisterAllMeta(server, client, false)
+			return tools.RegisterAllMeta(server, client, edition.Free)
 		}
-		tools.RegisterAll(server, client, true)
+		tools.RegisterAll(server, client, edition.Ultimate)
 		return nil
 	})
 	if err != nil {
@@ -252,7 +253,7 @@ func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 	session, cleanup, err := newSession(func(server *mcp.Server) error {
-		return tools.RegisterAllMeta(server, client, true)
+		return tools.RegisterAllMeta(server, client, edition.Ultimate)
 	})
 	if err != nil {
 		return nil, err

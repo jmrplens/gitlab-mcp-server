@@ -5,6 +5,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -22,9 +23,10 @@ import (
 // client.
 //
 // Returns an error if the action catalog cannot be built or if wiring
-// tools to the MCP server fails.
-func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, enterprise bool) error {
-	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Enterprise: enterprise})
+// tools to the MCP server fails. The tier gates Premium/Ultimate actions per
+// the central catalog tier filter.
+func RegisterAllMeta(server *mcp.Server, client *gitlabclient.Client, tier edition.Tier) error {
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: tier})
 	if err != nil {
 		return fmt.Errorf("failed to build action catalog: %w", err)
 	}

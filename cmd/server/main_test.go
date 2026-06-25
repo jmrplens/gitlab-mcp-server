@@ -115,7 +115,7 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 		Name:    serverName,
 		Version: "test",
 	}, nil)
-	tools.RegisterAll(server, client, true)
+	tools.RegisterAll(server, client, edition.Ultimate)
 	resources.Register(server, client)
 	prompts.Register(server, client)
 	return server
@@ -2291,7 +2291,7 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 			os.Stdout = w
 			t.Cleanup(func() { os.Stdout = oldStdout })
 
-			if searchErr := doToolSearch(tt.query, tt.toolSurface, false); searchErr != nil {
+			if searchErr := doToolSearch(tt.query, tt.toolSurface, edition.Free); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
 			_ = w.Close()
@@ -2318,7 +2318,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_, _ string, _ bool) error {
+	toolSearchRunner = func(_, _ string, _ edition.Tier) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }
@@ -2351,7 +2351,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 		}
 	}()
 
-	runToolSearch("project", config.ToolSurfaceMeta, false)
+	runToolSearch("project", config.ToolSurfaceMeta, edition.Free)
 }
 
 // TestParseLogLevel verifies that LOG_LEVEL values map to correct slog levels.

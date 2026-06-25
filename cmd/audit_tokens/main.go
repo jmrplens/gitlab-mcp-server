@@ -22,6 +22,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -229,13 +230,13 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 
 	switch toolSurface {
 	case config.ToolSurfaceMeta:
-		if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
+		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
 			os.Exit(1)
 		}
 		tools.RegisterMCPMeta(server, client, nil)
 	case config.ToolSurfaceIndividual:
-		tools.RegisterAll(server, client, enterprise)
+		tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown tool surface %q\n", toolSurface)
 		os.Exit(1)

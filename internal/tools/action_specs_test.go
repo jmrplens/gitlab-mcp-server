@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -37,7 +38,10 @@ func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 				t.Fatalf("BuildActionCatalog() error = %v", catalogErr)
 			}
 
-			for _, specGroup := range CollectActionSpecs(tc.client, tc.enterprise) {
+			// The catalog applies the central tier filter; align the raw collected
+			// specs to the same effective tier so route parity is comparable.
+			tier := edition.TierForEnterprise(tc.enterprise)
+			for _, specGroup := range filterActionSpecGroupsByTier(CollectActionSpecs(tc.client, tc.enterprise), tier) {
 				t.Run(specGroup.ToolName, func(t *testing.T) {
 					catalogGroup, ok := catalog.Group(specGroup.ToolName)
 					if !ok {

@@ -18,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -78,12 +79,12 @@ func main() {
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
 	if meta {
-		if err := tools.RegisterAllMeta(server, client, true); err != nil {
+		if err := tools.RegisterAllMeta(server, client, edition.Ultimate); err != nil {
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
-		tools.RegisterAll(server, client, true)
+		tools.RegisterAll(server, client, edition.Ultimate)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

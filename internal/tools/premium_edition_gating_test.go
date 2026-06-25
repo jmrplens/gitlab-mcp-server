@@ -25,6 +25,18 @@ var premiumGatingExempt = map[string]string{
 	"gitlab_feature_flag_create": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
 	"gitlab_feature_flag_update": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
 	"gitlab_feature_flag_delete": "Feature flags are a Free-tier feature; the Premium/Ultimate wording is legacy and inaccurate.",
+	// Push (remote) mirror creation is Free per doc/api/remote_mirrors.md (page
+	// tier = Free, Premium, Ultimate); only pull mirroring is Premium. The
+	// "Requires Premium/Ultimate" usage wording is legacy and inaccurate.
+	"gitlab_add_project_mirror": "Push mirroring is Free per remote_mirrors.md; the Premium/Ultimate wording is legacy. Pull mirroring stays Premium.",
+	// Group integration management is Free per doc/api/group_integrations.md
+	// (page tier = Free, Premium, Ultimate); only specific integrations need a
+	// paid tier. The wording references that sub-feature nuance, not the API tier.
+	"gitlab_list_group_integrations":          "Group integration management API is Free per group_integrations.md; only some integrations need a paid tier.",
+	"gitlab_set_group_integration":            "Group integration management API is Free per group_integrations.md; only some integrations need a paid tier.",
+	"gitlab_get_group_datadog_integration":    "Group integration management API is Free per group_integrations.md; the Premium/Ultimate wording is over-stated.",
+	"gitlab_set_group_datadog_integration":    "Group integration management API is Free per group_integrations.md; the Premium/Ultimate wording is over-stated.",
+	"gitlab_delete_group_datadog_integration": "Group integration management API is Free per group_integrations.md; the Premium/Ultimate wording is over-stated.",
 }
 
 // TestPremiumDescribedActionsAreEditionGated guards the premium-tool gating
