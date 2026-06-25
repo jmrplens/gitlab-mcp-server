@@ -68,8 +68,8 @@ func TestList_Success(t *testing.T) {
 	if mr.State != "merged" {
 		t.Errorf("expected state 'merged', got %q", mr.State)
 	}
-	if mr.Author != "dev1" {
-		t.Errorf("expected author 'dev1', got %q", mr.Author)
+	if mr.Author == nil || mr.Author.Username != "dev1" {
+		t.Errorf("expected author 'dev1', got %+v", mr.Author)
 	}
 	if mr.SourceBranch != "feature-x" {
 		t.Errorf("expected source_branch 'feature-x', got %q", mr.SourceBranch)
@@ -189,8 +189,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
-		MergeRequests: []MergeRequestItem{
-			{IID: 1, Title: "MR One", State: "merged", Author: "dev", SourceBranch: "feat", TargetBranch: "main"},
+		MergeRequests: []Output{
+			{IID: 1, Title: "MR One", State: "merged", Author: &BasicUserOutput{Username: "dev"}, SourceBranch: "feat", TargetBranch: "main"},
 		},
 	}
 	result := FormatListMarkdown(out)
@@ -256,7 +256,8 @@ func TestList_WithPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID: "1", DeploymentID: 5, Page: 2, PerPage: 1,
+		ProjectID: "1", DeploymentID: 5,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -292,8 +293,8 @@ func TestList_NilAuthor(t *testing.T) {
 	if len(out.MergeRequests) != 1 {
 		t.Fatalf("expected 1 MR, got %d", len(out.MergeRequests))
 	}
-	if out.MergeRequests[0].Author != "" {
-		t.Errorf("expected empty author for nil author, got %q", out.MergeRequests[0].Author)
+	if out.MergeRequests[0].Author != nil {
+		t.Errorf("expected nil author for nil author, got %+v", out.MergeRequests[0].Author)
 	}
 }
 
@@ -322,16 +323,219 @@ func TestList_AllOptionalFilters(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:    "1",
-		DeploymentID: 2,
-		State:        "opened",
-		OrderBy:      "updated_at",
-		Sort:         "asc",
-		Page:         3,
-		PerPage:      50,
+		ProjectID:       "1",
+		DeploymentID:    2,
+		State:           "opened",
+		OrderBy:         "updated_at",
+		Sort:            "asc",
+		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 50},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_MergeRequestFilters verifies that every merge-request filter mirrored
+// from gl.ListMergeRequestsOptions is forwarded to the GitLab API query string.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts each filter is encoded with its canonical query parameter name.
+func TestList_MergeRequestFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"approved":        "yes",
+			"author_username": "alice",
+			"in":              "title",
+			"author_id":       "7",
+			"assignee_id":     "9",
+			"draft":           "true",
+		}
+		for key, want := range checks {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		if got := q.Get("approver_ids[]"); got != "11" {
+			t.Errorf("approver_ids[] = %q, want 11", got)
+		}
+		if got := q.Get("approved_by_ids[]"); got != "13" {
+			t.Errorf("approved_by_ids[] = %q, want 13", got)
+		}
+		if got := q.Get("created_after"); !strings.HasPrefix(got, "2025-01-01") {
+			t.Errorf("created_after = %q, want 2025-01-01 prefix", got)
+		}
+		if got := q.Get("created_before"); !strings.HasPrefix(got, "2025-12-31") {
+			t.Errorf("created_before = %q, want 2025-12-31 prefix", got)
+		}
+		if got := q.Get("pagination"); got != "keyset" {
+			t.Errorf("pagination = %q, want keyset", got)
+		}
+		if got := q.Get("page_token"); got != "cursor-1" {
+			t.Errorf("page_token = %q, want cursor-1", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	draft := true
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:      "1",
+		DeploymentID:   2,
+		Approved:       "yes",
+		ApprovedByIDs:  []int64{13},
+		ApproverIDs:    []int64{11},
+		AssigneeID:     9,
+		AuthorID:       7,
+		AuthorUsername: "alice",
+		CreatedAfter:   "2025-01-01T00:00:00Z",
+		CreatedBefore:  "2025-12-31T23:59:59Z",
+		Draft:          &draft,
+		In:             "title",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "cursor-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_FullPayload verifies that List projects every sub-object of a fully
+// populated gl.MergeRequest onto the local Output mirror.
+// The mock GitLab API responds with a merge request carrying author, assignees,
+// reviewers, labels, label_details, milestone, references, time_stats,
+// task_completion_status, diff_refs, pipeline, and head_pipeline objects.
+// It asserts the nested converters surface each canonical field.
+func TestList_FullPayload(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{
+				"id": 100,
+				"iid": 5,
+				"project_id": 42,
+				"title": "Full MR",
+				"state": "merged",
+				"source_branch": "feat",
+				"target_branch": "main",
+				"web_url": "https://gl.example.com/mr/5",
+				"labels": ["bug", "urgent"],
+				"label_details": [{"id": 1, "name": "bug", "color": "#ff0000", "text_color": "#ffffff"}],
+				"author": {"id": 1, "username": "alice", "created_at": "2026-01-01T00:00:00Z"},
+				"assignee": {"id": 2, "username": "bob"},
+				"merge_user": {"id": 3, "username": "carol"},
+				"merged_by": {"id": 3, "username": "carol"},
+				"closed_by": {"id": 4, "username": "dave"},
+				"assignees": [{"id": 2, "username": "bob"}, null],
+				"reviewers": [{"id": 5, "username": "erin"}],
+				"milestone": {"id": 7, "iid": 1, "title": "v1", "state": "active", "start_date": "2025-01-01", "due_date": "2025-02-01", "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-02T00:00:00Z"},
+				"references": {"short": "!5", "relative": "!5", "full": "g/p!5"},
+				"time_stats": {"time_estimate": 3600, "total_time_spent": 1800, "human_time_estimate": "1h", "human_total_time_spent": "30m"},
+				"task_completion_status": {"count": 4, "completed_count": 2},
+				"user": {"can_merge": true},
+				"diff_refs": {"base_sha": "aaa", "head_sha": "bbb", "start_sha": "ccc"},
+				"pipeline": {"id": 200, "iid": 3, "project_id": 42, "status": "success", "ref": "feat", "sha": "bbb", "web_url": "https://gl.example.com/p/200", "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T01:00:00Z"},
+				"head_pipeline": {
+					"id": 201, "iid": 4, "project_id": 42, "status": "success", "ref": "feat", "sha": "bbb",
+					"before_sha": "000", "tag": false, "user": {"id": 1, "username": "alice"}, "duration": 120,
+					"queued_duration": 5, "coverage": "90", "web_url": "https://gl.example.com/p/201",
+					"created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T01:00:00Z",
+					"started_at": "2025-01-01T00:10:00Z", "finished_at": "2025-01-01T00:30:00Z", "committed_at": "2025-01-01T00:05:00Z",
+					"detailed_status": {"icon": "i", "text": "passed", "label": "passed", "group": "success", "tooltip": "ok", "has_details": true, "details_path": "/p", "favicon": "f", "illustration": {"image": "img.png"}}
+				},
+				"latest_build_started_at": "2025-01-01T00:10:00Z",
+				"latest_build_finished_at": "2025-01-01T00:30:00Z",
+				"first_deployed_to_production_at": "2025-01-02T00:00:00Z",
+				"created_at": "2025-01-01T00:00:00Z",
+				"updated_at": "2025-01-01T02:00:00Z",
+				"merged_at": "2025-01-01T03:00:00Z",
+				"closed_at": "2025-01-01T04:00:00Z",
+				"prepared_at": "2025-01-01T00:30:00Z"
+			}
+		]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", DeploymentID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("expected 1 MR, got %d", len(out.MergeRequests))
+	}
+	assertFullPayload(t, out.MergeRequests[0])
+}
+
+// assertFullPayload checks that every sub-object converter populated the
+// canonical fields of a fully-populated merge request.
+func assertFullPayload(t *testing.T, mr Output) {
+	t.Helper()
+	cases := []struct {
+		name string
+		ok   bool
+	}{
+		{"author.created_at", mr.Author != nil && mr.Author.CreatedAt != ""},
+		{"assignees (nil skipped)", len(mr.Assignees) == 1},
+		{"labels", len(mr.Labels) == 2},
+		{"label_details", mr.LabelDetails != nil},
+		{"milestone ISO dates", mr.Milestone != nil && mr.Milestone.StartDate == "2025-01-01" && mr.Milestone.DueDate == "2025-02-01"},
+		{"references", mr.References != nil && mr.References.Full == "g/p!5"},
+		{"time_stats", mr.TimeStats != nil && mr.TimeStats.TimeEstimate == 3600},
+		{"task_completion_status", mr.TaskCompletionStatus != nil && mr.TaskCompletionStatus.Count == 4},
+		{"user", mr.User != nil && mr.User.CanMerge},
+		{"diff_refs", mr.DiffRefs != nil && mr.DiffRefs.HeadSHA == "bbb"},
+		{"pipeline", mr.Pipeline != nil && mr.Pipeline.ID == 200},
+		{"head_pipeline detailed_status illustration", mr.HeadPipeline != nil && mr.HeadPipeline.DetailedStatus != nil && mr.HeadPipeline.DetailedStatus.Illustration != nil},
+		{"timestamps", mr.MergedAt != "" && mr.ClosedAt != "" && mr.PreparedAt != "" && mr.FirstDeployedToProductionAt != ""},
+	}
+	for _, c := range cases {
+		if !c.ok {
+			t.Errorf("%s not projected: %+v", c.name, mr)
+		}
+	}
+}
+
+// TestList_SparsePayload verifies the nil and empty branches of the sub-object
+// converters: a milestone without ISO dates, a label_details array whose only
+// element is null, and a head_pipeline without a detailed_status object.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the converters return the expected zero values for missing data.
+func TestList_SparsePayload(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{
+				"id": 101,
+				"iid": 6,
+				"project_id": 42,
+				"title": "Sparse MR",
+				"state": "opened",
+				"source_branch": "feat",
+				"target_branch": "main",
+				"web_url": "https://gl.example.com/mr/6",
+				"label_details": [null],
+				"milestone": {"id": 8, "iid": 2, "title": "v2", "state": "active"},
+				"head_pipeline": {"id": 202, "iid": 5, "project_id": 42, "status": "running", "ref": "feat", "sha": "ddd", "web_url": "https://gl.example.com/p/202"}
+			}
+		]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", DeploymentID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("expected 1 MR, got %d", len(out.MergeRequests))
+	}
+	mr := out.MergeRequests[0]
+	if mr.LabelDetails != nil {
+		t.Errorf("expected nil label_details for all-null array, got %+v", mr.LabelDetails)
+	}
+	if mr.Milestone == nil || mr.Milestone.StartDate != "" || mr.Milestone.DueDate != "" {
+		t.Errorf("expected empty ISO dates for dateless milestone, got %+v", mr.Milestone)
+	}
+	if mr.HeadPipeline == nil || mr.HeadPipeline.DetailedStatus != nil {
+		t.Errorf("expected nil detailed_status, got %+v", mr.HeadPipeline)
+	}
+	if len(mr.Labels) != 0 {
+		t.Errorf("expected empty labels slice, got %v", mr.Labels)
 	}
 }
 
@@ -344,10 +548,10 @@ func TestList_AllOptionalFilters(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{
-		MergeRequests: []MergeRequestItem{
-			{IID: 10, Title: "Feature A", State: "merged", Author: "dev1", SourceBranch: "feat-a", TargetBranch: "main"},
-			{IID: 11, Title: "Fix B", State: "opened", Author: "dev2", SourceBranch: "fix-b", TargetBranch: "develop"},
-			{IID: 12, Title: "Hotfix C", State: "closed", Author: "dev3", SourceBranch: "hotfix-c", TargetBranch: "main"},
+		MergeRequests: []Output{
+			{IID: 10, Title: "Feature A", State: "merged", Author: &BasicUserOutput{Username: "dev1"}, SourceBranch: "feat-a", TargetBranch: "main"},
+			{IID: 11, Title: "Fix B", State: "opened", Author: &BasicUserOutput{Username: "dev2"}, SourceBranch: "fix-b", TargetBranch: "develop"},
+			{IID: 12, Title: "Hotfix C", State: "closed", Author: &BasicUserOutput{Username: "dev3"}, SourceBranch: "hotfix-c", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 3, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -386,8 +590,8 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
-		MergeRequests: []MergeRequestItem{
-			{IID: 1, Title: "Title with | pipe", State: "merged", Author: "user", SourceBranch: "src", TargetBranch: "tgt"},
+		MergeRequests: []Output{
+			{IID: 1, Title: "Title with | pipe", State: "merged", Author: &BasicUserOutput{Username: "user"}, SourceBranch: "src", TargetBranch: "tgt"},
 		},
 	}
 	result := FormatListMarkdown(out)
@@ -404,7 +608,7 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{MergeRequests: []MergeRequestItem{}})
+	result := FormatListMarkdown(ListOutput{MergeRequests: []Output{}})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
 	}
