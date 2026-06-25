@@ -218,10 +218,11 @@ func GetMetricDefinitions(ctx context.Context, client *gitlabclient.Client, _ Ge
 
 // TrackEventInput is the input for tracking a single event.
 type TrackEventInput struct {
-	Event          string `json:"event" jsonschema:"Event name to track,required"`
-	SendToSnowplow *bool  `json:"send_to_snowplow,omitempty" jsonschema:"Whether to send event to Snowplow"`
-	NamespaceID    *int64 `json:"namespace_id,omitempty" jsonschema:"Namespace ID"`
-	ProjectID      *int64 `json:"project_id,omitempty" jsonschema:"Project ID"`
+	Event                string            `json:"event" jsonschema:"Event name to track,required"`
+	SendToSnowplow       *bool             `json:"send_to_snowplow,omitempty" jsonschema:"Whether to send event to Snowplow"`
+	NamespaceID          *int64            `json:"namespace_id,omitempty" jsonschema:"Namespace ID"`
+	ProjectID            *int64            `json:"project_id,omitempty" jsonschema:"Project ID"`
+	AdditionalProperties map[string]string `json:"additional_properties,omitempty" jsonschema:"Additional event properties forwarded to the tracking endpoint"`
 }
 
 // TrackEventOutput is the output for tracking a single event.
@@ -233,10 +234,11 @@ type TrackEventOutput struct {
 // TrackEvent tracks a single usage event.
 func TrackEvent(ctx context.Context, client *gitlabclient.Client, input TrackEventInput) (TrackEventOutput, error) {
 	opts := &gl.TrackEventOptions{
-		Event:          input.Event,
-		SendToSnowplow: input.SendToSnowplow,
-		NamespaceID:    input.NamespaceID,
-		ProjectID:      input.ProjectID,
+		Event:                input.Event,
+		SendToSnowplow:       input.SendToSnowplow,
+		NamespaceID:          input.NamespaceID,
+		ProjectID:            input.ProjectID,
+		AdditionalProperties: input.AdditionalProperties,
 	}
 
 	_, err := client.GL().UsageData.TrackEvent(opts, gl.WithContext(ctx))
@@ -268,10 +270,11 @@ func TrackEvents(ctx context.Context, client *gitlabclient.Client, input TrackEv
 	events := make([]gl.TrackEventOptions, 0, len(input.Events))
 	for _, e := range input.Events {
 		events = append(events, gl.TrackEventOptions{
-			Event:          e.Event,
-			SendToSnowplow: e.SendToSnowplow,
-			NamespaceID:    e.NamespaceID,
-			ProjectID:      e.ProjectID,
+			Event:                e.Event,
+			SendToSnowplow:       e.SendToSnowplow,
+			NamespaceID:          e.NamespaceID,
+			ProjectID:            e.ProjectID,
+			AdditionalProperties: e.AdditionalProperties,
 		})
 	}
 

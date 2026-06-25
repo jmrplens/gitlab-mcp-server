@@ -29,7 +29,18 @@ type ImportFromGitHubInput struct {
 	NewName             string `json:"new_name,omitempty" jsonschema:"New name for the imported project"`
 	TargetNamespace     string `json:"target_namespace" jsonschema:"Target namespace for the imported project,required"`
 	GitHubHostname      string `json:"github_hostname,omitempty" jsonschema:"GitHub hostname for GitHub Enterprise"`
-	TimeoutStrategy     string `json:"timeout_strategy,omitempty" jsonschema:"Timeout strategy (optimistic or pessimistic)"`
+	// OptionalStages selectively enables the slower, optional import stages.
+	// Each flag defaults to disabled when omitted, matching the GitLab API.
+	OptionalStages  *GitHubOptionalStagesInput `json:"optional_stages,omitempty" jsonschema:"Optional import stages to enable (each defaults to disabled when omitted)"`
+	TimeoutStrategy string                     `json:"timeout_strategy,omitempty" jsonschema:"Timeout strategy (optimistic or pessimistic)"`
+}
+
+// GitHubOptionalStagesInput mirrors the GitLab GitHub-import optional_stages
+// object, toggling the slower, opt-in import stages.
+type GitHubOptionalStagesInput struct {
+	SingleEndpointNotesImport *bool `json:"single_endpoint_notes_import,omitempty" jsonschema:"Import notes (comments) using the single-endpoint strategy for large repositories"`
+	AttachmentsImport         *bool `json:"attachments_import,omitempty" jsonschema:"Import Markdown attachments (images, files) referenced in descriptions and comments"`
+	CollaboratorsImport       *bool `json:"collaborators_import,omitempty" jsonschema:"Import collaborators (project members) from the GitHub repository"`
 }
 
 // GitHubImportOutput represents the output of a GitHub import operation.
@@ -38,11 +49,13 @@ type GitHubImportOutput struct {
 	Name                  string `json:"name"`
 	FullPath              string `json:"full_path"`
 	FullName              string `json:"full_name"`
+	RefsURL               string `json:"refs_url,omitempty"`
 	ImportSource          string `json:"import_source"`
 	ImportStatus          string `json:"import_status"`
 	HumanImportStatusName string `json:"human_import_status_name,omitempty"`
 	ProviderLink          string `json:"provider_link,omitempty"`
 	RelationType          string `json:"relation_type,omitempty"`
+	ImportWarning         string `json:"import_warning,omitempty"`
 }
 
 // ImportFromGitHub imports a repository from GitHub into GitLab.
@@ -64,6 +77,13 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 	if input.TimeoutStrategy != "" {
 		opts.TimeoutStrategy = new(input.TimeoutStrategy)
 	}
+	if input.OptionalStages != nil {
+		opts.OptionalStages = gl.ImportRepositoryFromGitHubOptionalStagesOptions{
+			SingleEndpointNotesImport: input.OptionalStages.SingleEndpointNotesImport,
+			AttachmentsImport:         input.OptionalStages.AttachmentsImport,
+			CollaboratorsImport:       input.OptionalStages.CollaboratorsImport,
+		}
+	}
 	result, _, err := client.GL().Import.ImportRepositoryFromGitHub(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_github", err, http.StatusBadRequest,
@@ -74,11 +94,13 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 		Name:                  result.Name,
 		FullPath:              result.FullPath,
 		FullName:              result.FullName,
+		RefsURL:               result.RefsURL,
 		ImportSource:          result.ImportSource,
 		ImportStatus:          result.ImportStatus,
 		HumanImportStatusName: result.HumanImportStatusName,
 		ProviderLink:          result.ProviderLink,
 		RelationType:          result.RelationType,
+		ImportWarning:         result.ImportWarning,
 	}, nil
 }
 
@@ -288,6 +310,9 @@ func FormatGitHubImport(out *GitHubImportOutput) string {
 	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
 	if out.HumanImportStatusName != "" {
 		fmt.Fprintf(&sb, "| Status Name | %s |\n", toolutil.EscapeMdTableCell(out.HumanImportStatusName))
+	}
+	if out.ImportWarning != "" {
+		fmt.Fprintf(&sb, "| Import Warning | %s |\n", toolutil.EscapeMdTableCell(out.ImportWarning))
 	}
 	toolutil.WriteHints(&sb, hintMonitorImport)
 	return sb.String()
