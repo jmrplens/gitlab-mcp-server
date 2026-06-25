@@ -263,7 +263,7 @@
   },
   {
     "name": "gitlab_access_request_list_group",
-    "description": "List access requests for a GitLab group.\n\nSee also: gitlab_access_request_approve_group, gitlab_group_member_add\n\nReturns: JSON array of access requests with pagination.",
+    "description": "List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -271,13 +271,29 @@
           "description": "Group ID or path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by for keyset-paginated result sets (e.g. id)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
+          "type": "string"
         }
       },
       "required": [
@@ -398,20 +414,36 @@
   },
   {
     "name": "gitlab_access_request_list_project",
-    "description": "List access requests for a GitLab project.\n\nSee also: gitlab_access_request_approve_project, gitlab_project_member_add\n\nReturns: JSON array of access requests with pagination.",
+    "description": "List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by for keyset-paginated result sets (e.g. id)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order: asc or desc",
           "type": "string"
         }
       },
@@ -1154,7 +1186,7 @@
   },
   {
     "name": "gitlab_add_group_job_token_allowlist",
-    "description": "Add a group to the CI/CD job token allowlist.\n\nReturns: JSON with the allowlist entry.\n\nSee also: gitlab_list_job_token_group_allowlist, gitlab_remove_group_job_token_allowlist",
+    "description": "Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist entry with source project ID and target group ID. See also: gitlab_list_job_token_group_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_add_project_job_token_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1285,7 +1317,7 @@
   },
   {
     "name": "gitlab_add_license",
-    "description": "Add a new GitLab license (admin). Requires the Base64-encoded license string.\n\nReturns: JSON with the added license details.\n\nSee also: gitlab_get_license.",
+    "description": "Add a GitLab Enterprise license. Returns: the installed license with plan, expiration, and entitlements. See also: gitlab_get_license, gitlab_delete_license.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1693,7 +1725,7 @@
   },
   {
     "name": "gitlab_add_project_job_token_allowlist",
-    "description": "Add a project to the CI/CD job token inbound allowlist.\n\nReturns: JSON with the allowlist entry.\n\nSee also: gitlab_list_job_token_inbound_allowlist, gitlab_remove_project_job_token_allowlist",
+    "description": "Add a project to a project's CI/CD job token inbound allowlist. Returns: the new allowlist entry with source and target project IDs. See also: gitlab_list_job_token_inbound_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_add_group_job_token_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2093,7 +2125,7 @@
   },
   {
     "name": "gitlab_add_system_hook",
-    "description": "Add a new system hook (admin). Requires URL. Optionally configure event subscriptions and SSL verification.\n\nReturns: JSON with the created system hook details.\n\nSee also: gitlab_list_system_hooks, gitlab_delete_system_hook",
+    "description": "Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -5045,7 +5077,7 @@
   },
   {
     "name": "gitlab_cancel_bulk_import",
-    "description": "Cancel an in-progress bulk import migration. Returns the migration with updated status.\n\nReturns: migration summary with id and status.\n\nSee also: gitlab_get_bulk_import, gitlab_list_bulk_imports.",
+    "description": "Cancel a bulk import. Returns: the bulk import with its updated (canceled) status. See also: gitlab_get_bulk_import, gitlab_list_bulk_imports.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -5103,7 +5135,7 @@
   },
   {
     "name": "gitlab_cancel_github_import",
-    "description": "Cancel an ongoing GitHub project import\n\nReturns: JSON with cancellation result.\n\nSee also: gitlab_import_from_github, gitlab_get_project_import_status",
+    "description": "Cancel a GitHub import. Returns: the project with its updated import status. See also: gitlab_import_from_github, gitlab_import_github_gists.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -5163,7 +5195,7 @@
   },
   {
     "name": "gitlab_change_plan_limits",
-    "description": "Change plan limits (admin). Requires plan_name; optionally set individual file size limits.\n\nReturns: JSON with the updated plan limits.\n\nSee also: gitlab_get_plan_limits.",
+    "description": "Change plan limits. Returns: the updated plan limit values. See also: gitlab_get_plan_limits, gitlab_get_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -8527,7 +8559,7 @@
   },
   {
     "name": "gitlab_create_application",
-    "description": "Create an OAuth2 application (admin). Params: name (required), redirect_uri (required), scopes (required), confidential.\n\nReturns: JSON with the created application details.\n\nSee also: gitlab_list_applications, gitlab_delete_application",
+    "description": "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -8615,7 +8647,7 @@
   },
   {
     "name": "gitlab_create_broadcast_message",
-    "description": "Create a broadcast message. Requires admin access.\n\nReturns: JSON with the created broadcast message details.\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message",
+    "description": "Create a broadcast message. Returns: the created message with id, theme, target, and schedule. See also: gitlab_update_broadcast_message, gitlab_list_broadcast_messages.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -8746,7 +8778,7 @@
   },
   {
     "name": "gitlab_create_cluster_agent_token",
-    "description": "Create a token for a cluster agent\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_get_cluster_agent\n\nReturns: JSON with the created token details.",
+    "description": "Create a cluster agent token. Returns: the created token including the secret value (shown once). See also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -9298,7 +9330,7 @@
   },
   {
     "name": "gitlab_create_error_tracking_client_key",
-    "description": "Create a new error tracking client key for a GitLab project.\n\nReturns: JSON with created client key including ID and public key.\n\nSee also: gitlab_list_error_tracking_client_keys, gitlab_delete_error_tracking_client_key",
+    "description": "Create an error-tracking client key. Returns: the created client key with public_key and sentry_dsn. See also: gitlab_list_error_tracking_client_keys, gitlab_get_error_tracking_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -11041,7 +11073,7 @@
   },
   {
     "name": "gitlab_create_secure_file",
-    "description": "Create a new CI/CD secure file. Provide either file_path (absolute path to a local file) or content_base64 (base64-encoded content), not both.\n\nReturns: JSON with the created secure file details.\n\nSee also: gitlab_list_secure_files, gitlab_remove_secure_file",
+    "description": "Create a secure file. Returns: the created secure file with id, name, and checksum. See also: gitlab_list_secure_files, gitlab_show_secure_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -11638,7 +11670,7 @@
   },
   {
     "name": "gitlab_create_topic",
-    "description": "Create a new project topic. Requires admin access.\n\nSee also: gitlab_list_topics, gitlab_update_topic\n\nReturns: JSON with the created topic details.",
+    "description": "Create an instance project topic. Returns: the created topic with id, name, title, and description. See also: gitlab_update_topic, gitlab_list_topics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12389,7 +12421,7 @@
   },
   {
     "name": "gitlab_delete_alert_metric_image",
-    "description": "Delete a metric image from a GitLab alert.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_alert_metric_images, gitlab_upload_alert_metric_image",
+    "description": "Delete an alert metric image. Returns: a success status. See also: gitlab_list_alert_metric_images, gitlab_upload_alert_metric_image.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12451,7 +12483,7 @@
   },
   {
     "name": "gitlab_delete_application",
-    "description": "Delete an OAuth2 application (admin). Params: id (required).\n\nReturns: confirmation message.\n\nSee also: gitlab_list_applications, gitlab_create_application",
+    "description": "Delete an instance OAuth application. Returns: a success status. See also: gitlab_list_applications, gitlab_create_application.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12503,7 +12535,7 @@
   },
   {
     "name": "gitlab_delete_broadcast_message",
-    "description": "Delete a broadcast message. Requires admin access.\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_list_broadcast_messages, gitlab_create_broadcast_message",
+    "description": "Delete a broadcast message. Returns: a success status. See also: gitlab_get_broadcast_message, gitlab_create_broadcast_message.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12555,7 +12587,7 @@
   },
   {
     "name": "gitlab_delete_cluster_agent",
-    "description": "Delete a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_revoke_cluster_agent_token\n\nReturns: confirmation message.",
+    "description": "Delete a cluster agent. Returns: a success status. See also: gitlab_get_cluster_agent, gitlab_register_cluster_agent.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12679,7 +12711,7 @@
   },
   {
     "name": "gitlab_delete_custom_attribute",
-    "description": "Delete a custom attribute for a user, group, or project (admin). Params: resource_type (required), resource_id (required), key (required).\n\nReturns: confirmation message.\n\nSee also: gitlab_list_custom_attributes, gitlab_set_custom_attribute",
+    "description": "Delete a custom attribute. Returns: a success status. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13010,7 +13042,7 @@
   },
   {
     "name": "gitlab_delete_error_tracking_client_key",
-    "description": "Delete an error tracking client key for a GitLab project.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_list_error_tracking_client_keys, gitlab_create_error_tracking_client_key",
+    "description": "Delete an error-tracking client key. Returns: a success status. See also: gitlab_list_error_tracking_client_keys, gitlab_create_error_tracking_client_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13067,7 +13099,7 @@
   },
   {
     "name": "gitlab_delete_feature_flag",
-    "description": "Delete a feature flag (admin). Requires the flag name.\n\nReturns: confirmation message.\n\nSee also: gitlab_feature_flag_list.",
+    "description": "Delete a feature flag. Returns: a success status. See also: gitlab_set_feature_flag, gitlab_list_features.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13951,7 +13983,7 @@
   },
   {
     "name": "gitlab_delete_license",
-    "description": "Delete a GitLab license by ID (admin).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_license.",
+    "description": "Delete an instance license. Returns: a success status. See also: gitlab_get_license, gitlab_add_license.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -14613,7 +14645,7 @@
   },
   {
     "name": "gitlab_delete_system_hook",
-    "description": "Delete a system hook by ID (admin).\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_list_system_hooks, gitlab_add_system_hook",
+    "description": "Delete an instance system hook. Returns: a success status. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -14722,7 +14754,7 @@
   },
   {
     "name": "gitlab_delete_terraform_state",
-    "description": "Delete a Terraform state\n\nReturns: JSON confirming state deletion.\n\nSee also: gitlab_list_terraform_states, gitlab_get_terraform_state",
+    "description": "Delete a Terraform state. Returns: a success status. See also: gitlab_get_terraform_state, gitlab_delete_terraform_state_version.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -14779,7 +14811,7 @@
   },
   {
     "name": "gitlab_delete_terraform_state_version",
-    "description": "Delete a specific version of a Terraform state\n\nReturns: JSON confirming state version deletion.\n\nSee also: gitlab_get_terraform_state, gitlab_delete_terraform_state",
+    "description": "Delete a Terraform state version. Returns: a success status. See also: gitlab_delete_terraform_state, gitlab_get_terraform_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -14842,7 +14874,7 @@
   },
   {
     "name": "gitlab_delete_topic",
-    "description": "Delete a project topic. Requires admin access.\n\nSee also: gitlab_list_topics, gitlab_create_topic\n\nReturns: JSON confirmation of deletion.",
+    "description": "Delete a project topic. Returns: a success status. See also: gitlab_get_topic, gitlab_create_topic.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -19004,7 +19036,7 @@
   },
   {
     "name": "gitlab_enable_disable_error_tracking",
-    "description": "Enable or disable error tracking for a GitLab project.\n\nReturns: JSON with updated error tracking settings including active status.\n\nSee also: gitlab_get_error_tracking_settings, gitlab_list_error_tracking_client_keys",
+    "description": "Enable or disable error tracking. Returns: the updated error-tracking settings. See also: gitlab_get_error_tracking_settings, gitlab_list_error_tracking_client_keys.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24815,7 +24847,7 @@
   },
   {
     "name": "gitlab_get_broadcast_message",
-    "description": "Get a specific broadcast message by ID. Requires admin access.\n\nReturns: JSON with broadcast message details (ID, message, type, dates, theme).\n\nSee also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message",
+    "description": "Get a broadcast message by id. Returns: the message with text, theme, target, and schedule. See also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24907,7 +24939,7 @@
   },
   {
     "name": "gitlab_get_bulk_import",
-    "description": "Get details of a single bulk import migration by ID.\n\nReturns: migration with id, status, source_type, source_url, has_failures, and timestamps.\n\nSee also: gitlab_list_bulk_imports, gitlab_list_bulk_import_entities, gitlab_cancel_bulk_import.",
+    "description": "Get a bulk import by id. Returns: the bulk import with status, source URL, and timestamps. See also: gitlab_list_bulk_imports, gitlab_list_bulk_import_entities.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24966,7 +24998,7 @@
   },
   {
     "name": "gitlab_get_bulk_import_entity",
-    "description": "Get details of a single bulk import migration entity by bulk_import_id and entity_id.\n\nReturns: entity with id, status, type, source/destination paths, migration flags, and per-relation stats.\n\nSee also: gitlab_list_bulk_import_entities, gitlab_list_bulk_import_entity_failures.",
+    "description": "Get a bulk import entity. Returns: the entity with source path, destination path, entity_type, and status. See also: gitlab_list_bulk_import_entities, gitlab_list_bulk_import_entity_failures.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25388,7 +25420,7 @@
   },
   {
     "name": "gitlab_get_cluster_agent",
-    "description": "Get details of a cluster agent\n\nSee also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens\n\nReturns: JSON with cluster agent details.",
+    "description": "Get a cluster agent. Returns: the agent with id, name, config project, and created_at. See also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25444,7 +25476,7 @@
   },
   {
     "name": "gitlab_get_cluster_agent_token",
-    "description": "Get details of a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token\n\nReturns: JSON with agent token details.",
+    "description": "Get a cluster agent token. Returns: the token with id, name, status, and last_used_at. See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25660,7 +25692,7 @@
   },
   {
     "name": "gitlab_get_custom_attribute",
-    "description": "Get a custom attribute by key for a user, group, or project (admin). Params: resource_type (required), resource_id (required), key (required).\n\nReturns: JSON with the custom attribute details.\n\nSee also: gitlab_list_custom_attributes, gitlab_set_custom_attribute",
+    "description": "Get a custom attribute by key. Returns: the attribute with key and value. See also: gitlab_list_custom_attributes, gitlab_set_custom_attribute.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26066,7 +26098,7 @@
   },
   {
     "name": "gitlab_get_error_tracking_settings",
-    "description": "Get error tracking settings for a GitLab project.\n\nReturns: JSON with error tracking settings including active status and integration mode.\n\nSee also: gitlab_enable_disable_error_tracking, gitlab_list_error_tracking_client_keys",
+    "description": "Get error-tracking settings. Returns: the settings with active flag and integrated mode. See also: gitlab_enable_disable_error_tracking, gitlab_list_error_tracking_client_keys.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27727,7 +27759,7 @@
   },
   {
     "name": "gitlab_get_job_token_access_settings",
-    "description": "Get the CI/CD job token access settings for a GitLab project.\n\nReturns: JSON with job token scope configuration.\n\nSee also: gitlab_patch_job_token_access_settings, gitlab_ci_variable_list",
+    "description": "Get a project's CI/CD job token access settings. Returns: whether inbound job token access is limited to the allowlist. See also: gitlab_patch_job_token_access_settings, gitlab_list_job_token_inbound_allowlist, gitlab_list_job_token_group_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27923,7 +27955,7 @@
   },
   {
     "name": "gitlab_get_license",
-    "description": "Get current GitLab license information (admin). Returns plan, expiry, user counts and licensee.\n\nReturns: JSON with license details.\n\nSee also: gitlab_add_license.",
+    "description": "Get the active instance license. Returns: the license with plan, expires_at, user_limit, active_users, and add-ons. See also: gitlab_add_license, gitlab_delete_license.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -28346,7 +28378,7 @@
   },
   {
     "name": "gitlab_get_metric_definitions",
-    "description": "Get metric definitions as YAML (admin). Returns all metric definitions used in service ping.\n\nReturns: YAML with all metric definitions.\n\nSee also: gitlab_get_service_ping, gitlab_get_usage_queries",
+    "description": "Get usage metric definitions. Returns: the metric dictionary with key, description, and category for each Service Ping metric. See also: gitlab_get_service_ping, gitlab_get_usage_queries.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -28382,7 +28414,7 @@
   },
   {
     "name": "gitlab_get_non_sql_metrics",
-    "description": "Get non-SQL service ping metrics (admin). Returns instance info, license details, and settings.\n\nReturns: JSON with non-SQL metrics including instance and license details.\n\nSee also: gitlab_get_service_ping, gitlab_get_usage_queries",
+    "description": "Get non-SQL usage metrics. Returns: the non-SQL portion of the Service Ping data. See also: gitlab_get_service_ping, gitlab_get_usage_queries.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -28510,7 +28542,7 @@
   },
   {
     "name": "gitlab_get_plan_limits",
-    "description": "Get current plan limits (admin). Optionally filter by plan name (default, free, bronze, silver, gold, premium, ultimate).\n\nReturns: JSON with current plan limits.\n\nSee also: gitlab_change_plan_limits.",
+    "description": "Get plan limits for a plan. Returns: the limit values for CI, registry, import, and other resource caps. See also: gitlab_change_plan_limits, gitlab_get_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30116,7 +30148,7 @@
   },
   {
     "name": "gitlab_get_service_ping",
-    "description": "Get service ping data (admin). Returns recorded_at, license info, and usage counts.\n\nReturns: JSON with service ping data including usage counts and license info.\n\nSee also: gitlab_get_non_sql_metrics, gitlab_get_metric_definitions",
+    "description": "Get the Service Ping payload. Returns: the aggregated instance usage data report. See also: gitlab_get_non_sql_metrics, gitlab_get_usage_queries.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -30166,7 +30198,7 @@
   },
   {
     "name": "gitlab_get_settings",
-    "description": "Get current application settings. Requires admin access. Returns all instance-level settings as key-value pairs.\n\nReturns: JSON with all application settings.\n\nSee also: gitlab_update_settings.",
+    "description": "Get the current GitLab application (instance) settings. Returns: the full application settings object including sign-up, visibility, CI/CD, and rate-limit configuration. See also: gitlab_update_settings, gitlab_get_appearance, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -30203,7 +30235,7 @@
   },
   {
     "name": "gitlab_get_sidekiq_compound_metrics",
-    "description": "Get all Sidekiq metrics in a single compound response (admin). Returns queue metrics, process metrics, and job statistics combined.\n\nReturns: JSON with combined queue, process, and job metrics.\n\nSee also: gitlab_get_sidekiq_queue_metrics.",
+    "description": "Get combined Sidekiq metrics. Returns: queue, process, and job statistics in a single object. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_job_stats.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -30342,7 +30374,7 @@
   },
   {
     "name": "gitlab_get_sidekiq_job_stats",
-    "description": "Get Sidekiq job statistics (admin). Returns processed, failed, and enqueued counts.\n\nReturns: JSON with job statistics.\n\nSee also: gitlab_get_sidekiq_compound_metrics.",
+    "description": "Get Sidekiq job statistics. Returns: aggregate counts of processed, failed, and enqueued jobs. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_compound_metrics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -30395,7 +30427,7 @@
   },
   {
     "name": "gitlab_get_sidekiq_process_metrics",
-    "description": "Get Sidekiq process metrics (admin). Returns information about running Sidekiq processes.\n\nReturns: JSON with process metrics.\n\nSee also: gitlab_get_sidekiq_compound_metrics.",
+    "description": "Get Sidekiq process metrics. Returns: the list of Sidekiq processes with concurrency and queue assignments. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_compound_metrics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -30486,7 +30518,7 @@
   },
   {
     "name": "gitlab_get_sidekiq_queue_metrics",
-    "description": "Get Sidekiq queue metrics (admin). Returns backlog and latency for all queues.\n\nReturns: JSON with queue metrics.\n\nSee also: gitlab_get_sidekiq_compound_metrics.",
+    "description": "Get Sidekiq queue metrics. Returns: per-queue backlog and latency figures. See also: gitlab_get_sidekiq_process_metrics, gitlab_get_sidekiq_compound_metrics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -31024,7 +31056,7 @@
   },
   {
     "name": "gitlab_get_system_hook",
-    "description": "Get a system hook by ID (admin).\n\nReturns: JSON with system hook details (ID, URL, event subscriptions, SSL settings).\n\nSee also: gitlab_list_system_hooks, gitlab_test_system_hook",
+    "description": "Get a system hook by id. Returns: the system hook with url, event triggers, and SSL verification setting. See also: gitlab_list_system_hooks, gitlab_edit_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31136,7 +31168,7 @@
   },
   {
     "name": "gitlab_get_terraform_state",
-    "description": "Get details of a Terraform state\n\nReturns: JSON with Terraform state details.\n\nSee also: gitlab_list_terraform_states, gitlab_lock_terraform_state",
+    "description": "Get a Terraform state. Returns: the state with name, lock info, and latest version. See also: gitlab_list_terraform_states, gitlab_lock_terraform_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31192,7 +31224,7 @@
   },
   {
     "name": "gitlab_get_topic",
-    "description": "Get a specific project topic by ID.\n\nSee also: gitlab_list_topics, gitlab_update_topic\n\nReturns: JSON with topic details (ID, name, title, description).",
+    "description": "Get a single project topic by id. Returns: the topic with id, name, title, description, avatar, and project count. See also: gitlab_list_topics, gitlab_update_topic.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31264,7 +31296,7 @@
   },
   {
     "name": "gitlab_get_usage_queries",
-    "description": "Get service ping SQL queries (admin). Returns the raw SQL queries used for service ping collection.\n\nReturns: JSON with raw SQL queries used for service ping.\n\nSee also: gitlab_get_service_ping, gitlab_get_non_sql_metrics",
+    "description": "Get usage data queries. Returns: the SQL query definitions backing Service Ping metrics. See also: gitlab_get_service_ping, gitlab_get_metric_definitions.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -43220,6 +43252,14 @@
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
@@ -43398,6 +43438,9 @@
         "id": {
           "type": "integer"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -43450,20 +43493,79 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "created_after": {
+          "description": "Return tokens created after this RFC3339 timestamp",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return tokens created before this RFC3339 timestamp",
+          "type": "string"
+        },
+        "expires_after": {
+          "description": "Return tokens expiring after this date (YYYY-MM-DD)",
+          "type": "string"
+        },
+        "expires_before": {
+          "description": "Return tokens expiring before this date (YYYY-MM-DD)",
+          "type": "string"
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "last_used_after": {
+          "description": "Return tokens last used after this RFC3339 timestamp",
+          "type": "string"
+        },
+        "last_used_before": {
+          "description": "Return tokens last used before this RFC3339 timestamp",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Order tokens by a supported column (e.g. id, created_at, expires_at, last_used_at)",
           "type": "string"
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
+        "revoked": {
+          "description": "Filter by revoked state: true returns only revoked tokens, false only active ones",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "search": {
+          "description": "Filter tokens whose name contains this text",
+          "type": "string"
+        },
         "service_account_id": {
           "description": "Service account user ID",
+          "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
+        "state": {
+          "description": "Filter by token state: active or inactive",
+          "type": "string"
+        },
+        "user_id": {
+          "description": "Filter by the user ID that owns the token",
           "type": "integer"
         }
       },
@@ -43539,6 +43641,9 @@
               },
               "id": {
                 "type": "integer"
+              },
+              "last_used_at": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -45503,7 +45608,7 @@
   },
   {
     "name": "gitlab_import_from_bitbucket_cloud",
-    "description": "Import a repository from Bitbucket Cloud into GitLab\n\nReturns: JSON with import status (project ID, import status, import source).\n\nSee also: gitlab_import_from_bitbucket_server, gitlab_import_from_github",
+    "description": "Import a repository from Bitbucket Cloud. Returns: the created project for the imported repository. See also: gitlab_import_from_bitbucket_server, gitlab_import_from_github.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45588,7 +45693,7 @@
   },
   {
     "name": "gitlab_import_from_bitbucket_server",
-    "description": "Import a repository from Bitbucket Server into GitLab\n\nReturns: JSON with import status (project ID, import status, import source).\n\nSee also: gitlab_import_from_bitbucket_cloud, gitlab_import_from_github",
+    "description": "Import a repository from Bitbucket Server. Returns: the created project for the imported repository. See also: gitlab_import_from_bitbucket_cloud, gitlab_import_from_github.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45665,7 +45770,7 @@
   },
   {
     "name": "gitlab_import_from_github",
-    "description": "Import a repository from GitHub into GitLab\n\nReturns: JSON with import status (project ID, import status, import source).\n\nSee also: gitlab_cancel_github_import, gitlab_start_bulk_import",
+    "description": "Import a repository from GitHub. Returns: the created project for the imported repository with its import status. See also: gitlab_cancel_github_import, gitlab_import_github_gists.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45749,7 +45854,7 @@
   },
   {
     "name": "gitlab_import_github_gists",
-    "description": "Import GitHub gists into GitLab snippets\n\nReturns: JSON confirmation of gists import initiation.\n\nSee also: gitlab_import_from_github, gitlab_snippet_list",
+    "description": "Import GitHub gists into snippets. Returns: a success status; the import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -71638,7 +71743,7 @@
   },
   {
     "name": "gitlab_list_alert_metric_images",
-    "description": "List metric images for a GitLab alert.\n\nReturns: JSON array of metric images with pagination.\n\nSee also: gitlab_get_error_tracking_settings, gitlab_upload_alert_metric_image",
+    "description": "List alert metric images. Returns: an array of metric images with id, filename, url, and url_text. See also: gitlab_upload_alert_metric_image, gitlab_update_alert_metric_image.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -71774,7 +71879,7 @@
   },
   {
     "name": "gitlab_list_applications",
-    "description": "List all OAuth2 applications (admin). Params: page, per_page.\n\nReturns: JSON array of OAuth2 applications with pagination.\n\nSee also: gitlab_create_application, gitlab_list_integrations",
+    "description": "List instance OAuth applications. Returns: an array of applications with id, application_id, name, redirect URIs, and scopes. See also: gitlab_create_application, gitlab_delete_application.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -72189,7 +72294,7 @@
   },
   {
     "name": "gitlab_list_broadcast_messages",
-    "description": "List all broadcast messages. Requires admin access.\n\nReturns: JSON with array of broadcast messages and pagination info.\n\nSee also: gitlab_create_broadcast_message, gitlab_get_appearance",
+    "description": "List instance broadcast messages. Returns: an array of broadcast messages with id, message, theme, target, starts_at, and ends_at. See also: gitlab_get_broadcast_message, gitlab_create_broadcast_message.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -72325,7 +72430,7 @@
   },
   {
     "name": "gitlab_list_bulk_import_entities",
-    "description": "List bulk import migration entities. When bulk_import_id is provided, scopes to that import; otherwise returns all entities visible to the caller. Optionally filter by status.\n\nReturns: paginated list of entities with id, status, type, source/destination paths, and per-relation stats.\n\nSee also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entity_failures.",
+    "description": "List bulk import entities. Returns: an array of migrated entities with id, source_full_path, entity_type, and status. See also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entity_failures.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -72533,7 +72638,7 @@
   },
   {
     "name": "gitlab_list_bulk_import_entity_failures",
-    "description": "List failed import records for a bulk import migration entity. Useful for diagnosing failed migrations.\n\nReturns: list of failures with relation, exception class/message, pipeline class/step, and source url.\n\nSee also: gitlab_get_bulk_import_entity.",
+    "description": "List bulk import entity failures. Returns: an array of failure records with relation, exception, and correlation id. See also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entities.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -72641,7 +72746,7 @@
   },
   {
     "name": "gitlab_list_bulk_imports",
-    "description": "List all group or project bulk import migrations visible to the caller. Optionally filter by status.\n\nReturns: paginated list of migrations with id, status, source_type, source_url, has_failures, and timestamps.\n\nSee also: gitlab_get_bulk_import, gitlab_list_bulk_import_entities.",
+    "description": "List bulk imports. Returns: an array of bulk imports with id, status, source_type, and timestamps. See also: gitlab_start_bulk_import, gitlab_get_bulk_import.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -73016,7 +73121,7 @@
   },
   {
     "name": "gitlab_list_cluster_agent_tokens",
-    "description": "List tokens for a cluster agent\n\nSee also: gitlab_create_cluster_agent_token, gitlab_get_cluster_agent\n\nReturns: JSON array of agent tokens with pagination.",
+    "description": "List cluster agent tokens. Returns: an array of agent tokens with id, name, and status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -73154,7 +73259,7 @@
   },
   {
     "name": "gitlab_list_cluster_agents",
-    "description": "List cluster agents for a GitLab project\n\nSee also: gitlab_register_cluster_agent, gitlab_list_cluster_agent_tokens\n\nReturns: JSON array of cluster agents with pagination.",
+    "description": "List project cluster agents. Returns: an array of agents with id, name, and created_at. See also: gitlab_get_cluster_agent, gitlab_register_cluster_agent.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -73445,7 +73550,7 @@
   },
   {
     "name": "gitlab_list_custom_attributes",
-    "description": "List custom attributes for a user, group, or project (admin). Params: resource_type (required: user|group|project), resource_id (required).\n\nReturns: JSON array of custom attributes.\n\nSee also: gitlab_get_custom_attribute, gitlab_set_custom_attribute",
+    "description": "List custom attributes for a resource. Returns: an array of key/value custom attributes. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -73632,24 +73737,87 @@
   },
   {
     "name": "gitlab_list_deployment_merge_requests",
-    "description": "List merge requests associated with a specific deployment in a GitLab project.\n\nReturns: JSON array of merge requests with pagination.\n\nSee also: gitlab_deployment_get, gitlab_mr_list.",
+    "description": "List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset or keyset pagination. Returns: matching merge requests with full metadata (author, assignees, reviewers, labels, milestone, pipelines, time stats, timestamps) and pagination metadata. See also: gitlab_mr_get, gitlab_mr_list, gitlab_deployment_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "approved": {
+          "description": "Filter by approval status: yes or no",
+          "type": "string"
+        },
+        "approved_by_ids": {
+          "description": "Filter by MRs approved by all listed user IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approver_ids": {
+          "description": "Filter by MRs with all listed users as eligible approvers",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_id": {
+          "description": "Filter by assignee user ID",
+          "type": "integer"
+        },
+        "author_id": {
+          "description": "Filter by author user ID",
+          "type": "integer"
+        },
+        "author_username": {
+          "description": "Filter by author username",
+          "type": "string"
+        },
+        "created_after": {
+          "description": "Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
+        },
         "deployment_id": {
           "description": "Deployment ID",
           "type": "integer"
+        },
+        "draft": {
+          "description": "Filter by draft status (true=only drafts, false=only non-drafts)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "in": {
+          "description": "Modify the scope of the search attribute (title, description, or title,description)",
+          "type": "string"
         },
         "order_by": {
           "description": "Order by: created_at or updated_at",
           "type": "string"
         },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
@@ -73678,39 +73846,907 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "allow_collaboration": {
+                "type": "boolean"
+              },
+              "allow_maintainer_to_push": {
+                "type": "boolean"
+              },
+              "assignee": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "assignees": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name",
+                    "state",
+                    "avatar_url",
+                    "web_url"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "blocking_discussions_resolved": {
+                "type": "boolean"
+              },
+              "changes_count": {
                 "type": "string"
               },
-              "merge_request_iid": {
+              "closed_at": {
+                "type": "string"
+              },
+              "closed_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "detailed_merge_status": {
+                "type": "string"
+              },
+              "diff_refs": {
+                "additionalProperties": false,
+                "properties": {
+                  "base_sha": {
+                    "type": "string"
+                  },
+                  "head_sha": {
+                    "type": "string"
+                  },
+                  "start_sha": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "base_sha",
+                  "head_sha",
+                  "start_sha"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "discussion_locked": {
+                "type": "boolean"
+              },
+              "diverged_commits_count": {
                 "type": "integer"
+              },
+              "downvotes": {
+                "type": "integer"
+              },
+              "draft": {
+                "type": "boolean"
+              },
+              "first_contribution": {
+                "type": "boolean"
+              },
+              "first_deployed_to_production_at": {
+                "type": "string"
+              },
+              "force_remove_source_branch": {
+                "type": "boolean"
+              },
+              "has_conflicts": {
+                "type": "boolean"
+              },
+              "head_pipeline": {
+                "additionalProperties": false,
+                "properties": {
+                  "before_sha": {
+                    "type": "string"
+                  },
+                  "committed_at": {
+                    "type": "string"
+                  },
+                  "coverage": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "detailed_status": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "details_path": {
+                        "type": "string"
+                      },
+                      "favicon": {
+                        "type": "string"
+                      },
+                      "group": {
+                        "type": "string"
+                      },
+                      "has_details": {
+                        "type": "boolean"
+                      },
+                      "icon": {
+                        "type": "string"
+                      },
+                      "illustration": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "image": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image"
+                        ],
+                        "type": [
+                          "null",
+                          "object"
+                        ]
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "tooltip": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "icon",
+                      "text",
+                      "label",
+                      "group",
+                      "tooltip",
+                      "has_details",
+                      "details_path",
+                      "favicon"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "duration": {
+                    "type": "integer"
+                  },
+                  "finished_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "queued_duration": {
+                    "type": "integer"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "started_at": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "tag": {
+                    "type": "boolean"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "web_url": {
+                    "type": "string"
+                  },
+                  "yaml_errors": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "project_id",
+                  "status",
+                  "source",
+                  "ref",
+                  "name",
+                  "sha",
+                  "before_sha",
+                  "tag",
+                  "yaml_errors",
+                  "duration",
+                  "queued_duration",
+                  "coverage",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "id": {
+                "type": "integer"
+              },
+              "iid": {
+                "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "latest_build_finished_at": {
+                "type": "string"
+              },
+              "latest_build_started_at": {
+                "type": "string"
+              },
+              "merge_after": {
+                "type": "string"
+              },
+              "merge_commit_sha": {
+                "type": "string"
+              },
+              "merge_error": {
+                "type": "string"
+              },
+              "merge_user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "merge_when_pipeline_succeeds": {
+                "type": "boolean"
               },
               "merged_at": {
                 "type": "string"
               },
+              "merged_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "milestone": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "expired": {
+                    "type": [
+                      "null",
+                      "boolean"
+                    ]
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "group_id",
+                  "project_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "pipeline": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "project_id",
+                  "status",
+                  "source",
+                  "ref",
+                  "sha",
+                  "name",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "prepared_at": {
+                "type": "string"
+              },
+              "project_id": {
+                "type": "integer"
+              },
+              "rebase_in_progress": {
+                "type": "boolean"
+              },
+              "references": {
+                "additionalProperties": false,
+                "properties": {
+                  "full": {
+                    "type": "string"
+                  },
+                  "relative": {
+                    "type": "string"
+                  },
+                  "short": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "short",
+                  "relative",
+                  "full"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "reviewers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name",
+                    "state",
+                    "avatar_url",
+                    "web_url"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "sha": {
+                "type": "string"
+              },
+              "should_remove_source_branch": {
+                "type": "boolean"
+              },
               "source_branch": {
                 "type": "string"
+              },
+              "source_project_id": {
+                "type": "integer"
+              },
+              "squash": {
+                "type": "boolean"
+              },
+              "squash_commit_sha": {
+                "type": "string"
+              },
+              "squash_on_merge": {
+                "type": "boolean"
               },
               "state": {
                 "type": "string"
               },
+              "subscribed": {
+                "type": "boolean"
+              },
               "target_branch": {
                 "type": "string"
+              },
+              "target_project_id": {
+                "type": "integer"
+              },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
               },
+              "updated_at": {
+                "type": "string"
+              },
+              "upvotes": {
+                "type": "integer"
+              },
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "can_merge": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "can_merge"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "user_notes_count": {
+                "type": "integer"
+              },
               "web_url": {
                 "type": "string"
+              },
+              "work_in_progress": {
+                "type": "boolean"
               }
             },
             "required": [
-              "merge_request_iid",
+              "id",
+              "iid",
+              "project_id",
               "title",
+              "description",
               "state",
-              "author",
               "source_branch",
               "target_branch",
-              "web_url"
+              "web_url",
+              "draft",
+              "has_conflicts",
+              "blocking_discussions_resolved",
+              "discussion_locked",
+              "assignees",
+              "reviewers",
+              "labels",
+              "created_at",
+              "updated_at"
             ],
             "type": "object"
           },
@@ -74377,7 +75413,7 @@
   },
   {
     "name": "gitlab_list_error_tracking_client_keys",
-    "description": "List error tracking client keys for a GitLab project.\n\nReturns: JSON with client keys array including ID and public key.\n\nSee also: gitlab_get_error_tracking_settings, gitlab_create_error_tracking_client_key",
+    "description": "List error-tracking client keys. Returns: an array of client keys with id, public_key, and sentry_dsn. See also: gitlab_create_error_tracking_client_key, gitlab_get_error_tracking_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -74504,7 +75540,7 @@
   },
   {
     "name": "gitlab_list_feature_definitions",
-    "description": "List all feature definitions (admin). Returns name, type, group, milestone and default_enabled for each definition.\n\nReturns: JSON array of feature definitions.\n\nSee also: gitlab_list_features.",
+    "description": "List feature flag definitions. Returns: an array of definitions with name, type, default_enabled, group, and milestone. See also: gitlab_list_features, gitlab_set_feature_flag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -74578,7 +75614,7 @@
   },
   {
     "name": "gitlab_list_features",
-    "description": "List all feature flags (admin). Returns name, state and gates for each flag.\n\nReturns: JSON array of feature flags.\n\nSee also: gitlab_set_feature_flag.",
+    "description": "List instance feature flags. Returns: an array of features with name, state, and gates (boolean, actors, groups, percentages). See also: gitlab_list_feature_definitions, gitlab_set_feature_flag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -77339,20 +78375,36 @@
   },
   {
     "name": "gitlab_list_job_token_group_allowlist",
-    "description": "List groups on the CI/CD job token allowlist for a GitLab project.\n\nReturns: JSON array of allowlist entries with pagination.\n\nSee also: gitlab_add_group_job_token_allowlist, gitlab_get_job_token_access_settings",
+    "description": "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name, full path, and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
           "type": "string"
         }
       },
@@ -77455,20 +78507,36 @@
   },
   {
     "name": "gitlab_list_job_token_inbound_allowlist",
-    "description": "List projects on the CI/CD job token inbound allowlist for a GitLab project.\n\nReturns: JSON array of allowlist entries with pagination.\n\nSee also: gitlab_add_project_job_token_allowlist, gitlab_get_job_token_access_settings",
+    "description": "List projects on a project's CI/CD job token inbound allowlist. Returns: allowlisted projects with id, name, path, and web URL plus pagination metadata. See also: gitlab_add_project_job_token_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_get_job_token_access_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
           "type": "string"
         }
       },
@@ -80049,7 +81117,7 @@
   },
   {
     "name": "gitlab_list_secure_files",
-    "description": "List CI/CD secure files for a GitLab project.\n\nReturns: JSON array of secure files with pagination.\n\nSee also: gitlab_show_secure_file, gitlab_ci_variable_list",
+    "description": "List project secure files. Returns: an array of secure files with id, name, checksum, and created_at. See also: gitlab_show_secure_file, gitlab_create_secure_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -81078,7 +82146,7 @@
   },
   {
     "name": "gitlab_list_system_hooks",
-    "description": "List all system hooks (admin). Returns ID, URL and event subscriptions.\n\nReturns: JSON with array of system hooks and pagination info.\n\nSee also: gitlab_add_system_hook, gitlab_list_integrations",
+    "description": "List instance system hooks. Returns: an array of system hooks with id, url, and event triggers. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -81188,7 +82256,7 @@
   },
   {
     "name": "gitlab_list_terraform_states",
-    "description": "List Terraform states for a GitLab project\n\nReturns: JSON array of Terraform states with pagination.\n\nSee also: gitlab_get_terraform_state, gitlab_list_secure_files",
+    "description": "List Terraform states. Returns: an array of states with name, lock status, and latest version. See also: gitlab_get_terraform_state, gitlab_lock_terraform_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -81263,7 +82331,7 @@
   },
   {
     "name": "gitlab_list_topics",
-    "description": "List project topics. Can be filtered by search query.\n\nSee also: gitlab_create_topic, gitlab_project_list\n\nReturns: JSON with array of topics and pagination info.",
+    "description": "List instance project topics. Returns: an array of topics with id, name, title, description, and project counts. See also: gitlab_get_topic, gitlab_create_topic.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -82447,7 +83515,7 @@
   },
   {
     "name": "gitlab_lock_terraform_state",
-    "description": "Lock a Terraform state\n\nReturns: JSON confirming the state was locked.\n\nSee also: gitlab_unlock_terraform_state, gitlab_get_terraform_state",
+    "description": "Lock a Terraform state. Returns: the state with its lock acquired. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -82499,7 +83567,7 @@
   },
   {
     "name": "gitlab_mark_migration",
-    "description": "Mark a pending database migration as successfully executed (admin). Params: version (required), database (optional).\n\nReturns: JSON with the migration mark confirmation.\n\nSee also: gitlab_server_status.",
+    "description": "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -111731,7 +112799,7 @@
   },
   {
     "name": "gitlab_patch_job_token_access_settings",
-    "description": "Update the CI/CD job token access settings for a GitLab project.\n\nReturns: confirmation message.\n\nSee also: gitlab_get_job_token_access_settings, gitlab_list_job_token_inbound_allowlist",
+    "description": "Update a project's CI/CD job token access settings. Returns: a confirmation that the inbound scope setting was updated. See also: gitlab_get_job_token_access_settings, gitlab_add_project_job_token_allowlist, gitlab_add_group_job_token_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147112,7 +148180,7 @@
   },
   {
     "name": "gitlab_purge_dependency_proxy",
-    "description": "Purge the dependency proxy cache for a GitLab group.\n\nReturns: confirmation message.\n\nSee also: gitlab_group_get.",
+    "description": "Purge a group's dependency proxy cache. Returns: a success status. See also: gitlab_group_get, gitlab_get_settings.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -147250,7 +148318,7 @@
   },
   {
     "name": "gitlab_register_cluster_agent",
-    "description": "Register a new cluster agent for a GitLab project\n\nSee also: gitlab_list_cluster_agents, gitlab_create_cluster_agent_token\n\nReturns: JSON with the registered agent details.",
+    "description": "Register a cluster agent. Returns: the created agent with id and name. See also: gitlab_list_cluster_agents, gitlab_create_cluster_agent_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -150863,7 +151931,7 @@
   },
   {
     "name": "gitlab_remove_group_job_token_allowlist",
-    "description": "Remove a group from the CI/CD job token allowlist.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_job_token_group_allowlist, gitlab_add_group_job_token_allowlist",
+    "description": "Remove a group from a project's CI/CD job token allowlist. Returns: a success confirmation naming the removed group. See also: gitlab_list_job_token_group_allowlist, gitlab_add_group_job_token_allowlist, gitlab_remove_project_job_token_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -150920,7 +151988,7 @@
   },
   {
     "name": "gitlab_remove_project_job_token_allowlist",
-    "description": "Remove a project from the CI/CD job token inbound allowlist.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_job_token_inbound_allowlist, gitlab_add_project_job_token_allowlist",
+    "description": "Remove a project from a project's CI/CD job token inbound allowlist. Returns: a success confirmation naming the removed project. See also: gitlab_list_job_token_inbound_allowlist, gitlab_add_project_job_token_allowlist, gitlab_remove_group_job_token_allowlist.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -150977,7 +152045,7 @@
   },
   {
     "name": "gitlab_remove_secure_file",
-    "description": "Remove a CI/CD secure file.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_secure_files, gitlab_create_secure_file",
+    "description": "Remove a secure file. Returns: a success status. See also: gitlab_list_secure_files, gitlab_create_secure_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -153897,7 +154965,7 @@
   },
   {
     "name": "gitlab_revoke_cluster_agent_token",
-    "description": "Revoke a cluster agent token\n\nSee also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token\n\nReturns: confirmation message.",
+    "description": "Revoke a cluster agent token. Returns: a success status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162227,7 +163295,7 @@
   },
   {
     "name": "gitlab_set_custom_attribute",
-    "description": "Set (create/update) a custom attribute for a user, group, or project (admin). Params: resource_type (required), resource_id (required), key (required), value (required).\n\nReturns: JSON with the custom attribute details.\n\nSee also: gitlab_list_custom_attributes, gitlab_delete_custom_attribute",
+    "description": "Set a custom attribute. Returns: the stored attribute with key and value. See also: gitlab_get_custom_attribute, gitlab_delete_custom_attribute.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162288,7 +163356,7 @@
   },
   {
     "name": "gitlab_set_feature_flag",
-    "description": "Set or create a feature flag (admin). Requires name and value. Supports scoping to user, group, project, namespace, or repository.\n\nReturns: JSON with the feature flag details.\n\nSee also: gitlab_list_features.",
+    "description": "Set a feature flag gate. Returns: the updated feature with its name, state, and gate values. See also: gitlab_list_features, gitlab_delete_feature_flag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -162982,7 +164050,7 @@
   },
   {
     "name": "gitlab_show_secure_file",
-    "description": "Show details of a CI/CD secure file.\n\nReturns: JSON with secure file details.\n\nSee also: gitlab_list_secure_files, gitlab_create_secure_file",
+    "description": "Show a secure file. Returns: the secure file with id, name, checksum, and metadata. See also: gitlab_list_secure_files, gitlab_create_secure_file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -166424,7 +167492,7 @@
   },
   {
     "name": "gitlab_start_bulk_import",
-    "description": "Start a new group or project bulk import migration (admin). Requires source GitLab URL, access token, and entities to migrate.\n\nReturns: JSON with the migration details.\n\nSee also: gitlab_list_bulk_imports, gitlab_get_bulk_import, gitlab_import_from_github, gitlab_schedule_group_export",
+    "description": "Start a bulk import (direct transfer). Returns: the created bulk import with id and status. See also: gitlab_list_bulk_imports, gitlab_get_bulk_import.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168005,7 +169073,7 @@
   },
   {
     "name": "gitlab_test_system_hook",
-    "description": "Test a system hook by ID (admin). Triggers a test event and returns the result.\n\nReturns: JSON with test event result.\n\nSee also: gitlab_get_system_hook, gitlab_add_system_hook",
+    "description": "Send a test event to a system hook. Returns: the delivery status of the test event. See also: gitlab_get_system_hook, gitlab_edit_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168313,7 +169381,7 @@
   },
   {
     "name": "gitlab_track_event",
-    "description": "Track a single usage event. Params: event (required), send_to_snowplow, namespace_id, project_id.\n\nReturns: JSON confirming the event was tracked.\n\nSee also: gitlab_track_events, gitlab_get_service_ping",
+    "description": "Track one usage event. Returns: a success status. See also: gitlab_track_events, gitlab_get_service_ping.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168376,7 +169444,7 @@
   },
   {
     "name": "gitlab_track_events",
-    "description": "Track multiple usage events in batch. Params: events (required, array of event objects).\n\nReturns: JSON confirming the events were tracked.\n\nSee also: gitlab_track_event, gitlab_get_service_ping",
+    "description": "Track multiple usage events. Returns: a success status. See also: gitlab_track_event, gitlab_get_service_ping.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168543,7 +169611,7 @@
   },
   {
     "name": "gitlab_unlock_terraform_state",
-    "description": "Unlock a Terraform state\n\nReturns: JSON confirming the state was unlocked.\n\nSee also: gitlab_lock_terraform_state, gitlab_get_terraform_state",
+    "description": "Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168600,7 +169668,7 @@
   },
   {
     "name": "gitlab_update_alert_metric_image",
-    "description": "Update a metric image for a GitLab alert.\n\nReturns: JSON with the updated metric image details.\n\nSee also: gitlab_list_alert_metric_images, gitlab_upload_alert_metric_image",
+    "description": "Update an alert metric image. Returns: the updated metric image. See also: gitlab_list_alert_metric_images, gitlab_delete_alert_metric_image.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -168834,7 +169902,7 @@
   },
   {
     "name": "gitlab_update_broadcast_message",
-    "description": "Update a broadcast message. Requires admin access.\n\nReturns: JSON with the updated broadcast message details.\n\nSee also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message",
+    "description": "Update a broadcast message. Returns: the updated message. See also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -170644,7 +171712,7 @@
   },
   {
     "name": "gitlab_update_settings",
-    "description": "Update application settings. Requires admin access. Pass settings as key-value map with snake_case keys matching GitLab API (e.g. signup_enabled, default_project_visibility).\n\nReturns: JSON with the updated application settings.\n\nSee also: gitlab_get_settings.",
+    "description": "Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -170772,7 +171840,7 @@
   },
   {
     "name": "gitlab_update_topic",
-    "description": "Update a project topic. Requires admin access.\n\nSee also: gitlab_get_topic, gitlab_delete_topic\n\nReturns: JSON with the updated topic details.",
+    "description": "Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, gitlab_delete_topic.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -171095,7 +172163,7 @@
   },
   {
     "name": "gitlab_upload_alert_metric_image",
-    "description": "Upload a metric image for a GitLab alert. Provide either file_path (absolute path to a local image file) or content_base64 (base64-encoded content), not both.\n\nReturns: JSON with the uploaded metric image details.\n\nSee also: gitlab_list_alert_metric_images, gitlab_update_alert_metric_image",
+    "description": "Upload an alert metric image. Returns: the uploaded metric image with id, filename, and url. See also: gitlab_list_alert_metric_images, gitlab_update_alert_metric_image.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
