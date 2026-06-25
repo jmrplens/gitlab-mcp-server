@@ -96,10 +96,12 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance."
 		options.Aliases = []string{"list labels", "show project labels", "find labels"}
 		options.RelatedActions = []string{"label.get", "label.create", actionIssueList}
+		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
 	case "label_get":
 		options.Usage = "Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed."
 		options.Aliases = []string{"get label", "show label details", "lookup label"}
 		options.RelatedActions = []string{"label.list", "label.update", "label.delete"}
+		options.IndividualTool.Description = "Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"label_id": {
 				SemanticRole:   "label_identifier",
@@ -111,12 +113,73 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.Usage = "Create a label in a project with required name and color, plus optional description and priority."
 		options.Aliases = []string{"create label", "add label", "new label"}
 		options.RelatedActions = []string{"label.get", "label.update", actionIssueList}
+		options.IndividualTool.Description = "Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"color": {
 				SemanticRole:     "hex_color",
 				ValueSource:      "Hex color string for label background (for example #d9534f).",
 				ExampleBinding:   `params.color:"#d9534f"`,
 				CommonConfusions: []string{"Provide hex color values; avoid named colors."},
+			},
+		}
+	case "label_update":
+		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name); at least one mutable field is required."
+		options.Aliases = []string{"update label", "edit label", "rename label", "recolor label"}
+		options.RelatedActions = []string{"label.get", "label.list", "label.delete"}
+		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"label_id": {
+				SemanticRole:   "label_identifier",
+				ValueSource:    "Label name or ID from task context or label list output.",
+				ExampleBinding: `params.label_id:"bug"`,
+			},
+		}
+	case "label_delete":
+		options.Usage = "Delete a project label by label_id (ID or name). Destructive and irreversible; group-inherited labels must be deleted at the group level."
+		options.Aliases = []string{"delete label", "remove label", "drop label"}
+		options.RelatedActions = []string{"label.list", "label.get", "label.create"}
+		options.IndividualTool.Description = "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"label_id": {
+				SemanticRole:   "label_identifier",
+				ValueSource:    "Label name or ID from task context or label list output.",
+				ExampleBinding: `params.label_id:"bug"`,
+			},
+		}
+	case "label_subscribe":
+		options.Usage = "Subscribe the authenticated user to a project label to receive notifications. Identify the label by label_id (ID or name)."
+		options.Aliases = []string{"subscribe to label", "follow label", "watch label"}
+		options.RelatedActions = []string{"label.unsubscribe", "label.get", "label.list"}
+		options.IndividualTool.Description = "Subscribe the authenticated user to a project label for notifications. Returns: the label with subscribed=true (already-subscribed yields 304 Not Modified). See also: gitlab_label_unsubscribe, gitlab_label_get, gitlab_label_list."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"label_id": {
+				SemanticRole:   "label_identifier",
+				ValueSource:    "Label name or ID from task context or label list output.",
+				ExampleBinding: `params.label_id:"bug"`,
+			},
+		}
+	case "label_unsubscribe":
+		options.Usage = "Unsubscribe the authenticated user from a project label to stop receiving notifications. Identify the label by label_id (ID or name)."
+		options.Aliases = []string{"unsubscribe from label", "unfollow label", "unwatch label"}
+		options.RelatedActions = []string{"label.subscribe", "label.get", "label.list"}
+		options.IndividualTool.Description = "Unsubscribe the authenticated user from a project label. Returns: no content on success (not-subscribed yields 304 Not Modified). See also: gitlab_label_subscribe, gitlab_label_get, gitlab_label_list."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"label_id": {
+				SemanticRole:   "label_identifier",
+				ValueSource:    "Label name or ID from task context or label list output.",
+				ExampleBinding: `params.label_id:"bug"`,
+			},
+		}
+	case "label_promote":
+		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group; personal-namespace projects cannot promote labels."
+		options.Aliases = []string{"promote label", "promote to group label", "make group label"}
+		options.RelatedActions = []string{"label.get", "label.list", "group_label.list"}
+		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success; requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"label_id": {
+				SemanticRole:   "label_identifier",
+				ValueSource:    "Label name or ID from task context or label list output.",
+				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
 	}
