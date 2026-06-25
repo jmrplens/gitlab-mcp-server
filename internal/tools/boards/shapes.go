@@ -30,18 +30,29 @@ func formatISOTimePtr(t *gl.ISOTime) string {
 	return time.Time(*t).Format("2006-01-02")
 }
 
-// ProjectOutput mirrors the compact project reference returned on the board's
-// `project` key. The boards API returns only the project's identity fields
-// (id, name, path, web URL, timestamps), not the full gl.Project payload.
+// ProjectOutput is a documented reference subset per doc/api/boards.md.
+// The boards API embeds a project reference on the board's `project` key that
+// contains only the fields the documented response examples list (identity,
+// repo URLs, and the extended fields shown in the update example) — not the
+// full gl.Project payload.
 type ProjectOutput struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name,omitempty"`
-	NameWithNamespace string `json:"name_with_namespace,omitempty"`
-	Path              string `json:"path,omitempty"`
-	PathWithNamespace string `json:"path_with_namespace,omitempty"`
-	WebURL            string `json:"web_url,omitempty"`
-	Description       string `json:"description,omitempty"`
-	CreatedAt         string `json:"created_at,omitempty"`
+	ID                int64    `json:"id"`
+	Name              string   `json:"name,omitempty"`
+	NameWithNamespace string   `json:"name_with_namespace,omitempty"`
+	Path              string   `json:"path,omitempty"`
+	PathWithNamespace string   `json:"path_with_namespace,omitempty"`
+	HTTPURLToRepo     string   `json:"http_url_to_repo,omitempty"`
+	WebURL            string   `json:"web_url,omitempty"`
+	CreatedAt         string   `json:"created_at,omitempty"`
+	DefaultBranch     string   `json:"default_branch,omitempty"`
+	TagList           []string `json:"tag_list,omitempty"`
+	Topics            []string `json:"topics,omitempty"`
+	SSHURLToRepo      string   `json:"ssh_url_to_repo,omitempty"`
+	ReadmeURL         string   `json:"readme_url,omitempty"`
+	AvatarURL         string   `json:"avatar_url,omitempty"`
+	StarCount         int64    `json:"star_count,omitempty"`
+	ForksCount        int64    `json:"forks_count,omitempty"`
+	LastActivityAt    string   `json:"last_activity_at,omitempty"`
 }
 
 func projectOutput(p *gl.Project) *ProjectOutput {
@@ -50,16 +61,25 @@ func projectOutput(p *gl.Project) *ProjectOutput {
 	}
 	return &ProjectOutput{
 		ID: p.ID, Name: p.Name, NameWithNamespace: p.NameWithNamespace,
-		Path: p.Path, PathWithNamespace: p.PathWithNamespace, WebURL: p.WebURL,
-		Description: p.Description, CreatedAt: formatTimePtr(p.CreatedAt),
+		Path: p.Path, PathWithNamespace: p.PathWithNamespace,
+		HTTPURLToRepo: p.HTTPURLToRepo, WebURL: p.WebURL,
+		CreatedAt: formatTimePtr(p.CreatedAt), DefaultBranch: p.DefaultBranch,
+		//nolint:staticcheck // tag_list is documented (deprecated alias of topics) in doc/api/boards.md
+		TagList: p.TagList, Topics: p.Topics, SSHURLToRepo: p.SSHURLToRepo,
+		ReadmeURL: p.ReadmeURL, AvatarURL: p.AvatarURL,
+		StarCount: p.StarCount, ForksCount: p.ForksCount,
+		LastActivityAt: formatTimePtr(p.LastActivityAt),
 	}
 }
 
-// MilestoneOutput mirrors gl.Milestone (the board/list milestone object).
+// MilestoneOutput is a documented reference subset per doc/api/boards.md.
+// The board/list `milestone` object surfaces only the fields the documented
+// update-board response lists (id, iid, project_id, title, description, state,
+// timestamps, dates, web_url); gl.Milestone's group_id and expired are not part
+// of the documented board milestone shape.
 type MilestoneOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`
-	GroupID     int64  `json:"group_id"`
 	ProjectID   int64  `json:"project_id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -69,7 +89,6 @@ type MilestoneOutput struct {
 	DueDate     string `json:"due_date,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
-	Expired     *bool  `json:"expired,omitempty"`
 }
 
 func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
@@ -77,16 +96,17 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 		return nil
 	}
 	return &MilestoneOutput{
-		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
+		ID: m.ID, IID: m.IID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
 		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
 		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
-		Expired: m.Expired,
 	}
 }
 
-// BasicUserOutput mirrors gl.BasicUser, the compact user object surfaced on the
-// board's `assignee` key.
+// BasicUserOutput is a documented reference subset per doc/api/boards.md.
+// The board's `assignee` object surfaces only the fields the documented
+// update-board response lists (id, name, username, state, avatar_url, web_url);
+// gl.BasicUser's created_at is not part of the documented board assignee shape.
 type BasicUserOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -94,7 +114,6 @@ type BasicUserOutput struct {
 	State     string `json:"state"`
 	AvatarURL string `json:"avatar_url"`
 	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
 }
 
 func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
@@ -103,12 +122,16 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
 }
 
-// BoardListAssigneeOutput mirrors gl.BoardListAssignee, the compact assignee
-// object surfaced on a board list's `assignee` key.
+// BoardListAssigneeOutput is a documented reference subset per
+// doc/api/boards.md. A board list's `assignee` object (Premium/Ultimate
+// assignee list type) is surfaced with id, name, and username, matching the
+// compact gl.BoardListAssignee struct. The documented response examples cover
+// only label lists, so this premium list-type sub-object has no fuller
+// documented shape to trim against.
 type BoardListAssigneeOutput struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
@@ -122,47 +145,35 @@ func boardListAssigneeOutput(a *gl.BoardListAssignee) *BoardListAssigneeOutput {
 	return &BoardListAssigneeOutput{ID: a.ID, Name: a.Name, Username: a.Username}
 }
 
-// LabelOutput mirrors gl.Label (the board list's `label` object).
+// LabelOutput is a documented reference subset per doc/api/boards.md.
+// Every documented board-list response shows the list's `label` object with
+// only name, color, and description; gl.Label's id, text_color, counts,
+// subscribed, priority, is_project_label, and archived fields are not part of
+// the documented board-list label shape.
 type LabelOutput struct {
-	ID                     int64  `json:"id"`
-	Name                   string `json:"name"`
-	Color                  string `json:"color"`
-	TextColor              string `json:"text_color"`
-	Description            string `json:"description"`
-	OpenIssuesCount        int64  `json:"open_issues_count,omitempty"`
-	ClosedIssuesCount      int64  `json:"closed_issues_count,omitempty"`
-	OpenMergeRequestsCount int64  `json:"open_merge_requests_count,omitempty"`
-	Subscribed             bool   `json:"subscribed,omitempty"`
-	Priority               *int64 `json:"priority,omitempty"`
-	IsProjectLabel         bool   `json:"is_project_label,omitempty"`
-	Archived               bool   `json:"archived,omitempty"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
 func labelOutput(l *gl.Label) *LabelOutput {
 	if l == nil {
 		return nil
 	}
-	out := &LabelOutput{
-		ID: l.ID, Name: l.Name, Color: l.Color, TextColor: l.TextColor,
-		Description: l.Description, OpenIssuesCount: l.OpenIssuesCount,
-		ClosedIssuesCount: l.ClosedIssuesCount, OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		Subscribed: l.Subscribed, IsProjectLabel: l.IsProjectLabel, Archived: l.Archived,
+	return &LabelOutput{
+		Name: l.Name, Color: l.Color, Description: l.Description,
 	}
-	if l.Priority.IsSpecified() && !l.Priority.IsNull() {
-		v := l.Priority.MustGet()
-		out.Priority = &v
-	}
-	return out
 }
 
-// LabelDetailsOutput mirrors gl.LabelDetails (the board's `labels[]` objects).
+// LabelDetailsOutput is a documented reference subset per doc/api/boards.md.
+// The board's `labels[]` entries in the documented update-board response show
+// only id, name, color, and description; gl.LabelDetails's description_html and
+// text_color are not part of the documented board labels shape.
 type LabelDetailsOutput struct {
-	ID              int64  `json:"id"`
-	Name            string `json:"name"`
-	Color           string `json:"color"`
-	Description     string `json:"description"`
-	DescriptionHTML string `json:"description_html"`
-	TextColor       string `json:"text_color"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
 func labelDetailsOutputs(details []*gl.LabelDetails) []*LabelDetailsOutput {
@@ -176,13 +187,16 @@ func labelDetailsOutputs(details []*gl.LabelDetails) []*LabelDetailsOutput {
 		}
 		out = append(out, &LabelDetailsOutput{
 			ID: d.ID, Name: d.Name, Color: d.Color, Description: d.Description,
-			DescriptionHTML: d.DescriptionHTML, TextColor: d.TextColor,
 		})
 	}
 	return out
 }
 
-// IterationOutput mirrors gl.ProjectIteration (the board list's `iteration`).
+// IterationOutput is a documented reference subset per doc/api/boards.md.
+// A board list's `iteration` object (Premium/Ultimate iteration list type)
+// mirrors gl.ProjectIteration. The documented response examples cover only
+// label lists, so this premium list-type sub-object has no fuller documented
+// shape to trim against.
 type IterationOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`

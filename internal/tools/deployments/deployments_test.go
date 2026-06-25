@@ -162,7 +162,7 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 				"deployable":{
 					"id":10,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,"coverage":92.5,
 					"created_at":"2026-01-01T00:00:00Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
-					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru"},
+					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru","twitter":"ru","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
 					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","web_url":"https://gl/c/abc"},
 					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:05:00Z"},
 					"runner":{"id":99,"description":"shared","name":"runner-1","runner_type":"instance_type","status":"online","online":true,"paused":false,"is_shared":true}
@@ -180,7 +180,7 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 	if out.User == nil || out.User.ID != 7 || out.User.WebURL != "https://gl/admin" {
 		t.Errorf("user mismatch: %+v", out.User)
 	}
-	if out.Environment == nil || out.Environment.Slug != "prod" || out.Environment.Tier != "production" {
+	if out.Environment == nil || out.Environment.ID != 3 || out.Environment.Name != "production" || out.Environment.ExternalURL != "https://app" {
 		t.Errorf("environment mismatch: %+v", out.Environment)
 	}
 	assertDeployable(t, out.Deployable)
@@ -193,13 +193,11 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	if d == nil {
 		t.Fatalf("deployable is nil")
 	}
-	if d.ID != 10 || d.Name != "deploy-prod" || d.Coverage != 92.5 || d.Duration != 240.0 {
+	if d.ID != 10 || d.Name != "deploy-prod" || d.Coverage != 92.5 {
 		t.Errorf("deployable scalar mismatch: %+v", d)
 	}
-	if d.User == nil || d.User.Username != "runner-user" {
-		t.Errorf("deployable user mismatch: %+v", d.User)
-	}
-	if d.Commit == nil || d.Commit.ShortID != "abc" || d.Commit.AuthorEmail != "dev@x" {
+	assertDeployableUser(t, d.User)
+	if d.Commit == nil || d.Commit.ShortID != "abc" || d.Commit.AuthorEmail != "dev@x" || d.Commit.Message != "Fix bug" {
 		t.Errorf("deployable commit mismatch: %+v", d.Commit)
 	}
 	if d.Pipeline == nil || d.Pipeline.ID != 55 || d.Pipeline.WebURL != "https://gl/p/55" {
@@ -207,6 +205,19 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	}
 	if d.Runner == nil || d.Runner.ID != 99 || d.Runner.RunnerType != "instance_type" || !d.Runner.Online || !d.Runner.IsShared {
 		t.Errorf("deployable runner mismatch: %+v", d.Runner)
+	}
+}
+
+// assertDeployableUser verifies the documented deployable user profile fields.
+func assertDeployableUser(t *testing.T, u *DeployableUserOutput) {
+	t.Helper()
+	if u == nil {
+		t.Fatalf("deployable user is nil")
+	}
+	if u.Username != "runner-user" || u.Bio != "builds things" || u.Location != "Earth" ||
+		u.PublicEmail != "ru@x" || u.Linkedin != "ru" || u.Twitter != "ru" ||
+		u.WebsiteURL != "https://ru" || u.Organization != "GL" || u.CreatedAt == "" {
+		t.Errorf("deployable user mismatch: %+v", u)
 	}
 }
 

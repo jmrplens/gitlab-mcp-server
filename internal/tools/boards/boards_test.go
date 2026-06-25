@@ -528,7 +528,7 @@ func TestFormatBoardMarkdown(t *testing.T) {
 		Assignee:        &BasicUserOutput{ID: 3, Username: "alice"},
 		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}},
 		HideBacklogList: false, HideClosedList: true,
-		Lists: []BoardListOutput{{ID: 100, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0}},
+		Lists: []BoardListOutput{{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0}},
 	}
 	md := FormatBoardMarkdown(out)
 	if !strings.Contains(md, "Dev") || !strings.Contains(md, "To Do") {
@@ -568,7 +568,7 @@ func TestFormatListBoardsMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown(t *testing.T) {
-	out := BoardListOutput{ID: 100, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0, MaxIssueCount: 10}
+	out := BoardListOutput{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 10}
 	md := FormatBoardListMarkdown(out)
 	if !strings.Contains(md, "To Do") {
 		t.Errorf(fmtMDMissingContent, md)
@@ -1094,8 +1094,8 @@ func TestFormatBoardMarkdown_WithWeight(t *testing.T) {
 func TestFormatListBoardListsMarkdown(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
-			{ID: 100, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0, MaxIssueCount: 10, MaxIssueWeight: 50},
-			{ID: 101, Label: &LabelOutput{ID: 21, Name: "Doing"}, Position: 1},
+			{ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 10, MaxIssueWeight: 50},
+			{ID: 101, Label: &LabelOutput{Name: "Doing"}, Position: 1},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
@@ -1127,7 +1127,7 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
-		ID: 100, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0,
+		ID: 100, Label: &LabelOutput{Name: "To Do"}, Position: 0,
 		MaxIssueCount: 10, MaxIssueWeight: 50,
 		Assignee:  &BoardListAssigneeOutput{ID: 3, Username: "alice"},
 		Milestone: &MilestoneOutput{ID: 5, Title: "v1.0"},
@@ -1307,26 +1307,28 @@ func TestActionSpecs_BoardGetRoute(t *testing.T) {
 	}
 }
 
-// fullBoardJSON exercises every sub-object converter (project/milestone/
-// assignee timestamps, label details, list label priority, iteration).
+// fullBoardJSON exercises every nested sub-object converter using only the
+// fields documented in doc/api/boards.md (project repo URLs/timestamps,
+// milestone dates/timestamps, documented assignee identity, label details,
+// list label name/color/description, and the premium iteration list type).
 const fullBoardJSON = `{
 	"id": 7,
 	"name": "Full",
-	"project": {"id": 10, "name": "P", "path_with_namespace": "g/p", "web_url": "https://gl/g/p", "description": "d", "created_at": "2021-01-01T00:00:00Z"},
-	"milestone": {"id": 5, "iid": 2, "title": "v1.0", "state": "active", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z", "expired": false},
-	"assignee": {"id": 3, "username": "alice", "name": "Alice", "state": "active", "created_at": "2020-01-01T00:00:00Z"},
+	"project": {"id": 10, "name": "P", "path_with_namespace": "g/p", "http_url_to_repo": "https://gl/g/p.git", "web_url": "https://gl/g/p", "created_at": "2021-01-01T00:00:00Z", "default_branch": "main"},
+	"milestone": {"id": 5, "iid": 2, "project_id": 10, "title": "v1.0", "state": "active", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z"},
+	"assignee": {"id": 3, "username": "alice", "name": "Alice", "state": "active", "web_url": "https://gl/alice"},
 	"weight": 2,
-	"labels": [{"id": 1, "name": "bug", "color": "#fff", "text_color": "#000", "description_html": "<b>bug</b>"}],
+	"labels": [{"id": 1, "name": "bug", "color": "#fff", "description": "bug label"}],
 	"hide_backlog_list": false,
 	"hide_closed_list": true,
 	"lists": [
-		{"id": 100, "label": {"id": 20, "name": "To Do", "priority": 3}, "iteration": {"id": 9, "iid": 1, "title": "Sprint 1", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z", "start_date": "2021-01-01", "due_date": "2021-01-14"}, "position": 0, "max_issue_count": 10}
+		{"id": 100, "label": {"name": "To Do", "color": "#F0AD4E", "description": "todo"}, "iteration": {"id": 9, "iid": 1, "title": "Sprint 1", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z", "start_date": "2021-01-01", "due_date": "2021-01-14"}, "position": 0, "max_issue_count": 10}
 	]
 }`
 
 // TestConvertBoard_FullSubObjects verifies every nested sub-object converter
-// populates its canonical key, covering the non-nil timestamp/priority/
-// iteration branches.
+// populates its canonical key with the documented field set, covering the
+// non-nil timestamp/iteration branches.
 func TestConvertBoard_FullSubObjects(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
@@ -1338,21 +1340,40 @@ func TestConvertBoard_FullSubObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Project == nil || out.Project.WebURL != "https://gl/g/p" || out.Project.CreatedAt == "" {
-		t.Errorf("project not fully converted: %+v", out.Project)
-	}
-	if out.Milestone == nil || out.Milestone.StartDate == "" || out.Milestone.CreatedAt == "" {
-		t.Errorf("milestone not fully converted: %+v", out.Milestone)
-	}
-	if out.Assignee == nil || out.Assignee.CreatedAt == "" {
+	assertFullBoardProject(t, out.Project)
+	assertFullBoardMilestone(t, out.Milestone)
+	if out.Assignee == nil || out.Assignee.WebURL != "https://gl/alice" {
 		t.Errorf("assignee not fully converted: %+v", out.Assignee)
 	}
-	if len(out.Labels) != 1 || out.Labels[0].DescriptionHTML == "" {
+	if len(out.Labels) != 1 || out.Labels[0].Description != "bug label" {
 		t.Errorf("label details not converted: %+v", out.Labels)
 	}
-	list := out.Lists[0]
-	if list.Label == nil || list.Label.Priority == nil || *list.Label.Priority != 3 {
-		t.Errorf("list label priority not converted: %+v", list.Label)
+	assertFullBoardList(t, out.Lists[0])
+}
+
+// assertFullBoardProject checks the documented project reference subset.
+func assertFullBoardProject(t *testing.T, p *ProjectOutput) {
+	t.Helper()
+	if p == nil || p.WebURL != "https://gl/g/p" ||
+		p.HTTPURLToRepo != "https://gl/g/p.git" || p.CreatedAt == "" ||
+		p.DefaultBranch != "main" {
+		t.Errorf("project not fully converted: %+v", p)
+	}
+}
+
+// assertFullBoardMilestone checks the documented milestone reference subset.
+func assertFullBoardMilestone(t *testing.T, m *MilestoneOutput) {
+	t.Helper()
+	if m == nil || m.ProjectID != 10 || m.StartDate == "" || m.CreatedAt == "" {
+		t.Errorf("milestone not fully converted: %+v", m)
+	}
+}
+
+// assertFullBoardList checks the documented list label/iteration subset.
+func assertFullBoardList(t *testing.T, list BoardListOutput) {
+	t.Helper()
+	if list.Label == nil || list.Label.Name != "To Do" || list.Label.Color != "#F0AD4E" || list.Label.Description != "todo" {
+		t.Errorf("list label not converted: %+v", list.Label)
 	}
 	if list.Iteration == nil || list.Iteration.StartDate == "" || list.Iteration.CreatedAt == "" {
 		t.Errorf("list iteration not converted: %+v", list.Iteration)

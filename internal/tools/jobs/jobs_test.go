@@ -86,8 +86,8 @@ func TestJobList_Success(t *testing.T) {
 	if out.Jobs[0].Status != "success" {
 		t.Errorf("Jobs[0].Status = %q, want %q", out.Jobs[0].Status, "success")
 	}
-	if out.Jobs[0].PipelineID != 10 {
-		t.Errorf("Jobs[0].PipelineID = %d, want 10", out.Jobs[0].PipelineID)
+	if out.Jobs[0].Pipeline == nil || out.Jobs[0].Pipeline.ID != 10 {
+		t.Errorf("Jobs[0].Pipeline = %+v, want id 10", out.Jobs[0].Pipeline)
 	}
 	if out.Jobs[0].User == nil || out.Jobs[0].User.Username != "testuser" {
 		t.Errorf("Jobs[0].User = %+v, want username testuser", out.Jobs[0].User)
@@ -1592,7 +1592,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Name:           "build",
 		Stage:          "build",
 		Status:         "success",
-		PipelineID:     10,
+		Pipeline:       &PipelineObject{ID: 10},
 		Ref:            "main",
 		Commit:         &CommitObject{ID: "abcdef1234567890"},
 		AllowFailure:   true,

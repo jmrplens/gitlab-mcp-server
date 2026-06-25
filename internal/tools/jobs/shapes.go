@@ -6,11 +6,13 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// Canonical output shapes mirrored from client-go sub-objects. Per the 1:1
-// audit policy (full nested objects) these surface the fields of the SDK
-// struct on the canonical json keys (commit, pipeline, project, runner, user,
-// artifacts, artifacts_file, downstream_pipeline) and are replicated here as
-// local types rather than imported from sibling packages to preserve the
+// Canonical output shapes mirrored from client-go sub-objects on the canonical
+// json keys (commit, pipeline, project, runner, user, artifacts,
+// artifacts_file, downstream_pipeline). Per the 1:1 OUTPUT-reconciliation audit
+// the nested reference objects (commit, pipeline, runner, user, project,
+// downstream_pipeline) are trimmed to the field set the GitLab Jobs API
+// documents for each sub-object (see doc/api/jobs.md), and are replicated here
+// as local types rather than imported from sibling packages to preserve the
 // zero-import-cycle constraint (C-IMPORTS).
 
 // formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
@@ -21,36 +23,20 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// CommitStatsOutput mirrors gl.CommitStats: line additions/deletions for a
-// commit.
-type CommitStatsOutput struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-	Total     int64 `json:"total"`
-}
-
-// CommitObject is a full local mirror of gl.Commit (C-IMPORTS): every field
-// returned by the GitLab commit payload embedded on a job's `commit` key is
-// surfaced here.
+// CommitObject mirrors the `commit` object embedded on a job, holding the
+// fields the Jobs API documents for that sub-object.
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `commit`):
+// id, short_id, title, author_name, author_email, created_at, message.
 type CommitObject struct {
-	ID               string             `json:"id"`
-	ShortID          string             `json:"short_id"`
-	Title            string             `json:"title"`
-	AuthorName       string             `json:"author_name"`
-	AuthorEmail      string             `json:"author_email,omitempty"`
-	AuthoredDate     string             `json:"authored_date,omitempty"`
-	CommitterName    string             `json:"committer_name,omitempty"`
-	CommitterEmail   string             `json:"committer_email,omitempty"`
-	CommittedDate    string             `json:"committed_date,omitempty"`
-	CreatedAt        string             `json:"created_at,omitempty"`
-	Message          string             `json:"message,omitempty"`
-	ParentIDs        []string           `json:"parent_ids,omitempty"`
-	Stats            *CommitStatsOutput `json:"stats,omitempty"`
-	Status           string             `json:"status,omitempty"`
-	ProjectID        int64              `json:"project_id,omitempty"`
-	Trailers         map[string]string  `json:"trailers,omitempty"`
-	ExtendedTrailers map[string]string  `json:"extended_trailers,omitempty"`
-	WebURL           string             `json:"web_url,omitempty"`
+	ID          string `json:"id"`
+	ShortID     string `json:"short_id"`
+	Title       string `json:"title"`
+	AuthorName  string `json:"author_name"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	Message     string `json:"message,omitempty"`
 }
 
 // commitObject converts a gl.Commit to its output shape, returning nil when the
@@ -59,39 +45,23 @@ func commitObject(c *gl.Commit) *CommitObject {
 	if c == nil {
 		return nil
 	}
-	out := &CommitObject{
-		ID:               c.ID,
-		ShortID:          c.ShortID,
-		Title:            c.Title,
-		AuthorName:       c.AuthorName,
-		AuthorEmail:      c.AuthorEmail,
-		AuthoredDate:     formatTimePtr(c.AuthoredDate),
-		CommitterName:    c.CommitterName,
-		CommitterEmail:   c.CommitterEmail,
-		CommittedDate:    formatTimePtr(c.CommittedDate),
-		CreatedAt:        formatTimePtr(c.CreatedAt),
-		Message:          c.Message,
-		ParentIDs:        c.ParentIDs,
-		ProjectID:        c.ProjectID,
-		Trailers:         c.Trailers,
-		ExtendedTrailers: c.ExtendedTrailers,
-		WebURL:           c.WebURL,
+	return &CommitObject{
+		ID:          c.ID,
+		ShortID:     c.ShortID,
+		Title:       c.Title,
+		AuthorName:  c.AuthorName,
+		AuthorEmail: c.AuthorEmail,
+		CreatedAt:   formatTimePtr(c.CreatedAt),
+		Message:     c.Message,
 	}
-	if c.Status != nil {
-		out.Status = string(*c.Status)
-	}
-	if c.Stats != nil {
-		out.Stats = &CommitStatsOutput{
-			Additions: c.Stats.Additions,
-			Deletions: c.Stats.Deletions,
-			Total:     c.Stats.Total,
-		}
-	}
-	return out
 }
 
 // PipelineObject mirrors gl.JobPipeline (the compact pipeline object embedded on
 // a job's `pipeline` key).
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `pipeline`):
+// id, project_id, ref, sha, status (full 1:1 with the documented shape).
 type PipelineObject struct {
 	ID        int64  `json:"id"`
 	ProjectID int64  `json:"project_id"`
@@ -111,17 +81,20 @@ func pipelineObject(p gl.JobPipeline) *PipelineObject {
 	}
 }
 
-// PipelineInfoObject mirrors gl.PipelineInfo (the compact pipeline object
-// embedded on a bridge's `pipeline` and `downstream_pipeline` keys).
+// PipelineInfoObject mirrors the compact pipeline object embedded on a bridge's
+// `pipeline` and `downstream_pipeline` keys, holding the fields the Jobs API
+// documents for those sub-objects.
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#list-pipeline-trigger-jobs — `pipeline`
+// and `downstream_pipeline`): id, project_id, ref, sha, status, created_at,
+// updated_at, web_url. (`project_id` appears on the `pipeline` shape only.)
 type PipelineInfoObject struct {
 	ID        int64  `json:"id"`
-	IID       int64  `json:"iid"`
-	ProjectID int64  `json:"project_id"`
+	ProjectID int64  `json:"project_id,omitempty"`
 	Status    string `json:"status"`
-	Source    string `json:"source"`
 	Ref       string `json:"ref"`
 	SHA       string `json:"sha"`
-	Name      string `json:"name"`
 	WebURL    string `json:"web_url"`
 	UpdatedAt string `json:"updated_at,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
@@ -134,8 +107,8 @@ func pipelineInfoObject(p *gl.PipelineInfo) *PipelineInfoObject {
 		return nil
 	}
 	return &PipelineInfoObject{
-		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
-		Source: p.Source, Ref: p.Ref, SHA: p.SHA, Name: p.Name, WebURL: p.WebURL,
+		ID: p.ID, ProjectID: p.ProjectID, Status: p.Status,
+		Ref: p.Ref, SHA: p.SHA, WebURL: p.WebURL,
 		UpdatedAt: formatTimePtr(p.UpdatedAt), CreatedAt: formatTimePtr(p.CreatedAt),
 	}
 }
@@ -152,6 +125,11 @@ func pipelineInfoValueObject(p gl.PipelineInfo) *PipelineInfoObject {
 
 // RunnerObject mirrors gl.JobRunner (the compact runner object embedded on a
 // job's `runner` key).
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `runner`). The doc
+// `runner` also lists ip_address, paused, runner_type, online, and status,
+// but gl.JobRunner does not carry those fields, so they are not surfaced.
 type RunnerObject struct {
 	ID          int64  `json:"id"`
 	Description string `json:"description"`
@@ -212,18 +190,28 @@ func artifactsFileObject(f gl.JobArtifactsFile) *ArtifactsFileObject {
 	return &ArtifactsFileObject{Filename: f.Filename, Size: f.Size}
 }
 
-// UserObject mirrors gl.User (the user object embedded on a job's `user` key).
-// It surfaces the identifying fields of the triggering user without importing
-// the full gl.User shape, which carries many unrelated account fields (sign-in
-// IPs, 2FA, license seats, identities) not relevant to a CI job actor — the
-// same approach the pipelineschedules package takes for its schedule owner.
+// UserObject mirrors the `user` object embedded on a job, holding the fields
+// the Jobs API documents for that sub-object.
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `user`):
+// id, name, username, state, avatar_url, web_url, created_at, bio, location,
+// public_email, linkedin, twitter, website_url, organization.
 type UserObject struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Username     string `json:"username"`
+	State        string `json:"state"`
+	AvatarURL    string `json:"avatar_url"`
+	WebURL       string `json:"web_url"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	Bio          string `json:"bio,omitempty"`
+	Location     string `json:"location,omitempty"`
+	PublicEmail  string `json:"public_email,omitempty"`
+	Linkedin     string `json:"linkedin,omitempty"`
+	Twitter      string `json:"twitter,omitempty"`
+	WebsiteURL   string `json:"website_url,omitempty"`
+	Organization string `json:"organization,omitempty"`
 }
 
 // userObject converts a *gl.User to its output shape, returning nil when the
@@ -233,22 +221,27 @@ func userObject(u *gl.User) *UserObject {
 		return nil
 	}
 	return &UserObject{
-		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
+		ID: u.ID, Name: u.Name, Username: u.Username, State: u.State,
 		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
+		CreatedAt:    formatTimePtr(u.CreatedAt),
+		Bio:          u.Bio,
+		Location:     u.Location,
+		PublicEmail:  u.PublicEmail,
+		Linkedin:     u.Linkedin,
+		Twitter:      u.Twitter,
+		WebsiteURL:   u.WebsiteURL,
+		Organization: u.Organization,
 	}
 }
 
-// ProjectObject mirrors gl.Project (the project object embedded on a job's
-// `project` key). It surfaces the identifying fields of the owning project
-// without importing the full gl.Project shape, which carries ~160 fields
-// (statistics, permissions, settings, links) not relevant to a job's project
-// reference.
+// ProjectObject mirrors the `project` object embedded on a job, holding the
+// field the Jobs API documents for that sub-object.
+//
+// Documented reference subset per doc/api/jobs.md
+// (https://docs.gitlab.com/api/jobs/#get-a-single-job — `project`):
+// ci_job_token_scope_enabled.
 type ProjectObject struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	Path              string `json:"path"`
-	PathWithNamespace string `json:"path_with_namespace"`
-	WebURL            string `json:"web_url"`
+	CIJobTokenScopeEnabled bool `json:"ci_job_token_scope_enabled"`
 }
 
 // projectObject converts a *gl.Project to its output shape, returning nil when
@@ -258,7 +251,6 @@ func projectObject(p *gl.Project) *ProjectObject {
 		return nil
 	}
 	return &ProjectObject{
-		ID: p.ID, Name: p.Name, Path: p.Path,
-		PathWithNamespace: p.PathWithNamespace, WebURL: p.WebURL,
+		CIJobTokenScopeEnabled: p.CIJobTokenScopeEnabled,
 	}
 }

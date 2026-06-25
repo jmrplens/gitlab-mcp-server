@@ -69,9 +69,10 @@ type DeleteInput struct {
 // Output types
 // ---------------------------------------------------------------------------.
 
-// Output represents a single deployment in MCP responses. The nested user,
-// environment, and deployable objects mirror the client-go gl.Deployment
-// sub-objects 1:1 (full nested objects per the 1:1 audit policy).
+// Output represents a single deployment in MCP responses, reconciled 1:1 with
+// the documented Deployments API response (doc/api/deployments.md). The nested
+// user, environment, and deployable objects are documented reference subsets of
+// the corresponding gl.Deployment sub-objects.
 type Output struct {
 	toolutil.HintableOutput
 	ID          int                `json:"id"`

@@ -6,16 +6,16 @@ import (
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// Canonical output shapes mirrored from client-go sub-objects. Per the 1:1
-// audit policy (full nested objects) these surface the fields of the SDK
-// structs on their canonical json keys and are replicated here rather than
-// imported from sibling packages to preserve the zero-import-cycle constraint
-// (C-IMPORTS).
+// Canonical output shapes reconciled 1:1 with the documented Deployments API
+// responses (doc/api/deployments.md). Each nested *Output type is a documented
+// reference subset: it surfaces exactly the fields the official API documents on
+// the canonical json keys and is replicated here (rather than imported from
+// sibling packages) to preserve the zero-import-cycle constraint (C-IMPORTS).
 //
 // This file covers the deployment sub-objects surfaced on the canonical json
 // keys: user (gl.ProjectUser), environment (gl.Environment), and deployable
-// (gl.DeploymentDeployable, including its nested user, commit, pipeline, and
-// runner objects).
+// (gl.DeploymentDeployable, including its nested user, commit, pipeline,
+// project, and runner objects).
 
 // formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
 func formatTimePtr(t *time.Time) string {
@@ -25,7 +25,9 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// UserOutput mirrors gl.ProjectUser (the deployment-level user object).
+// UserOutput is the documented reference subset of the deployment-level user
+// object (sourced from gl.ProjectUser). Documented reference subset per
+// doc/api/deployments.md.
 type UserOutput struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
@@ -49,23 +51,15 @@ func projectUserOutput(u *gitlab.ProjectUser) *UserOutput {
 	}
 }
 
-// EnvironmentOutput mirrors the scalar fields of gl.Environment. The SDK's
-// Project and LastDeployment back-references are intentionally omitted to avoid
-// unbounded nesting cycles (deployment -> environment -> last_deployment -> ...).
+// EnvironmentOutput is the documented reference subset of the deployment's
+// environment object (sourced from gl.Environment). The API documents only
+// id, name, and external_url on the deployment environment; the SDK's
+// remaining scalars and back-references are intentionally not surfaced.
+// Documented reference subset per doc/api/deployments.md.
 type EnvironmentOutput struct {
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	Slug                string `json:"slug,omitempty"`
-	Description         string `json:"description,omitempty"`
-	State               string `json:"state,omitempty"`
-	Tier                string `json:"tier,omitempty"`
-	ExternalURL         string `json:"external_url,omitempty"`
-	CreatedAt           string `json:"created_at,omitempty"`
-	UpdatedAt           string `json:"updated_at,omitempty"`
-	KubernetesNamespace string `json:"kubernetes_namespace,omitempty"`
-	FluxResourcePath    string `json:"flux_resource_path,omitempty"`
-	AutoStopAt          string `json:"auto_stop_at,omitempty"`
-	AutoStopSetting     string `json:"auto_stop_setting,omitempty"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	ExternalURL string `json:"external_url,omitempty"`
 }
 
 func environmentOutput(e *gitlab.Environment) *EnvironmentOutput {
@@ -73,30 +67,31 @@ func environmentOutput(e *gitlab.Environment) *EnvironmentOutput {
 		return nil
 	}
 	return &EnvironmentOutput{
-		ID:                  e.ID,
-		Name:                e.Name,
-		Slug:                e.Slug,
-		Description:         e.Description,
-		State:               e.State,
-		Tier:                e.Tier,
-		ExternalURL:         e.ExternalURL,
-		CreatedAt:           formatTimePtr(e.CreatedAt),
-		UpdatedAt:           formatTimePtr(e.UpdatedAt),
-		KubernetesNamespace: e.KubernetesNamespace,
-		FluxResourcePath:    e.FluxResourcePath,
-		AutoStopAt:          formatTimePtr(e.AutoStopAt),
-		AutoStopSetting:     e.AutoStopSetting,
+		ID:          e.ID,
+		Name:        e.Name,
+		ExternalURL: e.ExternalURL,
 	}
 }
 
-// DeployableUserOutput mirrors the fields of gl.User surfaced on a deployable.
+// DeployableUserOutput is the documented reference subset of the deployable
+// (CI job) user object (sourced from gl.User). The API documents the richer
+// user payload here (profile fields such as bio, location, and the social
+// links). Documented reference subset per doc/api/deployments.md.
 type DeployableUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state,omitempty"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
+	ID           int64  `json:"id"`
+	Username     string `json:"username"`
+	Name         string `json:"name"`
+	State        string `json:"state,omitempty"`
+	AvatarURL    string `json:"avatar_url,omitempty"`
+	WebURL       string `json:"web_url,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	Bio          string `json:"bio,omitempty"`
+	Location     string `json:"location,omitempty"`
+	PublicEmail  string `json:"public_email,omitempty"`
+	Linkedin     string `json:"linkedin,omitempty"`
+	Twitter      string `json:"twitter,omitempty"`
+	WebsiteURL   string `json:"website_url,omitempty"`
+	Organization string `json:"organization,omitempty"`
 }
 
 func deployableUserOutput(u *gitlab.User) *DeployableUserOutput {
@@ -104,26 +99,35 @@ func deployableUserOutput(u *gitlab.User) *DeployableUserOutput {
 		return nil
 	}
 	return &DeployableUserOutput{
-		ID:        u.ID,
-		Username:  u.Username,
-		Name:      u.Name,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
+		ID:           u.ID,
+		Username:     u.Username,
+		Name:         u.Name,
+		State:        u.State,
+		AvatarURL:    u.AvatarURL,
+		WebURL:       u.WebURL,
+		CreatedAt:    formatTimePtr(u.CreatedAt),
+		Bio:          u.Bio,
+		Location:     u.Location,
+		PublicEmail:  u.PublicEmail,
+		Linkedin:     u.Linkedin,
+		Twitter:      u.Twitter,
+		WebsiteURL:   u.WebsiteURL,
+		Organization: u.Organization,
 	}
 }
 
-// DeployableCommitOutput mirrors the fields of gl.Commit surfaced on a deployable.
+// DeployableCommitOutput is the documented reference subset of the deployable
+// (CI job) commit object (sourced from gl.Commit). The API documents id,
+// short_id, title, author_name, author_email, created_at, and message.
+// Documented reference subset per doc/api/deployments.md.
 type DeployableCommitOutput struct {
-	ID           string `json:"id"`
-	ShortID      string `json:"short_id,omitempty"`
-	Title        string `json:"title,omitempty"`
-	Message      string `json:"message,omitempty"`
-	AuthorName   string `json:"author_name,omitempty"`
-	AuthorEmail  string `json:"author_email,omitempty"`
-	AuthoredDate string `json:"authored_date,omitempty"`
-	CreatedAt    string `json:"created_at,omitempty"`
-	WebURL       string `json:"web_url,omitempty"`
+	ID          string `json:"id"`
+	ShortID     string `json:"short_id,omitempty"`
+	Title       string `json:"title,omitempty"`
+	AuthorName  string `json:"author_name,omitempty"`
+	AuthorEmail string `json:"author_email,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	Message     string `json:"message,omitempty"`
 }
 
 func deployableCommitOutput(c *gitlab.Commit) *DeployableCommitOutput {
@@ -131,19 +135,20 @@ func deployableCommitOutput(c *gitlab.Commit) *DeployableCommitOutput {
 		return nil
 	}
 	return &DeployableCommitOutput{
-		ID:           c.ID,
-		ShortID:      c.ShortID,
-		Title:        c.Title,
-		Message:      c.Message,
-		AuthorName:   c.AuthorName,
-		AuthorEmail:  c.AuthorEmail,
-		AuthoredDate: formatTimePtr(c.AuthoredDate),
-		CreatedAt:    formatTimePtr(c.CreatedAt),
-		WebURL:       c.WebURL,
+		ID:          c.ID,
+		ShortID:     c.ShortID,
+		Title:       c.Title,
+		AuthorName:  c.AuthorName,
+		AuthorEmail: c.AuthorEmail,
+		CreatedAt:   formatTimePtr(c.CreatedAt),
+		Message:     c.Message,
 	}
 }
 
-// DeployablePipelineOutput mirrors gl.DeploymentDeployablePipeline.
+// DeployablePipelineOutput is the documented reference subset of the deployable
+// (CI job) pipeline object (sourced from gl.DeploymentDeployablePipeline). The
+// API documents created_at, id, ref, sha, status, updated_at, and web_url.
+// Documented reference subset per doc/api/deployments.md.
 type DeployablePipelineOutput struct {
 	ID        int64  `json:"id"`
 	SHA       string `json:"sha,omitempty"`
@@ -169,7 +174,11 @@ func deployablePipelineOutput(p gitlab.DeploymentDeployablePipeline) *Deployable
 	}
 }
 
-// DeployableRunnerOutput mirrors the fields of gl.Runner surfaced on a deployable.
+// DeployableRunnerOutput is the documented reference subset of the deployable
+// (CI job) runner object (sourced from gl.Runner). The API documents the
+// runner key on the deployable but only ever shows a null value, so this keeps
+// the minimal runner identity fields surfaced when a runner is present.
+// Documented reference subset per doc/api/deployments.md.
 type DeployableRunnerOutput struct {
 	ID          int64  `json:"id"`
 	Description string `json:"description,omitempty"`
@@ -197,8 +206,14 @@ func deployableRunnerOutput(r *gitlab.Runner) *DeployableRunnerOutput {
 	}
 }
 
-// DeployableOutput mirrors gl.DeploymentDeployable (the CI job backing a
-// deployment), including its nested user, commit, pipeline, and runner objects.
+// DeployableOutput is the documented reference subset of gl.DeploymentDeployable
+// (the CI job backing a deployment), including its nested user, commit,
+// pipeline, and runner objects. The API documents id, status, stage, name, ref,
+// tag, coverage, created_at, started_at, finished_at, plus the nested objects;
+// the SDK's duration field is not documented and is not surfaced. The
+// documented deployable.project object ({ci_job_token_scope_enabled}) has no
+// counterpart on the SDK struct and therefore cannot be surfaced.
+// Documented reference subset per doc/api/deployments.md.
 type DeployableOutput struct {
 	ID         int64                     `json:"id"`
 	Status     string                    `json:"status,omitempty"`
@@ -210,7 +225,6 @@ type DeployableOutput struct {
 	CreatedAt  string                    `json:"created_at,omitempty"`
 	StartedAt  string                    `json:"started_at,omitempty"`
 	FinishedAt string                    `json:"finished_at,omitempty"`
-	Duration   float64                   `json:"duration,omitempty"`
 	User       *DeployableUserOutput     `json:"user,omitempty"`
 	Commit     *DeployableCommitOutput   `json:"commit,omitempty"`
 	Pipeline   *DeployablePipelineOutput `json:"pipeline,omitempty"`
@@ -236,7 +250,6 @@ func deployableOutput(d gitlab.DeploymentDeployable) *DeployableOutput {
 		CreatedAt:  formatTimePtr(d.CreatedAt),
 		StartedAt:  formatTimePtr(d.StartedAt),
 		FinishedAt: formatTimePtr(d.FinishedAt),
-		Duration:   d.Duration,
 		User:       deployableUserOutput(d.User),
 		Commit:     deployableCommitOutput(d.Commit),
 		Pipeline:   pipeline,

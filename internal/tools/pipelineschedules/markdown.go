@@ -30,8 +30,10 @@ func FormatOutputMarkdown(s Output) string {
 		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(s.Owner.Username))
 	}
 	if s.LastPipeline != nil {
+		// The documented `last_pipeline` reference has no web_url, so render the
+		// title as plain text (MdTitleLink emits no link for an empty URL).
 		fmt.Fprintf(&b, "| Last Pipeline | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status), s.LastPipeline.WebURL))
+			toolutil.MdTitleLink(fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status), ""))
 	}
 	if s.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(s.CreatedAt))

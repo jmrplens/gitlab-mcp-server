@@ -2889,9 +2889,6 @@
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
@@ -2940,16 +2937,10 @@
               "description": {
                 "type": "string"
               },
-              "description_html": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
               "name": {
-                "type": "string"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
@@ -2957,9 +2948,7 @@
               "id",
               "name",
               "color",
-              "description",
-              "description_html",
-              "text_color"
+              "description"
             ],
             "type": [
               "null",
@@ -3059,51 +3048,19 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
                   "color",
-                  "text_color",
                   "description"
                 ],
                 "type": [
@@ -3128,15 +3085,6 @@
                   },
                   "due_date": {
                     "type": "string"
-                  },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
                   },
                   "id": {
                     "type": "integer"
@@ -3166,7 +3114,6 @@
                 "required": [
                   "id",
                   "iid",
-                  "group_id",
                   "project_id",
                   "title",
                   "description",
@@ -3214,15 +3161,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
-            },
             "id": {
               "type": "integer"
             },
@@ -3251,7 +3189,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -3278,14 +3215,26 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
-            "description": {
+            "default_branch": {
+              "type": "string"
+            },
+            "forks_count": {
+              "type": "integer"
+            },
+            "http_url_to_repo": {
               "type": "string"
             },
             "id": {
               "type": "integer"
+            },
+            "last_activity_at": {
+              "type": "string"
             },
             "name": {
               "type": "string"
@@ -3298,6 +3247,33 @@
             },
             "path_with_namespace": {
               "type": "string"
+            },
+            "readme_url": {
+              "type": "string"
+            },
+            "ssh_url_to_repo": {
+              "type": "string"
+            },
+            "star_count": {
+              "type": "integer"
+            },
+            "tag_list": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "topics": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "web_url": {
               "type": "string"
@@ -3415,9 +3391,6 @@
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
@@ -3466,16 +3439,10 @@
               "description": {
                 "type": "string"
               },
-              "description_html": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
               "name": {
-                "type": "string"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
@@ -3483,9 +3450,7 @@
               "id",
               "name",
               "color",
-              "description",
-              "description_html",
-              "text_color"
+              "description"
             ],
             "type": [
               "null",
@@ -3585,51 +3550,19 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
                   "color",
-                  "text_color",
                   "description"
                 ],
                 "type": [
@@ -3654,15 +3587,6 @@
                   },
                   "due_date": {
                     "type": "string"
-                  },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
                   },
                   "id": {
                     "type": "integer"
@@ -3692,7 +3616,6 @@
                 "required": [
                   "id",
                   "iid",
-                  "group_id",
                   "project_id",
                   "title",
                   "description",
@@ -3740,15 +3663,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
-            },
             "id": {
               "type": "integer"
             },
@@ -3777,7 +3691,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -3804,14 +3717,26 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
-            "description": {
+            "default_branch": {
+              "type": "string"
+            },
+            "forks_count": {
+              "type": "integer"
+            },
+            "http_url_to_repo": {
               "type": "string"
             },
             "id": {
               "type": "integer"
+            },
+            "last_activity_at": {
+              "type": "string"
             },
             "name": {
               "type": "string"
@@ -3824,6 +3749,33 @@
             },
             "path_with_namespace": {
               "type": "string"
+            },
+            "readme_url": {
+              "type": "string"
+            },
+            "ssh_url_to_repo": {
+              "type": "string"
+            },
+            "star_count": {
+              "type": "integer"
+            },
+            "tag_list": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "topics": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "web_url": {
               "type": "string"
@@ -3909,9 +3861,6 @@
                   "avatar_url": {
                     "type": "string"
                   },
-                  "created_at": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
@@ -3960,16 +3909,10 @@
                     "description": {
                       "type": "string"
                     },
-                    "description_html": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
                     "name": {
-                      "type": "string"
-                    },
-                    "text_color": {
                       "type": "string"
                     }
                   },
@@ -3977,9 +3920,7 @@
                     "id",
                     "name",
                     "color",
-                    "description",
-                    "description_html",
-                    "text_color"
+                    "description"
                   ],
                   "type": [
                     "null",
@@ -4079,51 +4020,19 @@
                     "label": {
                       "additionalProperties": false,
                       "properties": {
-                        "archived": {
-                          "type": "boolean"
-                        },
-                        "closed_issues_count": {
-                          "type": "integer"
-                        },
                         "color": {
                           "type": "string"
                         },
                         "description": {
                           "type": "string"
                         },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "is_project_label": {
-                          "type": "boolean"
-                        },
                         "name": {
-                          "type": "string"
-                        },
-                        "open_issues_count": {
-                          "type": "integer"
-                        },
-                        "open_merge_requests_count": {
-                          "type": "integer"
-                        },
-                        "priority": {
-                          "type": [
-                            "null",
-                            "integer"
-                          ]
-                        },
-                        "subscribed": {
-                          "type": "boolean"
-                        },
-                        "text_color": {
                           "type": "string"
                         }
                       },
                       "required": [
-                        "id",
                         "name",
                         "color",
-                        "text_color",
                         "description"
                       ],
                       "type": [
@@ -4148,15 +4057,6 @@
                         },
                         "due_date": {
                           "type": "string"
-                        },
-                        "expired": {
-                          "type": [
-                            "null",
-                            "boolean"
-                          ]
-                        },
-                        "group_id": {
-                          "type": "integer"
                         },
                         "id": {
                           "type": "integer"
@@ -4186,7 +4086,6 @@
                       "required": [
                         "id",
                         "iid",
-                        "group_id",
                         "project_id",
                         "title",
                         "description",
@@ -4234,15 +4133,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
-                  },
                   "id": {
                     "type": "integer"
                   },
@@ -4271,7 +4161,6 @@
                 "required": [
                   "id",
                   "iid",
-                  "group_id",
                   "project_id",
                   "title",
                   "description",
@@ -4298,14 +4187,26 @@
               "project": {
                 "additionalProperties": false,
                 "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
                   "created_at": {
                     "type": "string"
                   },
-                  "description": {
+                  "default_branch": {
+                    "type": "string"
+                  },
+                  "forks_count": {
+                    "type": "integer"
+                  },
+                  "http_url_to_repo": {
                     "type": "string"
                   },
                   "id": {
                     "type": "integer"
+                  },
+                  "last_activity_at": {
+                    "type": "string"
                   },
                   "name": {
                     "type": "string"
@@ -4318,6 +4219,33 @@
                   },
                   "path_with_namespace": {
                     "type": "string"
+                  },
+                  "readme_url": {
+                    "type": "string"
+                  },
+                  "ssh_url_to_repo": {
+                    "type": "string"
+                  },
+                  "star_count": {
+                    "type": "integer"
+                  },
+                  "tag_list": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "topics": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
                   },
                   "web_url": {
                     "type": "string"
@@ -4531,51 +4459,19 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
             "color",
-            "text_color",
             "description"
           ],
           "type": [
@@ -4600,15 +4496,6 @@
             },
             "due_date": {
               "type": "string"
-            },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
             },
             "id": {
               "type": "integer"
@@ -4638,7 +4525,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -4849,51 +4735,19 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
             "color",
-            "text_color",
             "description"
           ],
           "type": [
@@ -4918,15 +4772,6 @@
             },
             "due_date": {
               "type": "string"
-            },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
             },
             "id": {
               "type": "integer"
@@ -4956,7 +4801,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -5130,51 +4974,19 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
                   "color",
-                  "text_color",
                   "description"
                 ],
                 "type": [
@@ -5199,15 +5011,6 @@
                   },
                   "due_date": {
                     "type": "string"
-                  },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
                   },
                   "id": {
                     "type": "integer"
@@ -5237,7 +5040,6 @@
                 "required": [
                   "id",
                   "iid",
-                  "group_id",
                   "project_id",
                   "title",
                   "description",
@@ -5450,51 +5252,19 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
             "color",
-            "text_color",
             "description"
           ],
           "type": [
@@ -5519,15 +5289,6 @@
             },
             "due_date": {
               "type": "string"
-            },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
             },
             "id": {
               "type": "integer"
@@ -5557,7 +5318,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -5664,9 +5424,6 @@
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
@@ -5715,16 +5472,10 @@
               "description": {
                 "type": "string"
               },
-              "description_html": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
               "name": {
-                "type": "string"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
@@ -5732,9 +5483,7 @@
               "id",
               "name",
               "color",
-              "description",
-              "description_html",
-              "text_color"
+              "description"
             ],
             "type": [
               "null",
@@ -5834,51 +5583,19 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
                   "color",
-                  "text_color",
                   "description"
                 ],
                 "type": [
@@ -5903,15 +5620,6 @@
                   },
                   "due_date": {
                     "type": "string"
-                  },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
                   },
                   "id": {
                     "type": "integer"
@@ -5941,7 +5649,6 @@
                 "required": [
                   "id",
                   "iid",
-                  "group_id",
                   "project_id",
                   "title",
                   "description",
@@ -5989,15 +5696,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "group_id": {
-              "type": "integer"
-            },
             "id": {
               "type": "integer"
             },
@@ -6026,7 +5724,6 @@
           "required": [
             "id",
             "iid",
-            "group_id",
             "project_id",
             "title",
             "description",
@@ -6053,14 +5750,26 @@
         "project": {
           "additionalProperties": false,
           "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
-            "description": {
+            "default_branch": {
+              "type": "string"
+            },
+            "forks_count": {
+              "type": "integer"
+            },
+            "http_url_to_repo": {
               "type": "string"
             },
             "id": {
               "type": "integer"
+            },
+            "last_activity_at": {
+              "type": "string"
             },
             "name": {
               "type": "string"
@@ -6073,6 +5782,33 @@
             },
             "path_with_namespace": {
               "type": "string"
+            },
+            "readme_url": {
+              "type": "string"
+            },
+            "ssh_url_to_repo": {
+              "type": "string"
+            },
+            "star_count": {
+              "type": "integer"
+            },
+            "tag_list": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "topics": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "web_url": {
               "type": "string"
@@ -20445,9 +20181,6 @@
                 "author_name": {
                   "type": "string"
                 },
-                "authored_date": {
-                  "type": "string"
-                },
                 "created_at": {
                   "type": "string"
                 },
@@ -20461,9 +20194,6 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": "string"
-                },
-                "web_url": {
                   "type": "string"
                 }
               },
@@ -20480,9 +20210,6 @@
             },
             "created_at": {
               "type": "string"
-            },
-            "duration": {
-              "type": "number"
             },
             "finished_at": {
               "type": "string"
@@ -20583,19 +20310,43 @@
                 "avatar_url": {
                   "type": "string"
                 },
+                "bio": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
                 "id": {
                   "type": "integer"
+                },
+                "linkedin": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
                 },
                 "name": {
                   "type": "string"
                 },
+                "organization": {
+                  "type": "string"
+                },
+                "public_email": {
+                  "type": "string"
+                },
                 "state": {
+                  "type": "string"
+                },
+                "twitter": {
                   "type": "string"
                 },
                 "username": {
                   "type": "string"
                 },
                 "web_url": {
+                  "type": "string"
+                },
+                "website_url": {
                   "type": "string"
                 }
               },
@@ -20621,43 +20372,13 @@
         "environment": {
           "additionalProperties": false,
           "properties": {
-            "auto_stop_at": {
-              "type": "string"
-            },
-            "auto_stop_setting": {
-              "type": "string"
-            },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
             "external_url": {
-              "type": "string"
-            },
-            "flux_resource_path": {
               "type": "string"
             },
             "id": {
               "type": "integer"
             },
-            "kubernetes_namespace": {
-              "type": "string"
-            },
             "name": {
-              "type": "string"
-            },
-            "slug": {
-              "type": "string"
-            },
-            "state": {
-              "type": "string"
-            },
-            "tier": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             }
           },
@@ -20841,9 +20562,6 @@
                 "author_name": {
                   "type": "string"
                 },
-                "authored_date": {
-                  "type": "string"
-                },
                 "created_at": {
                   "type": "string"
                 },
@@ -20857,9 +20575,6 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": "string"
-                },
-                "web_url": {
                   "type": "string"
                 }
               },
@@ -20876,9 +20591,6 @@
             },
             "created_at": {
               "type": "string"
-            },
-            "duration": {
-              "type": "number"
             },
             "finished_at": {
               "type": "string"
@@ -20979,19 +20691,43 @@
                 "avatar_url": {
                   "type": "string"
                 },
+                "bio": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
                 "id": {
                   "type": "integer"
+                },
+                "linkedin": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
                 },
                 "name": {
                   "type": "string"
                 },
+                "organization": {
+                  "type": "string"
+                },
+                "public_email": {
+                  "type": "string"
+                },
                 "state": {
+                  "type": "string"
+                },
+                "twitter": {
                   "type": "string"
                 },
                 "username": {
                   "type": "string"
                 },
                 "web_url": {
+                  "type": "string"
+                },
+                "website_url": {
                   "type": "string"
                 }
               },
@@ -21017,43 +20753,13 @@
         "environment": {
           "additionalProperties": false,
           "properties": {
-            "auto_stop_at": {
-              "type": "string"
-            },
-            "auto_stop_setting": {
-              "type": "string"
-            },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
             "external_url": {
-              "type": "string"
-            },
-            "flux_resource_path": {
               "type": "string"
             },
             "id": {
               "type": "integer"
             },
-            "kubernetes_namespace": {
-              "type": "string"
-            },
             "name": {
-              "type": "string"
-            },
-            "slug": {
-              "type": "string"
-            },
-            "state": {
-              "type": "string"
-            },
-            "tier": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             }
           },
@@ -21229,9 +20935,6 @@
                       "author_name": {
                         "type": "string"
                       },
-                      "authored_date": {
-                        "type": "string"
-                      },
                       "created_at": {
                         "type": "string"
                       },
@@ -21245,9 +20948,6 @@
                         "type": "string"
                       },
                       "title": {
-                        "type": "string"
-                      },
-                      "web_url": {
                         "type": "string"
                       }
                     },
@@ -21264,9 +20964,6 @@
                   },
                   "created_at": {
                     "type": "string"
-                  },
-                  "duration": {
-                    "type": "number"
                   },
                   "finished_at": {
                     "type": "string"
@@ -21367,19 +21064,43 @@
                       "avatar_url": {
                         "type": "string"
                       },
+                      "bio": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
                       "id": {
                         "type": "integer"
+                      },
+                      "linkedin": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
                       },
                       "name": {
                         "type": "string"
                       },
+                      "organization": {
+                        "type": "string"
+                      },
+                      "public_email": {
+                        "type": "string"
+                      },
                       "state": {
+                        "type": "string"
+                      },
+                      "twitter": {
                         "type": "string"
                       },
                       "username": {
                         "type": "string"
                       },
                       "web_url": {
+                        "type": "string"
+                      },
+                      "website_url": {
                         "type": "string"
                       }
                     },
@@ -21405,43 +21126,13 @@
               "environment": {
                 "additionalProperties": false,
                 "properties": {
-                  "auto_stop_at": {
-                    "type": "string"
-                  },
-                  "auto_stop_setting": {
-                    "type": "string"
-                  },
-                  "created_at": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
                   "external_url": {
-                    "type": "string"
-                  },
-                  "flux_resource_path": {
                     "type": "string"
                   },
                   "id": {
                     "type": "integer"
                   },
-                  "kubernetes_namespace": {
-                    "type": "string"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "slug": {
-                    "type": "string"
-                  },
-                  "state": {
-                    "type": "string"
-                  },
-                  "tier": {
-                    "type": "string"
-                  },
-                  "updated_at": {
                     "type": "string"
                   }
                 },
@@ -21632,9 +21323,6 @@
                 "author_name": {
                   "type": "string"
                 },
-                "authored_date": {
-                  "type": "string"
-                },
                 "created_at": {
                   "type": "string"
                 },
@@ -21648,9 +21336,6 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": "string"
-                },
-                "web_url": {
                   "type": "string"
                 }
               },
@@ -21667,9 +21352,6 @@
             },
             "created_at": {
               "type": "string"
-            },
-            "duration": {
-              "type": "number"
             },
             "finished_at": {
               "type": "string"
@@ -21770,19 +21452,43 @@
                 "avatar_url": {
                   "type": "string"
                 },
+                "bio": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
                 "id": {
                   "type": "integer"
+                },
+                "linkedin": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
                 },
                 "name": {
                   "type": "string"
                 },
+                "organization": {
+                  "type": "string"
+                },
+                "public_email": {
+                  "type": "string"
+                },
                 "state": {
+                  "type": "string"
+                },
+                "twitter": {
                   "type": "string"
                 },
                 "username": {
                   "type": "string"
                 },
                 "web_url": {
+                  "type": "string"
+                },
+                "website_url": {
                   "type": "string"
                 }
               },
@@ -21808,43 +21514,13 @@
         "environment": {
           "additionalProperties": false,
           "properties": {
-            "auto_stop_at": {
-              "type": "string"
-            },
-            "auto_stop_setting": {
-              "type": "string"
-            },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
             "external_url": {
-              "type": "string"
-            },
-            "flux_resource_path": {
               "type": "string"
             },
             "id": {
               "type": "integer"
             },
-            "kubernetes_namespace": {
-              "type": "string"
-            },
             "name": {
-              "type": "string"
-            },
-            "slug": {
-              "type": "string"
-            },
-            "state": {
-              "type": "string"
-            },
-            "tier": {
-              "type": "string"
-            },
-            "updated_at": {
               "type": "string"
             }
           },
@@ -83007,26 +82683,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -83034,57 +82692,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -83163,34 +82774,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -83261,13 +82853,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -83275,12 +82888,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -83305,7 +82921,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -83726,26 +83341,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -83753,57 +83350,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -83882,34 +83432,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -83980,13 +83511,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -83994,12 +83546,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -84024,7 +83579,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -84123,26 +83677,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -84150,57 +83686,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -84279,34 +83768,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -84377,13 +83847,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -84391,12 +83882,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -84421,7 +83915,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -84521,26 +84014,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -84548,57 +84023,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -84677,34 +84105,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -84775,13 +84184,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -84789,12 +84219,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -84819,7 +84252,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -84960,26 +84392,8 @@
                   "author_name": {
                     "type": "string"
                   },
-                  "authored_date": {
-                    "type": "string"
-                  },
-                  "committed_date": {
-                    "type": "string"
-                  },
-                  "committer_email": {
-                    "type": "string"
-                  },
-                  "committer_name": {
-                    "type": "string"
-                  },
                   "created_at": {
                     "type": "string"
-                  },
-                  "extended_trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
                   },
                   "id": {
                     "type": "string"
@@ -84987,57 +84401,10 @@
                   "message": {
                     "type": "string"
                   },
-                  "parent_ids": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
                   "short_id": {
                     "type": "string"
                   },
-                  "stats": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "additions": {
-                        "type": "integer"
-                      },
-                      "deletions": {
-                        "type": "integer"
-                      },
-                      "total": {
-                        "type": "integer"
-                      }
-                    },
-                    "required": [
-                      "additions",
-                      "deletions",
-                      "total"
-                    ],
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "status": {
-                    "type": "string"
-                  },
                   "title": {
-                    "type": "string"
-                  },
-                  "trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
@@ -85116,34 +84483,15 @@
                   "object"
                 ]
               },
-              "pipeline_id": {
-                "type": "integer"
-              },
               "project": {
                 "additionalProperties": false,
                 "properties": {
-                  "id": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "path_with_namespace": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
+                  "ci_job_token_scope_enabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
-                  "id",
-                  "name",
-                  "path",
-                  "path_with_namespace",
-                  "web_url"
+                  "ci_job_token_scope_enabled"
                 ],
                 "type": [
                   "null",
@@ -85214,13 +84562,34 @@
                   "avatar_url": {
                     "type": "string"
                   },
+                  "bio": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
+                  },
+                  "linkedin": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
                   },
                   "name": {
                     "type": "string"
                   },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
                   "state": {
+                    "type": "string"
+                  },
+                  "twitter": {
                     "type": "string"
                   },
                   "username": {
@@ -85228,12 +84597,15 @@
                   },
                   "web_url": {
                     "type": "string"
+                  },
+                  "website_url": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
-                  "username",
                   "name",
+                  "username",
                   "state",
                   "avatar_url",
                   "web_url"
@@ -85258,7 +84630,6 @@
               "duration",
               "queued_duration",
               "web_url",
-              "pipeline_id",
               "created_at"
             ],
             "type": "object"
@@ -85405,26 +84776,8 @@
                   "author_name": {
                     "type": "string"
                   },
-                  "authored_date": {
-                    "type": "string"
-                  },
-                  "committed_date": {
-                    "type": "string"
-                  },
-                  "committer_email": {
-                    "type": "string"
-                  },
-                  "committer_name": {
-                    "type": "string"
-                  },
                   "created_at": {
                     "type": "string"
-                  },
-                  "extended_trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
                   },
                   "id": {
                     "type": "string"
@@ -85432,57 +84785,10 @@
                   "message": {
                     "type": "string"
                   },
-                  "parent_ids": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
                   "short_id": {
                     "type": "string"
                   },
-                  "stats": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "additions": {
-                        "type": "integer"
-                      },
-                      "deletions": {
-                        "type": "integer"
-                      },
-                      "total": {
-                        "type": "integer"
-                      }
-                    },
-                    "required": [
-                      "additions",
-                      "deletions",
-                      "total"
-                    ],
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "status": {
-                    "type": "string"
-                  },
                   "title": {
-                    "type": "string"
-                  },
-                  "trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
@@ -85512,12 +84818,6 @@
                   "id": {
                     "type": "integer"
                   },
-                  "iid": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
                   "project_id": {
                     "type": "integer"
                   },
@@ -85525,9 +84825,6 @@
                     "type": "string"
                   },
                   "sha": {
-                    "type": "string"
-                  },
-                  "source": {
                     "type": "string"
                   },
                   "status": {
@@ -85542,13 +84839,9 @@
                 },
                 "required": [
                   "id",
-                  "iid",
-                  "project_id",
                   "status",
-                  "source",
                   "ref",
                   "sha",
-                  "name",
                   "web_url"
                 ],
                 "type": [
@@ -85583,12 +84876,6 @@
                   "id": {
                     "type": "integer"
                   },
-                  "iid": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
                   "project_id": {
                     "type": "integer"
                   },
@@ -85596,9 +84883,6 @@
                     "type": "string"
                   },
                   "sha": {
-                    "type": "string"
-                  },
-                  "source": {
                     "type": "string"
                   },
                   "status": {
@@ -85613,13 +84897,9 @@
                 },
                 "required": [
                   "id",
-                  "iid",
-                  "project_id",
                   "status",
-                  "source",
                   "ref",
                   "sha",
-                  "name",
                   "web_url"
                 ],
                 "type": [
@@ -85651,13 +84931,34 @@
                   "avatar_url": {
                     "type": "string"
                   },
+                  "bio": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
+                  },
+                  "linkedin": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
                   },
                   "name": {
                     "type": "string"
                   },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
                   "state": {
+                    "type": "string"
+                  },
+                  "twitter": {
                     "type": "string"
                   },
                   "username": {
@@ -85665,12 +84966,15 @@
                   },
                   "web_url": {
                     "type": "string"
+                  },
+                  "website_url": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
-                  "username",
                   "name",
+                  "username",
                   "state",
                   "avatar_url",
                   "web_url"
@@ -85888,26 +85192,8 @@
                   "author_name": {
                     "type": "string"
                   },
-                  "authored_date": {
-                    "type": "string"
-                  },
-                  "committed_date": {
-                    "type": "string"
-                  },
-                  "committer_email": {
-                    "type": "string"
-                  },
-                  "committer_name": {
-                    "type": "string"
-                  },
                   "created_at": {
                     "type": "string"
-                  },
-                  "extended_trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
                   },
                   "id": {
                     "type": "string"
@@ -85915,57 +85201,10 @@
                   "message": {
                     "type": "string"
                   },
-                  "parent_ids": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
                   "short_id": {
                     "type": "string"
                   },
-                  "stats": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "additions": {
-                        "type": "integer"
-                      },
-                      "deletions": {
-                        "type": "integer"
-                      },
-                      "total": {
-                        "type": "integer"
-                      }
-                    },
-                    "required": [
-                      "additions",
-                      "deletions",
-                      "total"
-                    ],
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "status": {
-                    "type": "string"
-                  },
                   "title": {
-                    "type": "string"
-                  },
-                  "trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
@@ -86044,34 +85283,15 @@
                   "object"
                 ]
               },
-              "pipeline_id": {
-                "type": "integer"
-              },
               "project": {
                 "additionalProperties": false,
                 "properties": {
-                  "id": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "path_with_namespace": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
+                  "ci_job_token_scope_enabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
-                  "id",
-                  "name",
-                  "path",
-                  "path_with_namespace",
-                  "web_url"
+                  "ci_job_token_scope_enabled"
                 ],
                 "type": [
                   "null",
@@ -86142,13 +85362,34 @@
                   "avatar_url": {
                     "type": "string"
                   },
+                  "bio": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
+                  },
+                  "linkedin": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
                   },
                   "name": {
                     "type": "string"
                   },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
                   "state": {
+                    "type": "string"
+                  },
+                  "twitter": {
                     "type": "string"
                   },
                   "username": {
@@ -86156,12 +85397,15 @@
                   },
                   "web_url": {
                     "type": "string"
+                  },
+                  "website_url": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
-                  "username",
                   "name",
+                  "username",
                   "state",
                   "avatar_url",
                   "web_url"
@@ -86186,7 +85430,6 @@
               "duration",
               "queued_duration",
               "web_url",
-              "pipeline_id",
               "created_at"
             ],
             "type": "object"
@@ -86372,26 +85615,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -86399,57 +85624,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -86528,34 +85706,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -86626,13 +85785,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -86640,12 +85820,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -86670,7 +85853,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -86769,26 +85951,8 @@
             "author_name": {
               "type": "string"
             },
-            "authored_date": {
-              "type": "string"
-            },
-            "committed_date": {
-              "type": "string"
-            },
-            "committer_email": {
-              "type": "string"
-            },
-            "committer_name": {
-              "type": "string"
-            },
             "created_at": {
               "type": "string"
-            },
-            "extended_trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
             },
             "id": {
               "type": "string"
@@ -86796,57 +85960,10 @@
             "message": {
               "type": "string"
             },
-            "parent_ids": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
-            "project_id": {
-              "type": "integer"
-            },
             "short_id": {
               "type": "string"
             },
-            "stats": {
-              "additionalProperties": false,
-              "properties": {
-                "additions": {
-                  "type": "integer"
-                },
-                "deletions": {
-                  "type": "integer"
-                },
-                "total": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "additions",
-                "deletions",
-                "total"
-              ],
-              "type": [
-                "null",
-                "object"
-              ]
-            },
-            "status": {
-              "type": "string"
-            },
             "title": {
-              "type": "string"
-            },
-            "trailers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "web_url": {
               "type": "string"
             }
           },
@@ -86925,34 +86042,15 @@
             "object"
           ]
         },
-        "pipeline_id": {
-          "type": "integer"
-        },
         "project": {
           "additionalProperties": false,
           "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "path_with_namespace": {
-              "type": "string"
-            },
-            "web_url": {
-              "type": "string"
+            "ci_job_token_scope_enabled": {
+              "type": "boolean"
             }
           },
           "required": [
-            "id",
-            "name",
-            "path",
-            "path_with_namespace",
-            "web_url"
+            "ci_job_token_scope_enabled"
           ],
           "type": [
             "null",
@@ -87023,13 +86121,34 @@
             "avatar_url": {
               "type": "string"
             },
+            "bio": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
             "id": {
               "type": "integer"
+            },
+            "linkedin": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
             },
             "name": {
               "type": "string"
             },
+            "organization": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
             "state": {
+              "type": "string"
+            },
+            "twitter": {
               "type": "string"
             },
             "username": {
@@ -87037,12 +86156,15 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "website_url": {
+              "type": "string"
             }
           },
           "required": [
             "id",
-            "username",
             "name",
+            "username",
             "state",
             "avatar_url",
             "web_url"
@@ -87067,7 +86189,6 @@
         "duration",
         "queued_duration",
         "web_url",
-        "pipeline_id",
         "created_at"
       ],
       "type": "object"
@@ -87244,26 +86365,8 @@
                 "author_name": {
                   "type": "string"
                 },
-                "authored_date": {
-                  "type": "string"
-                },
-                "committed_date": {
-                  "type": "string"
-                },
-                "committer_email": {
-                  "type": "string"
-                },
-                "committer_name": {
-                  "type": "string"
-                },
                 "created_at": {
                   "type": "string"
-                },
-                "extended_trailers": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object"
                 },
                 "id": {
                   "type": "string"
@@ -87271,57 +86374,10 @@
                 "message": {
                   "type": "string"
                 },
-                "parent_ids": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": [
-                    "null",
-                    "array"
-                  ]
-                },
-                "project_id": {
-                  "type": "integer"
-                },
                 "short_id": {
                   "type": "string"
                 },
-                "stats": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "additions": {
-                      "type": "integer"
-                    },
-                    "deletions": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "additions",
-                    "deletions",
-                    "total"
-                  ],
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "status": {
-                  "type": "string"
-                },
                 "title": {
-                  "type": "string"
-                },
-                "trailers": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object"
-                },
-                "web_url": {
                   "type": "string"
                 }
               },
@@ -87400,34 +86456,15 @@
                 "object"
               ]
             },
-            "pipeline_id": {
-              "type": "integer"
-            },
             "project": {
               "additionalProperties": false,
               "properties": {
-                "id": {
-                  "type": "integer"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "path": {
-                  "type": "string"
-                },
-                "path_with_namespace": {
-                  "type": "string"
-                },
-                "web_url": {
-                  "type": "string"
+                "ci_job_token_scope_enabled": {
+                  "type": "boolean"
                 }
               },
               "required": [
-                "id",
-                "name",
-                "path",
-                "path_with_namespace",
-                "web_url"
+                "ci_job_token_scope_enabled"
               ],
               "type": [
                 "null",
@@ -87498,13 +86535,34 @@
                 "avatar_url": {
                   "type": "string"
                 },
+                "bio": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
                 "id": {
                   "type": "integer"
+                },
+                "linkedin": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
                 },
                 "name": {
                   "type": "string"
                 },
+                "organization": {
+                  "type": "string"
+                },
+                "public_email": {
+                  "type": "string"
+                },
                 "state": {
+                  "type": "string"
+                },
+                "twitter": {
                   "type": "string"
                 },
                 "username": {
@@ -87512,12 +86570,15 @@
                 },
                 "web_url": {
                   "type": "string"
+                },
+                "website_url": {
+                  "type": "string"
                 }
               },
               "required": [
                 "id",
-                "username",
                 "name",
+                "username",
                 "state",
                 "avatar_url",
                 "web_url"
@@ -87542,7 +86603,6 @@
             "duration",
             "queued_duration",
             "web_url",
-            "pipeline_id",
             "created_at"
           ],
           "type": "object"
@@ -135158,17 +134218,13 @@
             },
             "status": {
               "type": "string"
-            },
-            "web_url": {
-              "type": "string"
             }
           },
           "required": [
             "id",
             "sha",
             "ref",
-            "status",
-            "web_url"
+            "status"
           ],
           "type": [
             "null",
@@ -135609,17 +134665,13 @@
             },
             "status": {
               "type": "string"
-            },
-            "web_url": {
-              "type": "string"
             }
           },
           "required": [
             "id",
             "sha",
             "ref",
-            "status",
-            "web_url"
+            "status"
           ],
           "type": [
             "null",
@@ -135876,17 +134928,13 @@
                   },
                   "status": {
                     "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
                   "sha",
                   "ref",
-                  "status",
-                  "web_url"
+                  "status"
                 ],
                 "type": [
                   "null",
@@ -136091,10 +135139,16 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "created_at": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
               "iid": {
+                "type": "integer"
+              },
+              "project_id": {
                 "type": "integer"
               },
               "ref": {
@@ -136109,6 +135163,9 @@
               "status": {
                 "type": "string"
               },
+              "updated_at": {
+                "type": "string"
+              },
               "web_url": {
                 "type": "string"
               }
@@ -136116,6 +135173,7 @@
             "required": [
               "id",
               "iid",
+              "project_id",
               "ref",
               "sha",
               "status",
@@ -136224,17 +135282,13 @@
             },
             "status": {
               "type": "string"
-            },
-            "web_url": {
-              "type": "string"
             }
           },
           "required": [
             "id",
             "sha",
             "ref",
-            "status",
-            "web_url"
+            "status"
           ],
           "type": [
             "null",
@@ -136418,17 +135472,13 @@
             },
             "status": {
               "type": "string"
-            },
-            "web_url": {
-              "type": "string"
             }
           },
           "required": [
             "id",
             "sha",
             "ref",
-            "status",
-            "web_url"
+            "status"
           ],
           "type": [
             "null",
@@ -136661,17 +135711,13 @@
             },
             "status": {
               "type": "string"
-            },
-            "web_url": {
-              "type": "string"
             }
           },
           "required": [
             "id",
             "sha",
             "ref",
-            "status",
-            "web_url"
+            "status"
           ],
           "type": [
             "null",
@@ -179082,26 +178128,8 @@
                   "author_name": {
                     "type": "string"
                   },
-                  "authored_date": {
-                    "type": "string"
-                  },
-                  "committed_date": {
-                    "type": "string"
-                  },
-                  "committer_email": {
-                    "type": "string"
-                  },
-                  "committer_name": {
-                    "type": "string"
-                  },
                   "created_at": {
                     "type": "string"
-                  },
-                  "extended_trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
                   },
                   "id": {
                     "type": "string"
@@ -179109,57 +178137,10 @@
                   "message": {
                     "type": "string"
                   },
-                  "parent_ids": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
                   "short_id": {
                     "type": "string"
                   },
-                  "stats": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "additions": {
-                        "type": "integer"
-                      },
-                      "deletions": {
-                        "type": "integer"
-                      },
-                      "total": {
-                        "type": "integer"
-                      }
-                    },
-                    "required": [
-                      "additions",
-                      "deletions",
-                      "total"
-                    ],
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "status": {
-                    "type": "string"
-                  },
                   "title": {
-                    "type": "string"
-                  },
-                  "trailers": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
@@ -179238,34 +178219,15 @@
                   "object"
                 ]
               },
-              "pipeline_id": {
-                "type": "integer"
-              },
               "project": {
                 "additionalProperties": false,
                 "properties": {
-                  "id": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "path_with_namespace": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
+                  "ci_job_token_scope_enabled": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
-                  "id",
-                  "name",
-                  "path",
-                  "path_with_namespace",
-                  "web_url"
+                  "ci_job_token_scope_enabled"
                 ],
                 "type": [
                   "null",
@@ -179336,13 +178298,34 @@
                   "avatar_url": {
                     "type": "string"
                   },
+                  "bio": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
                   "id": {
                     "type": "integer"
+                  },
+                  "linkedin": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
                   },
                   "name": {
                     "type": "string"
                   },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
                   "state": {
+                    "type": "string"
+                  },
+                  "twitter": {
                     "type": "string"
                   },
                   "username": {
@@ -179350,12 +178333,15 @@
                   },
                   "web_url": {
                     "type": "string"
+                  },
+                  "website_url": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
-                  "username",
                   "name",
+                  "username",
                   "state",
                   "avatar_url",
                   "web_url"
@@ -179380,7 +178366,6 @@
               "duration",
               "queued_duration",
               "web_url",
-              "pipeline_id",
               "created_at"
             ],
             "type": "object"

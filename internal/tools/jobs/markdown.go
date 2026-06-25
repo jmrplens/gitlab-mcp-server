@@ -13,8 +13,8 @@ import (
 func FormatOutputMarkdown(j Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s Job #%d: %s\n\n", toolutil.PipelineStatusEmoji(j.Status), j.ID, toolutil.EscapeMdHeading(j.Name))
-	if j.PipelineID > 0 {
-		fmt.Fprintf(&b, "- **Pipeline**: #%d\n", j.PipelineID)
+	if j.Pipeline != nil && j.Pipeline.ID > 0 {
+		fmt.Fprintf(&b, "- **Pipeline**: #%d\n", j.Pipeline.ID)
 	}
 	fmt.Fprintf(&b, "- **Stage**: %s\n", j.Stage)
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, j.Status)

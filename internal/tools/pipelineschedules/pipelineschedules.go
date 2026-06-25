@@ -530,15 +530,22 @@ type ListTriggeredPipelinesInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// TriggeredPipelineOutput represents a pipeline triggered by a schedule.
+// TriggeredPipelineOutput is a documented reference subset per
+// doc/api/pipeline_schedules.md. It represents a pipeline triggered by a
+// schedule, limited to the fields the official "List all pipelines triggered by
+// a pipeline schedule" response documents: id, iid, project_id, status, source,
+// ref, sha, web_url, created_at, updated_at.
 type TriggeredPipelineOutput struct {
-	ID     int    `json:"id"`
-	IID    int    `json:"iid"`
-	Ref    string `json:"ref"`
-	SHA    string `json:"sha"`
-	Status string `json:"status"`
-	Source string `json:"source"`
-	WebURL string `json:"web_url"`
+	ID        int    `json:"id"`
+	IID       int    `json:"iid"`
+	ProjectID int    `json:"project_id"`
+	Ref       string `json:"ref"`
+	SHA       string `json:"sha"`
+	Status    string `json:"status"`
+	Source    string `json:"source"`
+	WebURL    string `json:"web_url"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // TriggeredPipelinesListOutput represents the paginated result of pipelines triggered by a schedule.
@@ -570,15 +577,23 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 
 	items := make([]TriggeredPipelineOutput, 0, len(pipelines))
 	for _, p := range pipelines {
-		items = append(items, TriggeredPipelineOutput{
-			ID:     int(p.ID),
-			IID:    int(p.IID),
-			Ref:    p.Ref,
-			SHA:    p.SHA,
-			Status: p.Status,
-			Source: string(p.Source),
-			WebURL: p.WebURL,
-		})
+		item := TriggeredPipelineOutput{
+			ID:        int(p.ID),
+			IID:       int(p.IID),
+			ProjectID: int(p.ProjectID),
+			Ref:       p.Ref,
+			SHA:       p.SHA,
+			Status:    p.Status,
+			Source:    string(p.Source),
+			WebURL:    p.WebURL,
+		}
+		if p.CreatedAt != nil {
+			item.CreatedAt = p.CreatedAt.Format(time.RFC3339)
+		}
+		if p.UpdatedAt != nil {
+			item.UpdatedAt = p.UpdatedAt.Format(time.RFC3339)
+		}
+		items = append(items, item)
 	}
 
 	return TriggeredPipelinesListOutput{

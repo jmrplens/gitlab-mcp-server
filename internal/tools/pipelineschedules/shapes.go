@@ -10,10 +10,12 @@ import (
 // and are replicated here rather than imported from sibling packages to
 // preserve the zero-import-cycle constraint (C-IMPORTS).
 
-// OwnerOutput mirrors gl.User (the owner object embedded on a pipeline
-// schedule). It surfaces the identifying fields of the owning user without
-// importing the full gl.User shape, which carries many unrelated account
-// fields not relevant to a schedule owner.
+// OwnerOutput is a documented reference subset per
+// doc/api/pipeline_schedules.md. It mirrors gl.User (the owner object embedded
+// on a pipeline schedule) limited to the user-reference fields the official API
+// documents for the `owner` reference: id, username, name, state, avatar_url,
+// web_url. The full gl.User shape carries many unrelated account fields that the
+// documented response does not include.
 type OwnerOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -35,14 +37,17 @@ func ownerOutput(u *gitlab.User) *OwnerOutput {
 	}
 }
 
-// LastPipelineOutput mirrors gl.LastPipeline (the last pipeline run by a
-// schedule, returned only on the single-schedule get operation).
+// LastPipelineOutput is a documented reference subset per
+// doc/api/pipeline_schedules.md. It mirrors gl.LastPipeline (the last pipeline
+// run by a schedule, returned only on the single-schedule get operation),
+// limited to the fields the official API documents for the `last_pipeline`
+// reference: id, sha, ref, status. The SDK's web_url field is intentionally
+// omitted because the documented response does not include it.
 type LastPipelineOutput struct {
 	ID     int64  `json:"id"`
 	SHA    string `json:"sha"`
 	Ref    string `json:"ref"`
 	Status string `json:"status"`
-	WebURL string `json:"web_url"`
 }
 
 // lastPipelineOutput converts a gl.LastPipeline to its output shape, returning
@@ -52,12 +57,16 @@ func lastPipelineOutput(p *gitlab.LastPipeline) *LastPipelineOutput {
 		return nil
 	}
 	return &LastPipelineOutput{
-		ID: p.ID, SHA: p.SHA, Ref: p.Ref, Status: p.Status, WebURL: p.WebURL,
+		ID: p.ID, SHA: p.SHA, Ref: p.Ref, Status: p.Status,
 	}
 }
 
-// VariableObject mirrors gl.PipelineVariable, the variables embedded on a
-// pipeline schedule payload.
+// VariableObject is a documented reference subset per
+// doc/api/pipeline_schedules.md. It mirrors gl.PipelineVariable, the variables
+// embedded on a pipeline schedule payload (key, value, variable_type). The
+// documented `variables[]` response also lists a `raw` boolean, but the SDK's
+// gl.PipelineVariable does not expose it, so it cannot be surfaced without
+// inventing a scalar.
 type VariableObject struct {
 	Key          string `json:"key"`
 	Value        string `json:"value"`

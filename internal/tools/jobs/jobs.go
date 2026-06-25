@@ -80,7 +80,6 @@ type Output struct {
 	QueuedDuration    float64              `json:"queued_duration"`
 	FailureReason     string               `json:"failure_reason,omitempty"`
 	WebURL            string               `json:"web_url"`
-	PipelineID        int64                `json:"pipeline_id"` // TODO(1to1): flattened convenience scalar; prune in batched minor-extras cleanup (pipeline object carries id)
 	CreatedAt         string               `json:"created_at"`
 	StartedAt         string               `json:"started_at,omitempty"`
 	FinishedAt        string               `json:"finished_at,omitempty"`
@@ -302,7 +301,8 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 // ToOutput converts a GitLab API [gl.Job] into the package's [Output],
 // formatting timestamps as RFC 3339 strings and surfacing the embedded
 // commit, pipeline, project, runner, user, and artifact sub-objects on
-// their canonical keys (1:1 audit: full nested objects).
+// their canonical keys (nested objects trimmed to the documented Jobs API
+// field set per doc/api/jobs.md).
 func ToOutput(j *gl.Job) Output {
 	out := Output{
 		ID:             j.ID,
@@ -316,7 +316,6 @@ func ToOutput(j *gl.Job) Output {
 		QueuedDuration: j.QueuedDuration,
 		FailureReason:  j.FailureReason,
 		WebURL:         j.WebURL,
-		PipelineID:     j.Pipeline.ID,
 		Coverage:       j.Coverage,
 		TagList:        j.TagList,
 		Commit:         commitObject(j.Commit),
@@ -444,7 +443,8 @@ type BridgeListOutput struct {
 // BridgeToOutput converts a GitLab API [gl.Bridge] into the package's
 // [BridgeOutput], formatting timestamps as RFC 3339 strings and surfacing
 // the embedded commit, pipeline, user, and downstream_pipeline sub-objects
-// on their canonical keys (1:1 audit: full nested objects).
+// on their canonical keys (nested objects trimmed to the documented Jobs API
+// field set per doc/api/jobs.md).
 func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 	out := BridgeOutput{
 		ID:                 b.ID,

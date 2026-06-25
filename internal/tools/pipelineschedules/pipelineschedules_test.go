@@ -5,6 +5,7 @@ package pipelineschedules
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -145,6 +146,24 @@ func TestPipelineScheduleList_CancelledContext(t *testing.T) {
 // Pipeline Schedule Get
 // ---------------------------------------------------------------------------.
 
+// assertLastPipelineDocumentedSubset verifies that a last_pipeline reference
+// carries the documented fields (id, status, ref) and that the trimmed web_url
+// field is not surfaced in the serialized output, per
+// doc/api/pipeline_schedules.md.
+func assertLastPipelineDocumentedSubset(t *testing.T, lp *LastPipelineOutput) {
+	t.Helper()
+	if lp == nil || lp.ID != 99 || lp.Status != "success" || lp.Ref != "main" {
+		t.Errorf("last_pipeline = %+v, want id 99 status success ref main", lp)
+	}
+	blob, err := json.Marshal(lp)
+	if err != nil {
+		t.Fatalf("marshal last_pipeline: %v", err)
+	}
+	if strings.Contains(string(blob), "web_url") {
+		t.Errorf("last_pipeline JSON unexpectedly contains web_url: %s", blob)
+	}
+}
+
 // TestPipelineScheduleGet_Success verifies PipelineScheduleGet when success.
 func TestPipelineScheduleGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -177,9 +196,7 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	if out.Owner == nil || out.Owner.ID != 7 || out.Owner.Name != "Admin User" || out.Owner.State != "active" {
 		t.Errorf("owner = %+v, want full user object", out.Owner)
 	}
-	if out.LastPipeline == nil || out.LastPipeline.ID != 99 || out.LastPipeline.Status != "success" {
-		t.Errorf("last_pipeline = %+v, want id 99 status success", out.LastPipeline)
-	}
+	assertLastPipelineDocumentedSubset(t, out.LastPipeline)
 	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" || out.Variables[0].VariableType != "env_var" {
 		t.Errorf("variables = %+v, want one DEPLOY_ENV env_var", out.Variables)
 	}
@@ -622,7 +639,7 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":100,"iid":10,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100"}
+				{"id":100,"iid":10,"project_id":42,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100","created_at":"2016-08-11T11:28:34.085Z","updated_at":"2016-08-11T11:32:35.169Z"}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -637,11 +654,21 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	if len(out.Pipelines) != 1 {
 		t.Fatalf("len(Pipelines) = %d, want 1", len(out.Pipelines))
 	}
-	if out.Pipelines[0].ID != 100 {
-		t.Errorf("ID = %d, want 100", out.Pipelines[0].ID)
+	p := out.Pipelines[0]
+	if p.ID != 100 {
+		t.Errorf("ID = %d, want 100", p.ID)
 	}
-	if out.Pipelines[0].Source != "schedule" {
-		t.Errorf("Source = %q, want %q", out.Pipelines[0].Source, "schedule")
+	if p.Source != "schedule" {
+		t.Errorf("Source = %q, want %q", p.Source, "schedule")
+	}
+	if p.ProjectID != 42 {
+		t.Errorf("ProjectID = %d, want 42", p.ProjectID)
+	}
+	if p.CreatedAt != "2016-08-11T11:28:34Z" {
+		t.Errorf("CreatedAt = %q, want 2016-08-11T11:28:34Z", p.CreatedAt)
+	}
+	if p.UpdatedAt != "2016-08-11T11:32:35Z" {
+		t.Errorf("UpdatedAt = %q, want 2016-08-11T11:32:35Z", p.UpdatedAt)
 	}
 }
 
@@ -1344,7 +1371,7 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		CronTimezone: "UTC",
 		Active:       true,
 		Owner:        &OwnerOutput{Username: "admin"},
-		LastPipeline: &LastPipelineOutput{ID: 99, Status: "success", WebURL: "http://p"},
+		LastPipeline: &LastPipelineOutput{ID: 99, Status: "success"},
 		NextRunAt:    "2026-03-08T01:00:00Z",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 		UpdatedAt:    "2026-03-07T12:00:00Z",

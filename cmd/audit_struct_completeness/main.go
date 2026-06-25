@@ -110,6 +110,38 @@ var curatedRefSubsets = map[string]string{
 	"environments.DeployableCommitOutput":   "environments.md#retrieve-an-environment",
 	"environments.DeployablePipelineOutput": "environments.md#retrieve-an-environment",
 	"environments.DeployableRunnerOutput":   "environments.md#retrieve-an-environment",
+
+	// jobs — nested objects of the job response (doc/api/jobs.md#get-a-single-job).
+	"jobs.CommitObject":       "jobs.md#get-a-single-job",
+	"jobs.RunnerObject":       "jobs.md#get-a-single-job",
+	"jobs.UserObject":         "jobs.md#get-a-single-job",
+	"jobs.ProjectObject":      "jobs.md#get-a-single-job",
+	"jobs.PipelineObject":     "jobs.md#get-a-single-job",
+	"jobs.PipelineInfoObject": "jobs.md#list-pipeline-trigger-jobs",
+
+	// boards — nested objects of the board / board-list responses (doc/api/boards.md).
+	"boards.ProjectOutput":           "boards.md",
+	"boards.MilestoneOutput":         "boards.md",
+	"boards.BasicUserOutput":         "boards.md",
+	"boards.LabelOutput":             "boards.md",
+	"boards.LabelDetailsOutput":      "boards.md",
+	"boards.BoardListAssigneeOutput": "boards.md",
+	"boards.IterationOutput":         "boards.md",
+
+	// deployments — nested objects of the deployment response (doc/api/deployments.md).
+	"deployments.UserOutput":               "deployments.md",
+	"deployments.EnvironmentOutput":        "deployments.md",
+	"deployments.DeployableOutput":         "deployments.md",
+	"deployments.DeployableUserOutput":     "deployments.md",
+	"deployments.DeployableCommitOutput":   "deployments.md",
+	"deployments.DeployablePipelineOutput": "deployments.md",
+	"deployments.DeployableRunnerOutput":   "deployments.md",
+
+	// pipelineschedules — nested objects of the schedule response (doc/api/pipeline_schedules.md).
+	"pipelineschedules.OwnerOutput":             "pipeline_schedules.md",
+	"pipelineschedules.LastPipelineOutput":      "pipeline_schedules.md",
+	"pipelineschedules.VariableObject":          "pipeline_schedules.md",
+	"pipelineschedules.TriggeredPipelineOutput": "pipeline_schedules.md",
 }
 
 // isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
@@ -130,6 +162,9 @@ var docOmittedFields = map[string]string{
 	// (environments are queried within a project, so it would be redundant);
 	// gl.Environment.Project is never populated in the documented response.
 	"environments.Output.project": "environments.md (list/get/create/update response)",
+	// jobs: the job response nests pipeline.id; there is no top-level pipeline_id
+	// (the old MCP pipeline_id was a flattened convenience scalar, now removed).
+	"jobs.Output.pipeline_id": "jobs.md#get-a-single-job",
 }
 
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
