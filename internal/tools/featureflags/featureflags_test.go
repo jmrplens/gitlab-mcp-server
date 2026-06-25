@@ -35,6 +35,18 @@ const featureFlagJSON = `{
 // featureFlagListJSON identifies the feature flag list JSON constant used by this package.
 const featureFlagListJSON = `[` + featureFlagJSON + `]`
 
+// scopedFeatureFlagJSON is a feature flag with top-level scopes populated,
+// exercising the Output.Scopes mapping (including a null entry that must be
+// skipped) in convertFeatureFlag.
+const scopedFeatureFlagJSON = `{
+	"name": "scoped-flag",
+	"description": "",
+	"active": true,
+	"version": "new_version_flag",
+	"scopes": [{"id": 7, "environment_scope": "production"}, null],
+	"strategies": []
+}`
+
 // -- List --.
 
 // TestListFeatureFlags_Success verifies that ListFeatureFlags succeeds when the GitLab API returns a valid response.
@@ -63,6 +75,48 @@ func TestListFeatureFlags_Success(t *testing.T) {
 	}
 	if len(out.FeatureFlags[0].Strategies) != 1 {
 		t.Errorf("expected 1 strategy, got %d", len(out.FeatureFlags[0].Strategies))
+	}
+}
+
+// TestListFeatureFlags_OrderingAndKeyset verifies that ListFeatureFlags forwards
+// order_by, sort, and keyset pagination (pagination + page_token) as query
+// parameters, and that top-level flag scopes are surfaced on the output
+// (including a null scope entry that must be skipped).
+// It asserts the request query string and the mapped Output.Scopes.
+func TestListFeatureFlags_OrderingAndKeyset(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1/feature_flags", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "name" || q.Get("sort") != "asc" {
+			t.Errorf("order_by/sort = %q/%q, want name/asc", q.Get("order_by"), q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" || q.Get("page_token") != "cursor-1" {
+			t.Errorf("pagination/page_token = %q/%q, want keyset/cursor-1", q.Get("pagination"), q.Get("page_token"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+scopedFeatureFlagJSON+`]`, testutil.PaginationHeaders{
+			Page: "1", NextPage: "", TotalPages: "1", PerPage: "20", Total: "1",
+		})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListFeatureFlags(context.Background(), client, ListInput{
+		ProjectID:             "1",
+		OrderBy:               "name",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-1"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.FeatureFlags) != 1 {
+		t.Fatalf("expected 1 flag, got %d", len(out.FeatureFlags))
+	}
+	scopes := out.FeatureFlags[0].Scopes
+	if len(scopes) != 1 {
+		t.Fatalf("expected 1 scope (null skipped), got %d", len(scopes))
+	}
+	if scopes[0].ID != 7 || scopes[0].EnvironmentScope != "production" {
+		t.Errorf("scope = %+v, want id=7 production", scopes[0])
 	}
 }
 
@@ -158,32 +212,22 @@ func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	strategies := `[{"name":"gradualRolloutUserId","parameters":{"percentage":"50"},"scopes":[{"environment_scope":"production"}]}]`
 	out, err := CreateFeatureFlag(context.Background(), client, CreateInput{
-		ProjectID:  "1",
-		Name:       "my-flag",
-		Strategies: strategies,
+		ProjectID: "1",
+		Name:      "my-flag",
+		Strategies: []StrategyInput{
+			{
+				Name:       "gradualRolloutUserId",
+				Parameters: &StrategyParameterInput{Percentage: "50"},
+				Scopes:     []ScopeInput{{EnvironmentScope: "production"}},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.Name != "my-flag" {
 		t.Errorf("expected name 'my-flag', got %q", out.Name)
-	}
-}
-
-// TestCreateFeatureFlag_InvalidStrategies verifies the CreateFeatureFlag_InvalidStrategies handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCreateFeatureFlag_InvalidStrategies(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{
-		ProjectID:  "1",
-		Name:       "my-flag",
-		Strategies: "not-json",
-	})
-	if err == nil {
-		t.Fatal("expected error for invalid strategies JSON")
 	}
 }
 
@@ -291,6 +335,9 @@ func TestFormatFeatureFlagMarkdown(t *testing.T) {
 		Version:     "new_version_flag",
 		CreatedAt:   "2026-01-01T00:00:00Z",
 		UpdatedAt:   "2026-01-02T00:00:00Z",
+		Scopes: []ScopeOutput{
+			{ID: 7, EnvironmentScope: "production"},
+		},
 		Strategies: []StrategyOutput{
 			{
 				ID:   1,
@@ -315,6 +362,9 @@ func TestFormatFeatureFlagMarkdown(t *testing.T) {
 	}
 	if !contains(md, "gradualRolloutUserId") {
 		t.Error("expected markdown to contain strategy name")
+	}
+	if !contains(md, "| Scopes | production |") {
+		t.Error("expected markdown to contain top-level Scopes row")
 	}
 }
 
@@ -581,35 +631,26 @@ func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	active := false
-	strategies := `[{"id":1,"name":"default","parameters":{"percentage":"100"},"scopes":[{"environment_scope":"staging"}]}]`
 	out, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{
 		ProjectID:   "1",
 		Name:        "cov-flag",
 		NewName:     "cov-flag-renamed",
 		Description: "updated desc",
 		Active:      &active,
-		Strategies:  strategies,
+		Strategies: []StrategyInput{
+			{
+				ID:         1,
+				Name:       "default",
+				Parameters: &StrategyParameterInput{Percentage: "100"},
+				Scopes:     []ScopeInput{{EnvironmentScope: "staging"}},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.Name != "cov-flag" {
 		t.Errorf("expected name 'cov-flag', got %q", out.Name)
-	}
-}
-
-// TestUpdateFeatureFlag_InvalidStrategies verifies the UpdateFeatureFlag_InvalidStrategies handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdateFeatureFlag_InvalidStrategies(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	_, err := UpdateFeatureFlag(context.Background(), client, UpdateInput{
-		ProjectID:  "1",
-		Name:       "x",
-		Strategies: "not-json",
-	})
-	if err == nil {
-		t.Fatal("expected error for invalid strategies JSON")
 	}
 }
 
@@ -866,6 +907,61 @@ func TestActionSpecs_FeatureFlagGetRoute(t *testing.T) {
 	}
 	if out.Name != "experimental_ui" || !out.Active {
 		t.Fatalf("feature flag output = %#v, want active experimental_ui", out)
+	}
+}
+
+// TestFeatureFlagActionSpecs_Metadata verifies that every feature-flag action
+// spec carries non-generic R-META discovery metadata: a specific Usage (not the
+// generic placeholder), at least two natural-language aliases distinct from the
+// individual tool name, RelatedActions, and a "Returns: … See also: …"
+// individual-tool description.
+// It asserts these fields on all five projected specs.
+func TestFeatureFlagActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := featureFlagSpecsByTool(t, ActionSpecs(client))
+
+	wantTools := []string{
+		"gitlab_feature_flag_list",
+		"gitlab_feature_flag_get",
+		"gitlab_feature_flag_create",
+		"gitlab_feature_flag_update",
+		"gitlab_feature_flag_delete",
+	}
+	for _, tool := range wantTools {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("missing spec for %s", tool)
+		}
+		if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute featureflags domain action") {
+			t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+		}
+		nlAliases := 0
+		for _, a := range spec.Aliases {
+			if a != tool {
+				nlAliases++
+			}
+		}
+		if nlAliases < 2 {
+			t.Errorf("%s: expected >=2 natural-language aliases, got %v", tool, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: missing RelatedActions", tool)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also:: %q", tool, desc)
+		}
+	}
+}
+
+// TestDecorateFeatureFlagMeta_UnknownTool verifies that decorateFeatureFlagMeta
+// leaves options untouched for a tool name absent from featureFlagActionMeta.
+// It asserts the generic placeholder Usage survives the no-op path.
+func TestDecorateFeatureFlagMeta_UnknownTool(t *testing.T) {
+	options := featureFlagOptions("gitlab_feature_flag_unknown")
+	decorateFeatureFlagMeta(&options, "gitlab_feature_flag_unknown")
+	if options.Usage != "Use to execute featureflags domain action." {
+		t.Errorf("expected generic Usage to survive, got %q", options.Usage)
 	}
 }
 
