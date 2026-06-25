@@ -28,7 +28,7 @@ type Output struct {
 	WebURL                         string                  `json:"web_url"`
 	AvatarURL                      string                  `json:"avatar_url"`
 	IsAdmin                        bool                    `json:"is_admin"`
-	IsAuditor                      bool                    `json:"is_auditor"`
+	IsAuditor                      bool                    `json:"is_auditor" tier:"premium"`
 	Bot                            bool                    `json:"bot"`
 	Bio                            string                  `json:"bio,omitempty"`
 	Location                       string                  `json:"location,omitempty"`
@@ -60,8 +60,8 @@ type Output struct {
 	UsingLicenseSeat               bool                    `json:"using_license_seat"`
 	ThemeID                        int64                   `json:"theme_id,omitempty"`
 	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
-	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty"`
-	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty"`
+	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
+	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
 	NamespaceID                    int64                   `json:"namespace_id,omitempty"`
 	Identities                     []IdentityOutput        `json:"identities,omitempty"`
 	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`

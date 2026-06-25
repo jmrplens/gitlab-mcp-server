@@ -51,8 +51,8 @@ type CreateInput struct {
 	ProjectsLimit                  *int64 `json:"projects_limit,omitempty" jsonschema:"Maximum number of projects the user can create"`
 	ThemeID                        *int64 `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
 	ColorSchemeID                  *int64 `json:"color_scheme_id,omitempty" jsonschema:"Syntax-highlighting color scheme ID"`
-	SharedRunnersMinutesLimit      *int64 `json:"shared_runners_minutes_limit,omitempty" jsonschema:"Shared runners minutes limit (admin, Premium/Ultimate)"`
-	ExtraSharedRunnersMinutesLimit *int64 `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runners minutes (admin, Premium/Ultimate)"`
+	SharedRunnersMinutesLimit      *int64 `json:"shared_runners_minutes_limit,omitempty" tier:"premium" jsonschema:"Shared runners minutes limit (admin, Premium/Ultimate)"`
+	ExtraSharedRunnersMinutesLimit *int64 `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium" jsonschema:"Extra shared runners minutes (admin, Premium/Ultimate)"`
 	Note                           string `json:"note,omitempty" jsonschema:"Admin note about the user"`
 }
 
