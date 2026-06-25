@@ -60,6 +60,36 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_OrderBySortKeyset verifies List forwards order_by, sort, and keyset
+// pagination parameters (pagination, page_token) to the GitLab API query.
+func TestList_OrderBySortKeyset(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProtectedEnvs {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+envJSON+`]`,
+				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok123"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
 // TestList_MissingProjectID verifies List when missing project ID.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

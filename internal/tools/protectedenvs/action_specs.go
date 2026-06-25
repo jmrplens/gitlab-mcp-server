@@ -49,6 +49,29 @@ func protectedEnvironmentOptions(individualTool string) toolutil.ActionSpecOptio
 		RelatedActions: []string{"environment.list", "environment.get", "deployment.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "protectedenvs",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: protectedEnvironmentDescription(individualTool),
+		},
+	}
+}
+
+// protectedEnvironmentDescription returns the "Returns: … See also: …" tool
+// description for each protected-environment action (R-META).
+func protectedEnvironmentDescription(individualTool string) string {
+	switch individualTool {
+	case "gitlab_protected_environment_list":
+		return "List protected environments in a project with order_by/sort and offset or keyset pagination. Returns: protected environments with their deploy access levels, required approval count, approval rules, and pagination metadata. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_environment_list."
+	case "gitlab_protected_environment_get":
+		return "Get a single protected (or wildcard) environment by name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_protected_environment_list, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
+	case "gitlab_protected_environment_protect":
+		return "Protect a single environment or wildcard with deploy access levels and approval rules. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_update, gitlab_protected_environment_unprotect."
+	case "gitlab_protected_environment_update":
+		return "Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_protected_environment_get, gitlab_protected_environment_protect, gitlab_protected_environment_unprotect."
+	case "gitlab_protected_environment_unprotect":
+		return "Unprotect a single environment or wildcard, removing its deployment gates. Returns: a success confirmation naming the unprotected environment. See also: gitlab_protected_environment_list, gitlab_protected_environment_protect."
+	default:
+		return ""
 	}
 }

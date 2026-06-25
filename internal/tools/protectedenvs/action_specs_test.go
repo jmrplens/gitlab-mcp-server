@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -188,4 +189,26 @@ func schemaRequiredIncludes(schema map[string]any, name string) bool {
 		return slices.Contains(required, name)
 	}
 	return false
+}
+
+// TestProtectedEnvironmentDescription_AllActions verifies each protected
+// environment action carries a "Returns: … See also: …" individual-tool
+// description (R-META) and that an unknown tool name yields an empty string.
+func TestProtectedEnvironmentDescription_AllActions(t *testing.T) {
+	tools := []string{
+		"gitlab_protected_environment_list",
+		"gitlab_protected_environment_get",
+		"gitlab_protected_environment_protect",
+		"gitlab_protected_environment_update",
+		"gitlab_protected_environment_unprotect",
+	}
+	for _, name := range tools {
+		desc := protectedEnvironmentDescription(name)
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s description missing Returns/See also: %q", name, desc)
+		}
+	}
+	if got := protectedEnvironmentDescription("gitlab_unknown"); got != "" {
+		t.Errorf("unknown tool description = %q, want empty", got)
+	}
 }
