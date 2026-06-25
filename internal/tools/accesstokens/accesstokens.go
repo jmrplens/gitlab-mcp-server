@@ -138,7 +138,10 @@ func fromPersonalToken(t *gl.PersonalAccessToken) Output {
 type ProjectListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	State     string               `json:"state,omitempty" jsonschema:"Token state filter: active, inactive"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ProjectList returns access tokens for a project.
@@ -154,12 +157,13 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	if input.State != "" {
 		opts.State = new(input.State)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	tokens, resp, err := client.GL().ProjectAccessTokens.ListProjectAccessTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -416,9 +420,19 @@ func ProjectRotateSelf(ctx context.Context, client *gitlabclient.Client, input P
 
 // GroupListInput defines parameters for listing group access tokens.
 type GroupListInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	State   string               `json:"state,omitempty" jsonschema:"Token state filter: active, inactive"`
+	GroupID        toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	State          string               `json:"state,omitempty" jsonschema:"Token state filter: active, inactive"`
+	Search         string               `json:"search,omitempty" jsonschema:"Filter tokens by name (partial match)"`
+	Revoked        *bool                `json:"revoked,omitempty" jsonschema:"Filter by revoked status: true to return only revoked tokens, false for non-revoked"`
+	CreatedAfter   string               `json:"created_after,omitempty" jsonschema:"Return tokens created on or after this date (YYYY-MM-DD)"`
+	CreatedBefore  string               `json:"created_before,omitempty" jsonschema:"Return tokens created on or before this date (YYYY-MM-DD)"`
+	ExpiresAfter   string               `json:"expires_after,omitempty" jsonschema:"Return tokens that expire on or after this date (YYYY-MM-DD)"`
+	ExpiresBefore  string               `json:"expires_before,omitempty" jsonschema:"Return tokens that expire on or before this date (YYYY-MM-DD)"`
+	LastUsedAfter  string               `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
+	LastUsedBefore string               `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
+	Sort           string               `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GroupList returns access tokens for a group.
@@ -435,12 +449,34 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		st := gl.AccessTokenState(input.State)
 		opts.State = &st
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.Search != "" {
+		opts.Search = new(input.Search)
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Revoked != nil {
+		opts.Revoked = input.Revoked
 	}
+	if err := applyAccessTokenDateFilters(accessTokenDateFilters{
+		createdAfter:   input.CreatedAfter,
+		createdBefore:  input.CreatedBefore,
+		expiresAfter:   input.ExpiresAfter,
+		expiresBefore:  input.ExpiresBefore,
+		lastUsedAfter:  input.LastUsedAfter,
+		lastUsedBefore: input.LastUsedBefore,
+	}, accessTokenDateTargets{
+		createdAfter:   func(v *gl.ISOTime) { opts.CreatedAfter = v },
+		createdBefore:  func(v *gl.ISOTime) { opts.CreatedBefore = v },
+		expiresAfter:   func(v *gl.ISOTime) { opts.ExpiresAfter = v },
+		expiresBefore:  func(v *gl.ISOTime) { opts.ExpiresBefore = v },
+		lastUsedAfter:  func(v *gl.ISOTime) { opts.LastUsedAfter = v },
+		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
+	}); err != nil {
+		return ListOutput{}, err
+	}
+	if input.Sort != "" {
+		sort := gl.AccessTokenSort(input.Sort)
+		opts.Sort = &sort
+	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	tokens, resp, err := client.GL().GroupAccessTokens.ListGroupAccessTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -625,6 +661,56 @@ func rotateSelfAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, ex
 	return out, nil
 }
 
+// accessTokenDateFilters holds the raw YYYY-MM-DD date-filter strings supplied
+// on a list input. Empty strings are ignored.
+type accessTokenDateFilters struct {
+	createdAfter   string
+	createdBefore  string
+	expiresAfter   string
+	expiresBefore  string
+	lastUsedAfter  string
+	lastUsedBefore string
+}
+
+// accessTokenDateTargets holds setters that assign a parsed *gl.ISOTime onto the
+// matching field of an SDK list-options struct.
+type accessTokenDateTargets struct {
+	createdAfter   func(*gl.ISOTime)
+	createdBefore  func(*gl.ISOTime)
+	expiresAfter   func(*gl.ISOTime)
+	expiresBefore  func(*gl.ISOTime)
+	lastUsedAfter  func(*gl.ISOTime)
+	lastUsedBefore func(*gl.ISOTime)
+}
+
+// applyAccessTokenDateFilters parses each supplied YYYY-MM-DD date filter and
+// assigns the resulting *gl.ISOTime via the matching target setter. A blank
+// value leaves the corresponding option untouched. The first parse failure is
+// returned without mutating remaining targets.
+func applyAccessTokenDateFilters(filters accessTokenDateFilters, targets accessTokenDateTargets) error {
+	pairs := []struct {
+		value string
+		set   func(*gl.ISOTime)
+	}{
+		{filters.createdAfter, targets.createdAfter},
+		{filters.createdBefore, targets.createdBefore},
+		{filters.expiresAfter, targets.expiresAfter},
+		{filters.expiresBefore, targets.expiresBefore},
+		{filters.lastUsedAfter, targets.lastUsedAfter},
+		{filters.lastUsedBefore, targets.lastUsedBefore},
+	}
+	for _, pair := range pairs {
+		parsed, ok, err := parseAccessTokenExpiresAt(pair.value)
+		if err != nil {
+			return err
+		}
+		if ok {
+			pair.set(&parsed)
+		}
+	}
+	return nil
+}
+
 func parseAccessTokenExpiresAt(value string) (gl.ISOTime, bool, error) {
 	if value == "" {
 		return gl.ISOTime{}, false, nil
@@ -693,10 +779,19 @@ func validateAccessTokenScopes(scopes []string) error {
 
 // PersonalListInput defines parameters for listing personal access tokens.
 type PersonalListInput struct {
-	State  string `json:"state,omitempty"  jsonschema:"Token state filter: active, inactive"`
-	Search string `json:"search,omitempty" jsonschema:"Search by token name"`
-	UserID int64  `json:"user_id,omitempty" jsonschema:"Filter by user ID (admin only)"`
+	State          string `json:"state,omitempty"  jsonschema:"Token state filter: active, inactive"`
+	Search         string `json:"search,omitempty" jsonschema:"Search by token name"`
+	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by user ID (admin only)"`
+	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked status: true to return only revoked tokens, false for non-revoked"`
+	CreatedAfter   string `json:"created_after,omitempty" jsonschema:"Return tokens created on or after this date (YYYY-MM-DD)"`
+	CreatedBefore  string `json:"created_before,omitempty" jsonschema:"Return tokens created on or before this date (YYYY-MM-DD)"`
+	ExpiresAfter   string `json:"expires_after,omitempty" jsonschema:"Return tokens that expire on or after this date (YYYY-MM-DD)"`
+	ExpiresBefore  string `json:"expires_before,omitempty" jsonschema:"Return tokens that expire on or before this date (YYYY-MM-DD)"`
+	LastUsedAfter  string `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
+	LastUsedBefore string `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
+	Sort           string `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // PersonalList returns personal access tokens.
@@ -715,12 +810,30 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 	if input.UserID > 0 {
 		opts.UserID = new(input.UserID)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.Revoked != nil {
+		opts.Revoked = input.Revoked
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if err := applyAccessTokenDateFilters(accessTokenDateFilters{
+		createdAfter:   input.CreatedAfter,
+		createdBefore:  input.CreatedBefore,
+		expiresAfter:   input.ExpiresAfter,
+		expiresBefore:  input.ExpiresBefore,
+		lastUsedAfter:  input.LastUsedAfter,
+		lastUsedBefore: input.LastUsedBefore,
+	}, accessTokenDateTargets{
+		createdAfter:   func(v *gl.ISOTime) { opts.CreatedAfter = v },
+		createdBefore:  func(v *gl.ISOTime) { opts.CreatedBefore = v },
+		expiresAfter:   func(v *gl.ISOTime) { opts.ExpiresAfter = v },
+		expiresBefore:  func(v *gl.ISOTime) { opts.ExpiresBefore = v },
+		lastUsedAfter:  func(v *gl.ISOTime) { opts.LastUsedAfter = v },
+		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
+	}); err != nil {
+		return ListOutput{}, err
 	}
+	if input.Sort != "" {
+		opts.Sort = new(input.Sort)
+	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	tokens, resp, err := client.GL().PersonalAccessTokens.ListPersonalAccessTokens(opts, gl.WithContext(ctx))
 	if err != nil {
