@@ -163,6 +163,27 @@ type actionSpecGroupBuilder func(*gitlabclient.Client, bool) []ActionSpecGroup
 
 //go:generate go run ../../cmd/gen_action_catalog_manifest/
 
+// Edition tier markers for per-action gating. An empty Edition means Free.
+// These are the canonical minimum-tier values mapped by
+// [edition.TierFromEdition] and applied by the central catalog tier filter.
+const (
+	editionPremium  = "premium"
+	editionUltimate = "ultimate"
+)
+
+// editionTaggedSpecs returns copies of specs with Edition set to tier for the
+// whole set, so the central tier filter gates the group at that minimum tier.
+// It overrides any existing Edition because these domains are uniform-tier and
+// were historically self-tagged "premium" before the 3-tier model could
+// distinguish Premium from Ultimate; the caller asserts the correct tier here.
+func editionTaggedSpecs(specs []toolutil.ActionSpec, tier string) []toolutil.ActionSpec {
+	out := toolutil.CloneActionSpecs(specs)
+	for i := range out {
+		out[i].Edition = tier
+	}
+	return out
+}
+
 // CollectActionSpecs gathers canonical specs from domain-local builders
 // and returns them in deterministic, sorted order. The enterprise flag
 // toggles Premium/Ultimate domains; client is forwarded to every builder
@@ -198,29 +219,25 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 // when the deployment is GitLab.com and Enterprise is enabled. Returns
 // nil otherwise so the group is omitted from the catalog for
 // self-managed instances and CE catalogs.
-func buildOrbitActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise || client == nil || !client.IsGitLabDotCom() {
+func buildOrbitActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	if client == nil || !client.IsGitLabDotCom() {
 		return nil
 	}
-	return actionSpecGroup("gitlab_orbit", orbit.ActionSpecs(client))
+	// Orbit is a Premium+ GitLab.com feature; the GitLab.com check stays here and
+	// the central tier filter gates it to Premium/Ultimate via the Edition tag.
+	return actionSpecGroup("gitlab_orbit", editionTaggedSpecs(orbit.ActionSpecs(client), editionPremium))
 }
 
 // buildAttestationActionSpecs contributes the gitlab_attestation
 // Enterprise catalog group.
-func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_attestation", attestations.ActionSpecs(client))
+func buildAttestationActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_attestation", editionTaggedSpecs(attestations.ActionSpecs(client), editionUltimate))
 }
 
 // buildAuditEventActionSpecs contributes the gitlab_audit_event
 // Enterprise catalog group.
-func buildAuditEventActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_audit_event", auditevents.ActionSpecs(client))
+func buildAuditEventActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_audit_event", editionTaggedSpecs(auditevents.ActionSpecs(client), editionPremium))
 }
 
 // buildBranchActionSpecs contributes the gitlab_branch catalog group by
@@ -247,11 +264,8 @@ func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 
 // buildCompliancePolicyActionSpecs contributes the gitlab_compliance_policy
 // Enterprise catalog group.
-func buildCompliancePolicyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_compliance_policy", compliancepolicy.ActionSpecs(client))
+func buildCompliancePolicyActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_compliance_policy", editionTaggedSpecs(compliancepolicy.ActionSpecs(client), editionUltimate))
 }
 
 // buildCustomEmojiActionSpecs contributes the gitlab_custom_emoji catalog
@@ -262,20 +276,14 @@ func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSp
 
 // buildDependencyActionSpecs contributes the gitlab_dependency Enterprise
 // catalog group.
-func buildDependencyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_dependency", dependencies.ActionSpecs(client))
+func buildDependencyActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_dependency", editionTaggedSpecs(dependencies.ActionSpecs(client), editionUltimate))
 }
 
 // buildDORAMetricsActionSpecs contributes the gitlab_dora_metrics
 // Enterprise catalog group.
-func buildDORAMetricsActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_dora_metrics", dorametrics.ActionSpecs(client))
+func buildDORAMetricsActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_dora_metrics", editionTaggedSpecs(dorametrics.ActionSpecs(client), editionUltimate))
 }
 
 // buildEnvironmentActionSpecs contributes the gitlab_environment catalog
@@ -293,20 +301,14 @@ func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSp
 
 // buildEnterpriseUserActionSpecs contributes the gitlab_enterprise_user
 // Enterprise catalog group.
-func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_enterprise_user", enterpriseusers.ActionSpecs(client))
+func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_enterprise_user", editionTaggedSpecs(enterpriseusers.ActionSpecs(client), editionPremium))
 }
 
 // buildExternalStatusCheckActionSpecs contributes the
 // gitlab_external_status_check Enterprise catalog group.
-func buildExternalStatusCheckActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_external_status_check", externalstatuschecks.ActionSpecs(client))
+func buildExternalStatusCheckActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_external_status_check", editionTaggedSpecs(externalstatuschecks.ActionSpecs(client), editionUltimate))
 }
 
 // buildFeatureFlagsActionSpecs contributes the gitlab_feature_flags
@@ -319,11 +321,8 @@ func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 }
 
 // buildGeoActionSpecs contributes the gitlab_geo Enterprise catalog group.
-func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_geo", geo.ActionSpecs(client))
+func buildGeoActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_geo", editionTaggedSpecs(geo.ActionSpecs(client), editionPremium))
 }
 
 // buildGroupActionSpecs contributes the gitlab_group catalog group. It
@@ -367,11 +366,8 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 
 // buildGroupSCIMActionSpecs contributes the gitlab_group_scim Enterprise
 // catalog group.
-func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_group_scim", groupscim.ActionSpecs(client))
+func buildGroupSCIMActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_group_scim", editionTaggedSpecs(groupscim.ActionSpecs(client), editionPremium))
 }
 
 // buildIssueActionSpecs contributes the gitlab_issue catalog group by
@@ -421,20 +417,14 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 
 // buildMergeTrainActionSpecs contributes the gitlab_merge_train Enterprise
 // catalog group.
-func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_merge_train", mergetrains.ActionSpecs(client))
+func buildMergeTrainActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_merge_train", editionTaggedSpecs(mergetrains.ActionSpecs(client), editionPremium))
 }
 
 // buildMemberRoleActionSpecs contributes the gitlab_member_role Enterprise
 // catalog group.
-func buildMemberRoleActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_member_role", memberroles.ActionSpecs(client))
+func buildMemberRoleActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_member_role", editionTaggedSpecs(memberroles.ActionSpecs(client), editionUltimate))
 }
 
 // buildModelRegistryActionSpecs contributes the gitlab_model_registry
@@ -479,11 +469,8 @@ func buildPipelineActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 
 // buildProjectAliasActionSpecs contributes the gitlab_project_alias
 // Enterprise catalog group.
-func buildProjectAliasActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_project_alias", projectaliases.ActionSpecs(client))
+func buildProjectAliasActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_project_alias", editionTaggedSpecs(projectaliases.ActionSpecs(client), editionPremium))
 }
 
 // buildProjectActionSpecs contributes the gitlab_project catalog group.
@@ -546,11 +533,8 @@ func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 // buildSecurityAttributeActionSpecs contributes the gitlab_security_attribute
 // Enterprise catalog group. The custom group description documents the
 // supported actions in human-readable form for the schema resource.
-func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	groups := actionSpecGroup("gitlab_security_attribute", securityattributes.ActionSpecs(client))
+func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	groups := actionSpecGroup("gitlab_security_attribute", editionTaggedSpecs(securityattributes.ActionSpecs(client), editionUltimate))
 	if len(groups) > 0 {
 		groups[0].Description = "Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.\nReturns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.\n\nParam conventions: IDs are numeric GitLab IDs; mode is one of ADD, REMOVE, or REPLACE.\n\n- create: namespace_id*, category_id*, attributes* (array of {name, description, color})\n- update: attribute_id*, name, description, color\n- delete: attribute_id*\n- project_update: project_id*, add_attribute_ids, remove_attribute_ids\n- bulk_update: group_ids or project_ids*, attribute_ids*, mode*\n\nSee also: gitlab_security_category, gitlab_project, gitlab_group"
 	}
@@ -560,11 +544,8 @@ func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, enterprise b
 // buildSecurityCategoryActionSpecs contributes the gitlab_security_category
 // Enterprise catalog group. The custom group description documents the
 // supported actions in human-readable form for the schema resource.
-func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	groups := actionSpecGroup("gitlab_security_category", securitycategories.ActionSpecs(client))
+func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	groups := actionSpecGroup("gitlab_security_category", editionTaggedSpecs(securitycategories.ActionSpecs(client), editionUltimate))
 	if len(groups) > 0 {
 		groups[0].Description = "Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.\nReturns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.\n\nParam conventions: IDs are numeric GitLab IDs.\n\n- create: namespace_id*, name*, description, multiple_selection\n- update: category_id*, namespace_id*, name, description\n- delete: category_id*\n\nSee also: gitlab_security_attribute, gitlab_group, gitlab_project"
 	}
@@ -573,11 +554,8 @@ func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, enterprise bo
 
 // buildSecurityFindingActionSpecs contributes the gitlab_security_finding
 // Enterprise catalog group.
-func buildSecurityFindingActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_security_finding", securityfindings.ActionSpecs(client))
+func buildSecurityFindingActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_security_finding", editionTaggedSpecs(securityfindings.ActionSpecs(client), editionUltimate))
 }
 
 // buildSnippetActionSpecs contributes the gitlab_snippet catalog group by
@@ -645,11 +623,8 @@ func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []Action
 
 // buildVulnerabilityActionSpecs contributes the gitlab_vulnerability
 // Enterprise catalog group.
-func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	if !enterprise {
-		return nil
-	}
-	return actionSpecGroup("gitlab_vulnerability", vulnerabilities.ActionSpecs(client))
+func buildVulnerabilityActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	return actionSpecGroup("gitlab_vulnerability", editionTaggedSpecs(vulnerabilities.ActionSpecs(client), editionUltimate))
 }
 
 // buildWikiActionSpecs contributes the gitlab_wiki catalog group.

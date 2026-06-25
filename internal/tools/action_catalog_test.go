@@ -12,6 +12,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -562,6 +563,33 @@ func TestActionCatalog_BaselineCountsDoNotRegress(t *testing.T) {
 				t.Fatalf("dynamic catalog action count = %d, want %d", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestActionCatalog_PremiumTierHidesUltimate verifies the central tier filter
+// gates Ultimate-only groups out of a Premium instance while keeping Premium
+// groups. A Premium catalog must sit strictly between Free and Ultimate.
+func TestActionCatalog_PremiumTierHidesUltimate(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	ultimate := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+
+	if free.CountActions() >= premium.CountActions() || premium.CountActions() >= ultimate.CountActions() {
+		t.Fatalf("expected free < premium < ultimate, got %d, %d, %d",
+			free.CountActions(), premium.CountActions(), ultimate.CountActions())
+	}
+	// Ultimate-only groups are absent at Premium; Premium groups are present.
+	if _, ok := premium.Group("gitlab_vulnerability"); ok {
+		t.Error("gitlab_vulnerability (Ultimate) must not appear on a Premium instance")
+	}
+	if _, ok := ultimate.Group("gitlab_vulnerability"); !ok {
+		t.Error("gitlab_vulnerability (Ultimate) must appear on an Ultimate instance")
+	}
+	if _, ok := premium.Group("gitlab_geo"); !ok {
+		t.Error("gitlab_geo (Premium) must appear on a Premium instance")
+	}
+	if _, ok := free.Group("gitlab_geo"); ok {
+		t.Error("gitlab_geo (Premium) must not appear on a Free instance")
 	}
 }
 
