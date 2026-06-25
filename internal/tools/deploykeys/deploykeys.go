@@ -43,10 +43,15 @@ type InstanceOutput struct {
 	ProjectsWithReadonlyAccess []ProjectSummary `json:"projects_with_readonly_access,omitempty"`
 }
 
-// ProjectSummary holds basic project info for an InstanceDeployKey.
+// ProjectSummary mirrors gl.DeployKeyProject, the project an instance deploy
+// key has read-only or write access to. It carries the full set of project
+// fields the GitLab API returns for each entry.
 type ProjectSummary struct {
 	ID                int64  `json:"id"`
+	Description       string `json:"description,omitempty"`
 	Name              string `json:"name"`
+	NameWithNamespace string `json:"name_with_namespace,omitempty"`
+	Path              string `json:"path,omitempty"`
 	PathWithNamespace string `json:"path_with_namespace"`
 	CreatedAt         string `json:"created_at,omitempty"`
 }
@@ -68,6 +73,17 @@ type InstanceListOutput struct {
 // ---------------------------------------------------------------------------
 // Converters
 // ---------------------------------------------------------------------------.
+
+// applyOrdering copies the supplied order_by and sort values onto a
+// gl.ListOptions, leaving each field untouched when its input is empty.
+func applyOrdering(opts *gl.ListOptions, orderBy, sort string) {
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
 
 // timeStr formats optional deploy-key timestamps as RFC3339 strings.
 func timeStr(t *time.Time) string {
@@ -95,7 +111,10 @@ func toOutput(k *gl.ProjectDeployKey) Output {
 func toProjectSummary(p *gl.DeployKeyProject) ProjectSummary {
 	return ProjectSummary{
 		ID:                p.ID,
+		Description:       p.Description,
 		Name:              p.Name,
+		NameWithNamespace: p.NameWithNamespace,
+		Path:              p.Path,
 		PathWithNamespace: p.PathWithNamespace,
 		CreatedAt:         timeStr(p.CreatedAt),
 	}
@@ -127,9 +146,11 @@ func toInstanceOutput(k *gl.InstanceDeployKey) InstanceOutput {
 
 // ListProjectInput represents parameters for listing project deploy keys.
 type ListProjectInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	Page      int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int                  `json:"per_page,omitempty" jsonschema:"Results per page (max 100)"`
+	ProjectID toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput represents parameters for getting a single deploy key.
@@ -169,9 +190,11 @@ type EnableInput struct {
 
 // ListAllInput represents parameters for listing all instance-level deploy keys.
 type ListAllInput struct {
-	Public  *bool `json:"public,omitempty" jsonschema:"Filter by public keys"`
-	Page    int   `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int   `json:"per_page,omitempty" jsonschema:"Results per page (max 100)"`
+	Public  *bool  `json:"public,omitempty"   jsonschema:"Filter by public keys"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // AddInstanceInput represents parameters for creating an instance-level deploy key.
@@ -183,9 +206,11 @@ type AddInstanceInput struct {
 
 // ListUserProjectInput represents parameters for listing a user's project deploy keys.
 type ListUserProjectInput struct {
-	UserID  toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	Page    int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int                  `json:"per_page,omitempty" jsonschema:"Results per page (max 100)"`
+	UserID  toolutil.StringOrInt `json:"user_id"            jsonschema:"User ID or username,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id, title, created_at)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ---------------------------------------------------------------------------
@@ -198,12 +223,9 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 
-	opts := &gl.ListProjectDeployKeysOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListProjectDeployKeysOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	keys, resp, err := client.GL().DeployKeys.ListProjectDeployKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -338,12 +360,9 @@ func Enable(ctx context.Context, client *gitlabclient.Client, input EnableInput)
 
 // ListAll lists all instance-level deploy keys.
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (InstanceListOutput, error) {
-	opts := &gl.ListInstanceDeployKeysOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListInstanceDeployKeysOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Public != nil {
 		opts.Public = input.Public
 	}
@@ -398,12 +417,9 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 		return ListOutput{}, toolutil.ErrFieldRequired("user_id")
 	}
 
-	opts := &gl.ListUserProjectDeployKeysOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListUserProjectDeployKeysOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	keys, resp, err := client.GL().DeployKeys.ListUserProjectDeployKeys(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {

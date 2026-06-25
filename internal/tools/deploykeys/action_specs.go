@@ -46,6 +46,7 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		OwnerPackage:   "deploykeys",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	options.IndividualTool.Description = deployKeyDescription(actionName)
 	if actionName == "deploy_key_list_project" {
 		options.Usage = "Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested."
 	}
@@ -64,6 +65,34 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		}
 	}
 	return options
+}
+
+// deployKeyDescription returns the individual-tool description for a deploy key
+// action in the canonical "Returns: … See also: …" form (R-META) so models can
+// see the output shape and related actions directly in tools/list.
+func deployKeyDescription(actionName string) string {
+	switch actionName {
+	case "deploy_key_list_project":
+		return "List a project's SSH deploy keys with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: gitlab_deploy_key_get, gitlab_deploy_key_add, gitlab_deploy_key_enable."
+	case "deploy_key_get":
+		return "Get a single project deploy key by id. Returns: the deploy key with title, key, fingerprint, fingerprint_sha256, can_push, created_at, and expires_at. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_update, gitlab_deploy_key_delete."
+	case "deploy_key_add":
+		return "Add a new SSH deploy key to a project. Returns: the created deploy key with id, title, fingerprint, can_push, and expiry. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_enable."
+	case "deploy_key_update":
+		return "Update a project deploy key's title or push permission. Returns: the updated deploy key. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project, gitlab_deploy_key_delete."
+	case "deploy_key_delete":
+		return "Delete a deploy key from a project (removes it from all projects where it is enabled). Returns: a success confirmation. See also: gitlab_deploy_key_get, gitlab_deploy_key_list_project."
+	case "deploy_key_enable":
+		return "Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get."
+	case "deploy_key_list_all":
+		return "List all instance-level deploy keys (admin only) with ordering and pagination. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project."
+	case "deploy_key_add_instance":
+		return "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable."
+	case "deploy_key_list_user_project":
+		return "List the deploy keys across a user's projects (admin only) with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_get, gitlab_get_user."
+	default:
+		return ""
+	}
 }
 
 func deployKeyAliases(actionName string) []string {

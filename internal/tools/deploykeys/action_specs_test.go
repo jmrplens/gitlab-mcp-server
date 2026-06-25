@@ -170,3 +170,38 @@ func TestDeployKeyAliases_AllBranches(t *testing.T) {
 		})
 	}
 }
+
+// TestDeployKeyDescription_AllBranches verifies deployKeyDescription returns a
+// non-empty "Returns: … See also: …" description for every known action name
+// and an empty string for unknown action names (the default branch).
+func TestDeployKeyDescription_AllBranches(t *testing.T) {
+	known := []string{
+		"deploy_key_list_project",
+		"deploy_key_get",
+		"deploy_key_add",
+		"deploy_key_update",
+		"deploy_key_delete",
+		"deploy_key_enable",
+		"deploy_key_list_all",
+		"deploy_key_add_instance",
+		"deploy_key_list_user_project",
+	}
+	for _, name := range known {
+		t.Run(name, func(t *testing.T) {
+			got := deployKeyDescription(name)
+			if got == "" {
+				t.Fatalf("deployKeyDescription(%q) = empty, want description", name)
+			}
+			if !strings.Contains(got, "Returns:") || !strings.Contains(got, "See also:") {
+				t.Errorf("deployKeyDescription(%q) = %q, want Returns:/See also: form", name, got)
+			}
+		})
+	}
+	for _, name := range []string{"deploy_key_unknown", ""} {
+		t.Run("default/"+name, func(t *testing.T) {
+			if got := deployKeyDescription(name); got != "" {
+				t.Errorf("deployKeyDescription(%q) = %q, want empty", name, got)
+			}
+		})
+	}
+}
