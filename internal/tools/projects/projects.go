@@ -127,7 +127,7 @@ type CreateInput struct {
 	SquashCommitTemplate                      string `json:"squash_commit_template,omitempty" jsonschema:"Template for squash commit messages"`
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
 	IssueBranchTemplate                       string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues"`
-	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
+	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
 	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
 
@@ -485,7 +485,7 @@ type UpdateInput struct {
 	MergeTrainsEnabled                        *bool                `json:"merge_trains_enabled,omitempty"     jsonschema:"Enable merge trains"`
 	ProtectMergeRequestPipelines              *bool                `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	ResolveOutdatedDiffDiscussions            *bool                `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
-	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   jsonschema:"Number of approvals required before merge"`
+	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
 

@@ -1537,7 +1537,8 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 		"admin.settings_get":               "GitLab application settings",
 		"access.deploy_key_list_project":   "deploy keys, not deploy tokens",
 		"access.deploy_token_list_project": "registry/repository deploy credentials",
-		"environment.protected_get":        "protected environment",
+		// environment.protected_get is Premium (protected environments) and absent
+		// from this Free realCatalogRegistry; covered by the tier tests instead.
 		"environment.deployment_list":      "Lists deployments",
 		"feature_flags.ff_user_list_get":   "user_list_iid",
 		"issue.update":                     "state_event",
@@ -2906,7 +2907,10 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "issue time tracking sequence", query: "issue time tracking set estimate add spent time reset spent time reset estimate", limit: 8, want: []string{"issue.time_estimate_set", "issue.spent_time_add", "issue.spent_time_reset", "issue.time_estimate_reset"}},
 		{name: "deploy token inventory", query: "list project deploy tokens credentials not deploy keys", limit: 8, want: []string{"access.deploy_token_list_project"}},
 		{name: "project access token creation", query: "project access token create eval-token read_api expires_at 2026-12-31 for project my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"access.token_project_create"}},
-		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.protected_get", "environment.deployment_list", "environment.deployment_approve_or_reject"}},
+		// environment.protected_get is Premium (protected environments), so it is
+		// absent from this Free realCatalogRegistry; only the Free deployment
+		// actions are expected here.
+		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.deployment_list", "environment.deployment_approve_or_reject"}},
 		{name: "feature flag user list lifecycle", query: "feature flag user list get user_list_iid update delete", limit: 8, want: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}},
 		{name: "issue note lifecycle", query: "issue note get by note_id update delete comment", limit: 8, want: []string{"issue.note_get", "issue.note_update", "issue.note_delete"}},
 		{name: "discover project by path or url", query: "project find by path or url", limit: 8, want: []string{"discover_project.resolve"}},

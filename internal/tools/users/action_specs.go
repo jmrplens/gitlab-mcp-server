@@ -345,19 +345,19 @@ var userToolMetadata = map[string]userToolMeta{
 		description:    "Disable 2FA for a user. Returns: confirmation with the user ID and action. See also: gitlab_get_user, gitlab_modify_user.",
 	},
 	"gitlab_create_service_account": {
-		usage:          "Create an instance-level service account (Premium/Ultimate) with optional name, username, and email. Use when the prompt asks to provision a service account.",
+		usage:          "Create an instance-level service account with optional name, username, and email. Admin-only. Use when the prompt asks to provision a service account.",
 		aliases:        []string{"create service account", "new service account", "provision service account"},
 		relatedActions: []string{"user.list_service_accounts", "user.update_service_account"},
 		description:    "Create an instance-level service account. Returns: the created service account with ID, username, name, and email. Requires admin token. See also: gitlab_list_service_accounts, gitlab_update_instance_service_account.",
 	},
 	"gitlab_list_service_accounts": {
-		usage:          "List instance-level service accounts (Premium/Ultimate) with order_by/sort and pagination. Use when the prompt asks which service accounts exist.",
+		usage:          "List instance-level service accounts with order_by/sort and pagination. Admin-only. Use when the prompt asks which service accounts exist.",
 		aliases:        []string{"list service accounts", "show service accounts", "service account inventory"},
 		relatedActions: []string{"user.create_service_account", "user.update_service_account"},
 		description:    "List instance-level service accounts. Returns: service account summaries with ID, username, name, and email. Requires admin token. See also: gitlab_create_service_account, gitlab_update_instance_service_account.",
 	},
 	"gitlab_update_instance_service_account": {
-		usage:          "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Requires admin token and GitLab Premium/Ultimate.",
+		usage:          "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Admin-only.",
 		aliases:        []string{"update instance service account", "modify service account"},
 		relatedActions: []string{"user.create_service_account", "user.list_service_accounts"},
 		description:    "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts.",

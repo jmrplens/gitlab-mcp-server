@@ -465,6 +465,9 @@ func markWriteOnlySecretFields(schema map[string]any, rt reflect.Type) {
 // per-instance-tier schema pruning so Free/Premium instances never see fields
 // that require a higher tier.
 func FieldTiers(rt reflect.Type) map[string]string {
+	if rt == nil {
+		return nil
+	}
 	if rt.Kind() == reflect.Pointer {
 		rt = rt.Elem()
 	}

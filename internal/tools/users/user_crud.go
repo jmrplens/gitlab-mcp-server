@@ -27,7 +27,7 @@ type CreateInput struct {
 	ForceRandomPassword            *bool  `json:"force_random_password,omitempty" jsonschema:"Set a random password instead of requiring one"`
 	SkipConfirmation               *bool  `json:"skip_confirmation,omitempty" jsonschema:"Skip confirmation email and activate user immediately"`
 	Admin                          *bool  `json:"admin,omitempty" jsonschema:"Grant admin privileges"`
-	Auditor                        *bool  `json:"auditor,omitempty" jsonschema:"Grant auditor privileges (Premium/Ultimate)"`
+	Auditor                        *bool  `json:"auditor,omitempty" tier:"premium" jsonschema:"Grant auditor privileges (Premium/Ultimate)"`
 	External                       *bool  `json:"external,omitempty" jsonschema:"Mark user as external"`
 	CanCreateGroup                 *bool  `json:"can_create_group,omitempty" jsonschema:"Allow the user to create groups"`
 	PrivateProfile                 *bool  `json:"private_profile,omitempty" jsonschema:"Make the user's profile private"`

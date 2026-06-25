@@ -83,7 +83,7 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 	user, _, err := client.GL().Users.CreateServiceAccountUser(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create_service_account", err, http.StatusForbidden,
-			"creating service accounts requires admin token; service accounts are GitLab Premium/Ultimate; username must be unique")
+			"creating service accounts requires an admin token; username must be unique")
 	}
 	return toOutput(user), nil
 }
@@ -101,7 +101,7 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 	accounts, _, err := client.GL().Users.ListServiceAccounts(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ServiceAccountListOutput{}, toolutil.WrapErrWithStatusHint("list_service_accounts", err, http.StatusForbidden,
-			"listing service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
+			"listing service accounts requires an admin token")
 	}
 	out := make([]ServiceAccountOutput, 0, len(accounts))
 	for _, a := range accounts {
@@ -143,7 +143,7 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ServiceAccountOutput{}, toolutil.WrapErrWithStatusHint("update_instance_service_account", err, http.StatusForbidden,
-				"updating instance service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
+				"updating instance service accounts requires an admin token")
 		}
 		return ServiceAccountOutput{}, toolutil.WrapErrWithMessage("update_instance_service_account", err)
 	}

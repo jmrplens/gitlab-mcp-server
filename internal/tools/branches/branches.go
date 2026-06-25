@@ -69,7 +69,7 @@ type ProtectInput struct {
 	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Fine-grained push access entries (by user, group, deploy key, or access level)"`
 	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Fine-grained merge access entries (by user, group, deploy key, or access level)"`
 	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Fine-grained unprotect access entries (by user, group, deploy key, or access level)"`
-	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval for changes to matching files"`
+	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" tier:"premium" jsonschema:"Require CODEOWNERS approval for changes to matching files"`
 }
 
 // ProtectedOutput represents a protected branch. It mirrors gl.ProtectedBranch
@@ -443,7 +443,7 @@ type ProtectedUpdateInput struct {
 	BranchName                string                  `json:"branch_name"                         jsonschema:"Name of the protected branch to update,required"`
 	Name                      string                  `json:"name,omitempty"                      jsonschema:"New name or wildcard for the protected branch rule (rename)"`
 	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
-	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval"`
+	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" tier:"premium" jsonschema:"Require CODEOWNERS approval"`
 	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Fine-grained push access entries (by user, group, deploy key, or access level)"`
 	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Fine-grained merge access entries (by user, group, deploy key, or access level)"`
 	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Fine-grained unprotect access entries (by user, group, deploy key, or access level)"`

@@ -39,8 +39,8 @@ type CreateInput struct {
 	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
 	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
 	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate"`
-	EpicID      int64    `json:"epic_id,omitempty" tier:"premium" jsonschema:"Epic ID to associate the issue with (Premium/Ultimate)"`
-	Weight      int64    `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher (Premium/Ultimate)"`
+	EpicID      int64    `json:"epic_id,omitempty" tier:"premium" jsonschema:"Epic ID to associate the issue with"`
+	Weight      int64    `json:"weight,omitempty" tier:"premium" jsonschema:"Issue weight, 0 or higher"`
 	DueDate     string   `json:"due_date,omitempty" jsonschema:"Due date in YYYY-MM-DD format"`
 
 	// Behavior flags
@@ -136,7 +136,7 @@ type ListInput struct {
 	NotMyReactionEmoji  string               `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with this emoji"`
 	IIDs                []int64              `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
 	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
-	IterationID         *int64               `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
 	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0=no due date, overdue, week, month, next_month_and_previous_two_weeks)"`
 	CreatedAfter        string               `json:"created_after,omitempty"        jsonschema:"Return issues created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
@@ -168,12 +168,12 @@ type UpdateInput struct {
 	Labels           []string             `json:"labels,omitempty"        jsonschema:"Label names to replace all existing"`
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
-	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate (Premium/Ultimate)"`
+	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate"`
 	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`
-	Weight           int64                `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher (Premium/Ultimate)"`
+	Weight           int64                `json:"weight,omitempty"        tier:"premium" jsonschema:"Issue weight, 0 or higher"`
 	DiscussionLocked *bool                `json:"discussion_locked,omitempty" jsonschema:"Lock discussions on this issue"`
 	UpdatedAt        string               `json:"updated_at,omitempty"    jsonschema:"Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)"`
 }
@@ -210,7 +210,7 @@ type ListGroupInput struct {
 	NotMyReactionEmoji  string               `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with this emoji"`
 	IIDs                []int64              `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
 	IssueType           string               `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
-	IterationID         *int64               `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	IterationID         *int64               `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool                `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
 	DueDate             string               `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
 	OrderBy             string               `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
@@ -713,7 +713,7 @@ type ListAllInput struct {
 	NotMyReactionEmoji  []string `json:"not_my_reaction_emoji,omitempty" jsonschema:"Exclude issues you reacted to with these emoji"`
 	IIDs                []int64  `json:"iids,omitempty"                 jsonschema:"Filter by issue internal IDs"`
 	IssueType           string   `json:"issue_type,omitempty"           jsonschema:"Filter by issue type (issue, incident, test_case, task)"`
-	IterationID         *int64   `json:"iteration_id,omitempty"         jsonschema:"Filter by iteration ID (Premium/Ultimate)"`
+	IterationID         *int64   `json:"iteration_id,omitempty"         tier:"premium" jsonschema:"Filter by iteration ID"`
 	Confidential        *bool    `json:"confidential,omitempty"         jsonschema:"Filter by confidential status"`
 	DueDate             string   `json:"due_date,omitempty"             jsonschema:"Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)"`
 	OrderBy             string   `json:"order_by,omitempty"             jsonschema:"Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)"`
