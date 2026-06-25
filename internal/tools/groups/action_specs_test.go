@@ -167,11 +167,11 @@ func TestMemberToOutput_OptionalFields(t *testing.T) {
 	if out.ExpiresAt == "" {
 		t.Error("expected non-empty ExpiresAt")
 	}
-	if out.GroupSAMLProvider != "saml-provider" {
-		t.Errorf("GroupSAMLProvider = %q, want %q", out.GroupSAMLProvider, "saml-provider")
+	if out.GroupSAMLIdentity == nil || out.GroupSAMLIdentity.Provider != "saml-provider" {
+		t.Errorf("GroupSAMLIdentity.Provider = %+v, want %q", out.GroupSAMLIdentity, "saml-provider")
 	}
-	if out.MemberRoleName != "custom-role" {
-		t.Errorf("MemberRoleName = %q, want %q", out.MemberRoleName, "custom-role")
+	if out.MemberRole == nil || out.MemberRole.Name != "custom-role" {
+		t.Errorf("MemberRole.Name = %+v, want %q", out.MemberRole, "custom-role")
 	}
 }
 

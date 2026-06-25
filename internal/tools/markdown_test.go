@@ -534,7 +534,7 @@ func TestFormatGroup_ListMarkdown(t *testing.T) {
 func TestFormatGroup_MemberListMarkdown(t *testing.T) {
 	out := groups.MemberListOutput{
 		Members: []groups.MemberOutput{
-			{Username: "admin", Name: "Admin User", AccessLevelDescription: "Owner", State: "active"},
+			{Username: "admin", Name: "Admin User", AccessLevel: 50, State: "active"},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}

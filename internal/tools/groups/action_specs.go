@@ -114,6 +114,10 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 
+	if applyGroupHookMetadata(individualTool, &options) {
+		return options
+	}
+
 	switch individualTool {
 	case "gitlab_group_get":
 		options.Usage = "Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics."
@@ -159,7 +163,128 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 		options.IndividualTool.Description = "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete."
 	case "gitlab_group_members_list":
+		options.Usage = "List the direct and inherited members of a group. Use query, user_ids, show_seat_info, and pagination when the user asks who belongs to a group or at what access level."
+		options.Aliases = []string{"list group members", "show group members", "who is in this group"}
 		options.RelatedActions = []string{actionGroupGet, "group.projects", "group.member_add"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path whose members are listed.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+		}
+		options.IndividualTool.Description = "List the members of a GitLab group (direct and inherited). Returns: members with username, access level, and seat/role metadata. See also: gitlab_group_get, gitlab_group_projects, gitlab_group_member_add."
+	case "gitlab_group_projects":
+		options.Usage = "List the projects that belong to a group. Use include_subgroups, archived, visibility, topic, and ordering when the user asks which projects live under a group."
+		options.Aliases = []string{"list group projects", "show projects in group", "group repositories"}
+		options.RelatedActions = []string{actionGroupGet, "group.subgroups", "group.transfer_project"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path whose projects are listed.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Set include_subgroups=true to also include projects in descendant groups."},
+			},
+		}
+		options.IndividualTool.Description = "List the projects in a GitLab group. Returns: projects with path, visibility, and archived status. See also: gitlab_group_get, gitlab_subgroups_list, gitlab_group_transfer_project."
+	case "gitlab_group_search":
+		options.Usage = "Search for groups by name or path keywords. Use when the user wants to find groups matching a term without already knowing an ID or path."
+		options.Aliases = []string{"search groups", "find group by name", "lookup groups"}
+		options.RelatedActions = []string{actionGroupGet, "group.list", "group.create"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"query": {
+				ValueSource:    "Group name/path keywords from the user query.",
+				ExampleBinding: `params.query:"platform"`,
+			},
+		}
+		options.IndividualTool.Description = "Search GitLab groups by name or path. Returns: matching groups with path, name, and visibility. See also: gitlab_group_list, gitlab_group_get, gitlab_group_create."
+	case "gitlab_subgroups_list":
+		options.Usage = "List the descendant groups (subgroups at all depths) of a group. Use search, min_access_level, visibility, and ordering when the user asks which groups nest under a group."
+		options.Aliases = []string{"list subgroups", "show descendant groups", "nested groups"}
+		options.RelatedActions = []string{actionGroupGet, "group.projects", "group.transfer_locations"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path whose subgroups are listed.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Returns descendants at all depths; set top_level_only=true for direct children only."},
+			},
+		}
+		options.IndividualTool.Description = "List the subgroups (descendant groups) of a GitLab group. Returns: descendant groups with path, name, and visibility. See also: gitlab_group_get, gitlab_group_projects, gitlab_group_transfer_locations."
+	case "gitlab_group_update":
+		options.Usage = "Update an existing group's settings. Send group_id plus only the fields to change (name, path, visibility, default branch protection, merge policies, Duo, runner limits, etc.)."
+		options.Aliases = []string{"update group", "edit group settings", "change group configuration"}
+		options.RelatedActions = []string{actionGroupGet, "group.create", "group.delete"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path to update.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+		}
+		options.IndividualTool.Description = "Update a GitLab group's settings. Returns: the updated group metadata. See also: gitlab_group_get, gitlab_group_create, gitlab_group_delete."
+	case "gitlab_group_delete":
+		options.Usage = "Delete a group (marks it for deletion, or permanently removes it with permanently_remove=true). Destructive: this removes the group and all its projects. Confirm before calling."
+		options.Aliases = []string{"delete group", "remove group", "destroy group"}
+		options.RelatedActions = []string{actionGroupGet, "group.restore", "group.update"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path to delete.",
+				ExampleBinding:   `params.group_id:"my-org/legacy"`,
+				CommonConfusions: []string{"permanently_remove=true requires full_path and bypasses the retention window."},
+			},
+		}
+		options.IndividualTool.Description = "Delete a GitLab group and its projects. Returns: a success confirmation. See also: gitlab_group_restore, gitlab_group_get, gitlab_group_update."
+	case "gitlab_group_restore":
+		options.Usage = "Restore a group that was marked for deletion (within the retention window, before permanent removal). Use after an accidental delete to recover the group."
+		options.Aliases = []string{"restore group", "undelete group", "recover deleted group"}
+		options.RelatedActions = []string{actionGroupGet, "group.delete", "group.list"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path that was marked for deletion.",
+				ExampleBinding: `params.group_id:"my-org/legacy"`,
+			},
+		}
+		options.IndividualTool.Description = "Restore a GitLab group marked for deletion. Returns: the restored group metadata. See also: gitlab_group_delete, gitlab_group_get, gitlab_group_list."
+	case "gitlab_group_archive":
+		options.Usage = "Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent; archiving an archived group is a no-op."
+		options.Aliases = []string{"archive group", "freeze group", "make group read-only"}
+		options.RelatedActions = []string{actionGroupGet, "group.unarchive", "group.update"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path to archive.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+		}
+		options.IndividualTool.Description = "Archive a GitLab group (read-only). Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
+	case "gitlab_group_unarchive":
+		options.Usage = "Unarchive a previously archived group, restoring write access. Idempotent; unarchiving a non-archived group is a no-op."
+		options.Aliases = []string{"unarchive group", "unfreeze group", "restore group write access"}
+		options.RelatedActions = []string{actionGroupGet, "group.archive", "group.update"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path to unarchive.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+		}
+		options.IndividualTool.Description = "Unarchive a GitLab group (restore write access). Returns: a success confirmation. See also: gitlab_group_archive, gitlab_group_get, gitlab_group_update."
+	default:
+		applyGroupRelationMetadata(individualTool, &options)
+	}
+
+	return options
+}
+
+// applyGroupRelationMetadata fills in discovery metadata for the group-relation
+// tools (transfer-project, shared-with, invited-groups, transfer-locations).
+// Split out of groupOptionsForAction to keep its maintainability index above
+// the linter threshold.
+func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
+	switch individualTool {
 	case "gitlab_group_transfer_project":
 		options.Usage = "Move an existing project into this group's namespace. Use when the user wants to relocate a project under a group. To discover which groups a group itself can be transferred into, use gitlab_group_transfer_locations instead."
 		options.Aliases = []string{"transfer project to group", "move project into group", "relocate project namespace"}
@@ -216,18 +341,85 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 		options.IndividualTool.Description = "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list."
-	case "gitlab_group_hook_add", "gitlab_group_hook_edit":
-		// branch_filter_strategy is an enum on the GitLab side (wildcard,
-		// regex, all_branches). The jsonschema tag on HookInput already
-		// lists the three values in the description; this override adds
-		// the same values as a proper schema enum so the LLM can rely
-		// on validation rather than just textual inference.
-		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("branch_filter_strategy", map[string]any{
-				"enum": []any{"wildcard", "regex", "all_branches"},
-			}),
-		}
 	}
+}
 
-	return options
+// applyGroupHookMetadata fills in discovery metadata for the five group-webhook
+// tools. It returns true when it handled individualTool, letting the caller
+// short-circuit. Split out of groupOptionsForAction to keep that function's
+// cyclomatic complexity flat.
+func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
+	switch individualTool {
+	case "gitlab_group_hook_list":
+		options.Usage = "List the webhooks configured on a group. Use when the user asks which webhooks fire for a group and its subgroups/projects. Requires Owner role."
+		options.Aliases = []string{"list group hooks", "show group webhooks", "group webhook list"}
+		options.RelatedActions = []string{"group.hook_get", "group.hook_add", actionGroupGet}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path whose webhooks are listed.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+		}
+		options.IndividualTool.Description = "List the webhooks on a GitLab group. Returns: hooks with URL, enabled events, and SSL settings. See also: gitlab_group_hook_get, gitlab_group_hook_add, gitlab_group_get."
+	case "gitlab_group_hook_get":
+		options.Usage = "Fetch a single group webhook by hook_id. Use to inspect a webhook's URL, enabled events, and SSL/header settings. Requires Owner role."
+		options.Aliases = []string{"get group hook", "show group webhook", "view group webhook details"}
+		options.RelatedActions = []string{"group.hook_list", "group.hook_edit", "group.hook_delete"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"hook_id": {
+				ValueSource:    "Numeric hook ID from gitlab_group_hook_list.",
+				ExampleBinding: `params.hook_id:42`,
+			},
+		}
+		options.IndividualTool.Description = "Get a single GitLab group webhook by ID. Returns: the hook's URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_edit, gitlab_group_hook_delete."
+	case "gitlab_group_hook_delete":
+		options.Usage = "Delete a group webhook by hook_id. Destructive and irreversible. Confirm before calling. Requires Owner role."
+		options.Aliases = []string{"delete group hook", "remove group webhook", "destroy group webhook"}
+		options.RelatedActions = []string{"group.hook_list", "group.hook_get", "group.hook_add"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"hook_id": {
+				ValueSource:    "Numeric hook ID from gitlab_group_hook_list.",
+				ExampleBinding: `params.hook_id:42`,
+			},
+		}
+		options.IndividualTool.Description = "Delete a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_add."
+	case "gitlab_group_hook_add", "gitlab_group_hook_edit":
+		applyGroupHookAddEditMetadata(individualTool, options)
+	default:
+		return false
+	}
+	return true
+}
+
+// applyGroupHookAddEditMetadata fills in shared and per-tool metadata for the
+// hook add/edit tools, including the branch_filter_strategy enum override.
+func applyGroupHookAddEditMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
+	// branch_filter_strategy is an enum on the GitLab side (wildcard, regex,
+	// all_branches). The jsonschema tag on HookInput already lists the three
+	// values in the description; this override adds the same values as a proper
+	// schema enum so the LLM can rely on validation rather than just textual
+	// inference.
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("branch_filter_strategy", map[string]any{
+			"enum": []any{"wildcard", "regex", "all_branches"},
+		}),
+	}
+	options.RelatedActions = []string{"group.hook_list", "group.hook_get", "group.hook_delete"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"url": {
+			ValueSource:      "HTTP(S) endpoint that should receive webhook payloads.",
+			ExampleBinding:   `params.url:"https://ci.example.com/gitlab-hook"`,
+			CommonConfusions: []string{"Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing."},
+		},
+	}
+	if individualTool == "gitlab_group_hook_add" {
+		options.Usage = "Create a group webhook. Send url plus the event flags to enable (push_events, merge_requests_events, pipeline_events, etc.) and optional token/custom_headers/custom_webhook_template. Requires Owner role."
+		options.Aliases = []string{"add group hook", "create group webhook", "register group webhook"}
+		options.IndividualTool.Description = "Create a webhook on a GitLab group. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
+		return
+	}
+	options.Usage = "Update an existing group webhook by hook_id. Send only the fields to change; unset fields keep their current values. Requires Owner role."
+	options.Aliases = []string{"edit group hook", "update group webhook", "modify group webhook"}
+	options.IndividualTool.Description = "Update a GitLab group webhook. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
 }

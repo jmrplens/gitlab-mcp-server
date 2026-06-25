@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -89,7 +90,7 @@ func FormatMemberListMarkdown(out MemberListOutput) string {
 	b.WriteString("| Username | Name | Access Level | State |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, m := range out.Members {
-		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(m.Username), toolutil.EscapeMdTableCell(m.Name), toolutil.EscapeMdTableCell(m.AccessLevelDescription), m.State)
+		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(m.Username), toolutil.EscapeMdTableCell(m.Name), toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))), m.State)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

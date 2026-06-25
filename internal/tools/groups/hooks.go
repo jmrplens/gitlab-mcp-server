@@ -15,40 +15,52 @@ import (
 
 // HookInput defines common parameters for creating or editing a group hook.
 type HookInput struct {
-	URL                       string `json:"url,omitempty"                        jsonschema:"Webhook URL (required for add)"`
-	Name                      string `json:"name,omitempty"                       jsonschema:"Hook name"`
-	Description               string `json:"description,omitempty"                jsonschema:"Hook description"`
-	Token                     string `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
-	SigningToken              string `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
-	PushEvents                *bool  `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
-	TagPushEvents             *bool  `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
-	MergeRequestsEvents       *bool  `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
-	IssuesEvents              *bool  `json:"issues_events,omitempty"              jsonschema:"Trigger on issue events"`
-	NoteEvents                *bool  `json:"note_events,omitempty"                jsonschema:"Trigger on comment events"`
-	JobEvents                 *bool  `json:"job_events,omitempty"                 jsonschema:"Trigger on job events"`
-	PipelineEvents            *bool  `json:"pipeline_events,omitempty"            jsonschema:"Trigger on pipeline events"`
-	WikiPageEvents            *bool  `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
-	DeploymentEvents          *bool  `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
-	ReleasesEvents            *bool  `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
-	MilestoneEvents           *bool  `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
-	FeatureFlagEvents         *bool  `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
-	SubGroupEvents            *bool  `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
-	MemberEvents              *bool  `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
-	VulnerabilityEvents       *bool  `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
-	ConfidentialIssuesEvents  *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
-	ConfidentialNoteEvents    *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
-	EnableSSLVerification     *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
-	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
-	BranchFilterStrategy      string `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
-	EmojiEvents               *bool  `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
-	ResourceAccessTokenEvents *bool  `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
-	ProjectEvents             *bool  `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
+	URL                       string                  `json:"url,omitempty"                        jsonschema:"Webhook URL (required for add)"`
+	Name                      string                  `json:"name,omitempty"                       jsonschema:"Hook name"`
+	Description               string                  `json:"description,omitempty"                jsonschema:"Hook description"`
+	Token                     string                  `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
+	SigningToken              string                  `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
+	PushEvents                *bool                   `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
+	TagPushEvents             *bool                   `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
+	MergeRequestsEvents       *bool                   `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
+	IssuesEvents              *bool                   `json:"issues_events,omitempty"              jsonschema:"Trigger on issue events"`
+	NoteEvents                *bool                   `json:"note_events,omitempty"                jsonschema:"Trigger on comment events"`
+	JobEvents                 *bool                   `json:"job_events,omitempty"                 jsonschema:"Trigger on job events"`
+	PipelineEvents            *bool                   `json:"pipeline_events,omitempty"            jsonschema:"Trigger on pipeline events"`
+	WikiPageEvents            *bool                   `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
+	DeploymentEvents          *bool                   `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
+	ReleasesEvents            *bool                   `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool                   `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool                   `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
+	SubGroupEvents            *bool                   `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
+	MemberEvents              *bool                   `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
+	VulnerabilityEvents       *bool                   `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
+	ConfidentialIssuesEvents  *bool                   `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
+	ConfidentialNoteEvents    *bool                   `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
+	EnableSSLVerification     *bool                   `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
+	PushEventsBranchFilter    string                  `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
+	BranchFilterStrategy      string                  `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	EmojiEvents               *bool                   `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
+	ResourceAccessTokenEvents *bool                   `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ProjectEvents             *bool                   `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
+	CustomWebhookTemplate     string                  `json:"custom_webhook_template,omitempty"      jsonschema:"Custom payload template (JSON) sent instead of the default webhook body"`
+	CustomHeaders             []HookCustomHeaderInput `json:"custom_headers,omitempty"  jsonschema:"Custom HTTP headers added to webhook requests"`
+}
+
+// HookCustomHeaderInput is a single custom HTTP header sent with webhook
+// requests. It mirrors gl.HookCustomHeader on add/edit.
+type HookCustomHeaderInput struct {
+	Key   string `json:"key"   jsonschema:"Header name,required"`
+	Value string `json:"value,omitempty" jsonschema:"Header value (write-only; masked on read)"`
 }
 
 // ListHooksInput defines parameters for listing group hooks.
 type ListHooksInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Order hooks by field (id)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetHookInput defines parameters for retrieving a single group hook.
@@ -78,48 +90,59 @@ type DeleteHookInput struct {
 
 // HookURLVariable represents a templated webhook URL variable used to substitute
 // placeholders like {var_name} in a webhook URL with secret values resolved
-// server-side. Only the key is returned by the API; the value is masked.
+// server-side. Mirrors gl.HookURLVariable (Key + Value); the value is write-only
+// and masked on read, so it is omitted unless GitLab returns it.
 type HookURLVariable struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
+}
+
+// HookCustomHeaderOutput mirrors gl.HookCustomHeader (a custom_headers entry).
+// The value is write-only and masked on read.
+type HookCustomHeaderOutput struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
 // HookOutput represents a GitLab group webhook.
 type HookOutput struct {
 	toolutil.HintableOutput
-	ID                        int64             `json:"id"`
-	URL                       string            `json:"url"`
-	Name                      string            `json:"name,omitempty"`
-	Description               string            `json:"description,omitempty"`
-	GroupID                   int64             `json:"group_id"`
-	PushEvents                bool              `json:"push_events"`
-	TagPushEvents             bool              `json:"tag_push_events"`
-	MergeRequestsEvents       bool              `json:"merge_requests_events"`
-	IssuesEvents              bool              `json:"issues_events"`
-	NoteEvents                bool              `json:"note_events"`
-	JobEvents                 bool              `json:"job_events"`
-	PipelineEvents            bool              `json:"pipeline_events"`
-	WikiPageEvents            bool              `json:"wiki_page_events"`
-	DeploymentEvents          bool              `json:"deployment_events"`
-	ReleasesEvents            bool              `json:"releases_events"`
-	SubGroupEvents            bool              `json:"subgroup_events"`
-	MemberEvents              bool              `json:"member_events"`
-	ConfidentialIssuesEvents  bool              `json:"confidential_issues_events"`
-	ConfidentialNoteEvents    bool              `json:"confidential_note_events"`
-	EnableSSLVerification     bool              `json:"enable_ssl_verification"`
-	AlertStatus               string            `json:"alert_status,omitempty"`
-	DisabledUntil             string            `json:"disabled_until,omitempty"`
-	URLVariables              []HookURLVariable `json:"url_variables,omitempty"`
-	FeatureFlagEvents         bool              `json:"feature_flag_events"`
-	MilestoneEvents           bool              `json:"milestone_events"`
-	VulnerabilityEvents       bool              `json:"vulnerability_events"`
-	EmojiEvents               bool              `json:"emoji_events"`
-	ResourceAccessTokenEvents bool              `json:"resource_access_token_events"`
-	ProjectEvents             bool              `json:"project_events"`
-	PushEventsBranchFilter    string            `json:"push_events_branch_filter,omitempty"`
-	BranchFilterStrategy      string            `json:"branch_filter_strategy,omitempty"`
-	TokenPresent              bool              `json:"token_present"`
-	SigningTokenPresent       bool              `json:"signing_token_present"`
-	CreatedAt                 string            `json:"created_at,omitempty"`
+	ID                        int64                    `json:"id"`
+	URL                       string                   `json:"url"`
+	Name                      string                   `json:"name,omitempty"`
+	Description               string                   `json:"description,omitempty"`
+	GroupID                   int64                    `json:"group_id"`
+	PushEvents                bool                     `json:"push_events"`
+	TagPushEvents             bool                     `json:"tag_push_events"`
+	MergeRequestsEvents       bool                     `json:"merge_requests_events"`
+	IssuesEvents              bool                     `json:"issues_events"`
+	NoteEvents                bool                     `json:"note_events"`
+	JobEvents                 bool                     `json:"job_events"`
+	PipelineEvents            bool                     `json:"pipeline_events"`
+	WikiPageEvents            bool                     `json:"wiki_page_events"`
+	DeploymentEvents          bool                     `json:"deployment_events"`
+	ReleasesEvents            bool                     `json:"releases_events"`
+	SubGroupEvents            bool                     `json:"subgroup_events"`
+	MemberEvents              bool                     `json:"member_events"`
+	ConfidentialIssuesEvents  bool                     `json:"confidential_issues_events"`
+	ConfidentialNoteEvents    bool                     `json:"confidential_note_events"`
+	EnableSSLVerification     bool                     `json:"enable_ssl_verification"`
+	AlertStatus               string                   `json:"alert_status,omitempty"`
+	DisabledUntil             string                   `json:"disabled_until,omitempty"`
+	URLVariables              []HookURLVariable        `json:"url_variables,omitempty"`
+	FeatureFlagEvents         bool                     `json:"feature_flag_events"`
+	MilestoneEvents           bool                     `json:"milestone_events"`
+	VulnerabilityEvents       bool                     `json:"vulnerability_events"`
+	EmojiEvents               bool                     `json:"emoji_events"`
+	ResourceAccessTokenEvents bool                     `json:"resource_access_token_events"`
+	ProjectEvents             bool                     `json:"project_events"`
+	PushEventsBranchFilter    string                   `json:"push_events_branch_filter,omitempty"`
+	BranchFilterStrategy      string                   `json:"branch_filter_strategy,omitempty"`
+	TokenPresent              bool                     `json:"token_present"`
+	SigningTokenPresent       bool                     `json:"signing_token_present"`
+	CreatedAt                 string                   `json:"created_at,omitempty"`
+	CustomWebhookTemplate     string                   `json:"custom_webhook_template,omitempty"`
+	CustomHeaders             []HookCustomHeaderOutput `json:"custom_headers,omitempty"`
 }
 
 // HookListOutput holds a paginated list of group hooks.
@@ -163,11 +186,27 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 		BranchFilterStrategy:      h.BranchFilterStrategy,
 		TokenPresent:              h.TokenPresent,
 		SigningTokenPresent:       h.SigningTokenPresent,
+		CustomWebhookTemplate:     h.CustomWebhookTemplate,
 	}
 	if len(h.URLVariables) > 0 {
+		// url_variables mirrors gl.HookURLVariable as a []object (Key + Value),
+		// but the Value is a secret that GitLab masks on read; it is
+		// deliberately not propagated so the output never carries secrets.
 		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
 		for i, v := range h.URLVariables {
 			out.URLVariables[i] = HookURLVariable{Key: v.Key}
+		}
+	}
+	if len(h.CustomHeaders) > 0 {
+		// custom_headers mirrors gl.HookCustomHeader as a []object (Key +
+		// Value); the Value is secret and masked on read, so only the key is
+		// surfaced.
+		out.CustomHeaders = make([]HookCustomHeaderOutput, 0, len(h.CustomHeaders))
+		for _, c := range h.CustomHeaders {
+			if c == nil {
+				continue
+			}
+			out.CustomHeaders = append(out.CustomHeaders, HookCustomHeaderOutput{Key: c.Key})
 		}
 	}
 	if h.CreatedAt != nil {
@@ -189,11 +228,12 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	}
 
 	opts := &gl.ListGroupHooksOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	hooks, resp, err := client.GL().Groups.ListGroupHooks(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -262,6 +302,25 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
 	}
+	if input.CustomWebhookTemplate != "" {
+		opts.CustomWebhookTemplate = new(input.CustomWebhookTemplate)
+	}
+	if headers := customHeaderOptions(input.CustomHeaders); headers != nil {
+		opts.CustomHeaders = headers
+	}
+}
+
+// customHeaderOptions converts HookCustomHeaderInput values into the SDK
+// pointer-slice shape, returning nil when no header was supplied.
+func customHeaderOptions(headers []HookCustomHeaderInput) *[]*gl.HookCustomHeader {
+	if len(headers) == 0 {
+		return nil
+	}
+	out := make([]*gl.HookCustomHeader, len(headers))
+	for i, h := range headers {
+		out[i] = &gl.HookCustomHeader{Key: h.Key, Value: h.Value}
+	}
+	return &out
 }
 
 func applyGroupHookEventOptions(input HookInput, opts *gl.AddGroupHookOptions) {
@@ -338,6 +397,8 @@ func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHook
 		EnableSSLVerification:     opts.EnableSSLVerification,
 		Token:                     opts.Token,
 		SigningToken:              opts.SigningToken,
+		CustomWebhookTemplate:     opts.CustomWebhookTemplate,
+		CustomHeaders:             opts.CustomHeaders,
 	}
 }
 

@@ -255,11 +255,8 @@ func TestGroupMembersList_Success(t *testing.T) {
 	if out.Members[0].AccessLevel != 40 {
 		t.Errorf("out.Members[0].AccessLevel = %d, want 40", out.Members[0].AccessLevel)
 	}
-	if out.Members[0].AccessLevelDescription != "Maintainer" {
-		t.Errorf("out.Members[0].AccessLevelDescription = %q, want %q", out.Members[0].AccessLevelDescription, "Maintainer")
-	}
-	if out.Members[1].AccessLevelDescription != "Developer" {
-		t.Errorf("out.Members[1].AccessLevelDescription = %q, want %q", out.Members[1].AccessLevelDescription, "Developer")
+	if out.Members[1].AccessLevel != 30 {
+		t.Errorf("out.Members[1].AccessLevel = %d, want 30", out.Members[1].AccessLevel)
 	}
 }
 
@@ -520,11 +517,11 @@ func TestGroupMembers_ListSAMLAndRoleFields(t *testing.T) {
 	if len(out.Members) != 1 {
 		t.Fatalf("len(out.Members) = %d, want 1", len(out.Members))
 	}
-	if out.Members[0].GroupSAMLProvider != "okta-saml" {
-		t.Errorf("out.Members[0].GroupSAMLProvider = %q, want %q", out.Members[0].GroupSAMLProvider, "okta-saml")
+	if out.Members[0].GroupSAMLIdentity == nil || out.Members[0].GroupSAMLIdentity.Provider != "okta-saml" {
+		t.Errorf("out.Members[0].GroupSAMLIdentity = %+v, want provider %q", out.Members[0].GroupSAMLIdentity, "okta-saml")
 	}
-	if out.Members[0].MemberRoleName != "Custom Dev" {
-		t.Errorf("out.Members[0].MemberRoleName = %q, want %q", out.Members[0].MemberRoleName, "Custom Dev")
+	if out.Members[0].MemberRole == nil || out.Members[0].MemberRole.Name != "Custom Dev" {
+		t.Errorf("out.Members[0].MemberRole = %+v, want name %q", out.Members[0].MemberRole, "Custom Dev")
 	}
 }
 
@@ -1998,8 +1995,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 	out := MemberListOutput{
 		Members: []MemberOutput{
-			{ID: 10, Username: "devops1", Name: "DevOps One", AccessLevelDescription: "Maintainer", State: "active"},
-			{ID: 11, Username: "devops2", Name: "DevOps Two", AccessLevelDescription: "Developer", State: "active"},
+			{ID: 10, Username: "devops1", Name: "DevOps One", AccessLevel: 40, State: "active"},
+			{ID: 11, Username: "devops2", Name: "DevOps Two", AccessLevel: 30, State: "active"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
