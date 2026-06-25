@@ -325,11 +325,12 @@ func buildGeoActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 	return actionSpecGroup("gitlab_geo", editionTaggedSpecs(geo.ActionSpecs(client), editionPremium))
 }
 
-// buildGroupActionSpecs contributes the gitlab_group catalog group. It
-// always emits the base CE set and, when enterprise is true, also merges
-// in Premium/Ultimate-only group sub-domains (epics, SAML, LDAP, audit
-// settings, group iterations, group service accounts, group wikis, etc.).
-func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+// buildGroupActionSpecs contributes the gitlab_group catalog group. It emits
+// the full set of group sub-domains unconditionally; the central tier filter
+// (driven by each action's Edition) decides which are visible at the instance
+// tier. The Premium/Ultimate sub-domains (epics, SAML, LDAP, group iterations,
+// wikis, credentials, security settings, etc.) carry their own Edition tags.
+func buildGroupActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 96)
 	specs = append(specs, grouptools.ActionSpecs(client)...)
 	specs = append(specs, badges.GroupActionSpecs(client)...)
@@ -342,12 +343,7 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, grouprelationsexport.ActionSpecs(client)...)
 	specs = append(specs, groupreleases.ActionSpecs(client)...)
 	specs = append(specs, issues.GroupActionSpecs(client)...)
-	// Group service accounts are Free tier (service_accounts.md); the central
-	// tier filter — not positional gating — decides their visibility.
 	specs = append(specs, groupserviceaccounts.ActionSpecs(client)...)
-	if !enterprise {
-		return actionSpecGroup("gitlab_group", specs)
-	}
 	specs = append(specs, epicdiscussions.ActionSpecs(client)...)
 	specs = append(specs, epics.ActionSpecs(client)...)
 	specs = append(specs, resourceevents.EpicActionSpecs(client)...)
@@ -375,9 +371,9 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpec
 // buildIssueActionSpecs contributes the gitlab_issue catalog group by
 // merging issue, issue note, issue link, issue discussion, issue
 // statistics, work item, issue award emoji, and issue resource event
-// specs. Project and group iteration specs are appended when enterprise
-// is true.
-func buildIssueActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+// specs. Project and group iteration specs (Premium, self-tagged) are always
+// included; the central tier filter gates them by the instance tier.
+func buildIssueActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 63)
 	specs = append(specs, issues.ActionSpecs(client)...)
 	specs = append(specs, issuenotes.ActionSpecs(client)...)
@@ -387,10 +383,8 @@ func buildIssueActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, workitems.ActionSpecs(client)...)
 	specs = append(specs, awardemoji.IssueActionSpecs(client)...)
 	specs = append(specs, resourceevents.IssueActionSpecs(client)...)
-	if enterprise {
-		specs = append(specs, projectiterations.IssueActionSpecs(client)...)
-		specs = append(specs, groupiterations.IssueActionSpecs(client)...)
-	}
+	specs = append(specs, projectiterations.IssueActionSpecs(client)...)
+	specs = append(specs, groupiterations.IssueActionSpecs(client)...)
 	return actionSpecGroup("gitlab_issue", specs)
 }
 
@@ -478,7 +472,7 @@ func buildProjectAliasActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 // buildProjectActionSpecs contributes the gitlab_project catalog group.
 // It always emits the base CE project surface and, when enterprise is
 // true, also includes push rule and project service account specs.
-func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+func buildProjectActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 130)
 	specs = append(specs, uploads.ActionSpecs(client)...)
 	specs = append(specs, projectstatistics.ActionSpecs(client)...)
@@ -491,13 +485,12 @@ func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []Act
 	specs = append(specs, integrations.ActionSpecs(client)...)
 	specs = append(specs, pages.ActionSpecs(client)...)
 	specs = append(specs, projectmirrors.ActionSpecs(client)...)
-	// Project service accounts are Free tier (service_accounts.md); the central
-	// tier filter decides visibility, so they live in the base spec list.
 	specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
-	if enterprise {
-		specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
-	}
-	specs = append(specs, projects.ActionSpecs(client, enterprise)...)
+	// Security settings (Ultimate) and the Premium push-rule/target-branch specs
+	// inside projects.ActionSpecs are self-tagged; the central tier filter gates
+	// them, so they are always collected here.
+	specs = append(specs, editionTaggedSpecs(securitysettings.ProjectActionSpecs(client), editionUltimate)...)
+	specs = append(specs, projects.ActionSpecs(client, true)...)
 	return actionSpecGroup("gitlab_project", specs)
 }
 
@@ -574,17 +567,15 @@ func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	return actionSpecGroup("gitlab_snippet", specs)
 }
 
-// buildStorageMoveActionSpecs contributes the gitlab_storage_move
-// catalog group. The group always includes project and snippet storage
-// move specs and appends group storage move specs when enterprise is
-// true.
-func buildStorageMoveActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+// buildStorageMoveActionSpecs contributes the gitlab_storage_move catalog
+// group. Project and snippet storage moves are Free; group storage moves are
+// Premium (self-tagged). All are collected here and gated by the central tier
+// filter.
+func buildStorageMoveActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 18)
 	specs = append(specs, projectstoragemoves.ActionSpecs(client)...)
 	specs = append(specs, snippetstoragemoves.ActionSpecs(client)...)
-	if enterprise {
-		specs = append(specs, groupstoragemoves.ActionSpecs(client)...)
-	}
+	specs = append(specs, groupstoragemoves.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_storage_move", specs)
 }
 
@@ -607,12 +598,12 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	return actionSpecGroup("gitlab_template", specs)
 }
 
-// buildUserActionSpecs contributes the gitlab_user catalog group. The
-// user package receives the enterprise flag so it can decide whether to
-// include Enterprise-only user sub-resources.
-func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
+// buildUserActionSpecs contributes the gitlab_user catalog group. All user
+// sub-resources are collected unconditionally; the central tier filter gates
+// any paid ones by their Edition.
+func buildUserActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 75)
-	specs = append(specs, users.ActionSpecs(client, enterprise)...)
+	specs = append(specs, users.ActionSpecs(client, true)...)
 	specs = append(specs, todos.ActionSpecs(client)...)
 	specs = append(specs, events.UserActionSpecs(client)...)
 	specs = append(specs, notifications.ActionSpecs(client)...)

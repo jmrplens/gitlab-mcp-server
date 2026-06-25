@@ -185,11 +185,11 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 858 = 870 (after the first tier-filter wave) +16 service-account actions
-		// un-gated to Free (service_accounts.md = Free) −28 leaks now correctly
-		// gated out of Free (protected envs, MR approval settings + MR approval
-		// rules, runner controllers). See cmd/audit_edition_tier.
-		const expectedTools = 858
+		// 861 = 858 +3 instance service-account actions (user.create/list/update_
+		// service_account) un-gated to Free (service_accounts.md = Free). Prior
+		// wave: 870 +16 group/project service accounts −28 leaks (protected envs,
+		// MR approval settings/rules, runner controllers). See cmd/audit_edition_tier.
+		const expectedTools = 861
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

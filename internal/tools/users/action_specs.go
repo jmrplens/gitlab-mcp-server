@@ -9,9 +9,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ActionSpecs returns canonical specs for user account, status, SSH key, and misc actions.
-// When enterprise is true, instance-level service account specs are appended to the result.
-func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.ActionSpec {
+// ActionSpecs returns canonical specs for user account, status, SSH key, and
+// misc actions, including the Free-tier instance service-account specs. The
+// bool parameter is retained for signature compatibility but ignored: tier
+// gating is handled centrally by the catalog tier filter via each spec's
+// Edition.
+func ActionSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
 	specs := []toolutil.ActionSpec{
 		// gitlab_user_current — return the authenticated user profile for the current token.
 		userReadSpec("current", toolutil.RouteAction(client, Current), "gitlab_user_current"),
@@ -85,17 +88,12 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		userCreateSpec("create_current_user_pat", toolutil.RouteAction(client, CreateCurrentUserPAT), "gitlab_create_current_user_pat"),
 		// gitlab_upload_user_avatar — set the current authenticated user's avatar image (non-destructive replace).
 		userUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadCurrentUserAvatar), "gitlab_upload_user_avatar"),
-	}
-	if enterprise {
-		specs = append(
-			specs,
-			// gitlab_create_service_account — create an instance-level service account (Premium/Ultimate).
-			userEnterpriseCreateSpec("create_service_account", toolutil.RouteAction(client, CreateServiceAccount), "gitlab_create_service_account"),
-			// gitlab_list_service_accounts — list instance-level service accounts (Premium/Ultimate).
-			userEnterpriseReadSpec("list_service_accounts", toolutil.RouteAction(client, ListServiceAccounts), "gitlab_list_service_accounts"),
-			// gitlab_update_instance_service_account — update an instance-level service account.
-			userEnterpriseUpdateSpec("update_service_account", toolutil.RouteAction(client, UpdateInstanceServiceAccount), "gitlab_update_instance_service_account"),
-		)
+		// Instance-level service accounts are Free tier (admin-only) per
+		// doc/api/service_accounts.md (page tier = Free, Premium, Ultimate; the
+		// Instance section adds an admin requirement, not a licensing tier).
+		userCreateSpec("create_service_account", toolutil.RouteAction(client, CreateServiceAccount), "gitlab_create_service_account"),
+		userReadSpec("list_service_accounts", toolutil.RouteAction(client, ListServiceAccounts), "gitlab_list_service_accounts"),
+		userUpdateSpec("update_service_account", toolutil.RouteAction(client, UpdateInstanceServiceAccount), "gitlab_update_instance_service_account"),
 	}
 	return specs
 }
@@ -143,27 +141,6 @@ func userDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute
 	options := userOptionsForAction(name, individualTool)
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewDeleteActionSpec(name, route, options)
-}
-
-// userEnterpriseReadSpec builds the canonical read-only spec with Premium edition gating.
-func userEnterpriseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptionsForAction(name, individualTool)
-	options.Edition = "premium"
-	return toolutil.NewReadActionSpec(name, route, options)
-}
-
-// userEnterpriseCreateSpec builds the canonical create spec with Premium edition gating.
-func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptionsForAction(name, individualTool)
-	options.Edition = "premium"
-	return toolutil.NewCreateActionSpec(name, route, options)
-}
-
-// userEnterpriseUpdateSpec builds the canonical update spec with Premium edition gating.
-func userEnterpriseUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptionsForAction(name, individualTool)
-	options.Edition = "premium"
-	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 // userToolMeta carries the discovery metadata (R-META) for a user individual
