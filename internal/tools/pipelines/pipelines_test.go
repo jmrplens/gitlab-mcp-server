@@ -4,6 +4,7 @@ package pipelines
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -204,8 +205,8 @@ func TestPipelineGet_Success(t *testing.T) {
 	if out.Coverage != "85.5" {
 		t.Errorf("out.Coverage = %q, want %q", out.Coverage, "85.5")
 	}
-	if out.UserUsername != "testuser" {
-		t.Errorf("out.UserUsername = %q, want %q", out.UserUsername, "testuser")
+	if out.User == nil || out.User.Username != "testuser" {
+		t.Errorf("out.User.Username = %v, want %q", out.User, "testuser")
 	}
 	if out.BeforeSHA != "def456prev" {
 		t.Errorf("out.BeforeSHA = %q, want %q", out.BeforeSHA, "def456prev")
@@ -736,10 +737,15 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	}
 	input.Page = 2
 	input.PerPage = 50
+	input.Pagination = "keyset"
+	input.PageToken = "cursor-123"
 
 	opts := buildListOpts(input)
 	assertPipelineListStringFilters(t, opts)
 	assertPipelineListTimeAndPaginationFilters(t, opts)
+	if opts.Pagination != "keyset" || opts.PageToken != "cursor-123" {
+		t.Errorf("keyset = %q/%q, want keyset/cursor-123", opts.Pagination, opts.PageToken)
+	}
 }
 
 func assertPipelineListStringFilters(t *testing.T, opts *gl.ListProjectPipelinesOptions) {
@@ -921,8 +927,8 @@ func TestDetailToOutput_AllOptionalFields(t *testing.T) {
 	if out.CommittedAt == "" {
 		t.Error("CommittedAt should be set")
 	}
-	if out.UserUsername != "testuser" {
-		t.Errorf("UserUsername = %q, want %q", out.UserUsername, "testuser")
+	if out.User == nil || out.User.Username != "testuser" {
+		t.Errorf("User.Username = %v, want %q", out.User, "testuser")
 	}
 }
 
@@ -952,8 +958,8 @@ func TestDetailToOutput_MinimalFields(t *testing.T) {
 	if out.YamlErrors != "" {
 		t.Errorf("YamlErrors = %q, want empty", out.YamlErrors)
 	}
-	if out.UserUsername != "" {
-		t.Errorf("UserUsername = %q, want empty", out.UserUsername)
+	if out.User != nil {
+		t.Errorf("User = %v, want nil", out.User)
 	}
 	if out.StartedAt != "" {
 		t.Errorf("StartedAt = %q, want empty", out.StartedAt)
@@ -1421,13 +1427,13 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 			Icon: "status_success", Text: "passed", Label: "passed",
 			Group: "success", Tooltip: "passed", HasDetails: true,
 		},
-		WebURL:       "https://gitlab.example.com/-/pipelines/99",
-		CreatedAt:    "2026-03-01T10:00:00Z",
-		UpdatedAt:    "2026-03-01T10:05:00Z",
-		StartedAt:    "2026-03-01T10:00:05Z",
-		FinishedAt:   "2026-03-01T10:05:00Z",
-		CommittedAt:  "2026-02-28T09:00:00Z",
-		UserUsername: "testuser",
+		WebURL:      "https://gitlab.example.com/-/pipelines/99",
+		CreatedAt:   "2026-03-01T10:00:00Z",
+		UpdatedAt:   "2026-03-01T10:05:00Z",
+		StartedAt:   "2026-03-01T10:00:05Z",
+		FinishedAt:  "2026-03-01T10:05:00Z",
+		CommittedAt: "2026-02-28T09:00:00Z",
+		User:        &BasicUserOutput{Username: "testuser"},
 	}
 	md := FormatDetailMarkdown(out)
 
@@ -2038,4 +2044,144 @@ func pipelineSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]t
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit additions: keyset pagination, pipeline inputs, sub-object mirrors
+// ---------------------------------------------------------------------------.
+
+// TestGetLatest_FallbackKeysetAndFilters verifies that the list fallback honors
+// keyset pagination and the additional ListProjectPipelinesOptions filters that
+// GetLatestInput now mirrors.
+func TestGetLatest_FallbackKeysetAndFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case r.URL.Path == "/api/v4/projects/42/pipelines" && r.Method == http.MethodGet:
+			q := r.URL.Query()
+			if q.Get("pagination") != "keyset" || q.Get("page_token") != "cur-9" {
+				t.Errorf("keyset query = %q/%q, want keyset/cur-9", q.Get("pagination"), q.Get("page_token"))
+			}
+			if q.Get("status") != "success" || q.Get("source") != "push" {
+				t.Errorf("filter query status=%q source=%q, want success/push", q.Get("status"), q.Get("source"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":88,"status":"success","ref":"main","sha":"abc123"}]`)
+		case r.URL.Path == "/api/v4/projects/42/pipelines/88":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":88,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/p/-/pipelines/88"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	input := GetLatestInput{ProjectID: "42", Status: "success", Source: "push"}
+	input.Pagination = "keyset"
+	input.PageToken = "cur-9"
+	out, err := GetLatest(context.Background(), client, input)
+	if err != nil {
+		t.Fatalf("GetLatest() unexpected error: %v", err)
+	}
+	if out.ID != 88 {
+		t.Errorf("fallback ID = %d, want 88", out.ID)
+	}
+}
+
+// TestCreate_WithInputs verifies Create serializes typed pipeline inputs and
+// sends them in the request body.
+func TestCreate_WithInputs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
+			body, _ := io.ReadAll(r.Body)
+			for _, want := range []string{`"environment":"production"`, `"replicas":3`, `"debug":false`, `"regions":["us","eu"]`} {
+				if !strings.Contains(string(body), want) {
+					t.Errorf("request body missing %q:\n%s", want, body)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusCreated, pipelineDetailJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		Ref:       "main",
+		Inputs: map[string]any{
+			"environment": "production",
+			"replicas":    float64(3),
+			"debug":       false,
+			"regions":     []any{"us", "eu"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if out.ID != 10 {
+		t.Errorf(fmtIDWant10, out.ID)
+	}
+}
+
+// TestCreate_WithInvalidInputs verifies Create rejects unsupported input value
+// types before issuing the API call.
+func TestCreate_WithInvalidInputs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		Ref:       "main",
+		Inputs:    map[string]any{"bad": map[string]any{"nested": true}},
+	})
+	if err == nil {
+		t.Fatal("expected error for unsupported input value type")
+	}
+}
+
+// TestBuildPipelineInputs_AllTypes verifies buildPipelineInputs accepts every
+// supported value type and rejects non-string array elements.
+func TestBuildPipelineInputs_AllTypes(t *testing.T) {
+	in, err := buildPipelineInputs(map[string]any{
+		"s":      "v",
+		"b":      true,
+		"f":      float64(1.5),
+		"i":      7,
+		"i64":    int64(9),
+		"arrAny": []any{"a", "b"},
+		"arrStr": []string{"c"},
+	})
+	if err != nil {
+		t.Fatalf("buildPipelineInputs() unexpected error: %v", err)
+	}
+	if len(in) != 7 {
+		t.Errorf("len = %d, want 7", len(in))
+	}
+
+	if _, badErr := buildPipelineInputs(map[string]any{"arr": []any{"ok", 5}}); badErr == nil {
+		t.Error("expected error for non-string array element")
+	}
+}
+
+// TestDetailedStatusOutput_Illustration verifies the detailed_status illustration
+// sub-object and the user created_at timestamp are mirrored.
+func TestDetailedStatusOutput_Illustration(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":5,"iid":5,"project_id":42,"status":"failed","source":"push",
+			"ref":"main","sha":"abc","web_url":"https://gitlab.example.com/p/-/pipelines/5",
+			"created_at":"2026-03-01T10:00:00Z","updated_at":"2026-03-01T10:00:00Z",
+			"detailed_status":{"icon":"status_failed","illustration":{"image":"err.svg"}},
+			"user":{"id":7,"username":"u","name":"User","state":"active","web_url":"https://gitlab.example.com/u","created_at":"2025-01-02T03:04:05Z"}
+		}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 5})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.DetailedStatus == nil || out.DetailedStatus.Illustration == nil || out.DetailedStatus.Illustration.Image != "err.svg" {
+		t.Errorf("illustration not mirrored: %+v", out.DetailedStatus)
+	}
+	if out.User == nil || out.User.CreatedAt == "" || out.User.ID != 7 {
+		t.Errorf("user not fully mirrored: %+v", out.User)
+	}
 }
