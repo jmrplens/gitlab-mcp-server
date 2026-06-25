@@ -20,7 +20,10 @@ type TreeInput struct {
 	Path      string               `json:"path,omitempty"      jsonschema:"Path inside the repository to list (default: root)"`
 	Ref       string               `json:"ref,omitempty"       jsonschema:"Branch name, tag, or commit SHA (default: default branch)"`
 	Recursive bool                 `json:"recursive,omitempty" jsonschema:"List files recursively through subdirectories"`
+	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order keyset-paginated results by: 'id', 'name', 'path', or 'type' (only used with pagination='keyset')"`
+	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // TreeNodeOutput represents a file or directory in the repository tree.
@@ -58,12 +61,13 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 	if input.Recursive {
 		opts.Recursive = new(true)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	nodes, resp, err := client.GL().Repositories.ListTree(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -100,6 +104,7 @@ type DiffOutput = toolutil.DiffOutput
 // CompareOutput holds the comparison result.
 type CompareOutput struct {
 	toolutil.HintableOutput
+	Commit         *commits.Output  `json:"commit,omitempty"`
 	Commits        []commits.Output `json:"commits"`
 	Diffs          []DiffOutput     `json:"diffs"`
 	CompareTimeout bool             `json:"compare_timeout"`
@@ -146,7 +151,14 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 		diffs[i] = toolutil.DiffToOutput(d)
 	}
 
+	var baseCommit *commits.Output
+	if cmp.Commit != nil {
+		c := commits.ToOutput(cmp.Commit)
+		baseCommit = &c
+	}
+
 	return CompareOutput{
+		Commit:         baseCommit,
 		Commits:        commitList,
 		Diffs:          diffs,
 		CompareTimeout: cmp.CompareTimeout,
@@ -165,6 +177,7 @@ type ContributorsInput struct {
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by: name, email, or commits (default: commits)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc (default: asc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ContributorOutput represents a repository contributor.
@@ -198,12 +211,7 @@ func Contributors(ctx context.Context, client *gitlabclient.Client, input Contri
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	contribs, resp, err := client.GL().Repositories.Contributors(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ContributorsOutput{}, toolutil.WrapErrWithStatusHint("repositoryContributors", err, http.StatusNotFound,
@@ -420,6 +428,7 @@ type AddChangelogInput struct {
 	Version    string               `json:"version"              jsonschema:"Version string for the changelog,required"`
 	Branch     string               `json:"branch,omitempty"     jsonschema:"Branch to commit the changelog to (default: default branch)"`
 	ConfigFile string               `json:"config_file,omitempty" jsonschema:"Path to the changelog config file in the project"`
+	Date       string               `json:"date,omitempty"       jsonschema:"Date and time of the release as an RFC3339 timestamp (default: current time)"`
 	File       string               `json:"file,omitempty"       jsonschema:"Path to the changelog file (default: CHANGELOG.md)"`
 	From       string               `json:"from,omitempty"       jsonschema:"Start of the range (commit SHA or tag)"`
 	To         string               `json:"to,omitempty"         jsonschema:"End of the range (commit SHA or tag, default: HEAD)"`
@@ -454,6 +463,10 @@ func AddChangelog(ctx context.Context, client *gitlabclient.Client, input AddCha
 	if input.ConfigFile != "" {
 		opts.ConfigFile = new(input.ConfigFile)
 	}
+	if t := toolutil.ParseOptionalTime(input.Date); t != nil {
+		d := gl.ISOTime(*t)
+		opts.Date = &d
+	}
 	if input.File != "" {
 		opts.File = new(input.File)
 	}
@@ -486,6 +499,7 @@ type GenerateChangelogInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	Version    string               `json:"version"               jsonschema:"Version string,required"`
 	ConfigFile string               `json:"config_file,omitempty"  jsonschema:"Path to the changelog config file"`
+	Date       string               `json:"date,omitempty"        jsonschema:"Date and time of the release as an RFC3339 timestamp (default: current time)"`
 	From       string               `json:"from,omitempty"        jsonschema:"Start of the range (commit SHA or tag)"`
 	To         string               `json:"to,omitempty"          jsonschema:"End of the range (commit SHA or tag, default: HEAD)"`
 	Trailer    string               `json:"trailer,omitempty"     jsonschema:"Git trailer to use (default: Changelog)"`
@@ -513,6 +527,10 @@ func GenerateChangelogData(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	if input.ConfigFile != "" {
 		opts.ConfigFile = new(input.ConfigFile)
+	}
+	if t := toolutil.ParseOptionalTime(input.Date); t != nil {
+		d := gl.ISOTime(*t)
+		opts.Date = &d
 	}
 	if input.From != "" {
 		opts.From = new(input.From)

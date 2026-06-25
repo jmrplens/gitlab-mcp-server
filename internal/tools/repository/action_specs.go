@@ -69,10 +69,22 @@ func repositoryOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path."
 		options.Aliases = []string{"get file blob", "show file content", "read repository blob"}
 		options.RelatedActions = []string{"repository.tree", "repository.raw_blob"}
+		options.IndividualTool.Description = "Get a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: gitlab_repository_raw_blob, gitlab_repository_tree."
+	case "gitlab_repository_raw_blob":
+		options.IndividualTool.Description = "Get the raw content of a git blob by SHA. Returns: blob SHA, byte size, decoded text content (or image data), and a content category (text/image/binary). See also: gitlab_repository_blob, gitlab_repository_tree."
+	case "gitlab_repository_contributors":
+		options.IndividualTool.Description = "List repository contributors. Returns: each contributor's name, email, commit count, additions, deletions, and pagination metadata. See also: gitlab_repository_tree, gitlab_commit_list."
+	case "gitlab_repository_merge_base":
+		options.IndividualTool.Description = "Find the common ancestor (merge base) of two or more refs. Returns: the merge-base commit with metadata and web URL. See also: gitlab_repository_compare, gitlab_branch_list."
+	case "gitlab_repository_archive":
+		options.IndividualTool.Description = "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list."
 	case "gitlab_repository_changelog_add":
 		options.Usage = "Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested."
 		options.Aliases = []string{"add changelog", "update changelog", "write release notes file"}
 		options.RelatedActions = []string{"repository.changelog_generate", "release.create", "tag.create"}
+		options.IndividualTool.Description = "Add changelog data to a changelog file by committing the generated entries. Returns: a success confirmation with the version. See also: gitlab_repository_changelog_generate, gitlab_release_create."
+	case "gitlab_repository_changelog_generate":
+		options.IndividualTool.Description = "Generate changelog notes for a version range without committing. Returns: the rendered changelog notes (read-only preview). See also: gitlab_repository_changelog_add, gitlab_release_create."
 	}
 
 	return options
