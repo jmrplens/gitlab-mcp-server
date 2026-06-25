@@ -40793,43 +40793,22 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "group": {
+        "assignee": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "full_name": {
-              "type": "string"
-            },
-            "full_path": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
-            },
-            "lfs_enabled": {
-              "type": "boolean"
             },
             "name": {
               "type": "string"
             },
-            "parent_id": {
-              "type": "integer"
-            },
-            "path": {
+            "state": {
               "type": "string"
             },
-            "request_access_enabled": {
-              "type": "boolean"
-            },
-            "visibility": {
+            "username": {
               "type": "string"
             },
             "web_url": {
@@ -40838,15 +40817,44 @@
           },
           "required": [
             "id",
+            "username",
             "name",
-            "path",
-            "request_access_enabled",
-            "lfs_enabled"
+            "state",
+            "avatar_url",
+            "web_url"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "group": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "hide_backlog_list": {
+          "type": "boolean"
+        },
+        "hide_closed_list": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer"
@@ -40855,12 +40863,6 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "archived": {
-                "type": "boolean"
-              },
-              "closed_issues_count": {
-                "type": "integer"
-              },
               "color": {
                 "type": "string"
               },
@@ -40870,35 +40872,15 @@
               "id": {
                 "type": "integer"
               },
-              "is_project_label": {
-                "type": "boolean"
-              },
               "name": {
-                "type": "string"
-              },
-              "open_issues_count": {
-                "type": "integer"
-              },
-              "open_merge_requests_count": {
-                "type": "integer"
-              },
-              "priority": {
-                "type": [
-                  "null",
-                  "integer"
-                ]
-              },
-              "subscribed": {
-                "type": "boolean"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
             "required": [
               "id",
               "name",
-              "color"
+              "color",
+              "description"
             ],
             "type": [
               "null",
@@ -40998,50 +40980,20 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
-                  "color"
+                  "color",
+                  "description"
                 ],
                 "type": [
                   "null",
@@ -41066,12 +41018,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
                   "group_id": {
                     "type": "integer"
                   },
@@ -41079,9 +41025,6 @@
                     "type": "integer"
                   },
                   "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
                     "type": "integer"
                   },
                   "start_date": {
@@ -41104,7 +41047,6 @@
                   "id",
                   "iid",
                   "group_id",
-                  "project_id",
                   "title",
                   "description",
                   "state",
@@ -41151,12 +41093,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -41164,9 +41100,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -41189,7 +41122,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -41211,11 +41143,16 @@
             "null",
             "array"
           ]
+        },
+        "weight": {
+          "type": "integer"
         }
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "hide_backlog_list",
+        "hide_closed_list"
       ],
       "type": "object"
     },
@@ -41305,43 +41242,22 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "group": {
+        "assignee": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "full_name": {
-              "type": "string"
-            },
-            "full_path": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
-            },
-            "lfs_enabled": {
-              "type": "boolean"
             },
             "name": {
               "type": "string"
             },
-            "parent_id": {
-              "type": "integer"
-            },
-            "path": {
+            "state": {
               "type": "string"
             },
-            "request_access_enabled": {
-              "type": "boolean"
-            },
-            "visibility": {
+            "username": {
               "type": "string"
             },
             "web_url": {
@@ -41350,15 +41266,44 @@
           },
           "required": [
             "id",
+            "username",
             "name",
-            "path",
-            "request_access_enabled",
-            "lfs_enabled"
+            "state",
+            "avatar_url",
+            "web_url"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "group": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "hide_backlog_list": {
+          "type": "boolean"
+        },
+        "hide_closed_list": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer"
@@ -41367,12 +41312,6 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "archived": {
-                "type": "boolean"
-              },
-              "closed_issues_count": {
-                "type": "integer"
-              },
               "color": {
                 "type": "string"
               },
@@ -41382,35 +41321,15 @@
               "id": {
                 "type": "integer"
               },
-              "is_project_label": {
-                "type": "boolean"
-              },
               "name": {
-                "type": "string"
-              },
-              "open_issues_count": {
-                "type": "integer"
-              },
-              "open_merge_requests_count": {
-                "type": "integer"
-              },
-              "priority": {
-                "type": [
-                  "null",
-                  "integer"
-                ]
-              },
-              "subscribed": {
-                "type": "boolean"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
             "required": [
               "id",
               "name",
-              "color"
+              "color",
+              "description"
             ],
             "type": [
               "null",
@@ -41510,50 +41429,20 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
-                  "color"
+                  "color",
+                  "description"
                 ],
                 "type": [
                   "null",
@@ -41578,12 +41467,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
                   "group_id": {
                     "type": "integer"
                   },
@@ -41591,9 +41474,6 @@
                     "type": "integer"
                   },
                   "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
                     "type": "integer"
                   },
                   "start_date": {
@@ -41616,7 +41496,6 @@
                   "id",
                   "iid",
                   "group_id",
-                  "project_id",
                   "title",
                   "description",
                   "state",
@@ -41663,12 +41542,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -41676,9 +41549,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -41701,7 +41571,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -41723,11 +41592,16 @@
             "null",
             "array"
           ]
+        },
+        "weight": {
+          "type": "integer"
         }
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "hide_backlog_list",
+        "hide_closed_list"
       ],
       "type": "object"
     },
@@ -41785,43 +41659,22 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "group": {
+              "assignee": {
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
                     "type": "string"
                   },
-                  "created_at": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "full_name": {
-                    "type": "string"
-                  },
-                  "full_path": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
-                  },
-                  "lfs_enabled": {
-                    "type": "boolean"
                   },
                   "name": {
                     "type": "string"
                   },
-                  "parent_id": {
-                    "type": "integer"
-                  },
-                  "path": {
+                  "state": {
                     "type": "string"
                   },
-                  "request_access_enabled": {
-                    "type": "boolean"
-                  },
-                  "visibility": {
+                  "username": {
                     "type": "string"
                   },
                   "web_url": {
@@ -41830,15 +41683,44 @@
                 },
                 "required": [
                   "id",
+                  "username",
                   "name",
-                  "path",
-                  "request_access_enabled",
-                  "lfs_enabled"
+                  "state",
+                  "avatar_url",
+                  "web_url"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
+              },
+              "group": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "hide_backlog_list": {
+                "type": "boolean"
+              },
+              "hide_closed_list": {
+                "type": "boolean"
               },
               "id": {
                 "type": "integer"
@@ -41847,12 +41729,6 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "closed_issues_count": {
-                      "type": "integer"
-                    },
                     "color": {
                       "type": "string"
                     },
@@ -41862,35 +41738,15 @@
                     "id": {
                       "type": "integer"
                     },
-                    "is_project_label": {
-                      "type": "boolean"
-                    },
                     "name": {
-                      "type": "string"
-                    },
-                    "open_issues_count": {
-                      "type": "integer"
-                    },
-                    "open_merge_requests_count": {
-                      "type": "integer"
-                    },
-                    "priority": {
-                      "type": [
-                        "null",
-                        "integer"
-                      ]
-                    },
-                    "subscribed": {
-                      "type": "boolean"
-                    },
-                    "text_color": {
                       "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "name",
-                    "color"
+                    "color",
+                    "description"
                   ],
                   "type": [
                     "null",
@@ -41990,50 +41846,20 @@
                     "label": {
                       "additionalProperties": false,
                       "properties": {
-                        "archived": {
-                          "type": "boolean"
-                        },
-                        "closed_issues_count": {
-                          "type": "integer"
-                        },
                         "color": {
                           "type": "string"
                         },
                         "description": {
                           "type": "string"
                         },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "is_project_label": {
-                          "type": "boolean"
-                        },
                         "name": {
-                          "type": "string"
-                        },
-                        "open_issues_count": {
-                          "type": "integer"
-                        },
-                        "open_merge_requests_count": {
-                          "type": "integer"
-                        },
-                        "priority": {
-                          "type": [
-                            "null",
-                            "integer"
-                          ]
-                        },
-                        "subscribed": {
-                          "type": "boolean"
-                        },
-                        "text_color": {
                           "type": "string"
                         }
                       },
                       "required": [
-                        "id",
                         "name",
-                        "color"
+                        "color",
+                        "description"
                       ],
                       "type": [
                         "null",
@@ -42058,12 +41884,6 @@
                         "due_date": {
                           "type": "string"
                         },
-                        "expired": {
-                          "type": [
-                            "null",
-                            "boolean"
-                          ]
-                        },
                         "group_id": {
                           "type": "integer"
                         },
@@ -42071,9 +41891,6 @@
                           "type": "integer"
                         },
                         "iid": {
-                          "type": "integer"
-                        },
-                        "project_id": {
                           "type": "integer"
                         },
                         "start_date": {
@@ -42096,7 +41913,6 @@
                         "id",
                         "iid",
                         "group_id",
-                        "project_id",
                         "title",
                         "description",
                         "state",
@@ -42143,12 +41959,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
                   "group_id": {
                     "type": "integer"
                   },
@@ -42156,9 +41966,6 @@
                     "type": "integer"
                   },
                   "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
                     "type": "integer"
                   },
                   "start_date": {
@@ -42181,7 +41988,6 @@
                   "id",
                   "iid",
                   "group_id",
-                  "project_id",
                   "title",
                   "description",
                   "state",
@@ -42203,11 +42009,16 @@
                   "null",
                   "array"
                 ]
+              },
+              "weight": {
+                "type": "integer"
               }
             },
             "required": [
               "id",
-              "name"
+              "name",
+              "hide_backlog_list",
+              "hide_closed_list"
             ],
             "type": "object"
           },
@@ -42388,50 +42199,20 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
-            "color"
+            "color",
+            "description"
           ],
           "type": [
             "null",
@@ -42456,12 +42237,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -42469,9 +42244,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -42494,7 +42266,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -42704,50 +42475,20 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
-            "color"
+            "color",
+            "description"
           ],
           "type": [
             "null",
@@ -42772,12 +42513,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -42785,9 +42520,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -42810,7 +42542,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -42983,50 +42714,20 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
-                  "color"
+                  "color",
+                  "description"
                 ],
                 "type": [
                   "null",
@@ -43051,12 +42752,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
                   "group_id": {
                     "type": "integer"
                   },
@@ -43064,9 +42759,6 @@
                     "type": "integer"
                   },
                   "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
                     "type": "integer"
                   },
                   "start_date": {
@@ -43089,7 +42781,6 @@
                   "id",
                   "iid",
                   "group_id",
-                  "project_id",
                   "title",
                   "description",
                   "state",
@@ -43301,50 +42992,20 @@
         "label": {
           "additionalProperties": false,
           "properties": {
-            "archived": {
-              "type": "boolean"
-            },
-            "closed_issues_count": {
-              "type": "integer"
-            },
             "color": {
               "type": "string"
             },
             "description": {
               "type": "string"
             },
-            "id": {
-              "type": "integer"
-            },
-            "is_project_label": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
-            "priority": {
-              "type": [
-                "null",
-                "integer"
-              ]
-            },
-            "subscribed": {
-              "type": "boolean"
-            },
-            "text_color": {
               "type": "string"
             }
           },
           "required": [
-            "id",
             "name",
-            "color"
+            "color",
+            "description"
           ],
           "type": [
             "null",
@@ -43369,12 +43030,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -43382,9 +43037,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -43407,7 +43059,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -43493,43 +43144,22 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "group": {
+        "assignee": {
           "additionalProperties": false,
           "properties": {
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "full_name": {
-              "type": "string"
-            },
-            "full_path": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
-            },
-            "lfs_enabled": {
-              "type": "boolean"
             },
             "name": {
               "type": "string"
             },
-            "parent_id": {
-              "type": "integer"
-            },
-            "path": {
+            "state": {
               "type": "string"
             },
-            "request_access_enabled": {
-              "type": "boolean"
-            },
-            "visibility": {
+            "username": {
               "type": "string"
             },
             "web_url": {
@@ -43538,15 +43168,44 @@
           },
           "required": [
             "id",
+            "username",
             "name",
-            "path",
-            "request_access_enabled",
-            "lfs_enabled"
+            "state",
+            "avatar_url",
+            "web_url"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "group": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "hide_backlog_list": {
+          "type": "boolean"
+        },
+        "hide_closed_list": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer"
@@ -43555,12 +43214,6 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "archived": {
-                "type": "boolean"
-              },
-              "closed_issues_count": {
-                "type": "integer"
-              },
               "color": {
                 "type": "string"
               },
@@ -43570,35 +43223,15 @@
               "id": {
                 "type": "integer"
               },
-              "is_project_label": {
-                "type": "boolean"
-              },
               "name": {
-                "type": "string"
-              },
-              "open_issues_count": {
-                "type": "integer"
-              },
-              "open_merge_requests_count": {
-                "type": "integer"
-              },
-              "priority": {
-                "type": [
-                  "null",
-                  "integer"
-                ]
-              },
-              "subscribed": {
-                "type": "boolean"
-              },
-              "text_color": {
                 "type": "string"
               }
             },
             "required": [
               "id",
               "name",
-              "color"
+              "color",
+              "description"
             ],
             "type": [
               "null",
@@ -43698,50 +43331,20 @@
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
                     "type": "string"
                   }
                 },
                 "required": [
-                  "id",
                   "name",
-                  "color"
+                  "color",
+                  "description"
                 ],
                 "type": [
                   "null",
@@ -43766,12 +43369,6 @@
                   "due_date": {
                     "type": "string"
                   },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
                   "group_id": {
                     "type": "integer"
                   },
@@ -43779,9 +43376,6 @@
                     "type": "integer"
                   },
                   "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
                     "type": "integer"
                   },
                   "start_date": {
@@ -43804,7 +43398,6 @@
                   "id",
                   "iid",
                   "group_id",
-                  "project_id",
                   "title",
                   "description",
                   "state",
@@ -43851,12 +43444,6 @@
             "due_date": {
               "type": "string"
             },
-            "expired": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "group_id": {
               "type": "integer"
             },
@@ -43864,9 +43451,6 @@
               "type": "integer"
             },
             "iid": {
-              "type": "integer"
-            },
-            "project_id": {
               "type": "integer"
             },
             "start_date": {
@@ -43889,7 +43473,6 @@
             "id",
             "iid",
             "group_id",
-            "project_id",
             "title",
             "description",
             "state",
@@ -43911,11 +43494,16 @@
             "null",
             "array"
           ]
+        },
+        "weight": {
+          "type": "integer"
         }
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "hide_backlog_list",
+        "hide_closed_list"
       ],
       "type": "object"
     },
@@ -44780,7 +44368,7 @@
   },
   {
     "name": "gitlab_group_epic_board_get",
-    "description": "Get a single group epic board by ID (Premium/Ultimate). Returns: the epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope. See also: gitlab_group_epic_board_list, gitlab_group_epic_list.",
+    "description": "Get a single group epic board by ID (Premium/Ultimate). Returns: the epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope. See also: gitlab_group_epic_board_list, gitlab_group_epic_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44805,40 +44393,10 @@
         "group": {
           "additionalProperties": false,
           "properties": {
-            "avatar_url": {
-              "type": "string"
-            },
-            "created_at": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "full_name": {
-              "type": "string"
-            },
-            "full_path": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
-            "lfs_enabled": {
-              "type": "boolean"
-            },
             "name": {
-              "type": "string"
-            },
-            "parent_id": {
-              "type": "integer"
-            },
-            "path": {
-              "type": "string"
-            },
-            "request_access_enabled": {
-              "type": "boolean"
-            },
-            "visibility": {
               "type": "string"
             },
             "web_url": {
@@ -44847,15 +44405,18 @@
           },
           "required": [
             "id",
-            "name",
-            "path",
-            "request_access_enabled",
-            "lfs_enabled"
+            "name"
           ],
           "type": [
             "null",
             "object"
           ]
+        },
+        "hide_backlog_list": {
+          "type": "boolean"
+        },
+        "hide_closed_list": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer"
@@ -44867,11 +44428,17 @@
               "color": {
                 "type": "string"
               },
+              "created_at": {
+                "type": "string"
+              },
               "description": {
                 "type": "string"
               },
               "description_html": {
                 "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
               },
               "id": {
                 "type": "integer"
@@ -44879,13 +44446,24 @@
               "name": {
                 "type": "string"
               },
+              "project_id": {
+                "type": "integer"
+              },
+              "template": {
+                "type": "boolean"
+              },
               "text_color": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
                 "type": "string"
               }
             },
             "required": [
               "id",
-              "name",
               "color"
             ],
             "type": [
@@ -44902,96 +44480,18 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "assignee": {
-                "additionalProperties": false,
-                "properties": {
-                  "id": {
-                    "type": "integer"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "username": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "username"
-                ],
+              "collapsed": {
                 "type": [
                   "null",
-                  "object"
+                  "boolean"
                 ]
               },
               "id": {
                 "type": "integer"
               },
-              "iteration": {
-                "additionalProperties": false,
-                "properties": {
-                  "created_at": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "due_date": {
-                    "type": "string"
-                  },
-                  "group_id": {
-                    "type": "integer"
-                  },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "iid": {
-                    "type": "integer"
-                  },
-                  "sequence": {
-                    "type": "integer"
-                  },
-                  "start_date": {
-                    "type": "string"
-                  },
-                  "state": {
-                    "type": "integer"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "updated_at": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "iid",
-                  "sequence",
-                  "group_id",
-                  "title",
-                  "description",
-                  "state",
-                  "web_url"
-                ],
-                "type": [
-                  "null",
-                  "object"
-                ]
-              },
               "label": {
                 "additionalProperties": false,
                 "properties": {
-                  "archived": {
-                    "type": "boolean"
-                  },
-                  "closed_issues_count": {
-                    "type": "integer"
-                  },
                   "color": {
                     "type": "string"
                   },
@@ -45001,107 +44501,21 @@
                   "id": {
                     "type": "integer"
                   },
-                  "is_project_label": {
-                    "type": "boolean"
-                  },
                   "name": {
                     "type": "string"
-                  },
-                  "open_issues_count": {
-                    "type": "integer"
-                  },
-                  "open_merge_requests_count": {
-                    "type": "integer"
-                  },
-                  "priority": {
-                    "type": [
-                      "null",
-                      "integer"
-                    ]
-                  },
-                  "subscribed": {
-                    "type": "boolean"
-                  },
-                  "text_color": {
-                    "type": "string"
                   }
                 },
                 "required": [
                   "id",
-                  "name",
-                  "color"
+                  "name"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
               },
-              "max_issue_count": {
-                "type": "integer"
-              },
-              "max_issue_weight": {
-                "type": "integer"
-              },
-              "milestone": {
-                "additionalProperties": false,
-                "properties": {
-                  "created_at": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "due_date": {
-                    "type": "string"
-                  },
-                  "expired": {
-                    "type": [
-                      "null",
-                      "boolean"
-                    ]
-                  },
-                  "group_id": {
-                    "type": "integer"
-                  },
-                  "id": {
-                    "type": "integer"
-                  },
-                  "iid": {
-                    "type": "integer"
-                  },
-                  "project_id": {
-                    "type": "integer"
-                  },
-                  "start_date": {
-                    "type": "string"
-                  },
-                  "state": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "updated_at": {
-                    "type": "string"
-                  },
-                  "web_url": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "iid",
-                  "group_id",
-                  "project_id",
-                  "title",
-                  "description",
-                  "state",
-                  "web_url"
-                ],
-                "type": [
-                  "null",
-                  "object"
-                ]
+              "list_type": {
+                "type": "string"
               },
               "position": {
                 "type": "integer"
@@ -45133,7 +44547,9 @@
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "hide_backlog_list",
+        "hide_closed_list"
       ],
       "type": "object"
     },
@@ -45146,7 +44562,7 @@
   },
   {
     "name": "gitlab_group_epic_board_list",
-    "description": "List all epic boards in a group with pagination (Premium/Ultimate). Returns: each epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope, plus pagination metadata. See also: gitlab_group_epic_board_get, gitlab_group_epic_list.",
+    "description": "List all epic boards in a group with pagination (Premium/Ultimate). Returns: each epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope, plus pagination metadata. See also: gitlab_group_epic_board_get, gitlab_group_epic_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45194,40 +44610,10 @@
               "group": {
                 "additionalProperties": false,
                 "properties": {
-                  "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "full_name": {
-                    "type": "string"
-                  },
-                  "full_path": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
-                  "lfs_enabled": {
-                    "type": "boolean"
-                  },
                   "name": {
-                    "type": "string"
-                  },
-                  "parent_id": {
-                    "type": "integer"
-                  },
-                  "path": {
-                    "type": "string"
-                  },
-                  "request_access_enabled": {
-                    "type": "boolean"
-                  },
-                  "visibility": {
                     "type": "string"
                   },
                   "web_url": {
@@ -45236,15 +44622,18 @@
                 },
                 "required": [
                   "id",
-                  "name",
-                  "path",
-                  "request_access_enabled",
-                  "lfs_enabled"
+                  "name"
                 ],
                 "type": [
                   "null",
                   "object"
                 ]
+              },
+              "hide_backlog_list": {
+                "type": "boolean"
+              },
+              "hide_closed_list": {
+                "type": "boolean"
               },
               "id": {
                 "type": "integer"
@@ -45256,11 +44645,17 @@
                     "color": {
                       "type": "string"
                     },
+                    "created_at": {
+                      "type": "string"
+                    },
                     "description": {
                       "type": "string"
                     },
                     "description_html": {
                       "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
                     },
                     "id": {
                       "type": "integer"
@@ -45268,13 +44663,24 @@
                     "name": {
                       "type": "string"
                     },
+                    "project_id": {
+                      "type": "integer"
+                    },
+                    "template": {
+                      "type": "boolean"
+                    },
                     "text_color": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "updated_at": {
                       "type": "string"
                     }
                   },
                   "required": [
                     "id",
-                    "name",
                     "color"
                   ],
                   "type": [
@@ -45291,96 +44697,18 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
-                    "assignee": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "id": {
-                          "type": "integer"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "username": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "name",
-                        "username"
-                      ],
+                    "collapsed": {
                       "type": [
                         "null",
-                        "object"
+                        "boolean"
                       ]
                     },
                     "id": {
                       "type": "integer"
                     },
-                    "iteration": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "created_at": {
-                          "type": "string"
-                        },
-                        "description": {
-                          "type": "string"
-                        },
-                        "due_date": {
-                          "type": "string"
-                        },
-                        "group_id": {
-                          "type": "integer"
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "iid": {
-                          "type": "integer"
-                        },
-                        "sequence": {
-                          "type": "integer"
-                        },
-                        "start_date": {
-                          "type": "string"
-                        },
-                        "state": {
-                          "type": "integer"
-                        },
-                        "title": {
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "type": "string"
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "iid",
-                        "sequence",
-                        "group_id",
-                        "title",
-                        "description",
-                        "state",
-                        "web_url"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
-                    },
                     "label": {
                       "additionalProperties": false,
                       "properties": {
-                        "archived": {
-                          "type": "boolean"
-                        },
-                        "closed_issues_count": {
-                          "type": "integer"
-                        },
                         "color": {
                           "type": "string"
                         },
@@ -45390,107 +44718,21 @@
                         "id": {
                           "type": "integer"
                         },
-                        "is_project_label": {
-                          "type": "boolean"
-                        },
                         "name": {
                           "type": "string"
-                        },
-                        "open_issues_count": {
-                          "type": "integer"
-                        },
-                        "open_merge_requests_count": {
-                          "type": "integer"
-                        },
-                        "priority": {
-                          "type": [
-                            "null",
-                            "integer"
-                          ]
-                        },
-                        "subscribed": {
-                          "type": "boolean"
-                        },
-                        "text_color": {
-                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
-                        "name",
-                        "color"
+                        "name"
                       ],
                       "type": [
                         "null",
                         "object"
                       ]
                     },
-                    "max_issue_count": {
-                      "type": "integer"
-                    },
-                    "max_issue_weight": {
-                      "type": "integer"
-                    },
-                    "milestone": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "created_at": {
-                          "type": "string"
-                        },
-                        "description": {
-                          "type": "string"
-                        },
-                        "due_date": {
-                          "type": "string"
-                        },
-                        "expired": {
-                          "type": [
-                            "null",
-                            "boolean"
-                          ]
-                        },
-                        "group_id": {
-                          "type": "integer"
-                        },
-                        "id": {
-                          "type": "integer"
-                        },
-                        "iid": {
-                          "type": "integer"
-                        },
-                        "project_id": {
-                          "type": "integer"
-                        },
-                        "start_date": {
-                          "type": "string"
-                        },
-                        "state": {
-                          "type": "string"
-                        },
-                        "title": {
-                          "type": "string"
-                        },
-                        "updated_at": {
-                          "type": "string"
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "iid",
-                        "group_id",
-                        "project_id",
-                        "title",
-                        "description",
-                        "state",
-                        "web_url"
-                      ],
-                      "type": [
-                        "null",
-                        "object"
-                      ]
+                    "list_type": {
+                      "type": "string"
                     },
                     "position": {
                       "type": "integer"
@@ -45522,7 +44764,9 @@
             },
             "required": [
               "id",
-              "name"
+              "name",
+              "hide_backlog_list",
+              "hide_closed_list"
             ],
             "type": "object"
           },
@@ -64357,13 +63601,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -64381,6 +63628,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -94023,32 +93271,20 @@
               "uploaded_by": {
                 "additionalProperties": false,
                 "properties": {
-                  "avatar_url": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
                   "name": {
                     "type": "string"
                   },
-                  "state": {
-                    "type": "string"
-                  },
                   "username": {
-                    "type": "string"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
                 "required": [
                   "id",
                   "username",
-                  "name",
-                  "state",
-                  "avatar_url",
-                  "web_url"
+                  "name"
                 ],
                 "type": [
                   "null",
@@ -141362,13 +140598,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -141386,6 +140625,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -142794,13 +142034,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -142818,6 +142061,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -144230,13 +143474,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -144254,6 +143501,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -146259,13 +145507,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -146283,6 +145534,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -147208,13 +146460,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -147232,6 +146487,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -150399,13 +149655,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -150423,6 +149682,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],
@@ -151515,13 +150775,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -151539,6 +150802,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],
@@ -153209,13 +152473,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -153233,6 +152500,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],
@@ -154370,13 +153638,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -154394,6 +153665,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],
@@ -155531,13 +154803,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -155555,6 +154830,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],
@@ -158091,13 +157367,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -158115,6 +157394,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -160821,13 +160101,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -160845,6 +160128,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -161853,13 +161137,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -161877,6 +161164,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -162782,13 +162070,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -162806,6 +162097,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -163711,13 +163003,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -163735,6 +163030,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -165248,13 +164544,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -165272,6 +164571,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -165631,7 +164931,7 @@
   },
   {
     "name": "gitlab_project_upload",
-    "description": "Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
+    "description": "Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's id (GitLab 17.3+), alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -165669,6 +164969,9 @@
         },
         "full_url": {
           "type": "string"
+        },
+        "id": {
+          "type": "integer"
         },
         "markdown": {
           "type": "string"
@@ -166260,13 +165563,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -166284,6 +165590,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],
@@ -166700,7 +166007,7 @@
   },
   {
     "name": "gitlab_project_upload_list",
-    "description": "List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
+    "description": "List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -166805,32 +166112,20 @@
               "uploaded_by": {
                 "additionalProperties": false,
                 "properties": {
-                  "avatar_url": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
                   "name": {
                     "type": "string"
                   },
-                  "state": {
-                    "type": "string"
-                  },
                   "username": {
-                    "type": "string"
-                  },
-                  "web_url": {
                     "type": "string"
                   }
                 },
                 "required": [
                   "id",
                   "username",
-                  "name",
-                  "state",
-                  "avatar_url",
-                  "web_url"
+                  "name"
                 ],
                 "type": [
                   "null",
@@ -184419,13 +183714,16 @@
                   "created_at": {
                     "type": "string"
                   },
-                  "email": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -184443,6 +183741,7 @@
                   "username",
                   "name",
                   "state",
+                  "locked",
                   "avatar_url",
                   "web_url"
                 ],

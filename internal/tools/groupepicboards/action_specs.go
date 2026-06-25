@@ -23,7 +23,7 @@ var epicBoardMetaByName = map[string]epicBoardMeta{
 		aliases: []string{"list epic boards", "show group epic boards", "find epic boards in group"},
 		related: []string{"group.epic_board_get", "group.epic_list"},
 		description: "List all epic boards in a group with pagination (Premium/Ultimate). " +
-			"Returns: each epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope, plus pagination metadata. " +
+			"Returns: each epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope, plus pagination metadata. " +
 			"See also: gitlab_group_epic_board_get, gitlab_group_epic_list.",
 	},
 	"epic_board_get": {
@@ -31,7 +31,7 @@ var epicBoardMetaByName = map[string]epicBoardMeta{
 		aliases: []string{"get epic board", "show epic board details", "fetch epic board"},
 		related: []string{"group.epic_board_list", "group.epic_list"},
 		description: "Get a single group epic board by ID (Premium/Ultimate). " +
-			"Returns: the epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope. " +
+			"Returns: the epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope. " +
 			"See also: gitlab_group_epic_board_list, gitlab_group_epic_list.",
 	},
 }

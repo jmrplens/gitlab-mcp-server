@@ -20,12 +20,12 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_project_upload — upload a file (path or base64) to a project's markdown upload area.
 		uploadCreateSpec(actionUpload, toolutil.RouteActionWithRequest(client, Upload), "gitlab_project_upload",
 			"Use to upload a file into a project's Markdown attachments store and obtain a Markdown-embeddable reference.",
-			"Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
+			"Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's id (GitLab 17.3+), alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
 			[]string{actionUploadList, "project.get"}),
 		// gitlab_project_upload_list — list existing markdown uploads for a project.
 		uploadReadSpec(actionUploadList, toolutil.RouteAction(client, List), "gitlab_project_upload_list",
 			"Use to enumerate files uploaded into a project's Markdown attachments store.",
-			"List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name, state, avatar, web URL), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
+			"List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
 			[]string{actionUpload, actionUploadDelete, "project.get"}),
 		// gitlab_project_upload_delete — delete a markdown upload by ID (destructive).
 		uploadDeleteSpec(actionUploadDelete, toolutil.DestructiveAction(client, deleteOutput), "gitlab_project_upload_delete",

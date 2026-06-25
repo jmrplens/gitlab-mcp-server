@@ -22,10 +22,12 @@ const (
 	boardJSON = `{
 		"id": 1,
 		"name": "Epic Board",
-		"group": {"id": 7, "name": "My Group", "full_path": "my/group"},
-		"labels": [{"id": 10, "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>"}],
+		"hide_backlog_list": true,
+		"hide_closed_list": false,
+		"group": {"id": 7, "name": "My Group", "web_url": "http://example.com/groups/my-group"},
+		"labels": [{"id": 10, "title": "Priority", "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>", "group_id": 7, "project_id": null, "template": false, "created_at": "2023-01-27T10:40:59.738Z", "updated_at": "2023-01-27T10:40:59.738Z"}],
 		"lists": [
-			{"id": 100, "label": {"id": 10, "name": "Priority"}, "position": 0}
+			{"id": 100, "label": {"id": 10, "name": "Priority", "color": "#F0AD4E", "description": null}, "position": 0, "list_type": "label", "collapsed": false}
 		]
 	}`
 
@@ -171,14 +173,20 @@ func assertListBoardLabels(t *testing.T, board Output) {
 
 func assertListBoardLists(t *testing.T, board Output) {
 	t.Helper()
-	if board.Group == nil || board.Group.FullPath != "my/group" {
-		t.Errorf("Group = %+v, want full_path my/group", board.Group)
+	if board.Group == nil || board.Group.Name != "My Group" {
+		t.Errorf("Group = %+v, want name My Group", board.Group)
+	}
+	if !board.HideBacklogList || board.HideClosedList {
+		t.Errorf("hide flags = %v/%v, want true/false", board.HideBacklogList, board.HideClosedList)
 	}
 	if len(board.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(board.Lists))
 	}
 	if board.Lists[0].Label == nil || board.Lists[0].Label.Name != "Priority" {
 		t.Errorf("Lists[0].Label = %+v, want name Priority", board.Lists[0].Label)
+	}
+	if board.Lists[0].ListType != "label" {
+		t.Errorf("Lists[0].ListType = %q, want label", board.Lists[0].ListType)
 	}
 }
 
@@ -314,8 +322,11 @@ func assertEpicBoardDetails(t *testing.T, out Output) {
 	if len(out.Labels) != 1 || out.Labels[0].Name != "Priority" {
 		t.Errorf("Labels = %v, want [Priority]", out.Labels)
 	}
-	if out.Group == nil || out.Group.ID != 7 {
-		t.Errorf("Group = %+v, want id 7", out.Group)
+	if out.Labels[0].Title != "Priority" || out.Labels[0].GroupID != 7 || out.Labels[0].CreatedAt == "" {
+		t.Errorf("Labels[0] superset = %+v, want title/group_id/created_at populated", out.Labels[0])
+	}
+	if out.Group == nil || out.Group.ID != 7 || out.Group.WebURL == "" {
+		t.Errorf("Group = %+v, want id 7 with web_url", out.Group)
 	}
 	if len(out.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
@@ -417,6 +428,37 @@ func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestGet_VersionTolerantOmittedFields verifies that an older GitLab instance
+// response which omits the raw-superset keys (hide_*_list, the label
+// title/group_id/template/created_at/updated_at, and each list's
+// list_type/collapsed) decodes without error: the missing fields stay at their
+// zero value and are omitted from the envelope rather than hard-failing.
+func TestGet_VersionTolerantOmittedFields(t *testing.T) {
+	const legacyJSON = `{
+		"id": 1,
+		"name": "Legacy Board",
+		"group": {"id": 7, "name": "My Group"},
+		"labels": [{"id": 10, "name": "Priority", "color": "#FF0000"}],
+		"lists": [{"id": 100, "label": {"id": 10, "name": "Priority"}, "position": 0}]
+	}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, legacyJSON)
+	}))
+	out, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, BoardID: 1})
+	if err != nil {
+		t.Fatalf("Get() legacy response error = %v, want nil", err)
+	}
+	if out.HideBacklogList || out.HideClosedList {
+		t.Errorf("hide flags = %v/%v, want false/false when omitted", out.HideBacklogList, out.HideClosedList)
+	}
+	if len(out.Labels) != 1 || out.Labels[0].Title != "" || out.Labels[0].CreatedAt != "" {
+		t.Errorf("label superset = %+v, want zero when omitted", out.Labels)
+	}
+	if len(out.Lists) != 1 || out.Lists[0].ListType != "" || out.Lists[0].Collapsed != nil {
+		t.Errorf("list superset = %+v, want zero/nil when omitted", out.Lists)
+	}
+}
+
 // TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
@@ -432,11 +474,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			input: Output{
 				ID:     1,
 				Name:   "Sprint Board",
-				Group:  &GroupRefOutput{ID: 7, FullPath: "my/group"},
+				Group:  &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://x"},
 				Labels: []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, {ID: 11, Name: "Bug"}},
 				Lists: []BoardListOutput{
-					{ID: 100, Label: &LabelOutput{ID: 10, Name: "Priority"}, Position: 0},
-					{ID: 101, Label: &LabelOutput{ID: 11, Name: "Bug"}, Position: 1},
+					{ID: 100, Label: &ListLabelOutput{ID: 10, Name: "Priority"}, Position: 0},
+					{ID: 101, Label: &ListLabelOutput{ID: 11, Name: "Bug"}, Position: 1},
 				},
 			},
 			contains: []string{

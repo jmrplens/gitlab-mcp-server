@@ -83,6 +83,61 @@ func TestProjectUpload_Success(t *testing.T) {
 	}
 }
 
+// TestProjectUpload_ID_Mapped verifies that Upload surfaces the documented id
+// attribute (GitLab 17.3+, MR 161160) from the create-upload response.
+func TestProjectUpload_ID_Mapped(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id": 5,
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "/-/project/1234/uploads/abc/dk.png",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 5 {
+		t.Errorf("out.ID = %d, want 5", out.ID)
+	}
+}
+
+// TestProjectUpload_ID_Omitted_VersionTolerance verifies that Upload tolerates
+// GitLab instances older than 17.3 that omit the id attribute: the field stays
+// zero and no error is raised, mirroring the omitempty version-tolerance policy.
+func TestProjectUpload_ID_Omitted_VersionTolerance(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "/-/project/1234/uploads/abc/dk.png",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 0 {
+		t.Errorf("out.ID = %d, want 0 when id omitted by older GitLab", out.ID)
+	}
+	if out.URL != "/uploads/abc/dk.png" {
+		t.Errorf("out.URL = %q, want mapped despite missing id", out.URL)
+	}
+}
+
 // TestProjectUpload_InvalidBase64 verifies that Upload returns an error
 // when the content_base64 field contains invalid base64 data. The mock should
 // never be called because validation occurs before the API request.
@@ -655,10 +710,11 @@ func TestList_WithTimestampAndUploader(t *testing.T) {
 	if out.Uploads[0].UploadedBy.Username != "admin" {
 		t.Errorf("UploadedBy.Username = %q, want %q", out.Uploads[0].UploadedBy.Username, "admin")
 	}
-	if out.Uploads[0].UploadedBy.ID != 7 || out.Uploads[0].UploadedBy.Name != "Admin User" ||
-		out.Uploads[0].UploadedBy.State != "active" || out.Uploads[0].UploadedBy.WebURL == "" ||
-		out.Uploads[0].UploadedBy.AvatarURL == "" {
-		t.Errorf("UploadedBy fields not fully mapped: %+v", out.Uploads[0].UploadedBy)
+	// uploaded_by is trimmed to the documented reference subset (id, name,
+	// username) per doc/api/project_markdown_uploads.md; state, avatar_url, and
+	// web_url are intentionally not surfaced even though the SDK supplies them.
+	if out.Uploads[0].UploadedBy.ID != 7 || out.Uploads[0].UploadedBy.Name != "Admin User" {
+		t.Errorf("UploadedBy fields not mapped to documented subset: %+v", out.Uploads[0].UploadedBy)
 	}
 	if out.Uploads[0].CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")

@@ -461,8 +461,8 @@ func TestFormatGroupBoardMarkdown(t *testing.T) {
 		Name:      "Dev Board",
 		Group:     &GroupRefOutput{ID: 42, Name: "mygroup"},
 		Milestone: &MilestoneOutput{ID: 5, Title: "v1.0"},
-		Labels:    []*LabelOutput{{ID: 1, Name: "bug"}, {ID: 2, Name: "feature"}},
-		Lists:     []BoardListOutput{{ID: 10, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0}},
+		Labels:    []*LabelDetailsOutput{{ID: 1, Name: "bug"}, {ID: 2, Name: "feature"}},
+		Lists:     []BoardListOutput{{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0}},
 	}
 	md := FormatGroupBoardMarkdown(out)
 	if !strings.Contains(md, "Dev Board") {
@@ -504,7 +504,7 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
-		Label:          &LabelOutput{ID: 5, Name: "Priority"},
+		Label:          &LabelOutput{Name: "Priority"},
 		Position:       0,
 		Assignee:       &BoardListAssigneeOutput{ID: 3, Username: "dev1"},
 		Iteration:      &IterationOutput{ID: 9, Title: "Iteration 1"},
@@ -985,8 +985,8 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
-			{ID: 10, Label: &LabelOutput{ID: 20, Name: "To Do"}, Position: 0, MaxIssueCount: 5, MaxIssueWeight: 20},
-			{ID: 11, Label: &LabelOutput{ID: 21, Name: "Doing"}, Position: 1, MaxIssueCount: 3, MaxIssueWeight: 15},
+			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5, MaxIssueWeight: 20},
+			{ID: 11, Label: &LabelOutput{Name: "Doing"}, Position: 1, MaxIssueCount: 3, MaxIssueWeight: 15},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1107,10 +1107,120 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 	}
 	// A board with a nil group/milestone and a label-less list must still render.
 	md := FormatGroupBoardMarkdown(GroupBoardOutput{
-		ID: 1, Name: "Plain", Labels: []*LabelOutput{nil},
+		ID: 1, Name: "Plain", Labels: []*LabelDetailsOutput{nil},
 		Lists: []BoardListOutput{{ID: 9, Position: 0}},
 	})
 	if !strings.Contains(md, "Plain") {
 		t.Errorf("markdown missing board name:\n%s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Documented-but-SDK-missing field surfacing (raw-fetch superset) tests
+// ---------------------------------------------------------------------------.
+
+// premiumGroupBoardJSON carries the documented Premium/Ultimate group-board
+// fields that gl.GroupIssueBoard omits: hide_backlog_list, hide_closed_list,
+// assignee and weight. It is used to assert the raw-superset fetch path surfaces
+// them on the canonical json keys.
+const premiumGroupBoardJSON = `{
+	"id": 1,
+	"name": "new_name",
+	"hide_backlog_list": true,
+	"hide_closed_list": true,
+	"group": {"id": 5, "name": "Documentcloud", "web_url": "http://example.com/groups/documentcloud"},
+	"milestone": {"id": 44, "iid": 1, "group_id": 5, "title": "Group Milestone", "state": "active", "web_url": "http://example.com/m/1"},
+	"assignee": {"id": 1, "name": "Administrator", "username": "root", "state": "active", "avatar_url": "https://gravatar/x", "web_url": "http://example.com/root"},
+	"labels": [{"id": 11, "name": "GroupLabel", "color": "#428BCA", "description": ""}],
+	"weight": 4
+}`
+
+// TestGetGroupBoard_SurfacesDocumentedPremiumFields verifies that the raw-fetch
+// superset path surfaces the documented hide_backlog_list, hide_closed_list,
+// assignee and weight fields that client-go's gl.GroupIssueBoard omits.
+func TestGetGroupBoard_SurfacesDocumentedPremiumFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/5/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, premiumGroupBoardJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: toolutil.StringOrInt("5"), BoardID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.HideBacklogList || !out.HideClosedList {
+		t.Errorf("hide flags = (%v, %v), want (true, true)", out.HideBacklogList, out.HideClosedList)
+	}
+	if out.Weight != 4 {
+		t.Errorf("weight = %d, want 4", out.Weight)
+	}
+	if out.Assignee == nil || out.Assignee.Username != "root" || out.Assignee.State != "active" {
+		t.Errorf("assignee = %+v, want username root state active", out.Assignee)
+	}
+	if out.Milestone == nil || out.Milestone.GroupID != 5 {
+		t.Errorf("milestone group_id = %+v, want 5", out.Milestone)
+	}
+	if len(out.Labels) != 1 || out.Labels[0].ID != 11 || out.Labels[0].Color != "#428BCA" {
+		t.Errorf("labels = %+v, want one GroupLabel with color", out.Labels)
+	}
+}
+
+// TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent verifies that a
+// response WITHOUT the SDK-missing documented fields (older / Free-tier GitLab)
+// decodes successfully with those fields at their zero value and omitted from
+// the envelope, never failing the tool.
+func TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		// Minimal Free-tier shape: no hide_*_list, assignee or weight keys.
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Development","group":{"id":42,"name":"mygroup"}}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: toolutil.StringOrInt("42"), BoardID: 1})
+	if err != nil {
+		t.Fatalf("tool must not fail when documented premium fields are absent: %v", err)
+	}
+	if out.HideBacklogList || out.HideClosedList || out.Weight != 0 || out.Assignee != nil {
+		t.Errorf("absent fields should be zero/nil, got hide=(%v,%v) weight=%d assignee=%+v",
+			out.HideBacklogList, out.HideClosedList, out.Weight, out.Assignee)
+	}
+
+	// The omitempty assignee/weight keys must not appear in the marshaled envelope.
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	js := string(raw)
+	if strings.Contains(js, `"assignee"`) || strings.Contains(js, `"weight"`) {
+		t.Errorf("absent assignee/weight must be omitted from envelope: %s", js)
+	}
+}
+
+// TestListGroupBoards_SurfacesDocumentedPremiumFields verifies the list handler's
+// raw-fetch superset path surfaces hide_*_list/assignee/weight per board.
+func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/5/boards", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+premiumGroupBoardJSON+`]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{GroupID: toolutil.StringOrInt("5")})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Boards) != 1 || out.Boards[0].Weight != 4 || !out.Boards[0].HideBacklogList {
+		t.Errorf("board[0] = %+v, want weight 4 and hide_backlog_list true", out.Boards)
+	}
+}
+
+// TestBasicUserOutput_Nil verifies the assignee converter returns nil for a nil
+// input (the Free-tier / no-assignee case).
+func TestBasicUserOutput_Nil(t *testing.T) {
+	if got := basicUserOutput(nil); got != nil {
+		t.Errorf("basicUserOutput(nil) = %+v, want nil", got)
 	}
 }

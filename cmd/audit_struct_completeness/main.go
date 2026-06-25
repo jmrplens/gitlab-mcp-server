@@ -147,6 +147,28 @@ var curatedRefSubsets = map[string]string{
 	// approval-state responses (doc/api/merge_request_approvals.md).
 	"mrapprovals.BasicUserOutput": "merge_request_approvals.md",
 	"mrapprovals.GroupOutput":     "merge_request_approvals.md",
+
+	// projects — owner is a documented identity subset of the full gl.User
+	// (doc/api/projects.md owner.* attribute table).
+	"projects.OwnerOutput": "projects.md",
+
+	// uploads / groupmarkdownuploads — uploaded_by is a documented {id,name,username}
+	// subset (doc/api/project_markdown_uploads.md, doc/api/group_markdown_uploads.md).
+	"uploads.UploadedByOutput":              "project_markdown_uploads.md",
+	"groupmarkdownuploads.UploadedByOutput": "group_markdown_uploads.md",
+
+	// groupboards — nested refs of the group-board responses (doc/api/group_boards.md).
+	"groupboards.GroupRefOutput":     "group_boards.md",
+	"groupboards.MilestoneOutput":    "group_boards.md",
+	"groupboards.BasicUserOutput":    "group_boards.md",
+	"groupboards.LabelDetailsOutput": "group_boards.md",
+	"groupboards.LabelOutput":        "group_boards.md",
+
+	// groupepicboards — nested refs of the epic-board responses (doc/api/group_epic_boards.md).
+	"groupepicboards.GroupRefOutput":     "group_epic_boards.md",
+	"groupepicboards.ListLabelOutput":    "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput": "group_epic_boards.md",
+	"groupepicboards.BoardListOutput":    "group_epic_boards.md",
 }
 
 // isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
@@ -219,6 +241,27 @@ var docAddedFields = map[string]string{
 	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
 	"mrapprovals.RuleOutput.overridden": "merge_request_approvals.md",
+
+	// groupboards — documented in doc/api/group_boards.md but absent from
+	// gl.GroupIssueBoard; fetched via raw REST (rawListGroupBoards/rawGetGroupBoard/
+	// rawCreateGroupBoard/rawUpdateGroupBoard into the groupIssueBoardAPI superset).
+	"groupboards.GroupBoardOutput.hide_backlog_list": "group_boards.md",
+	"groupboards.GroupBoardOutput.hide_closed_list":  "group_boards.md",
+	"groupboards.GroupBoardOutput.assignee":          "group_boards.md",
+	"groupboards.GroupBoardOutput.weight":            "group_boards.md",
+
+	// groupepicboards — documented in doc/api/group_epic_boards.md but absent from
+	// gl.GroupEpicBoard / gl.BoardList / gl.LabelDetails; fetched via raw REST superset.
+	"groupepicboards.Output.hide_backlog_list":      "group_epic_boards.md",
+	"groupepicboards.Output.hide_closed_list":       "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.title":      "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.group_id":   "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.project_id": "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.template":   "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.created_at": "group_epic_boards.md",
+	"groupepicboards.LabelDetailsOutput.updated_at": "group_epic_boards.md",
+	"groupepicboards.BoardListOutput.list_type":     "group_epic_boards.md",
+	"groupepicboards.BoardListOutput.collapsed":     "group_epic_boards.md",
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

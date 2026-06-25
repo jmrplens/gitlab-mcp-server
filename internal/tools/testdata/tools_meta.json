@@ -4053,13 +4053,16 @@
             "created_at": {
               "type": "string"
             },
-            "email": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -4077,6 +4080,7 @@
             "username",
             "name",
             "state",
+            "locked",
             "avatar_url",
             "web_url"
           ],

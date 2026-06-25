@@ -60,7 +60,7 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Board List (ID: %d)\n\n", out.ID)
 	if out.Label != nil {
-		fmt.Fprintf(&b, "**Label**: %s (ID: %d)\n", out.Label.Name, out.Label.ID)
+		fmt.Fprintf(&b, "**Label**: %s\n", out.Label.Name)
 	}
 	fmt.Fprintf(&b, "**Position**: %d\n", out.Position)
 	if out.MaxIssueCount > 0 {

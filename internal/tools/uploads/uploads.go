@@ -30,9 +30,13 @@ type UploadInput struct {
 	ContentBase64 string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Only one of file_path or content_base64 should be provided."`
 }
 
-// UploadOutput contains the result of a file upload.
+// UploadOutput contains the result of a file upload. Fields mirror the
+// documented create-upload response (id, alt, url, full_path, markdown) per
+// doc/api/project_markdown_uploads.md. ID is omitempty because GitLab only
+// returns it from 17.3 onward (MR 161160); older instances omit it.
 type UploadOutput struct {
 	toolutil.HintableOutput
+	ID       int64  `json:"id,omitempty"`
 	Alt      string `json:"alt"`
 	URL      string `json:"url"`
 	FullPath string `json:"full_path"`
@@ -107,6 +111,7 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 	fullURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + uploaded.FullPath
 
 	return UploadOutput{
+		ID:       uploaded.ID,
 		Alt:      uploaded.Alt,
 		URL:      uploaded.URL,
 		FullPath: uploaded.FullPath,
@@ -129,15 +134,15 @@ type ListInput struct {
 }
 
 // UploadedByOutput mirrors the short-user representation in a markdown upload's
-// uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User). It is the
-// project-side mirror of groupmarkdownuploads.UploadedByOutput.
+// uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User). Per the list
+// response in doc/api/project_markdown_uploads.md, the nested uploaded_by object
+// documents only id, name, and username, so this is trimmed to that documented
+// reference subset even though the SDK *gl.User carries additional fields.
+// Documented reference subset per doc/api/project_markdown_uploads.md
 type UploadedByOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
 }
 
 // ListItem represents a single markdown upload entry. It mirrors the canonical
@@ -163,12 +168,9 @@ func uploadedByOutput(u *gl.User) *UploadedByOutput {
 		return nil
 	}
 	return &UploadedByOutput{
-		ID:        u.ID,
-		Username:  u.Username,
-		Name:      u.Name,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
+		ID:       u.ID,
+		Username: u.Username,
+		Name:     u.Name,
 	}
 }
 

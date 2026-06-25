@@ -6,17 +6,16 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
-// Canonical output shapes mirrored from client-go sub-objects. Per the 1:1
-// audit policy (full nested objects) these surface every identifying field of
-// the SDK struct on the canonical JSON keys and are replicated here rather than
-// imported from sibling packages to preserve the zero-import-cycle constraint
-// (C-IMPORTS).
+// Canonical output shapes mirrored from client-go sub-objects, trimmed to the
+// documented response shapes. Per the bidirectional 1:1 audit each nested
+// reference object surfaces exactly the sub-fields the GitLab group_boards API
+// documents (doc/api/group_boards.md) rather than the full SDK struct, and is
+// replicated here rather than imported from sibling packages to preserve the
+// zero-import-cycle constraint (C-IMPORTS).
 //
 // This file covers the group-board sub-objects: the board group, milestone,
-// labels and lists (gl.GroupIssueBoard) and the per-list assignee, label,
-// iteration and milestone scope objects (gl.BoardList). The previously
-// flattened scalars (*_id / *_name / *_title) are dropped in favor of these
-// nested objects.
+// assignee, labels and lists (gl.GroupIssueBoard) and the per-list assignee,
+// label, iteration and milestone scope objects (gl.BoardList).
 
 // formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
 func formatTimePtr(t *time.Time) string {
@@ -34,45 +33,32 @@ func formatISOTimePtr(t *gl.ISOTime) string {
 	return time.Time(*t).Format("2006-01-02")
 }
 
-// GroupRefOutput mirrors the identifying fields of gl.Group as embedded in a
-// gl.GroupIssueBoard. The full Group payload carries dozens of administrative,
-// statistics, LDAP/SAML, and runner fields that are not relevant in board
-// context; the identifying subset matches the mrapprovals.GroupOutput shape.
+// GroupRefOutput is a documented reference subset per doc/api/group_boards.md.
+// Every documented group-board response shows the board's `group` object with
+// only id, name and web_url; gl.Group's remaining administrative, statistics,
+// LDAP/SAML, and runner fields are not part of the documented board group shape.
 type GroupRefOutput struct {
-	ID                   int64  `json:"id"`
-	Name                 string `json:"name"`
-	Path                 string `json:"path"`
-	FullPath             string `json:"full_path,omitempty"`
-	FullName             string `json:"full_name,omitempty"`
-	Description          string `json:"description,omitempty"`
-	Visibility           string `json:"visibility,omitempty"`
-	WebURL               string `json:"web_url,omitempty"`
-	AvatarURL            string `json:"avatar_url,omitempty"`
-	ParentID             int64  `json:"parent_id,omitempty"`
-	RequestAccessEnabled bool   `json:"request_access_enabled"`
-	LFSEnabled           bool   `json:"lfs_enabled"`
-	CreatedAt            string `json:"created_at,omitempty"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	WebURL string `json:"web_url,omitempty"`
 }
 
 func groupRefOutput(g *gl.Group) *GroupRefOutput {
 	if g == nil {
 		return nil
 	}
-	return &GroupRefOutput{
-		ID: g.ID, Name: g.Name, Path: g.Path, FullPath: g.FullPath, FullName: g.FullName,
-		Description: g.Description, Visibility: string(g.Visibility), WebURL: g.WebURL,
-		AvatarURL: g.AvatarURL, ParentID: g.ParentID,
-		RequestAccessEnabled: g.RequestAccessEnabled, LFSEnabled: g.LFSEnabled,
-		CreatedAt: formatTimePtr(g.CreatedAt),
-	}
+	return &GroupRefOutput{ID: g.ID, Name: g.Name, WebURL: g.WebURL}
 }
 
-// MilestoneOutput mirrors gl.Milestone (the board / list milestone scope).
+// MilestoneOutput is a documented reference subset per doc/api/group_boards.md.
+// The board/list `milestone` object surfaces only the fields the documented
+// update-board and create-list responses list (id, iid, group_id, title,
+// description, state, timestamps, dates, web_url); gl.Milestone's project_id and
+// expired are not part of the documented group-board milestone shape.
 type MilestoneOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`
 	GroupID     int64  `json:"group_id"`
-	ProjectID   int64  `json:"project_id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	State       string `json:"state"`
@@ -81,7 +67,6 @@ type MilestoneOutput struct {
 	DueDate     string `json:"due_date,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
-	Expired     *bool  `json:"expired,omitempty"`
 }
 
 func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
@@ -89,66 +74,74 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 		return nil
 	}
 	return &MilestoneOutput{
-		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
+		ID: m.ID, IID: m.IID, GroupID: m.GroupID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
 		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
 		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
-		Expired: m.Expired,
 	}
 }
 
-// LabelOutput mirrors gl.Label (a board scope label or a list label column).
-// gl.GroupLabel is a defined type identical to gl.Label, so the same shape
-// covers both the board's GroupLabel slice and a list's Label.
-type LabelOutput struct {
-	ID                     int64  `json:"id"`
-	Name                   string `json:"name"`
-	Color                  string `json:"color"`
-	TextColor              string `json:"text_color,omitempty"`
-	Description            string `json:"description,omitempty"`
-	OpenIssuesCount        int64  `json:"open_issues_count,omitempty"`
-	ClosedIssuesCount      int64  `json:"closed_issues_count,omitempty"`
-	OpenMergeRequestsCount int64  `json:"open_merge_requests_count,omitempty"`
-	Subscribed             bool   `json:"subscribed,omitempty"`
-	Priority               *int64 `json:"priority,omitempty"`
-	IsProjectLabel         bool   `json:"is_project_label,omitempty"`
-	Archived               bool   `json:"archived,omitempty"`
+// BasicUserOutput is a documented reference subset per doc/api/group_boards.md.
+// The board's `assignee` object in the documented update-board response shows
+// only id, name, username, state, avatar_url, and web_url; gl.BasicUser's
+// created_at is not part of the documented board assignee shape. The board-level
+// assignee is decoded via the raw-superset fetch path (groupIssueBoardAPI), as
+// gl.GroupIssueBoard omits the assignee field entirely.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url"`
+	WebURL    string `json:"web_url"`
 }
 
-func labelOutput(l *gl.Label) *LabelOutput {
-	if l == nil {
+func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	if u == nil {
 		return nil
 	}
-	out := &LabelOutput{
-		ID: l.ID, Name: l.Name, Color: l.Color, TextColor: l.TextColor,
-		Description: l.Description, OpenIssuesCount: l.OpenIssuesCount,
-		ClosedIssuesCount: l.ClosedIssuesCount, OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		Subscribed: l.Subscribed, IsProjectLabel: l.IsProjectLabel, Archived: l.Archived,
+	return &BasicUserOutput{
+		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
-	if p, err := l.Priority.Get(); err == nil {
-		out.Priority = &p
-	}
-	return out
+}
+
+// LabelDetailsOutput is a documented reference subset per
+// doc/api/group_boards.md. The board's `labels[]` entries in the documented
+// update-board response show only id, name, color, and description; gl.Label's
+// text_color, counts, subscribed, priority, is_project_label, and archived
+// fields are not part of the documented board labels shape.
+type LabelDetailsOutput struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
 // groupLabelOutputs converts a slice of gl.GroupLabel (a defined type aliasing
-// gl.Label) to LabelOutput, skipping nil elements.
-func groupLabelOutputs(labels []*gl.GroupLabel) []*LabelOutput {
+// gl.Label) to the documented board label subset, skipping nil elements.
+func groupLabelOutputs(labels []*gl.GroupLabel) []*LabelDetailsOutput {
 	if len(labels) == 0 {
 		return nil
 	}
-	out := make([]*LabelOutput, 0, len(labels))
+	out := make([]*LabelDetailsOutput, 0, len(labels))
 	for _, l := range labels {
 		if l == nil {
 			continue
 		}
-		lbl := gl.Label(*l)
-		out = append(out, labelOutput(&lbl))
+		out = append(out, &LabelDetailsOutput{
+			ID: l.ID, Name: l.Name, Color: l.Color, Description: l.Description,
+		})
 	}
 	return out
 }
 
-// BoardListAssigneeOutput mirrors gl.BoardListAssignee (a list assignee scope).
+// BoardListAssigneeOutput is a documented reference subset per
+// doc/api/group_boards.md. A board list's `assignee` object (Premium/Ultimate
+// assignee list type) is surfaced with id, name, and username, matching the
+// compact gl.BoardListAssignee struct. The documented response examples cover
+// only label and milestone lists, so this premium list-type sub-object has no
+// fuller documented shape to trim against.
 type BoardListAssigneeOutput struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
@@ -162,7 +155,28 @@ func boardListAssigneeOutput(a *gl.BoardListAssignee) *BoardListAssigneeOutput {
 	return &BoardListAssigneeOutput{ID: a.ID, Name: a.Name, Username: a.Username}
 }
 
-// IterationOutput mirrors gl.ProjectIteration (a list iteration scope).
+// LabelOutput is a documented reference subset per doc/api/group_boards.md.
+// Every documented board-list response shows the list's `label` object with
+// only name, color, and description (no id); gl.Label's remaining fields are not
+// part of the documented board-list label shape.
+type LabelOutput struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+func labelOutput(l *gl.Label) *LabelOutput {
+	if l == nil {
+		return nil
+	}
+	return &LabelOutput{Name: l.Name, Color: l.Color, Description: l.Description}
+}
+
+// IterationOutput is a documented reference subset per doc/api/group_boards.md.
+// A board list's `iteration` object (Premium/Ultimate iteration list type)
+// mirrors gl.ProjectIteration. The documented response examples cover only
+// label and milestone lists, so this premium list-type sub-object has no fuller
+// documented shape to trim against.
 type IterationOutput struct {
 	ID          int64  `json:"id"`
 	IID         int64  `json:"iid"`

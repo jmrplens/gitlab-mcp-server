@@ -36,7 +36,7 @@ func FormatOutputMarkdown(b Output) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Epic Board #%d — %s\n\n", b.ID, toolutil.EscapeMdTableCell(b.Name))
 	if b.Group != nil {
-		fmt.Fprintf(&sb, "- **Group**: %s (#%d)\n", toolutil.EscapeMdTableCell(b.Group.FullPath), b.Group.ID)
+		fmt.Fprintf(&sb, "- **Group**: %s (#%d)\n", toolutil.EscapeMdTableCell(b.Group.Name), b.Group.ID)
 	}
 	if names := labelNames(b.Labels); len(names) > 0 {
 		fmt.Fprintf(&sb, "- **Labels**: %s\n", strings.Join(names, ", "))

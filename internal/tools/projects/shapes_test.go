@@ -112,8 +112,8 @@ func TestShapeConverters_SingleObjects(t *testing.T) {
 		&ForkParentOutput{ID: 9, Name: "up", NameWithNamespace: "u/up", Path: "up", PathWithNamespace: "u/up", HTTPURLToRepo: "h", WebURL: "w", RepositoryStorage: "s"})
 
 	checkEqual(t, "ownerOutput",
-		ownerOutput(&gl.User{ID: 7, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a", WebURL: "w", Email: "e@x", CreatedAt: &now}),
-		&OwnerOutput{ID: 7, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a", WebURL: "w", Email: "e@x", CreatedAt: rfc})
+		ownerOutput(&gl.User{ID: 7, Username: "alice", Name: "Alice", State: "active", Locked: true, AvatarURL: "a", WebURL: "w", PublicEmail: "e@x", CreatedAt: &now}),
+		&OwnerOutput{ID: 7, Username: "alice", Name: "Alice", State: "active", Locked: true, AvatarURL: "a", WebURL: "w", PublicEmail: "e@x", CreatedAt: rfc})
 
 	checkEqual(t, "permissionsOutput",
 		permissionsOutput(&gl.Permissions{ProjectAccess: &gl.ProjectAccess{AccessLevel: 40, NotificationLevel: 3}, GroupAccess: &gl.GroupAccess{AccessLevel: 50, NotificationLevel: 4}}),

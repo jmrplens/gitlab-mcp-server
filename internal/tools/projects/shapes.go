@@ -82,17 +82,24 @@ func forkParentOutput(f *gl.ForkParent) *ForkParentOutput {
 	}
 }
 
-// OwnerOutput mirrors the project owner object (gl.User). The owner payload on
-// projects carries the public identity subset of the full user object.
+// OwnerOutput is a documented reference subset of the project owner object.
+//
+// Documented reference subset per doc/api/projects.md (`owner.*` attribute
+// table): id, username, public_email, name, state, locked, avatar_url, web_url,
+// created_at. The owner key is a *gl.User in the SDK, but the project payload
+// surfaces only this identity subset rather than the full user record, so the
+// remaining administrative gl.User fields (bio, projects_limit, identities,
+// is_admin, etc.) are intentionally not mirrored here.
 type OwnerOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
-	Email     string `json:"email,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	Locked      bool   `json:"locked"`
+	AvatarURL   string `json:"avatar_url"`
+	WebURL      string `json:"web_url"`
+	PublicEmail string `json:"public_email,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
 }
 
 func ownerOutput(u *gl.User) *OwnerOutput {
@@ -101,8 +108,9 @@ func ownerOutput(u *gl.User) *OwnerOutput {
 	}
 	return &OwnerOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, Email: u.Email,
-		CreatedAt: formatTimePtr(u.CreatedAt),
+		Locked: u.Locked, AvatarURL: u.AvatarURL, WebURL: u.WebURL,
+		PublicEmail: u.PublicEmail,
+		CreatedAt:   formatTimePtr(u.CreatedAt),
 	}
 }
 

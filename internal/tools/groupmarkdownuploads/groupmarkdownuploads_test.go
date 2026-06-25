@@ -482,7 +482,10 @@ func TestFormatList_MultipleRows(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestList_UploadedBy verifies that the uploaded_by user embed in the GitLab
-// response is mapped onto the full UploadedByOutput short-user shape.
+// response is mapped onto the documented UploadedByOutput short-user subset
+// (id, username, name per doc/api/group_markdown_uploads.md). Extra SDK fields
+// present in the response (state, avatar_url, web_url) are tolerated and
+// dropped.
 func TestList_UploadedBy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -502,8 +505,7 @@ func TestList_UploadedBy(t *testing.T) {
 	if ub == nil {
 		t.Fatal("expected uploaded_by to be populated")
 	}
-	if ub.ID != 42 || ub.Username != "alice" || ub.Name != "Alice Example" ||
-		ub.State != "active" || ub.AvatarURL == "" || ub.WebURL == "" {
+	if ub.ID != 42 || ub.Username != "alice" || ub.Name != "Alice Example" {
 		t.Errorf("uploaded_by mapped incorrectly: %+v", ub)
 	}
 }

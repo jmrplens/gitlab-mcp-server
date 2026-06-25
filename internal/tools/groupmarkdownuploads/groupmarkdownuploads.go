@@ -27,13 +27,16 @@ type ListInput struct {
 
 // UploadedByOutput mirrors the short-user representation in a markdown
 // upload's uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User).
+//
+// Documented reference subset per doc/api/group_markdown_uploads.md: the
+// "List all uploads for a group" response documents only id, name, and
+// username inside uploaded_by. The SDK *gl.User embed additionally carries
+// state, avatar_url, and web_url; those are trimmed here to keep the nested
+// reference at documented depth.
 type UploadedByOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
+	ID       int64  `json:"id"`       // Documented reference subset per doc/api/group_markdown_uploads.md
+	Username string `json:"username"` // Documented reference subset per doc/api/group_markdown_uploads.md
+	Name     string `json:"name"`     // Documented reference subset per doc/api/group_markdown_uploads.md
 }
 
 // UploadItem represents a single markdown upload entry. It mirrors the canonical
@@ -58,12 +61,9 @@ func uploadedByOutput(u *gl.User) *UploadedByOutput {
 		return nil
 	}
 	return &UploadedByOutput{
-		ID:        u.ID,
-		Username:  u.Username,
-		Name:      u.Name,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
+		ID:       u.ID,
+		Username: u.Username,
+		Name:     u.Name,
 	}
 }
 
