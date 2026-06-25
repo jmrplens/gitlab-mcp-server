@@ -1,7 +1,7 @@
 [
   {
     "name": "gitlab_access_request_approve_group",
-    "description": "Approve a group access request. Optionally set the access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer).\n\nSee also: gitlab_access_request_list_group, gitlab_group_member_add\n\nReturns: JSON with the approved access request details.",
+    "description": "Approve a pending group access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -75,7 +75,7 @@
   },
   {
     "name": "gitlab_access_request_approve_project",
-    "description": "Approve a project access request. Optionally set the access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer).\n\nSee also: gitlab_access_request_list_project, gitlab_project_member_add\n\nReturns: JSON with the approved access request details.",
+    "description": "Approve a pending project access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -149,7 +149,7 @@
   },
   {
     "name": "gitlab_access_request_deny_group",
-    "description": "Deny a group access request. This action cannot be undone.\n\nSee also: gitlab_access_request_approve_group, gitlab_access_request_list_group\n\nReturns: confirmation message.",
+    "description": "Deny a pending group access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_group, gitlab_access_request_approve_group, gitlab_group_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -206,7 +206,7 @@
   },
   {
     "name": "gitlab_access_request_deny_project",
-    "description": "Deny a project access request. This action cannot be undone.\n\nSee also: gitlab_access_request_approve_project, gitlab_access_request_list_project\n\nReturns: confirmation message.",
+    "description": "Deny a pending project access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_project, gitlab_access_request_approve_project, gitlab_project_member_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -565,7 +565,7 @@
   },
   {
     "name": "gitlab_access_request_request_group",
-    "description": "Request access to a GitLab group for the authenticated user.\n\nSee also: gitlab_access_request_list_group, gitlab_group_member_add\n\nReturns: JSON with the access request details.",
+    "description": "Request access to a group as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: gitlab_access_request_list_group, gitlab_access_request_approve_group, gitlab_access_request_deny_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -629,7 +629,7 @@
   },
   {
     "name": "gitlab_access_request_request_project",
-    "description": "Request access to a GitLab project for the authenticated user.\n\nSee also: gitlab_access_request_list_project, gitlab_project_member_add\n\nReturns: JSON with the access request details.",
+    "description": "Request access to a project as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: gitlab_access_request_list_project, gitlab_access_request_approve_project, gitlab_access_request_deny_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20387,7 +20387,7 @@
   },
   {
     "name": "gitlab_deployment_create",
-    "description": "Create a new deployment in a GitLab project. Requires environment name, git ref, and SHA. Optionally specify tag flag and initial status. Returns: id, iid, ref, sha, status, user_name, environment_name, created_at. See also: gitlab_deployment_get, gitlab_environment_get.",
+    "description": "Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_environment_get, gitlab_deployment_list, gitlab_deployment_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20747,7 +20747,7 @@
   },
   {
     "name": "gitlab_deployment_delete",
-    "description": "Permanently delete a deployment from a GitLab project. This action cannot be undone.\n\nReturns: confirmation message.\n\nSee also: gitlab_deployment_list.",
+    "description": "Delete a deployment record by deployment_id within a project. Returns: a confirmation that the deployment was deleted. See also: gitlab_deployment_get, gitlab_deployment_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -21590,7 +21590,7 @@
   },
   {
     "name": "gitlab_deployment_update",
-    "description": "Update the status of an existing deployment in a GitLab project. Use to transition a deployment between states: created, running, success, failed, canceled. Returns: id, iid, ref, sha, status, user_name, environment_name, updated_at. See also: gitlab_deployment_get.",
+    "description": "Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_deployment_get, gitlab_deployment_list, gitlab_deployment_approve_or_reject.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30683,7 +30683,7 @@
   },
   {
     "name": "gitlab_get_ci_yml_template",
-    "description": "Get a single GitLab CI/CD YAML template by key. Returns: the template name and full YAML content to copy into a .gitlab-ci.yml file. See also: gitlab_list_ci_yml_templates, gitlab_lint_ci_yaml.",
+    "description": "Get a single GitLab CI/CD pipeline YAML template by key. Returns: the template name and full YAML content to copy into a .gitlab-ci.yml file. See also: gitlab_list_ci_yml_templates, gitlab_ci_lint, gitlab_file_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -89228,7 +89228,7 @@
   },
   {
     "name": "gitlab_list_ci_yml_templates",
-    "description": "List the GitLab-provided CI/CD YAML templates. Returns: available templates with key and name, plus pagination metadata. See also: gitlab_get_ci_yml_template, gitlab_lint_ci_yaml.",
+    "description": "List the GitLab-provided CI/CD pipeline YAML templates. Returns: available templates with key and name, plus pagination metadata. See also: gitlab_get_ci_yml_template, gitlab_ci_lint, gitlab_file_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

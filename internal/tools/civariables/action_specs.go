@@ -85,8 +85,14 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 		}
 		options.IndividualTool.Description = "Create a CI/CD variable in a project with type, environment scope, and protected/masked/raw/masked_and_hidden flags. Returns: the created variable's key, value (redacted when masked or hidden), type, flags, environment scope, and description. See also: gitlab_ci_variable_list, gitlab_ci_variable_get, gitlab_ci_variable_update."
 	case "update":
+		options.Usage = "Update an existing project CI/CD variable's value or flags by key (and optional environment scope). Use to rotate secrets or change protected/masked settings without recreating the variable."
+		options.Aliases = []string{"update ci variable", "edit pipeline variable", "rotate ci variable value"}
+		options.RelatedActions = []string{"ci_variable.get", "ci_variable.list", "ci_variable.delete"}
 		options.IndividualTool.Description = "Update a CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete."
 	case "delete":
+		options.Usage = "Delete a project CI/CD variable by key (and optional environment scope). Use to remove obsolete or leaked pipeline configuration values."
+		options.Aliases = []string{"delete ci variable", "remove pipeline variable", "drop ci variable"}
+		options.RelatedActions = []string{"ci_variable.list", "ci_variable.get"}
 		options.IndividualTool.Description = "Delete a CI/CD variable by key, selecting an environment-scoped instance via the filter. Returns: a success confirmation message. See also: gitlab_ci_variable_list, gitlab_ci_variable_get."
 	}
 

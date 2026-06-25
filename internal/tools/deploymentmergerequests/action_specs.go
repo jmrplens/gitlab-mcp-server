@@ -9,8 +9,8 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("deployment_merge_requests", toolutil.RouteAction(client, List), toolutil.ActionSpecOptions{
-			Aliases: []string{"gitlab_list_deployment_merge_requests"}, Usage: "Use to execute deployment_merge_requests action.", Tags: []string{"environment", "deployment"},
-			RelatedActions: []string{"environment.deployment_get", "pipeline.list"},
+			Aliases: []string{"merge requests for a deployment", "MRs included in a deployment", "which merge requests shipped in this deployment", "deployment to merge request association"}, Usage: "List the merge requests associated with a specific deployment in a project environment. Use this when the prompt asks which MRs were included, shipped, or rolled out by a known deployment_id, not to list deployments or to list merge requests directly.", Tags: []string{"environment", "deployment"},
+			RelatedActions: []string{"environment.deployment_get", "mergerequest.get", "mergerequest.list"},
 			OpenWorld:      true,
 			OwnerPackage:   "deploymentmergerequests",
 			IndividualTool: toolutil.IndividualToolSpec{

@@ -82,6 +82,17 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries."
 		options.Aliases = []string{"create deployment", "start deployment", "new deployment"}
 		options.RelatedActions = []string{"environment.get", "deployment.list", actionDeploymentUpdate}
+		options.IndividualTool.Description = "Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_environment_get, gitlab_deployment_list, gitlab_deployment_update."
+	case "deployment_update":
+		options.Usage = "Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
+		options.Aliases = []string{"update deployment status", "set deployment status", "transition deployment"}
+		options.RelatedActions = []string{"deployment.get", "deployment.list", "deployment.approve_or_reject"}
+		options.IndividualTool.Description = "Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_deployment_get, gitlab_deployment_list, gitlab_deployment_approve_or_reject."
+	case "deployment_delete":
+		options.Usage = "Permanently delete a deployment record by deployment_id. Use only to remove obsolete or erroneous deployment entries; this does not undo the underlying deployment."
+		options.Aliases = []string{"delete deployment", "remove deployment", "purge deployment record"}
+		options.RelatedActions = []string{"deployment.get", "deployment.list"}
+		options.IndividualTool.Description = "Delete a deployment record by deployment_id within a project. Returns: a confirmation that the deployment was deleted. See also: gitlab_deployment_get, gitlab_deployment_list."
 	case "deployment_approve_or_reject":
 		options.Usage = "Approve or reject a blocked deployment. Use only when approval workflows require explicit deployment approvals/rejections."
 		options.Aliases = []string{"approve deployment", "reject deployment", "deployment approval"}
