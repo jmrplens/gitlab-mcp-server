@@ -14,10 +14,19 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueEventReadSpec("event_issue_milestone_get", toolutil.RouteAction(client, GetIssueMilestoneEvent), "gitlab_issue_milestone_event_get"),
 		issueEventReadSpec("event_issue_state_list", toolutil.RouteAction(client, ListIssueStateEvents), "gitlab_issue_state_event_list"),
 		issueEventReadSpec("event_issue_state_get", toolutil.RouteAction(client, GetIssueStateEvent), "gitlab_issue_state_event_get"),
-		issueEventReadSpec("event_issue_iteration_list", toolutil.RouteAction(client, ListIssueIterationEvents), "gitlab_issue_iteration_event_list"),
-		issueEventReadSpec("event_issue_iteration_get", toolutil.RouteAction(client, GetIssueIterationEvent), "gitlab_issue_iteration_event_get"),
-		issueEventReadSpec("event_issue_weight_list", toolutil.RouteAction(client, ListIssueWeightEvents), "gitlab_issue_weight_event_list"),
+		issueEventPremiumSpec(issueEventReadSpec("event_issue_iteration_list", toolutil.RouteAction(client, ListIssueIterationEvents), "gitlab_issue_iteration_event_list")),
+		issueEventPremiumSpec(issueEventReadSpec("event_issue_iteration_get", toolutil.RouteAction(client, GetIssueIterationEvent), "gitlab_issue_iteration_event_get")),
+		issueEventPremiumSpec(issueEventReadSpec("event_issue_weight_list", toolutil.RouteAction(client, ListIssueWeightEvents), "gitlab_issue_weight_event_list")),
 	}
+}
+
+// issueEventPremiumSpec marks an issue resource-event action as
+// Premium/Ultimate so the individual catalog hides it from CE clients.
+// Issue iteration and weight events depend on iterations/weights, which are
+// GitLab Premium features.
+func issueEventPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
 }
 
 func issueEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {

@@ -70,7 +70,7 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1028 self-managed / 1034 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>1061 self-managed / 1067 GitLab.com Premium/Ultimate tools]
         META[meta projection<br/>32 base / 48 self-managed enterprise / 49 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         ELIC[elicitation support<br/>4 interactive actions]
@@ -168,7 +168,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1028 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1034 total in that catalog, organized across 175 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1061 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1067 total in that catalog, organized across 175 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 

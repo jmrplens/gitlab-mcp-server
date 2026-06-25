@@ -14,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mirrorReadSpec("mirror_list", toolutil.RouteAction(client, List), "gitlab_list_project_mirrors"),
 		mirrorReadSpec("mirror_get", toolutil.RouteAction(client, Get), "gitlab_get_project_mirror"),
 		mirrorReadSpec("mirror_get_public_key", toolutil.RouteAction(client, GetPublicKey), "gitlab_get_project_mirror_public_key"),
-		mirrorCreateSpec("mirror_add", toolutil.RouteAction(client, Add), "gitlab_add_project_mirror"),
+		mirrorPremiumSpec(mirrorCreateSpec("mirror_add", toolutil.RouteAction(client, Add), "gitlab_add_project_mirror")),
 		mirrorUpdateSpec("mirror_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_project_mirror"),
 		mirrorDeleteSpec("mirror_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_project_mirror"),
 		mirrorForcePushSpec(client),
@@ -49,6 +49,14 @@ const (
 	actionMirrorForcePush    = "project.mirror_force_push"
 	actionPullMirrorGet      = "project.pull_mirror_get"
 )
+
+// mirrorPremiumSpec marks a project push (remote) mirror action as
+// Premium/Ultimate so the individual catalog hides it from CE clients.
+// Creating remote mirrors is a GitLab Premium feature.
+func mirrorPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
+}
 
 func mirrorReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, mirrorOptions(individualTool))

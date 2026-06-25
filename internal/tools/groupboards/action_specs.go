@@ -18,10 +18,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Get a single group issue board by ID. Returns: the board with its group, milestone, scope labels, and lists. See also: gitlab_group_board_list, gitlab_group_board_update, gitlab_group_board_list_lists.",
 			"Inspect one group issue board's milestone, scope labels, and columns by its board ID.",
 			[]string{"get a group issue board", "show details of a group board", "view a group kanban board"}),
-		groupBoardCreateSpec("group_board_create", toolutil.RouteAction(client, CreateGroupBoard), "gitlab_group_board_create",
+		groupBoardPremiumSpec(groupBoardCreateSpec("group_board_create", toolutil.RouteAction(client, CreateGroupBoard), "gitlab_group_board_create",
 			"Create a new group issue board (Premium/Ultimate). Returns: the created board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_update, gitlab_group_board_delete.",
 			"Set up a new issue board for a group so the team can plan work across its projects.",
-			[]string{"create a group issue board", "add a new board to a group", "set up a group kanban board"}),
+			[]string{"create a group issue board", "add a new board to a group", "set up a group kanban board"})),
 		groupBoardUpdateSpec("group_board_update", toolutil.RouteAction(client, UpdateGroupBoard), "gitlab_group_board_update",
 			"Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
 			"Rename a group issue board or retune its assignee, milestone, label, and weight scope.",
@@ -65,6 +65,14 @@ func deleteGroupBoardListOutput(ctx context.Context, client *gitlabclient.Client
 		return toolutil.DeleteOutput{}, err
 	}
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group board list."}, nil
+}
+
+// groupBoardPremiumSpec marks a group board action as Premium/Ultimate so the
+// individual catalog hides it from CE clients. Creating additional group issue
+// boards (beyond the single CE board) is a GitLab Premium feature.
+func groupBoardPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
 }
 
 func groupBoardReadSpec(name string, route toolutil.ActionRoute, individualTool, description, usage string, aliases []string) toolutil.ActionSpec {

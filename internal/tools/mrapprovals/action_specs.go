@@ -14,7 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		approvalReadSpec("approval_rules", toolutil.RouteAction(client, Rules), "gitlab_mr_approval_rules"),
 		approvalReadSpec("approval_config", toolutil.RouteAction(client, Config), "gitlab_mr_approval_config"),
 		approvalResetSpec(client),
-		approvalCreateSpec("approval_rule_create", toolutil.RouteAction(client, CreateRule), "gitlab_mr_approval_rule_create"),
+		approvalPremiumSpec(approvalCreateSpec("approval_rule_create", toolutil.RouteAction(client, CreateRule), "gitlab_mr_approval_rule_create")),
 		approvalUpdateSpec("approval_rule_update", toolutil.RouteAction(client, UpdateRule), "gitlab_mr_approval_rule_update"),
 		approvalDeleteSpec("approval_rule_delete", toolutil.DestructiveAction(client, deleteRuleOutput), "gitlab_mr_approval_rule_delete"),
 	}
@@ -51,6 +51,14 @@ const (
 	actionMRApprove          = "merge_request.approve"
 	actionMRUnapprove        = "merge_request.unapprove"
 )
+
+// approvalPremiumSpec marks an MR approval action as Premium/Ultimate so the
+// individual catalog hides it from CE clients. Creating multiple merge-request
+// approval rules is a GitLab Premium feature.
+func approvalPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
+}
 
 func approvalReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := approvalOptions(individualTool)
