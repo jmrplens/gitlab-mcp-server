@@ -14,10 +14,15 @@ import (
 // Project Snippet Handlers (ProjectSnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ProjectListInput selects a project snippet page.
+// ProjectListInput selects a project snippet page. OrderBy/Sort/pagination/
+// page_token map onto the embedded gl.ListOptions to mirror the SDK's
+// keyset-capable list options.
 type ProjectListInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id"          jsonschema:"Project ID or path,required"`
+	OrderBy   string               `json:"order_by,omitempty"  jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	Sort      string               `json:"sort,omitempty"      jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ProjectList lists snippets for a project.
@@ -25,12 +30,9 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := &gl.ListProjectSnippetsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListProjectSnippetsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	snippets, resp, err := client.GL().ProjectSnippets.ListSnippets(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)

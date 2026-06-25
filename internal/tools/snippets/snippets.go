@@ -19,36 +19,56 @@ import (
 // Shared output types
 // ---------------------------------------------------------------------------.
 
-// AuthorOutput represents a snippet author.
-type AuthorOutput struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	State    string `json:"state"`
+// SnippetAuthorOutput mirrors gl.SnippetAuthor, the full author object embedded
+// in snippet payloads. Per the 1:1 audit policy it is a full nested object
+// surfaced on the canonical "author" key, replacing the previously flattened
+// author scalars. It is replicated here rather than imported from a sibling
+// package to preserve the zero-import-cycle constraint (C-IMPORTS).
+type SnippetAuthorOutput struct {
+	ID        int64      `json:"id"`
+	Username  string     `json:"username"`
+	Email     string     `json:"email"`
+	Name      string     `json:"name"`
+	State     string     `json:"state"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 }
 
-// FileOutput represents a file attached to a snippet.
+// snippetAuthorOutput maps a gl.SnippetAuthor into its output shape.
+func snippetAuthorOutput(a gl.SnippetAuthor) *SnippetAuthorOutput {
+	return &SnippetAuthorOutput{
+		ID:        a.ID,
+		Username:  a.Username,
+		Email:     a.Email,
+		Name:      a.Name,
+		State:     a.State,
+		CreatedAt: a.CreatedAt,
+	}
+}
+
+// FileOutput mirrors gl.SnippetFile, the file object embedded in snippet
+// payloads (path and raw URL), surfaced on the canonical "files" key.
 type FileOutput struct {
 	Path   string `json:"path"`
 	RawURL string `json:"raw_url"`
 }
 
-// Output represents a single snippet.
+// Output represents a single snippet. It mirrors gl.Snippet, surfacing the full
+// nested author object and repository_storage per the 1:1 audit policy.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64        `json:"id"`
-	Title       string       `json:"title"`
-	FileName    string       `json:"file_name"`
-	Description string       `json:"description"`
-	Visibility  string       `json:"visibility"`
-	Author      AuthorOutput `json:"author"`
-	ProjectID   int64        `json:"project_id,omitempty"`
-	WebURL      string       `json:"web_url"`
-	RawURL      string       `json:"raw_url"`
-	Files       []FileOutput `json:"files,omitempty"`
-	CreatedAt   *time.Time   `json:"created_at,omitempty"`
-	UpdatedAt   *time.Time   `json:"updated_at,omitempty"`
+	ID                int64                `json:"id"`
+	Title             string               `json:"title"`
+	FileName          string               `json:"file_name"`
+	Description       string               `json:"description"`
+	Visibility        string               `json:"visibility"`
+	Author            *SnippetAuthorOutput `json:"author,omitempty"`
+	ProjectID         int64                `json:"project_id,omitempty"`
+	WebURL            string               `json:"web_url"`
+	RawURL            string               `json:"raw_url"`
+	RepositoryStorage string               `json:"repository_storage,omitempty"`
+	Files             []FileOutput         `json:"files,omitempty"`
+	CreatedAt         *time.Time           `json:"created_at,omitempty"`
+	UpdatedAt         *time.Time           `json:"updated_at,omitempty"`
 }
 
 // ListOutput represents a list of snippets with pagination.
@@ -77,24 +97,19 @@ type FileContentOutput struct {
 // convertSnippet maps a GitLab snippet into the MCP output shape.
 func convertSnippet(s *gl.Snippet) Output {
 	out := Output{
-		ID:          s.ID,
-		Title:       s.Title,
-		FileName:    s.FileName,
-		Description: s.Description,
-		Visibility:  s.Visibility,
-		ProjectID:   s.ProjectID,
-		WebURL:      s.WebURL,
-		RawURL:      s.RawURL,
-		CreatedAt:   s.CreatedAt,
-		UpdatedAt:   s.UpdatedAt,
+		ID:                s.ID,
+		Title:             s.Title,
+		FileName:          s.FileName,
+		Description:       s.Description,
+		Visibility:        s.Visibility,
+		ProjectID:         s.ProjectID,
+		WebURL:            s.WebURL,
+		RawURL:            s.RawURL,
+		RepositoryStorage: s.RepositoryStorage,
+		CreatedAt:         s.CreatedAt,
+		UpdatedAt:         s.UpdatedAt,
 	}
-	out.Author = AuthorOutput{
-		ID:       s.Author.ID,
-		Username: s.Author.Username,
-		Name:     s.Author.Name,
-		Email:    s.Author.Email,
-		State:    s.Author.State,
-	}
+	out.Author = snippetAuthorOutput(s.Author)
 	for _, f := range s.Files {
 		out.Files = append(out.Files, FileOutput{Path: f.Path, RawURL: f.RawURL})
 	}
@@ -126,6 +141,21 @@ func snippetVisibility(value string) *gl.VisibilityValue {
 	}
 	visibility := gl.VisibilityValue(value)
 	return &visibility
+}
+
+// applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
+// setting only the values the caller supplied. These fields drive keyset
+// ordering for the snippet list endpoints.
+func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
+	if opts == nil {
+		return
+	}
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
 }
 
 // createSnippetFiles creates snippet files for the snippets package.
@@ -206,7 +236,7 @@ func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
 	for _, s := range snippets {
 		proj := resolveProjectLabel(s)
 		fmt.Fprintf(b, "| %d | %s | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), proj, s.Visibility, s.Author.Username, len(s.Files))
+			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), proj, s.Visibility, authorUsername(s.Author), len(s.Files))
 	}
 }
 
@@ -227,27 +257,38 @@ func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString("|---|---|---|---|---|\n")
 	for _, s := range snippets {
 		fmt.Fprintf(b, "| %d | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), s.Visibility, s.Author.Username, len(s.Files))
+			s.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(s.Title), s.WebURL), s.Visibility, authorUsername(s.Author), len(s.Files))
 	}
+}
+
+// authorUsername returns the snippet author's username, or an empty string when
+// the author object is nil (e.g. minimal payloads).
+func authorUsername(a *SnippetAuthorOutput) string {
+	if a == nil {
+		return ""
+	}
+	return a.Username
 }
 
 // ---------------------------------------------------------------------------
 // Personal Snippet Handlers (SnippetsService)
 // ---------------------------------------------------------------------------.
 
-// ListInput carries pagination for the authenticated user's snippets.
+// ListInput carries pagination and ordering for the authenticated user's
+// snippets. OrderBy, Sort, pagination, and page_token map onto the embedded
+// gl.ListOptions to mirror the SDK's keyset-capable list options.
 type ListInput struct {
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // List lists all snippets for the current user.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListSnippetsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListSnippetsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	snippets, resp, err := client.GL().Snippets.ListSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list", err, http.StatusUnauthorized,
@@ -260,20 +301,27 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return out, nil
 }
 
-// ListAllInput carries admin-only snippet listing filters and pagination.
+// ListAllInput carries admin-only snippet listing filters, ordering, and
+// pagination. CreatedAfter/CreatedBefore/RepositoryStorage mirror
+// gl.ListAllSnippetsOptions, while OrderBy/Sort/pagination/page_token map onto
+// the embedded gl.ListOptions.
 type ListAllInput struct {
-	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Filter snippets created after (ISO 8601)"`
-	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Filter snippets created before (ISO 8601)"`
+	CreatedAfter      string `json:"created_after,omitempty"      jsonschema:"Filter snippets created after (ISO 8601)"`
+	CreatedBefore     string `json:"created_before,omitempty"     jsonschema:"Filter snippets created before (ISO 8601)"`
+	RepositoryStorage string `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage name (admin only)"`
+	OrderBy           string `json:"order_by,omitempty"           jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	Sort              string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListAll lists all snippets (admin endpoint).
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
-	opts := &gl.ListAllSnippetsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListAllSnippetsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	if input.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(input.RepositoryStorage)
 	}
 	if input.CreatedAfter != "" {
 		t, err := time.Parse(time.RFC3339, input.CreatedAfter)
@@ -496,19 +544,20 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
-// ExploreInput carries pagination for public snippet discovery.
+// ExploreInput carries pagination and ordering for public snippet discovery.
+// OrderBy/Sort/pagination/page_token map onto the embedded gl.ListOptions.
 type ExploreInput struct {
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Explore lists all public snippets.
 func Explore(ctx context.Context, client *gitlabclient.Client, input ExploreInput) (ListOutput, error) {
-	opts := &gl.ExploreSnippetsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ExploreSnippetsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	snippets, resp, err := client.GL().Snippets.ExploreSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_explore", err, http.StatusForbidden,
