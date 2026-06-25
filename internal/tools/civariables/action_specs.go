@@ -49,10 +49,12 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Usage = "List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions."
 		options.Aliases = []string{"list ci variables", "show project variables", "find ci variables"}
 		options.RelatedActions = []string{"ci_variable.get", actionCIVariableUpdate, "ci_variable.delete"}
+		options.IndividualTool.Description = "List a project's CI/CD variables with order_by, sort, and offset or keyset pagination. Returns: each variable's key, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_ci_variable_get, gitlab_ci_variable_create, gitlab_ci_variable_update."
 	case "get":
 		options.Usage = "Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed."
 		options.Aliases = []string{"get ci variable", "show variable details", "lookup variable"}
 		options.RelatedActions = []string{"ci_variable.list", actionCIVariableUpdate}
+		options.IndividualTool.Description = "Get a single CI/CD variable by key, optionally selecting an environment-scoped instance via the filter. Returns: the variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_list, gitlab_ci_variable_update, gitlab_ci_variable_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:   "ci_variable_key",
@@ -81,6 +83,11 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 				ExampleBinding: `params.value:"example-value"`,
 			},
 		}
+		options.IndividualTool.Description = "Create a CI/CD variable in a project with type, environment scope, and protected/masked/raw/masked_and_hidden flags. Returns: the created variable's key, value (redacted when masked or hidden), type, flags, environment scope, and description. See also: gitlab_ci_variable_list, gitlab_ci_variable_get, gitlab_ci_variable_update."
+	case "update":
+		options.IndividualTool.Description = "Update a CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value (redacted when masked or hidden), type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_ci_variable_get, gitlab_ci_variable_list, gitlab_ci_variable_delete."
+	case "delete":
+		options.IndividualTool.Description = "Delete a CI/CD variable by key, selecting an environment-scoped instance via the filter. Returns: a success confirmation message. See also: gitlab_ci_variable_list, gitlab_ci_variable_get."
 	}
 
 	return options
