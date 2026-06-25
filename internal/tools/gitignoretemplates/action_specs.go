@@ -27,11 +27,15 @@ func gitignoreTemplateOptions(actionName, individualTool string) toolutil.Action
 		OwnerPackage:   "gitignoretemplates",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "gitignore_list" {
+		opts.IndividualTool.Description = "List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: gitlab_get_gitignore_template, gitlab_file_create."
+	}
 	if actionName == "gitignore_get" {
 		opts.Usage = "Get one .gitignore template by key for repository bootstrap workflows."
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key": {SemanticRole: "template_key", ValueSource: "Template key returned by gitignore template list output.", ExampleBinding: `params.key:"Go"`},
 		}
+		opts.IndividualTool.Description = "Get one .gitignore template by key (e.g. Go, Python, Node). Returns: the template's name and full file content ready to copy into .gitignore. See also: gitlab_list_gitignore_templates, gitlab_file_create."
 	}
 	return opts
 }

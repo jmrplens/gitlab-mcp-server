@@ -11,11 +11,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ListInput is the input for listing license templates.
+// ListInput is the input for listing license templates. It mirrors
+// gl.ListLicenseTemplatesOptions (popular) and the embedded gl.ListOptions
+// (order_by, sort, pagination, page_token, page, per_page) so every SDK filter
+// and pagination knob is available on the MCP surface.
 type ListInput struct {
-	Popular *bool `json:"popular,omitempty" jsonschema:"Filter by popular licenses"`
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Items per page"`
+	Popular *bool  `json:"popular,omitempty" jsonschema:"Filter by popular licenses"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // LicenseItem represents a license template.
@@ -44,8 +49,13 @@ type ListOutput struct {
 // License templates API (GET /templates/licenses). Optional Popular
 // filter narrows to featured templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListLicenseTemplatesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
+	opts := &gl.ListLicenseTemplatesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Popular != nil {
 		opts.Popular = input.Popular

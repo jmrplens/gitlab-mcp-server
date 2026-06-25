@@ -29,7 +29,11 @@ func dockerfileTemplateOptions(actionName, individualTool string) toolutil.Actio
 			RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
 			OpenWorld:      true,
 			OwnerPackage:   "dockerfiletemplates",
-			IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+			IndividualTool: toolutil.IndividualToolSpec{
+				Name:        individualTool,
+				Title:       toolutil.TitleFromName(individualTool),
+				Description: "Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content. See also: gitlab_list_dockerfile_templates, gitlab_get_gitignore_template.",
+			},
 		}
 	}
 	return toolutil.ActionSpecOptions{
@@ -39,6 +43,10 @@ func dockerfileTemplateOptions(actionName, individualTool string) toolutil.Actio
 		RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "dockerfiletemplates",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: "List available Dockerfile templates with pagination and sorting. Returns: matching templates with key and name plus pagination metadata. See also: gitlab_get_dockerfile_template, gitlab_list_gitignore_templates.",
+		},
 	}
 }

@@ -232,7 +232,43 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"apache-2.0","name":"Apache License 2.0"}]`)
 	}))
-	out, err := List(context.Background(), client, ListInput{Page: 2, PerPage: 10})
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10}})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Licenses) != 1 {
+		t.Fatalf("len = %d, want 1", len(out.Licenses))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// List — with keyset pagination, order_by, and sort
+// ---------------------------------------------------------------------------.
+
+// TestList_WithKeysetAndOrdering verifies that List forwards the keyset
+// pagination cursor, pagination method, order_by, and sort query parameters.
+func TestList_WithKeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok-123" {
+			t.Errorf("expected page_token=tok-123, got %s", q.Get("page_token"))
+		}
+		if q.Get("order_by") != "name" {
+			t.Errorf("expected order_by=name, got %s", q.Get("order_by"))
+		}
+		if q.Get("sort") != "asc" {
+			t.Errorf("expected sort=asc, got %s", q.Get("sort"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{
+		OrderBy:               "name",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -290,9 +326,16 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if len(spec.Aliases) == 0 {
 			t.Fatalf("Aliases for %s should not be empty", spec.Name)
 		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Fatalf("IndividualTool.Description for %s should follow Returns:/See also: form, got %q", spec.Name, desc)
+		}
 	}
 	if specByTool["gitlab_get_license_template"].ParameterGuidance["key"].SemanticRole == "" {
 		t.Fatal("gitlab_get_license_template should define key parameter guidance")
+	}
+	if specByTool["gitlab_list_license_templates"].ParameterGuidance["order_by"].SemanticRole == "" {
+		t.Fatal("gitlab_list_license_templates should define order_by parameter guidance")
 	}
 }
 
