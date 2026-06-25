@@ -595,6 +595,8 @@ type ListWorkItemTypesInput struct {
 	OnlyAvailable bool   `json:"only_available,omitempty" jsonschema:"Return only available work item types"`
 	First         int64  `json:"first,omitempty"      jsonschema:"Number of types to return from the beginning (cursor pagination)"`
 	After         string `json:"after,omitempty"      jsonschema:"Cursor for forward pagination"`
+	Last          int64  `json:"last,omitempty"       jsonschema:"Number of types to return from the end (backward cursor pagination)"`
+	Before        string `json:"before,omitempty"     jsonschema:"Cursor for backward pagination"`
 }
 
 // ListWorkItemTypes lists work item types (system-defined and custom) for a namespace.
@@ -615,6 +617,13 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	if input.After != "" {
 		opts.After = new(input.After)
+	}
+	if input.Last > 0 {
+		last := input.Last
+		opts.Last = &last
+	}
+	if input.Before != "" {
+		opts.Before = new(input.Before)
 	}
 	types, resp, err := client.GL().WorkItems.ListWorkItemTypes(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
