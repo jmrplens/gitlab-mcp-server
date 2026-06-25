@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -62,6 +63,26 @@ func badgeMarkdownText(t *testing.T, result *mcp.CallToolResult) string {
 		t.Fatalf("expected TextContent, got %T", result.Content[0])
 	}
 	return text.Text
+}
+
+// TestApplyOrderSort verifies that applyOrderSort copies only the supplied
+// order_by and sort fields onto a gl.ListOptions and is a no-op on a nil
+// receiver.
+// It asserts the nil guard returns without panicking and that empty inputs
+// leave the options untouched.
+func TestApplyOrderSort(t *testing.T) {
+	applyOrderSort(nil, "id", "desc") // must not panic
+
+	opts := &gl.ListOptions{}
+	applyOrderSort(opts, "", "")
+	if opts.OrderBy != "" || opts.Sort != "" {
+		t.Fatalf("expected empty options, got order_by=%q sort=%q", opts.OrderBy, opts.Sort)
+	}
+
+	applyOrderSort(opts, "name", "asc")
+	if opts.OrderBy != "name" || opts.Sort != "asc" {
+		t.Fatalf("expected name/asc, got order_by=%q sort=%q", opts.OrderBy, opts.Sort)
+	}
 }
 
 // Project Badges.
@@ -234,6 +255,33 @@ func TestListGroup_Success(t *testing.T) {
 	}))
 
 	out, err := ListGroup(t.Context(), client, ListGroupInput{GroupID: "1"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Badges) != 1 {
+		t.Fatalf("expected 1 badge, got %d", len(out.Badges))
+	}
+}
+
+// TestListGroup_KeysetPagination verifies that ListGroup forwards keyset
+// pagination and ordering parameters (order_by, sort, pagination, page_token)
+// onto the GitLab query string.
+// It asserts every parameter reaches the API request unchanged.
+func TestListGroup_KeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "name" || q.Get("sort") != "asc" ||
+			q.Get("pagination") != "keyset" || q.Get("page_token") != "7" {
+			t.Errorf("unexpected query: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
+	}))
+	out, err := ListGroup(t.Context(), client, ListGroupInput{
+		GroupID:               "1",
+		OrderBy:               "name",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -625,6 +673,33 @@ func TestListProject_WithNameFilter(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	out, err := ListProject(t.Context(), client, ListProjectInput{ProjectID: "1", Name: "coverage"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Badges) != 1 {
+		t.Fatalf("expected 1, got %d", len(out.Badges))
+	}
+}
+
+// TestListProject_KeysetPagination verifies that ListProject forwards keyset
+// pagination and ordering parameters (order_by, sort, pagination, page_token)
+// onto the GitLab query string.
+// It asserts every parameter reaches the API request unchanged.
+func TestListProject_KeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" || q.Get("sort") != "desc" ||
+			q.Get("pagination") != "keyset" || q.Get("page_token") != "42" {
+			t.Errorf("unexpected query: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
+	}))
+	out, err := ListProject(t.Context(), client, ListProjectInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1291,5 +1366,24 @@ func TestBadgeActionDescription_AllBranches(t *testing.T) {
 				t.Errorf("badgeActionDescription(%q, %q) = %q, want %q", tt.verb, tt.scope, got, tt.contains)
 			}
 		})
+	}
+}
+
+// TestBadgeIndividualDescription_AllBranches verifies badgeIndividualDescription
+// across every known verb plus the default fallback, asserting each description
+// follows the project norm's "Returns: … See also: …" form so the audited
+// individual-tool surface is never flagged as weak.
+func TestBadgeIndividualDescription_AllBranches(t *testing.T) {
+	verbs := []string{"list", "get", "add", "edit", "delete", "preview", "rotate"}
+	for _, scope := range []string{"project", "group"} {
+		for _, verb := range verbs {
+			got := badgeIndividualDescription(verb, scope)
+			if !strings.Contains(got, "Returns:") || !strings.Contains(got, "See also:") {
+				t.Errorf("badgeIndividualDescription(%q, %q) missing Returns:/See also:: %q", verb, scope, got)
+			}
+			if !strings.Contains(got, scope) {
+				t.Errorf("badgeIndividualDescription(%q, %q) does not mention scope: %q", verb, scope, got)
+			}
+		}
 	}
 }

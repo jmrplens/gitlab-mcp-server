@@ -113,7 +113,33 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 			},
 		},
 	}
+	options.IndividualTool.Description = badgeIndividualDescription(verb, scope)
 	return badgeEditGuidance(actionName, options)
+}
+
+// badgeIndividualDescription returns the curated individual-tool description for
+// a badge action, following the project norm's "Returns: … See also: …" form so
+// the model sees concrete output and cross-references for every badge tool.
+func badgeIndividualDescription(verb, scope string) string {
+	badgeFields := "id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind"
+	t := scope // "project" or "group"
+	seeAll := fmt.Sprintf("gitlab_list_%s_badges, gitlab_get_%s_badge", t, t)
+	switch verb {
+	case "list":
+		return fmt.Sprintf("List badges for a %s, including inherited group badges. Returns: badges (%s) plus pagination metadata. See also: gitlab_get_%s_badge, gitlab_add_%s_badge.", t, badgeFields, t, t)
+	case "get":
+		return fmt.Sprintf("Get a single %s badge by badge_id. Returns: the badge with %s. See also: gitlab_list_%s_badges, gitlab_edit_%s_badge.", t, badgeFields, t, t)
+	case "add":
+		return fmt.Sprintf("Add a badge to a %s. Returns: the created badge with %s. See also: %s.", t, badgeFields, seeAll)
+	case "edit":
+		return fmt.Sprintf("Edit a %s badge's name, link_url, or image_url. Returns: the updated badge with %s. See also: %s.", t, badgeFields, seeAll)
+	case "delete":
+		return fmt.Sprintf("Delete a %s badge by badge_id. Returns: a success confirmation. See also: %s.", t, seeAll)
+	case "preview":
+		return fmt.Sprintf("Preview how a %s badge's link_url and image_url resolve after placeholder interpolation, without persisting it. Returns: the rendered badge with %s. See also: gitlab_add_%s_badge, gitlab_list_%s_badges.", t, badgeFields, t, t)
+	default:
+		return fmt.Sprintf("Manage %s badges. Returns: the affected badge with %s. See also: %s.", t, badgeFields, seeAll)
+	}
 }
 
 func badgeScopeBoundary(scope string) string {
