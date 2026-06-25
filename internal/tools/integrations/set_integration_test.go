@@ -408,10 +408,10 @@ func TestActionSpecs_GenericIntegrationsPresent(t *testing.T) {
 		group       bool
 	}{
 		"integration_set":          {destructive: false, edition: "", group: false},
-		"integration_list_group":   {destructive: false, edition: "premium", group: true},
-		"integration_get_group":    {destructive: false, edition: "premium", group: true},
-		"integration_set_group":    {destructive: false, edition: "premium", group: true},
-		"integration_delete_group": {destructive: true, edition: "premium", group: true},
+		"integration_list_group":   {destructive: false, edition: "", group: true},
+		"integration_get_group":    {destructive: false, edition: "", group: true},
+		"integration_set_group":    {destructive: false, edition: "", group: true},
+		"integration_delete_group": {destructive: true, edition: "", group: true},
 	}
 	seen := map[string]bool{}
 	for _, s := range specs {

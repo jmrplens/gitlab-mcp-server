@@ -163,13 +163,13 @@ func TestApplyIntegrationMeta_KnownAndUnknown(t *testing.T) {
 }
 
 // TestGroupDatadogOptions_KnownAndUnknown verifies the group-Datadog option
-// builder applies the premium edition and group tags, keeps the per-action
-// metadata for known tools, and falls back to the generic group.get
-// RelatedActions for tools without metadata.
+// builder leaves the edition at Free (group integration management is Free tier),
+// keeps the per-action metadata for known tools, and falls back to the generic
+// group.get RelatedActions for tools without metadata.
 func TestGroupDatadogOptions_KnownAndUnknown(t *testing.T) {
 	known := groupDatadogOptions("gitlab_get_group_datadog_integration", "desc")
-	if known.Edition != "premium" {
-		t.Fatalf("known group tool Edition = %q, want premium", known.Edition)
+	if known.Edition != "" {
+		t.Fatalf("known group tool Edition = %q, want free (empty)", known.Edition)
 	}
 	if isGenericMetaUsage(known.Usage) {
 		t.Fatalf("known group tool Usage still generic: %q", known.Usage)
@@ -179,8 +179,8 @@ func TestGroupDatadogOptions_KnownAndUnknown(t *testing.T) {
 	}
 
 	unknown := groupDatadogOptions("gitlab_unknown_group_tool", "desc")
-	if unknown.Edition != "premium" {
-		t.Fatalf("unknown group tool Edition = %q, want premium", unknown.Edition)
+	if unknown.Edition != "" {
+		t.Fatalf("unknown group tool Edition = %q, want free (empty)", unknown.Edition)
 	}
 	if len(unknown.RelatedActions) != 1 || unknown.RelatedActions[0] != "group.get" {
 		t.Fatalf("unknown group tool RelatedActions = %+v, want [group.get]", unknown.RelatedActions)

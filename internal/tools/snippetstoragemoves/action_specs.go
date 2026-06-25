@@ -92,8 +92,9 @@ func snippetStorageMoveAliases(meta snippetStorageMoveMeta) []string {
 func snippetStorageMoveOptions(meta snippetStorageMoveMeta) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: snippetStorageMoveAliases(meta), Usage: meta.usage, Tags: []string{"storage_move", "snippet"},
+		// Snippet repository storage moves are a Free-tier admin API (self-managed
+		// only). doc/api/snippet_repository_storage_moves.md page tier = Free, Premium, Ultimate.
 		OpenWorld:      true,
-		Edition:        "premium",
 		OwnerPackage:   "snippetstoragemoves",
 		RelatedActions: meta.related,
 		IndividualTool: toolutil.IndividualToolSpec{Name: meta.tool, Title: toolutil.TitleFromName(meta.tool), Description: meta.description},

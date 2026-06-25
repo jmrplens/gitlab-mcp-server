@@ -550,9 +550,9 @@ func TestActionSpecs_GroupDatadogPresent(t *testing.T) {
 		edition     string
 		hasGroupTag bool
 	}{
-		"integration_get_group_datadog":    {destructive: false, edition: "premium", hasGroupTag: true},
-		"integration_set_group_datadog":    {destructive: false, edition: "premium", hasGroupTag: true},
-		"integration_delete_group_datadog": {destructive: true, edition: "premium", hasGroupTag: true},
+		"integration_get_group_datadog":    {destructive: false, edition: "", hasGroupTag: true},
+		"integration_set_group_datadog":    {destructive: false, edition: "", hasGroupTag: true},
+		"integration_delete_group_datadog": {destructive: true, edition: "", hasGroupTag: true},
 	}
 	seen := map[string]bool{}
 	for _, s := range specs {

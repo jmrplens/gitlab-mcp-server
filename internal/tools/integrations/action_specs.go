@@ -200,13 +200,11 @@ func integrationOptions(individualTool, description string) toolutil.ActionSpecO
 
 // groupIntegrationOptions returns the spec options shared by the generic
 // group-level integration actions (list/get/set/delete). The group integration
-// API is gated on Owner role, and most integrations require GitLab
-// Premium/Ultimate (self-managed EE or GitLab.com), so we mark the edition
-// explicitly to match the existing group-Datadog actions.
+// management API is Free tier (doc/api/group_integrations.md page tier = Free,
+// Premium, Ultimate); it is gated on Owner role, not on a licensing tier.
 func groupIntegrationOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := integrationOptions(individualTool, description)
 	opts.Tags = []string{"group", "integration"}
-	opts.Edition = "premium"
 	if _, ok := integrationActionMeta[individualTool]; !ok {
 		opts.RelatedActions = []string{"group.get"}
 	}
@@ -214,12 +212,11 @@ func groupIntegrationOptions(individualTool, description string) toolutil.Action
 }
 
 // groupDatadogOptions returns the spec options shared by the three group-level
-// Datadog integration actions. The endpoint requires GitLab Premium/Ultimate
-// (self-managed EE or GitLab.com), so we mark the edition explicitly.
+// Datadog integration actions. The group integration management API is Free tier
+// (doc/api/group_integrations.md page tier = Free, Premium, Ultimate).
 func groupDatadogOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := integrationOptions(individualTool, description)
 	opts.Tags = []string{"group", "integration", "datadog"}
-	opts.Edition = "premium"
 	// applyIntegrationMeta already set group-specific RelatedActions; only fall
 	// back to the generic group.get when no per-action metadata was found.
 	if _, ok := integrationActionMeta[individualTool]; !ok {

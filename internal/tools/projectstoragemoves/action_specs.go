@@ -133,9 +133,11 @@ func scheduleAllSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 // actions, leaving action-specific Usage/Aliases/RelatedActions to callers.
 func baseOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"storage_move", "project"},
+		Tags: []string{"storage_move", "project"},
+		// Repository storage moves are a Free-tier admin API (self-managed only);
+		// admin permission is not a licensing tier. doc/api/project_repository_storage_moves.md
+		// page tier = Free, Premium, Ultimate.
 		OpenWorld:      true,
-		Edition:        "premium",
 		OwnerPackage:   "projectstoragemoves",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
