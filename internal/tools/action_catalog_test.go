@@ -594,6 +594,58 @@ func TestActionCatalog_PremiumTierHidesUltimate(t *testing.T) {
 	}
 }
 
+// TestCentralTierFilter_Invariants is a doc-grounded structural guardrail on the
+// central tier filter. It asserts the filter's defining invariants directly from
+// the catalog (no reliance on description text): a Free instance exposes no
+// action carrying a paid Edition, a Premium instance exposes no Ultimate-only
+// action, and a curated set of landmark actions land in exactly the right tiers.
+func TestCentralTierFilter_Invariants(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	ultimate := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+
+	// Invariant 1: a Free catalog contains no action with a paid Edition.
+	for _, a := range free.Actions() {
+		if edition.TierFromEdition(a.Edition) != edition.Free {
+			t.Errorf("Free catalog leaks paid action %s (Edition=%q)", a.ID, a.Edition)
+		}
+	}
+	// Invariant 2: a Premium catalog contains no Ultimate-only action.
+	for _, a := range premium.Actions() {
+		if edition.TierFromEdition(a.Edition) == edition.Ultimate {
+			t.Errorf("Premium catalog leaks Ultimate action %s (Edition=%q)", a.ID, a.Edition)
+		}
+	}
+
+	// Landmark actions: canonical IDs that must resolve to a specific tier. These
+	// encode the audited Wave 1/2 decisions (see cmd/audit_edition_tier).
+	landmarks := []struct {
+		id        actioncatalog.ActionID
+		freeOK    bool // present on a Free instance
+		premiumOK bool // present on a Premium instance
+	}{
+		{"issue.list", true, true},                          // core, all tiers
+		{"merge_request.approval_config", true, true},       // basic approval state is Free
+		{"project.service_account_list", true, true},        // service accounts are Free
+		{"group.epic_list", false, true},                    // epics are Premium
+		{"merge_request.approval_rule_create", false, true}, // approval rules are Premium
+		{"vulnerability.list", false, false},                // Ultimate only
+		{"dependency.list", false, false},                   // Ultimate only
+		{"security_finding.list", false, false},             // Ultimate only
+	}
+	for _, lm := range landmarks {
+		if _, ok := free.Action(lm.id); ok != lm.freeOK {
+			t.Errorf("Free: action %s present=%v, want %v", lm.id, ok, lm.freeOK)
+		}
+		if _, ok := premium.Action(lm.id); ok != lm.premiumOK {
+			t.Errorf("Premium: action %s present=%v, want %v", lm.id, ok, lm.premiumOK)
+		}
+		if _, ok := ultimate.Action(lm.id); !ok {
+			t.Errorf("Ultimate: action %s must be present", lm.id)
+		}
+	}
+}
+
 // TestActionSpecCoverage_AllCatalogRoutesClassified verifies ActionSpecCoverage when all catalog routes classified.
 func TestActionSpecCoverage_AllCatalogRoutesClassified(t *testing.T) {
 	catalog := mustBuildDynamicActionCatalogForTest(t, newGitLabDotComClient(t), true)
