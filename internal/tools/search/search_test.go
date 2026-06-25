@@ -1775,6 +1775,60 @@ func TestActionSpecs_SearchDisambiguationUsage(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata verifies every search tool carries
+// non-generic discovery metadata: an action-specific Usage (not the generic
+// placeholder), natural-language Aliases beyond the individual tool name,
+// canonical RelatedActions, and an IndividualTool.Description in the
+// "Returns: … See also: …" form (1:1 audit R-META).
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute search domain action") {
+				t.Errorf("%s Usage = %q, want action-specific usage", tool, spec.Usage)
+			}
+			naturalAliases := 0
+			for _, alias := range spec.Aliases {
+				if alias != tool {
+					naturalAliases++
+				}
+			}
+			if naturalAliases == 0 {
+				t.Errorf("%s Aliases = %v, want natural-language aliases", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s RelatedActions empty, want canonical related actions", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s Description = %q, want Returns:/See also: form", tool, desc)
+			}
+		})
+	}
+}
+
+// TestDecorateSearchMeta_UnknownToolNoOp verifies decorateSearchMeta leaves
+// options untouched when the individual tool has no entry in searchActionMeta.
+func TestDecorateSearchMeta_UnknownToolNoOp(t *testing.T) {
+	options := searchReadOptions("gitlab_search_unknown")
+	before := options
+	decorateSearchMeta(&options, "gitlab_search_unknown")
+
+	if options.Usage != before.Usage {
+		t.Errorf("Usage changed for unknown tool: %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description set for unknown tool: %q", options.IndividualTool.Description)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions set for unknown tool: %v", options.RelatedActions)
+	}
+}
+
 // TestRegisterMeta_SearchTypeActionSchemaEnum verifies that gitlab_search
 // action schemas expose the same search_type enum as the individual tools.
 func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {

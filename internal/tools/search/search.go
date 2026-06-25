@@ -392,9 +392,9 @@ type NoteOutput struct {
 	Author       string `json:"author"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
-	NoteableType string `json:"notable_type"`
-	NoteableID   int64  `json:"notable_id"`
-	NoteableIID  int64  `json:"notable_iid,omitempty"`
+	NoteableType string `json:"noteable_type"`
+	NoteableID   int64  `json:"noteable_id"`
+	NoteableIID  int64  `json:"noteable_iid,omitempty"`
 	System       bool   `json:"system"`
 }
 
