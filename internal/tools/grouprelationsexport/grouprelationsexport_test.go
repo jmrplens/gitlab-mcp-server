@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestScheduleExport verifies the ScheduleExport handler.
@@ -237,9 +238,8 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 		})
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
-		GroupID: "10",
-		Page:    1,
-		PerPage: 2,
+		GroupID:         "10",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -253,6 +253,55 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 	if out.Pagination.NextPage != 2 {
 		t.Errorf("NextPage = %d, want 2", out.Pagination.NextPage)
 	}
+}
+
+// TestListExportStatus_KeysetAndOrdering verifies that keyset pagination,
+// order_by, sort, and relation parameters are forwarded as query parameters.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the request carries pagination, ordering, and the parsed batches.
+func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"relation":"project","status":1,"batched":true,"batches_count":1,"updated_at":"2026-06-15T10:00:00Z",
+			"batches":[{"status":1,"batch_number":1,"objects_count":42,"error":"","updated_at":"2026-06-15T10:01:00Z"}]
+		}]`)
+	}))
+	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
+		GroupID:               "10",
+		Relation:              "project",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: testKeyset(),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=abc", "relation=project"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+	if len(out.Statuses) != 1 || len(out.Statuses[0].Batches) != 1 {
+		t.Fatalf("expected 1 status with 1 batch, got %+v", out.Statuses)
+	}
+	b := out.Statuses[0].Batches[0]
+	if b.BatchNumber != 1 || b.ObjectsCount != 42 || b.Status != 1 {
+		t.Errorf("unexpected batch: %+v", b)
+	}
+	if b.UpdatedAt == "" {
+		t.Error("expected batch UpdatedAt to be populated")
+	}
+}
+
+// testKeyset returns a keyset pagination input used across tests.
+func testKeyset() toolutil.KeysetPaginationInput {
+	return toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"}
 }
 
 // TestListExportStatus_EmptyResponse verifies the ListExportStatus_EmptyResponse handler.
