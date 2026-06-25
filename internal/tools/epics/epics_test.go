@@ -12,6 +12,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // testMinimalWorkItem is a bare-minimum WorkItem for toOutput converter tests.
@@ -44,8 +45,8 @@ var testFullWorkItem = func() gl.WorkItem {
 		Description:  "Full description",
 		WebURL:       "https://gitlab.example.com/groups/g/-/epics/1",
 		Confidential: true,
-		Author:       &gl.BasicUser{Username: "alice"},
-		Assignees:    []*gl.BasicUser{{Username: "bob"}, {Username: "carol"}},
+		Author:       &gl.BasicUser{ID: 1, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice", CreatedAt: &created},
+		Assignees:    []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
 		Labels:       []gl.LabelDetails{{Name: "planning"}, {Name: "priority"}},
 		LinkedItems:  []gl.LinkedWorkItem{{WorkItemIID: gl.WorkItemIID{IID: 5, NamespacePath: "g/sub"}, LinkType: "blocks"}},
 		Color:        &color,
@@ -122,6 +123,16 @@ const (
 	}`
 )
 
+// authorName returns the username of a nested user output, or "" when nil. It
+// keeps assertions on the migrated *BasicUserOutput author/assignee fields
+// concise.
+func authorName(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
 // --- List tests ---
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
@@ -158,7 +169,12 @@ func TestList_RESTFilterOptions(t *testing.T) {
 			t.Errorf(fmtUnexpMethod, r.Method)
 		}
 		query := r.URL.Query()
-		for _, key := range []string{"state", "search", "labels", "sort", "include_ancestor_groups", "include_descendant_groups", "per_page"} {
+		for _, key := range []string{
+			"state", "search", "labels", "sort", "order_by", "author_id",
+			"my_reaction_emoji", "created_after", "created_before",
+			"include_ancestor_groups", "include_descendant_groups", "per_page",
+			"pagination", "page_token",
+		} {
 			if query.Get(key) == "" {
 				t.Errorf("query missing %q in %s", key, r.URL.RawQuery)
 			}
@@ -167,15 +183,22 @@ func TestList_RESTFilterOptions(t *testing.T) {
 	}))
 	include := true
 	first := int64(10)
+	authorID := int64(7)
 	out, err := List(context.Background(), client, ListInput{
-		FullPath:           testFullPath,
-		State:              "opened",
-		Search:             "planning",
-		LabelName:          []string{"urgent"},
-		Sort:               "created_desc",
-		First:              &first,
-		IncludeAncestors:   &include,
-		IncludeDescendants: &include,
+		FullPath:              testFullPath,
+		State:                 "opened",
+		Search:                "planning",
+		AuthorID:              &authorID,
+		LabelName:             []string{"urgent"},
+		MyReactionEmoji:       "thumbsup",
+		OrderBy:               "created_at",
+		Sort:                  "created_desc",
+		CreatedAfter:          "2026-01-01T00:00:00Z",
+		CreatedBefore:         "2026-12-31T23:59:59Z",
+		First:                 &first,
+		IncludeAncestors:      &include,
+		IncludeDescendants:    &include,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "123"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -247,8 +270,8 @@ func TestGet_Success(t *testing.T) {
 	if out.Title != "Q1 Planning" {
 		t.Errorf(fmtWantTitle, out.Title, "Q1 Planning")
 	}
-	if out.Author != "alice" {
-		t.Errorf("out.Author = %q, want alice", out.Author)
+	if authorName(out.Author) != "alice" {
+		t.Errorf("out.Author = %q, want alice", authorName(out.Author))
 	}
 	if out.Type != "Epic" {
 		t.Errorf("Type = %q, want Epic", out.Type)
@@ -320,8 +343,8 @@ func TestGetLinks_Success(t *testing.T) {
 	if out.ChildEpics[0].ID != 201 {
 		t.Errorf("ChildEpics[0].ID = %d, want 201", out.ChildEpics[0].ID)
 	}
-	if out.ChildEpics[0].Author != "carol" {
-		t.Errorf("ChildEpics[0].Author = %q, want carol", out.ChildEpics[0].Author)
+	if authorName(out.ChildEpics[0].Author) != "carol" {
+		t.Errorf("ChildEpics[0].Author = %q, want carol", authorName(out.ChildEpics[0].Author))
 	}
 }
 
@@ -567,8 +590,8 @@ func TestToOutput_Minimal(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf("ID = %d, want 1", out.ID)
 	}
-	if out.Author != "" {
-		t.Errorf("Author should be empty, got %q", out.Author)
+	if out.Author != nil {
+		t.Errorf("Author should be nil, got %+v", out.Author)
 	}
 	if len(out.Assignees) != 0 {
 		t.Errorf("Assignees should be empty, got %v", out.Assignees)
@@ -607,7 +630,9 @@ func TestMapStatusToID(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
-		IID: 1, Title: "Epic", Type: "Epic", State: "OPEN", Author: "alice",
+		IID: 1, Title: "Epic", Type: "Epic", State: "OPEN",
+		Author:    &BasicUserOutput{Username: "alice"},
+		Assignees: []*BasicUserOutput{{Username: "bob"}},
 	}
 	result := FormatOutputMarkdown(out)
 	if result == "" {
@@ -631,7 +656,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatLinksMarkdown(t *testing.T) {
 	out := LinksOutput{
 		ChildEpics: []LinksItem{
-			{IID: 2, Title: "Sub", State: "opened", Author: "bob"},
+			{IID: 2, Title: "Sub", State: "opened", Author: &BasicUserOutput{Username: "bob"}},
 		},
 	}
 	result := FormatLinksMarkdown(out)
@@ -660,10 +685,10 @@ func assertEpicOutputCoreFields(t *testing.T, out Output) {
 	if out.Status != "IN_PROGRESS" {
 		t.Errorf("Status = %q, want IN_PROGRESS", out.Status)
 	}
-	if out.Author != "alice" {
-		t.Errorf("Author = %q, want alice", out.Author)
+	if authorName(out.Author) != "alice" {
+		t.Errorf("Author = %q, want alice", authorName(out.Author))
 	}
-	if len(out.Assignees) != 2 || out.Assignees[0] != "bob" || out.Assignees[1] != "carol" {
+	if len(out.Assignees) != 2 || authorName(out.Assignees[0]) != "bob" || authorName(out.Assignees[1]) != "carol" {
 		t.Errorf("Assignees = %v, want [bob carol]", out.Assignees)
 	}
 	if len(out.Labels) != 2 || out.Labels[0] != "planning" {
@@ -723,8 +748,8 @@ func assertEpicOutputTimelineFields(t *testing.T, out Output) {
 func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 	e := &gl.Epic{ID: 10, IID: 3, Title: "Bare", State: "opened"}
 	item := toLinkItem(e)
-	if item.Author != "" {
-		t.Errorf("Author = %q, want empty", item.Author)
+	if item.Author != nil {
+		t.Errorf("Author = %+v, want nil", item.Author)
 	}
 	if item.CreatedAt != "" {
 		t.Errorf("CreatedAt = %q, want empty", item.CreatedAt)
@@ -741,28 +766,133 @@ func TestEpicToOutput_FullRESTEpic(t *testing.T) {
 	updated := time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)
 	closed := time.Date(2026, 1, 4, 3, 4, 5, 0, time.UTC)
 
+	startFixed := gl.ISOTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	startFromMs := gl.ISOTime(time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC))
+	dueFixed := gl.ISOTime(time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC))
+	dueFromMs := gl.ISOTime(time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC))
+
 	out := epicToOutput(&gl.Epic{
-		ID:           44,
-		IID:          7,
-		Title:        "REST Epic",
-		State:        "opened",
-		Author:       &gl.EpicAuthor{Username: "alice"},
-		StartDate:    &start,
-		DueDate:      &due,
-		CreatedAt:    &created,
-		UpdatedAt:    &updated,
-		ClosedAt:     &closed,
-		Confidential: true,
-		ParentID:     3,
+		ID:                      44,
+		IID:                     7,
+		GroupID:                 9,
+		Title:                   "REST Epic",
+		Description:             "REST body",
+		State:                   "opened",
+		WebURL:                  "https://gitlab.example.com/groups/g/-/epics/7",
+		URL:                     "https://gitlab.example.com/api/v4/groups/9/epics/7",
+		Author:                  &gl.EpicAuthor{ID: 2, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice"},
+		Labels:                  []string{"x"},
+		StartDate:               &start,
+		StartDateIsFixed:        true,
+		StartDateFixed:          &startFixed,
+		StartDateFromMilestones: &startFromMs,
+		DueDate:                 &due,
+		DueDateIsFixed:          true,
+		DueDateFixed:            &dueFixed,
+		DueDateFromMilestones:   &dueFromMs,
+		Upvotes:                 3,
+		Downvotes:               1,
+		UserNotesCount:          4,
+		CreatedAt:               &created,
+		UpdatedAt:               &updated,
+		ClosedAt:                &closed,
+		Confidential:            true,
+		ParentID:                3,
 	})
-	if out.ID != 44 || out.IID != 7 || out.Author != "alice" || out.ParentIID != 3 {
+	assertRESTEpicIdentity(t, out)
+	assertRESTEpicDates(t, out)
+	assertRESTEpicMetrics(t, out)
+}
+
+func assertRESTEpicIdentity(t *testing.T, out Output) {
+	t.Helper()
+	if out.ID != 44 || out.IID != 7 || out.GroupID != 9 || out.ParentID != 3 || out.ParentIID != 3 {
 		t.Fatalf("unexpected epic output identity fields: %+v", out)
 	}
-	if out.StartDate != "2026-01-01" || out.DueDate != "2026-02-01" {
-		t.Fatalf("unexpected date fields: %+v", out)
+	if authorName(out.Author) != "alice" || out.Author.ID != 2 || out.Author.Name != "Alice" || out.Author.State != "active" || out.Author.WebURL == "" {
+		t.Fatalf("expected full author object, got %+v", out.Author)
+	}
+}
+
+func assertRESTEpicDates(t *testing.T, out Output) {
+	t.Helper()
+	if out.StartDate != "2026-01-01" || out.StartDateFixed != "2026-01-05" || out.StartDateFromMilestones != "2026-01-06" || !out.StartDateIsFixed {
+		t.Fatalf("unexpected start date fields: %+v", out)
+	}
+	if out.DueDate != "2026-02-01" || out.DueDateFixed != "2026-02-05" || out.DueDateFromMilestones != "2026-02-06" || !out.DueDateIsFixed {
+		t.Fatalf("unexpected due date fields: %+v", out)
 	}
 	if out.CreatedAt == "" || out.UpdatedAt == "" || out.ClosedAt == "" {
 		t.Fatalf("expected timestamp fields to be populated: %+v", out)
+	}
+}
+
+func assertRESTEpicMetrics(t *testing.T, out Output) {
+	t.Helper()
+	if out.URL == "" || out.Upvotes != 3 || out.Downvotes != 1 || out.UserNotesCount != 4 {
+		t.Fatalf("unexpected vote/url fields: %+v", out)
+	}
+}
+
+// TestToLinkItem_FullRESTEpic verifies that toLinkItem maps every gl.Epic field
+// (group_id, parent_id, description, url, fixed/from-milestone dates, votes,
+// user notes count, full author, timestamps) onto the LinksItem output.
+func TestToLinkItem_FullRESTEpic(t *testing.T) {
+	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	startFixed := gl.ISOTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC))
+	startFromMs := gl.ISOTime(time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC))
+	due := gl.ISOTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
+	dueFixed := gl.ISOTime(time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC))
+	dueFromMs := gl.ISOTime(time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC))
+	created := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	closed := time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)
+
+	item := toLinkItem(&gl.Epic{
+		ID:                      201,
+		IID:                     2,
+		GroupID:                 9,
+		ParentID:                7,
+		Title:                   "Sub-Epic",
+		Description:             "child body",
+		State:                   "opened",
+		WebURL:                  "https://gitlab.example.com/groups/g/-/epics/2",
+		URL:                     "https://gitlab.example.com/api/v4/groups/9/epics/2",
+		Author:                  &gl.EpicAuthor{ID: 3, Username: "carol", Name: "Carol", State: "active"},
+		Labels:                  []string{"sub"},
+		Confidential:            true,
+		StartDate:               &start,
+		StartDateIsFixed:        true,
+		StartDateFixed:          &startFixed,
+		StartDateFromMilestones: &startFromMs,
+		DueDate:                 &due,
+		DueDateIsFixed:          true,
+		DueDateFixed:            &dueFixed,
+		DueDateFromMilestones:   &dueFromMs,
+		Upvotes:                 2,
+		Downvotes:               1,
+		UserNotesCount:          5,
+		CreatedAt:               &created,
+		UpdatedAt:               &updated,
+		ClosedAt:                &closed,
+	})
+	if item.GroupID != 9 || item.ParentID != 7 || item.Description != "child body" || item.URL == "" {
+		t.Fatalf("unexpected core fields: %+v", item)
+	}
+	if authorName(item.Author) != "carol" || item.Author.ID != 3 || item.Author.Name != "Carol" {
+		t.Fatalf("unexpected author: %+v", item.Author)
+	}
+	if item.StartDateFixed != "2026-01-05" || item.StartDateFromMilestones != "2026-01-06" || !item.StartDateIsFixed {
+		t.Fatalf("unexpected start date fields: %+v", item)
+	}
+	if item.DueDateFixed != "2026-02-05" || item.DueDateFromMilestones != "2026-02-06" || !item.DueDateIsFixed {
+		t.Fatalf("unexpected due date fields: %+v", item)
+	}
+	if item.Upvotes != 2 || item.Downvotes != 1 || item.UserNotesCount != 5 {
+		t.Fatalf("unexpected vote fields: %+v", item)
+	}
+	if item.UpdatedAt == "" || item.ClosedAt == "" {
+		t.Fatalf("expected updated/closed timestamps: %+v", item)
 	}
 }
 
@@ -1023,8 +1153,8 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 		Type:         "Epic",
 		State:        "CLOSED",
 		Status:       "IN_PROGRESS",
-		Author:       "alice",
-		Assignees:    []string{"bob", "carol"},
+		Author:       &BasicUserOutput{Username: "alice"},
+		Assignees:    []*BasicUserOutput{{Username: "bob"}, {Username: "carol"}},
 		Confidential: true,
 		Labels:       []string{"planning", "urgent"},
 		HealthStatus: "onTrack",
@@ -1055,6 +1185,23 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdown_NilUsers verifies that the formatters tolerate a nil
+// author and empty assignees (the userName/userNames nil branches) without
+// panicking and render the epic rows.
+func TestFormatMarkdown_NilUsers(t *testing.T) {
+	out := Output{IID: 1, Title: "No Author", State: "opened"}
+	if got := FormatOutputMarkdown(out); !strings.Contains(got, "No Author") {
+		t.Errorf("FormatOutputMarkdown missing title; got:\n%s", got)
+	}
+	list := ListOutput{Epics: []Output{{IID: 1, Title: "No Author", State: "opened"}}}
+	if got := FormatListMarkdown(list); !strings.Contains(got, "No Author") {
+		t.Errorf("FormatListMarkdown missing title; got:\n%s", got)
+	}
+	if names := userNames(nil); names != nil {
+		t.Errorf("userNames(nil) = %v, want nil", names)
+	}
+}
+
 // TestFormatLinksMarkdown_Empty verifies the LinksMarkdown_Empty Markdown formatter for a representative links_empty input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
@@ -1071,7 +1218,7 @@ func TestFormatLinksMarkdown_Empty(t *testing.T) {
 // labels column from the slice.
 func TestFormatListMarkdown_WithLabels(t *testing.T) {
 	out := ListOutput{Epics: []Output{
-		{IID: 1, Title: "Epic A", State: "opened", Author: "alice", Labels: []string{"backend", "priority"}},
+		{IID: 1, Title: "Epic A", State: "opened", Author: &BasicUserOutput{Username: "alice"}, Labels: []string{"backend", "priority"}},
 	}}
 	result := FormatListMarkdown(out)
 	if !strings.Contains(result, "backend, priority") {
