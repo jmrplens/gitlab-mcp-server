@@ -342,10 +342,51 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(specs) != 2 {
 		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
 	}
+	genericUsage := "Use to execute keys domain action."
 	for _, spec := range specs {
 		if spec.OwnerPackage != "keys" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		tool := spec.IndividualTool.Name
+		if spec.Usage == genericUsage || spec.Usage == "" {
+			t.Errorf("%s: Usage should be action-specific, got %q", tool, spec.Usage)
+		}
+		// Aliases must be distinctive natural-language phrases, not just the tool name.
+		if len(spec.Aliases) < 2 {
+			t.Errorf("%s: expected multiple natural-language aliases, got %v", tool, spec.Aliases)
+		}
+		for _, a := range spec.Aliases {
+			if a == tool {
+				t.Errorf("%s: alias should not equal the tool name", tool)
+			}
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: expected canonical RelatedActions", tool)
+		}
+		for _, r := range spec.RelatedActions {
+			if !strings.HasPrefix(r, "user.") {
+				t.Errorf("%s: RelatedActions should target the user.* surface, got %q", tool, r)
+			}
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description must use 'Returns: … See also: …' form, got %q", tool, desc)
+		}
+	}
+}
+
+// TestDecorateKeyMeta_UnknownTool verifies the no-op branch leaves generic metadata.
+func TestDecorateKeyMeta_UnknownTool(t *testing.T) {
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{"gitlab_unknown_key_tool"},
+		Usage:   "Use to execute keys domain action.",
+	}
+	decorateKeyMeta(&options, "gitlab_unknown_key_tool")
+	if options.Usage != "Use to execute keys domain action." {
+		t.Errorf("expected generic usage unchanged for unknown tool, got %q", options.Usage)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("expected no RelatedActions for unknown tool, got %v", options.RelatedActions)
 	}
 }
 

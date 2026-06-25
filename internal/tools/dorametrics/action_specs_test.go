@@ -3,6 +3,7 @@ package dorametrics
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -57,6 +58,46 @@ func doraMetricSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.Acti
 		specByTool[spec.IndividualTool.Name] = spec
 	}
 	return specByTool
+}
+
+// TestActionSpecs_DiscoveryMetadata verifies that each DORA metric ActionSpec
+// carries non-generic discovery metadata: distinctive DORA/DevOps
+// natural-language aliases, a canonical related action pointing at the sibling
+// scope, and an IndividualTool.Description in the "Returns: … See also: …" form
+// (1:1 audit R-META). It guards against regression back to generic placeholder
+// metadata.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specByTool := doraMetricSpecsByTool(ActionSpecs(client))
+
+	cases := []struct {
+		tool        string
+		related     string
+		aliasPhrase string
+	}{
+		{"gitlab_get_project_dora_metrics", "dora_metrics.group", "project deployment frequency"},
+		{"gitlab_get_group_dora_metrics", "dora_metrics.project", "group deployment frequency"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			spec, ok := specByTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.tool)
+			}
+
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description missing Returns:/See also: form: %q", tc.tool, desc)
+			}
+
+			if !slices.Contains(spec.Aliases, tc.aliasPhrase) {
+				t.Errorf("%s aliases missing distinctive phrase %q: %v", tc.tool, tc.aliasPhrase, spec.Aliases)
+			}
+			if !slices.Contains(spec.RelatedActions, tc.related) {
+				t.Errorf("%s related actions missing sibling scope %q: %v", tc.tool, tc.related, spec.RelatedActions)
+			}
+		})
+	}
 }
 
 // TestMarkdownHints_Output verifies the MarkdownHints_Output handler.
