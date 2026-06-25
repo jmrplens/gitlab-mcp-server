@@ -97,13 +97,15 @@ type DeployAccessLevelInput struct {
 	GroupInheritanceType *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type (0=direct, 1=inherited)"`
 }
 
-// ApprovalRuleInput represents an approval rule input.
+// ApprovalRuleInput represents an approval rule input. It mirrors
+// gl.GroupEnvironmentApprovalRuleOptions field-for-field.
 type ApprovalRuleInput struct {
-	UserID                *int64 `json:"user_id,omitempty"                jsonschema:"User ID"`
-	GroupID               *int64 `json:"group_id,omitempty"               jsonschema:"Group ID"`
-	AccessLevel           *int   `json:"access_level,omitempty"           jsonschema:"Access level"`
-	RequiredApprovalCount *int64 `json:"required_approvals,omitempty"     jsonschema:"Required number of approvals"`
-	GroupInheritanceType  *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type (0=direct, 1=inherited)"`
+	UserID                 *int64  `json:"user_id,omitempty"                  jsonschema:"User ID"`
+	GroupID                *int64  `json:"group_id,omitempty"                 jsonschema:"Group ID"`
+	AccessLevel            *int    `json:"access_level,omitempty"             jsonschema:"Access level"`
+	AccessLevelDescription *string `json:"access_level_description,omitempty"  jsonschema:"Human-readable description of the access level"`
+	RequiredApprovalCount  *int64  `json:"required_approvals,omitempty"       jsonschema:"Required number of approvals"`
+	GroupInheritanceType   *int64  `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type (0=direct, 1=inherited)"`
 }
 
 // UpdateDeployAccessLevelInput represents an updated deploy access level.
@@ -116,21 +118,30 @@ type UpdateDeployAccessLevelInput struct {
 	Destroy              *bool  `json:"_destroy,omitempty"               jsonschema:"Set true to remove this access level"`
 }
 
-// UpdateApprovalRuleInput represents an updated approval rule.
+// UpdateApprovalRuleInput represents an updated approval rule. It mirrors
+// gl.UpdateGroupEnvironmentApprovalRuleOptions field-for-field.
 type UpdateApprovalRuleInput struct {
-	ID                    *int64 `json:"id,omitempty"                     jsonschema:"Existing approval rule ID to update"`
-	UserID                *int64 `json:"user_id,omitempty"                jsonschema:"User ID"`
-	GroupID               *int64 `json:"group_id,omitempty"               jsonschema:"Group ID"`
-	AccessLevel           *int   `json:"access_level,omitempty"           jsonschema:"Access level"`
-	RequiredApprovalCount *int64 `json:"required_approvals,omitempty"     jsonschema:"Required number of approvals"`
-	GroupInheritanceType  *int64 `json:"group_inheritance_type,omitempty" jsonschema:"Group inheritance type"`
-	Destroy               *bool  `json:"_destroy,omitempty"               jsonschema:"Set true to remove this rule"`
+	ID                     *int64  `json:"id,omitempty"                       jsonschema:"Existing approval rule ID to update"`
+	UserID                 *int64  `json:"user_id,omitempty"                  jsonschema:"User ID"`
+	GroupID                *int64  `json:"group_id,omitempty"                 jsonschema:"Group ID"`
+	AccessLevel            *int    `json:"access_level,omitempty"             jsonschema:"Access level"`
+	AccessLevelDescription *string `json:"access_level_description,omitempty"  jsonschema:"Human-readable description of the access level"`
+	RequiredApprovalCount  *int64  `json:"required_approvals,omitempty"       jsonschema:"Required number of approvals"`
+	GroupInheritanceType   *int64  `json:"group_inheritance_type,omitempty"   jsonschema:"Group inheritance type"`
+	Destroy                *bool   `json:"_destroy,omitempty"                 jsonschema:"Set true to remove this rule"`
 }
 
-// ListInput defines parameters for the List action which retrieves group-level protected environments.
+// ListInput defines parameters for the List action which retrieves group-level
+// protected environments. It mirrors
+// gl.ListGroupProtectedEnvironmentsOptions, which embeds gl.ListOptions,
+// exposing keyset pagination (order_by, sort, pagination, page_token) in
+// addition to offset pagination.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for the Get action which retrieves a single group-level protected environment.
@@ -191,10 +202,11 @@ func toApprovalRuleOpts(input []ApprovalRuleInput) *[]*gl.GroupEnvironmentApprov
 	opts := make([]*gl.GroupEnvironmentApprovalRuleOptions, len(input))
 	for i, r := range input {
 		o := &gl.GroupEnvironmentApprovalRuleOptions{
-			UserID:                r.UserID,
-			GroupID:               r.GroupID,
-			RequiredApprovalCount: r.RequiredApprovalCount,
-			GroupInheritanceType:  r.GroupInheritanceType,
+			UserID:                 r.UserID,
+			GroupID:                r.GroupID,
+			AccessLevelDescription: r.AccessLevelDescription,
+			RequiredApprovalCount:  r.RequiredApprovalCount,
+			GroupInheritanceType:   r.GroupInheritanceType,
 		}
 		if r.AccessLevel != nil {
 			v := gl.AccessLevelValue(*r.AccessLevel)
@@ -234,12 +246,13 @@ func toUpdateApprovalRuleOpts(input []UpdateApprovalRuleInput) *[]*gl.UpdateGrou
 	opts := make([]*gl.UpdateGroupEnvironmentApprovalRuleOptions, len(input))
 	for i, r := range input {
 		o := &gl.UpdateGroupEnvironmentApprovalRuleOptions{
-			ID:                    r.ID,
-			UserID:                r.UserID,
-			GroupID:               r.GroupID,
-			RequiredApprovalCount: r.RequiredApprovalCount,
-			GroupInheritanceType:  r.GroupInheritanceType,
-			Destroy:               r.Destroy,
+			ID:                     r.ID,
+			UserID:                 r.UserID,
+			GroupID:                r.GroupID,
+			AccessLevelDescription: r.AccessLevelDescription,
+			RequiredApprovalCount:  r.RequiredApprovalCount,
+			GroupInheritanceType:   r.GroupInheritanceType,
+			Destroy:                r.Destroy,
 		}
 		if r.AccessLevel != nil {
 			v := gl.AccessLevelValue(*r.AccessLevel)
@@ -258,8 +271,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.GroupID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := &gl.ListGroupProtectedEnvironmentsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
+	opts := &gl.ListGroupProtectedEnvironmentsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	envs, resp, err := client.GL().GroupProtectedEnvironments.ListGroupProtectedEnvironments(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {

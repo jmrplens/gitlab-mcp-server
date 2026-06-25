@@ -113,6 +113,28 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// TestGroupProtectedEnvDescription verifies each individual tool advertises a
+// "Returns: … See also: …" description (R-META) and that the helper returns the
+// empty string for an unknown tool name.
+func TestGroupProtectedEnvDescription(t *testing.T) {
+	tools := []string{
+		"gitlab_group_protected_environment_list",
+		"gitlab_group_protected_environment_get",
+		"gitlab_group_protected_environment_protect",
+		"gitlab_group_protected_environment_update",
+		"gitlab_group_protected_environment_unprotect",
+	}
+	for _, name := range tools {
+		desc := groupProtectedEnvDescription(name)
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("description for %s = %q, want Returns:/See also: form", name, desc)
+		}
+	}
+	if got := groupProtectedEnvDescription("gitlab_unknown_tool"); got != "" {
+		t.Errorf("description for unknown tool = %q, want empty", got)
+	}
+}
+
 func groupProtectedEnvSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
