@@ -38,7 +38,7 @@ func FormatDomainMarkdown(out DomainOutput) string {
 	fmt.Fprintf(&sb, "## Pages Domain: %s\n\n", out.Domain)
 	sb.WriteString("| Property | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.MdTitleLink(out.URL, out.URL))
-	fmt.Fprintf(&sb, "| Project | %s |\n", projectDisplay(out.ProjectPath, out.ProjectID))
+	fmt.Fprintf(&sb, "| Project | %s |\n", projectDisplay(out.ProjectID))
 	fmt.Fprintf(&sb, "| Verified | %v |\n", out.Verified)
 	fmt.Fprintf(&sb, "| Auto SSL | %v |\n", out.AutoSslEnabled)
 	if out.EnabledUntil != "" {
@@ -64,7 +64,7 @@ func FormatDomainListMarkdown(out ListDomainsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
 	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectPath, d.ProjectID))
+		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
 	}
 	toolutil.WriteHints(
 		&sb,
@@ -82,7 +82,7 @@ func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## All Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
 	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectPath, d.ProjectID))
+		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
 	}
 	toolutil.WriteHints(
 		&sb,

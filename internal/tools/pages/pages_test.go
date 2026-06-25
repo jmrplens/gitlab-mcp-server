@@ -163,6 +163,65 @@ func TestListDomains_Success(t *testing.T) {
 	}
 }
 
+// TestListDomains_KeysetAndOrdering verifies ListDomains forwards keyset
+// pagination plus order_by/sort query parameters to the GitLab API.
+func TestListDomains_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok42" {
+			t.Errorf("page_token = %q, want tok42", q.Get("page_token"))
+		}
+		if q.Get("order_by") != "domain" {
+			t.Errorf("order_by = %q, want domain", q.Get("order_by"))
+		}
+		if q.Get("sort") != "asc" {
+			t.Errorf("sort = %q, want asc", q.Get("sort"))
+		}
+		if q.Get("per_page") != "50" {
+			t.Errorf("per_page = %q, want 50", q.Get("per_page"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	_, err := ListDomains(context.Background(), client, ListDomainsInput{
+		ProjectID:             "42",
+		OrderBy:               "domain",
+		Sort:                  "asc",
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestToDomainOutput_FullCertificate verifies toDomainOutput mirrors every
+// PagesDomainCertificate field, including certificate_text.
+func TestToDomainOutput_FullCertificate(t *testing.T) {
+	out := toDomainOutput(&gl.PagesDomain{
+		Domain:    testDomain,
+		ProjectID: 42,
+		Certificate: gl.PagesDomainCertificate{
+			Subject:         testDomain,
+			Expired:         true,
+			Certificate:     "-----BEGIN CERTIFICATE-----",
+			CertificateText: "Certificate:\n    Data:",
+		},
+	})
+	if out.Certificate.Certificate != "-----BEGIN CERTIFICATE-----" {
+		t.Errorf("Certificate = %q, want PEM body", out.Certificate.Certificate)
+	}
+	if out.Certificate.CertificateText != "Certificate:\n    Data:" {
+		t.Errorf("CertificateText = %q, want decoded text", out.Certificate.CertificateText)
+	}
+	if !out.Certificate.Expired {
+		t.Error("expected Expired=true")
+	}
+}
+
 // TestGetDomain_Success verifies GetDomain when success.
 func TestGetDomain_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -297,8 +356,6 @@ const (
 	testExampleURL = "https://example.com"
 	// testDomainA identifies the test domain a constant used by this package.
 	testDomainA = "a.com"
-	// testGroupProject identifies the test group project constant used by this package.
-	testGroupProject = "group/project"
 	// testMyGroupProject identifies the test my group project constant used by this package.
 	testMyGroupProject = "mygroup/myproject"
 	// errNoHandler identifies the err no handler constant used by this package.
@@ -705,65 +762,24 @@ func TestFormatUnpublishMarkdown(t *testing.T) {
 func TestProjectDisplay(t *testing.T) {
 	tests := []struct {
 		name string
-		path string
 		id   int64
 		want string
 	}{
-		{"path preferred", testGroupProject, 42, testGroupProject},
-		{"numeric fallback", "", 42, "#42"},
-		{"zero id", "", 0, "#0"},
+		{"numeric id", 42, "#42"},
+		{"zero id", 0, "#0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := projectDisplay(tt.path, tt.id)
+			got := projectDisplay(tt.id)
 			if got != tt.want {
-				t.Errorf("projectDisplay(%q, %d) = %q, want %q", tt.path, tt.id, got, tt.want)
+				t.Errorf("projectDisplay(%d) = %q, want %q", tt.id, got, tt.want)
 			}
 		})
 	}
 }
 
-// TestSetProjectPathFromInput covers SetProjectPathFromInput with table-driven subtests.
-func TestSetProjectPathFromInput(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		wantPath string
-	}{
-		{"path input", testGroupProject, testGroupProject},
-		{"numeric input", "42", ""},
-		{"nested path", "org/sub/project", "org/sub/project"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			out := DomainOutput{ProjectID: 42}
-			setProjectPathFromInput(&out, toolutil.StringOrInt(tt.input))
-			if out.ProjectPath != tt.wantPath {
-				t.Errorf("setProjectPathFromInput(%q) -> ProjectPath=%q, want %q", tt.input, out.ProjectPath, tt.wantPath)
-			}
-		})
-	}
-}
-
-// TestFormatDomainMarkdown_WithProjectPath verifies FormatDomainMarkdown when with project path.
-func TestFormatDomainMarkdown_WithProjectPath(t *testing.T) {
-	md := FormatDomainMarkdown(DomainOutput{
-		Domain:      testDomain,
-		URL:         testExampleURL,
-		ProjectID:   42,
-		ProjectPath: testMyGroupProject,
-		Verified:    true,
-	})
-	if !strings.Contains(md, testMyGroupProject) {
-		t.Error("expected project path in output")
-	}
-	if strings.Contains(md, "42") {
-		t.Error("should not contain numeric project ID when path is set")
-	}
-}
-
-// TestFormatDomainMarkdown_NumericFallback verifies FormatDomainMarkdown when numeric fallback.
-func TestFormatDomainMarkdown_NumericFallback(t *testing.T) {
+// TestFormatDomainMarkdown_NumericProject verifies FormatDomainMarkdown renders the numeric project ID.
+func TestFormatDomainMarkdown_NumericProject(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
 		Domain:    testDomain,
 		URL:       testExampleURL,
@@ -771,38 +787,35 @@ func TestFormatDomainMarkdown_NumericFallback(t *testing.T) {
 		Verified:  true,
 	})
 	if !strings.Contains(md, "#99") {
-		t.Error("expected #99 numeric fallback in output")
+		t.Error("expected #99 numeric project ID in output")
 	}
 }
 
-// TestFormatDomainListMarkdown_WithProjectPath verifies FormatDomainListMarkdown when with project path.
-func TestFormatDomainListMarkdown_WithProjectPath(t *testing.T) {
+// TestFormatDomainListMarkdown_NumericProject verifies FormatDomainListMarkdown renders numeric project IDs.
+func TestFormatDomainListMarkdown_NumericProject(t *testing.T) {
 	md := FormatDomainListMarkdown(ListDomainsOutput{
 		Domains: []DomainOutput{
-			{Domain: testDomainA, URL: testDomainAURL, ProjectID: 1, ProjectPath: "team/web"},
+			{Domain: testDomainA, URL: testDomainAURL, ProjectID: 1},
 			{Domain: "b.com", URL: "https://b.com", ProjectID: 2},
 		},
 	})
-	if !strings.Contains(md, "team/web") {
-		t.Error("expected project path for first domain")
+	if !strings.Contains(md, "#1") {
+		t.Error("expected numeric project ID for first domain")
 	}
 	if !strings.Contains(md, "#2") {
-		t.Error("expected numeric fallback for second domain")
+		t.Error("expected numeric project ID for second domain")
 	}
 }
 
-// TestFormatAllDomainsMarkdown_WithProjectPath verifies FormatAllDomainsMarkdown when with project path.
-func TestFormatAllDomainsMarkdown_WithProjectPath(t *testing.T) {
+// TestFormatAllDomainsMarkdown_NumericProject verifies FormatAllDomainsMarkdown renders numeric project IDs.
+func TestFormatAllDomainsMarkdown_NumericProject(t *testing.T) {
 	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
 		Domains: []DomainOutput{
-			{Domain: testDomainA, URL: testDomainAURL, ProjectID: 10, ProjectPath: "org/repo"},
+			{Domain: testDomainA, URL: testDomainAURL, ProjectID: 10},
 		},
 	})
-	if !strings.Contains(md, "org/repo") {
-		t.Error("expected project path in all-domains output")
-	}
-	if strings.Contains(md, "#10") {
-		t.Error("should not contain numeric ID when path is set")
+	if !strings.Contains(md, "#10") {
+		t.Error("expected numeric project ID in all-domains output")
 	}
 }
 
@@ -836,8 +849,8 @@ func TestConverters_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestGetDomain_PropagatesProjectPath verifies GetDomain when propagates project path.
-func TestGetDomain_PropagatesProjectPath(t *testing.T) {
+// TestGetDomain_ReturnsProjectID verifies GetDomain surfaces the numeric project ID from the API.
+func TestGetDomain_ReturnsProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"domain":"d.com","auto_ssl_enabled":false,"url":"https://d.com","project_id":7,"verified":true,
@@ -848,24 +861,7 @@ func TestGetDomain_PropagatesProjectPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ProjectPath != testMyGroupProject {
-		t.Errorf("got ProjectPath %q, want %q", out.ProjectPath, testMyGroupProject)
-	}
-}
-
-// TestGetDomain_NumericInputNoPath verifies GetDomain when numeric input no path.
-func TestGetDomain_NumericInputNoPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{
-			"domain":"d.com","auto_ssl_enabled":false,"url":"https://d.com","project_id":7,"verified":true,
-			"verification_code":"x","certificate":{"subject":"","expired":false}
-		}`)
-	}))
-	out, err := GetDomain(context.Background(), client, GetDomainInput{ProjectID: "7", Domain: "d.com"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ProjectPath != "" {
-		t.Errorf("expected empty ProjectPath for numeric input, got %q", out.ProjectPath)
+	if out.ProjectID != 7 {
+		t.Errorf("got ProjectID %d, want 7", out.ProjectID)
 	}
 }

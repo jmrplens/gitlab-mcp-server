@@ -115,6 +115,25 @@ func pagesOptions(actionName, individualTool string) toolutil.ActionSpecOptions 
 		ParameterGuidance: guidance,
 		OpenWorld:         true,
 		OwnerPackage:      "pages",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: pagesActionDescriptions[actionName],
+		},
 	}
+}
+
+// pagesActionDescriptions maps each Pages action to a non-generic
+// individual-tool description in the "Returns: … See also: …" form
+// (1:1 audit R-META). Keyed by canonical action name.
+var pagesActionDescriptions = map[string]string{
+	"pages_get":             "Get the Pages settings for a project. Returns: the Pages URL, force-HTTPS and unique-domain flags, primary domain, and recent deployments. See also: gitlab_pages_update, gitlab_pages_unpublish, gitlab_pages_domain_list.",
+	"pages_update":          "Update the Pages settings for a project. Returns: the updated Pages settings with URL, force-HTTPS and unique-domain flags, primary domain, and deployments. See also: gitlab_pages_get, gitlab_pages_domain_create, gitlab_pages_unpublish.",
+	"pages_unpublish":       "Unpublish a project's Pages site (destructive). Returns: a success confirmation. See also: gitlab_pages_get, gitlab_pages_update.",
+	"pages_domain_list_all": "List every Pages custom domain across the instance (admin only). Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get.",
+	"pages_domain_list":     "List the custom Pages domains for a project with pagination. Returns: matching domains with verification status, auto-SSL flag, project ID, certificate details, and pagination metadata. See also: gitlab_pages_domain_get, gitlab_pages_domain_create, gitlab_pages_domain_list_all.",
+	"pages_domain_get":      "Get a single Pages custom domain by name. Returns: the domain with verification status and code, auto-SSL flag, enabled-until date, and certificate subject/expiration. See also: gitlab_pages_domain_list, gitlab_pages_domain_update, gitlab_pages_domain_delete.",
+	"pages_domain_create":   "Add a new custom Pages domain to a project. Returns: the created domain with verification code, auto-SSL flag, and certificate details. See also: gitlab_pages_domain_get, gitlab_pages_domain_update, gitlab_pages_domain_list.",
+	"pages_domain_update":   "Update an existing Pages custom domain's auto-SSL flag or certificate. Returns: the updated domain with verification status and certificate details. See also: gitlab_pages_domain_get, gitlab_pages_domain_delete, gitlab_pages_domain_list.",
+	"pages_domain_delete":   "Remove a custom Pages domain from a project (destructive). Returns: a success confirmation naming the deleted domain. See also: gitlab_pages_domain_get, gitlab_pages_domain_list.",
 }
