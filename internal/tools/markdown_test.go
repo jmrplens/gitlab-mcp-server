@@ -143,7 +143,7 @@ func TestFormatProject_ListMarkdown(t *testing.T) {
 
 // TestFormatBranch_Markdown verifies that branch fields appear in Markdown output.
 func TestFormatBranch_Markdown(t *testing.T) {
-	br := branches.Output{Name: "feature-x", Protected: true, Default: false, Merged: false, CommitID: "abc123"}
+	br := branches.Output{Name: "feature-x", Protected: true, Default: false, Merged: false, Commit: &branches.CommitOutput{ID: "abc123"}}
 	md := branches.FormatOutputMarkdown(br)
 
 	if !strings.Contains(md, "## Branch: feature-x") {
@@ -171,13 +171,13 @@ func TestFormatBranch_ListMarkdown(t *testing.T) {
 
 // TestFormatProtected_BranchMarkdown verifies protected branch fields in Markdown.
 func TestFormatProtected_BranchMarkdown(t *testing.T) {
-	pb := branches.ProtectedOutput{ID: 1, Name: "main", PushAccessLevel: 40, MergeAccessLevel: 30, AllowForcePush: false}
+	pb := branches.ProtectedOutput{ID: 1, Name: "main", PushAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 40}}, MergeAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 30}}, AllowForcePush: false}
 	md := branches.FormatProtectedMarkdown(pb)
 
 	if !strings.Contains(md, "## Protected Branch: main") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "**Push Access Level**: 40") {
+	if !strings.Contains(md, "**Push Access Levels**: 40") {
 		t.Error("missing push level")
 	}
 }
@@ -1865,7 +1865,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "branches.Output",
 			result: branches.Output{
 				Name: "feature/auth", Protected: false, Merged: false,
-				CommitID: "abc123def",
+				Commit: &branches.CommitOutput{ID: "abc123def"},
 			},
 		},
 		{
@@ -1898,7 +1898,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 		{
 			name: "tags.Output",
 			result: tags.Output{
-				Name: "v1.0.0", CommitSHA: "abc123", Message: "Release v1.0.0",
+				Name: "v1.0.0", Commit: &tags.CommitOutput{ID: "abc123"}, Message: "Release v1.0.0",
 			},
 		},
 		{

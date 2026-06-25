@@ -66,6 +66,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows."
 		options.Aliases = []string{"list branches", "show project branches", "find branches"}
 		options.RelatedActions = []string{"branch.get", "branch.create", "repository.compare"}
+		options.IndividualTool.Description = "List repository branches in one project with optional search/regex filtering, ordering, and offset or keyset pagination. Returns: matching branches with protection, default, merged flags, the head commit object, and pagination metadata. See also: gitlab_branch_get, gitlab_branch_create, gitlab_repository_compare."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -77,6 +78,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "Get one branch by project_id and branch_name. Use when a specific branch is referenced and exact branch protection/default metadata is needed."
 		options.Aliases = []string{"get branch", "show branch details", "lookup branch"}
 		options.RelatedActions = []string{actionBranchList, "branch.protect", "branch.unprotect"}
+		options.IndividualTool.Description = "Get a single branch by name. Returns: the branch with protection, default, and merged flags, push/merge permissions, the head commit object, and web URL. See also: gitlab_branch_list, gitlab_branch_protect, gitlab_branch_unprotect."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"branch_name": {
 				SemanticRole:   "git_branch",
@@ -88,6 +90,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "Create a branch from a source ref (branch/tag/commit). Use when preparing feature branches or release branches."
 		options.Aliases = []string{"create branch", "new branch", "branch from ref"}
 		options.RelatedActions = []string{actionBranchList, "merge_request.create", "repository.compare"}
+		options.IndividualTool.Description = "Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_merge_request_create, gitlab_repository_compare."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"branch_name": {
 				SemanticRole:   "git_branch",
@@ -104,10 +107,32 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "Delete one branch by name. Use only for confirmed cleanup tasks when the branch is no longer needed."
 		options.Aliases = []string{"delete branch", "remove branch", "drop branch"}
 		options.RelatedActions = []string{actionBranchList, "branch.unprotect"}
+		options.IndividualTool.Description = "Delete a single branch by name. Returns: a success confirmation. Fails for protected or default branches. See also: gitlab_branch_list, gitlab_branch_unprotect."
 	case "delete_merged":
 		options.Usage = "Delete merged branches in a project. Use with caution for branch hygiene after confirming merge status requirements."
 		options.Aliases = []string{"delete merged branches", "cleanup merged branches", "prune merged branches"}
 		options.RelatedActions = []string{actionBranchList, "merge_request.list"}
+		options.IndividualTool.Description = "Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_merge_request_list."
+	case "unprotect":
+		options.Usage = "Remove protection from a branch by project_id and branch_name. Use before deleting a protected branch or when relaxing branch protection rules. Idempotent: succeeds when the branch is already unprotected."
+		options.Aliases = []string{"unprotect branch", "remove branch protection", "unlock branch"}
+		options.RelatedActions = []string{"branch.protect", "branch.get_protected", actionBranchList}
+		options.IndividualTool.Description = "Remove protection from a branch (idempotent). Returns: a status and message confirming protection removed or already absent. See also: gitlab_branch_protect, gitlab_protected_branch_get, gitlab_branch_delete."
+	case "get_protected":
+		options.Usage = "Get one protected branch (or wildcard rule) by project_id and branch_name. Use to inspect current push/merge/unprotect access levels before updating or unprotecting."
+		options.Aliases = []string{"get protected branch", "show branch protection", "protected branch details"}
+		options.RelatedActions = []string{"branch.list_protected", "branch.update_protected", "branch.unprotect"}
+		options.IndividualTool.Description = "Get a single protected branch or wildcard rule by name. Returns: the rule with push, merge, and unprotect access-level arrays, allow-force-push, and CODEOWNERS-approval flags. See also: gitlab_protected_branches_list, gitlab_protected_branch_update, gitlab_branch_unprotect."
+	case "list_protected":
+		options.Usage = "List protected branches (and wildcard rules) for one project with optional search and pagination. Use to audit branch protection coverage before changing rules."
+		options.Aliases = []string{"list protected branches", "show branch protections", "audit protected branches"}
+		options.RelatedActions = []string{"branch.get_protected", "branch.protect", "branch.update_protected"}
+		options.IndividualTool.Description = "List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination. Returns: protected rules with push/merge/unprotect access-level arrays and pagination metadata. See also: gitlab_protected_branch_get, gitlab_branch_protect, gitlab_protected_branch_update."
+	case "update_protected":
+		options.Usage = "Update an existing protected branch rule by project_id and branch_name. Use to change allow-force-push, CODEOWNERS approval, rename the rule, or replace fine-grained push/merge/unprotect access entries."
+		options.Aliases = []string{"update protected branch", "change branch protection", "edit branch protection"}
+		options.RelatedActions = []string{"branch.get_protected", "branch.list_protected", "branch.protect"}
+		options.IndividualTool.Description = "Update an existing protected branch rule: allow-force-push, CODEOWNERS approval, rename, or fine-grained allowed_to_push/merge/unprotect entries. Returns: the updated rule with its access-level arrays. See also: gitlab_protected_branch_get, gitlab_protected_branches_list, gitlab_branch_protect."
 	}
 
 	if name == "protect" {
@@ -128,6 +153,9 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {
 	options.Tags = append(options.Tags, "protected_branch", "access_level")
 	options.Usage = "Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer."
+	options.Aliases = []string{"protect branch", "add branch protection", "lock branch"}
+	options.RelatedActions = []string{"branch.unprotect", "branch.get_protected", "branch.update_protected"}
+	options.IndividualTool.Description = "Protect a branch or wildcard with push/merge/unprotect access levels and optional fine-grained allowed_to_push/merge/unprotect entries. Returns: the protected rule with its access-level arrays. Idempotent: returns the existing rule when the branch is already protected. See also: gitlab_branch_unprotect, gitlab_protected_branch_get, gitlab_protected_branch_update."
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"push_access_level":  branchProtectionAccessLevelGuidance("push"),
 		"merge_access_level": branchProtectionAccessLevelGuidance("merge"),

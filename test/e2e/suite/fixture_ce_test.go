@@ -550,7 +550,7 @@ func createBranch(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 		Ref:        defaultBranch,
 	})
 	requireNoError(t, err, "create branch "+branchName)
-	return BranchFixture{Name: out.Name, CommitID: out.CommitID}
+	return BranchFixture{Name: out.Name, CommitID: out.Commit.ID}
 }
 
 // createBranchMeta creates a branch via the gitlab_branch meta-tool.
@@ -565,7 +565,7 @@ func createBranchMeta(ctx context.Context, t *testing.T, session *mcp.ClientSess
 		},
 	})
 	requireNoError(t, err, "create branch meta "+branchName)
-	return BranchFixture{Name: out.Name, CommitID: out.CommitID}
+	return BranchFixture{Name: out.Name, CommitID: out.Commit.ID}
 }
 
 // createIssue creates an issue via individual tools.

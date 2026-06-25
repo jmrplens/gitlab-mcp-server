@@ -227,8 +227,8 @@ func TestBranchCreate_Success(t *testing.T) {
 	if out.Name != testBranchAuth {
 		t.Errorf(fmtOutNameWant, out.Name, testBranchAuth)
 	}
-	if out.CommitID != "abc123def456" {
-		t.Errorf("out.CommitID = %q, want %q", out.CommitID, "abc123def456")
+	if out.Commit == nil || out.Commit.ID != "abc123def456" {
+		t.Errorf("out.Commit.ID = %v, want %q", out.Commit, "abc123def456")
 	}
 }
 
@@ -493,11 +493,11 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	if out.Name != "main" {
 		t.Errorf(fmtOutNameWant, out.Name, "main")
 	}
-	if out.PushAccessLevel != 0 {
-		t.Errorf("PushAccessLevel = %d, want 0", out.PushAccessLevel)
+	if len(out.PushAccessLevels) != 1 || out.PushAccessLevels[0].AccessLevel != 0 {
+		t.Errorf("PushAccessLevels = %+v, want one entry with access_level 0", out.PushAccessLevels)
 	}
-	if out.MergeAccessLevel != 40 {
-		t.Errorf("MergeAccessLevel = %d, want 40", out.MergeAccessLevel)
+	if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].AccessLevel != 40 {
+		t.Errorf("MergeAccessLevels = %+v, want one entry with access_level 40", out.MergeAccessLevels)
 	}
 	if !out.CodeOwnerApprovalRequired {
 		t.Error("CodeOwnerApprovalRequired = false, want true")
@@ -1062,8 +1062,8 @@ func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 func TestToOutput_NilCommit(t *testing.T) {
 	b := &gl.Branch{Name: "main", Protected: true}
 	out := ToOutput(b)
-	if out.CommitID != "" {
-		t.Errorf("out.CommitID = %q, want empty for nil commit", out.CommitID)
+	if out.Commit != nil {
+		t.Errorf("out.Commit = %+v, want nil for nil commit", out.Commit)
 	}
 }
 
@@ -1073,11 +1073,11 @@ func TestToOutput_NilCommit(t *testing.T) {
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
 	out := ProtectedToOutput(pb)
-	if out.PushAccessLevel != 0 {
-		t.Errorf("PushAccessLevel = %d, want 0 for empty access levels", out.PushAccessLevel)
+	if out.PushAccessLevels != nil {
+		t.Errorf("PushAccessLevels = %+v, want nil for empty access levels", out.PushAccessLevels)
 	}
-	if out.MergeAccessLevel != 0 {
-		t.Errorf("MergeAccessLevel = %d, want 0 for empty access levels", out.MergeAccessLevel)
+	if out.MergeAccessLevels != nil {
+		t.Errorf("MergeAccessLevels = %+v, want nil for empty access levels", out.MergeAccessLevels)
 	}
 }
 
@@ -1094,7 +1094,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Protected: true,
 		Default:   true,
 		Merged:    false,
-		CommitID:  "abc123",
+		Commit:    &CommitOutput{ID: "abc123"},
 		WebURL:    "https://gitlab.example.com/-/tree/main",
 	})
 	if !strings.Contains(md, "## Branch: main") {
@@ -1191,17 +1191,17 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectedMarkdown(t *testing.T) {
 	md := FormatProtectedMarkdown(ProtectedOutput{
-		ID:               1,
-		Name:             "main",
-		PushAccessLevel:  0,
-		MergeAccessLevel: 40,
-		AllowForcePush:   false,
+		ID:                1,
+		Name:              "main",
+		PushAccessLevels:  []BranchAccessDescriptionOutput{{AccessLevel: 0}},
+		MergeAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 40}},
+		AllowForcePush:    false,
 	})
 	if !strings.Contains(md, "## Protected Branch: main") {
 		t.Error("expected heading with protected branch name")
 	}
-	if !strings.Contains(md, "Push Access Level") {
-		t.Error("expected push access level")
+	if !strings.Contains(md, "Push Access Levels") {
+		t.Error("expected push access levels")
 	}
 }
 
@@ -1211,7 +1211,7 @@ func TestFormatProtectedMarkdown(t *testing.T) {
 func TestFormatProtectedListMarkdown(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{
 		Branches: []ProtectedOutput{
-			{ID: 1, Name: "main", PushAccessLevel: 0, MergeAccessLevel: 40},
+			{ID: 1, Name: "main", PushAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 0}}, MergeAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 40}}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1573,8 +1573,10 @@ func TestBranchProtect_Conflict409_FallbackGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected idempotent success, got error: %v", err)
 	}
-	if !out.AlreadyProtected {
-		t.Error("expected AlreadyProtected = true")
+	// The idempotent fallback GET returns the existing rule, so its access
+	// levels (from the GET mock) must be surfaced.
+	if len(out.PushAccessLevels) != 1 || out.PushAccessLevels[0].AccessLevel != 40 {
+		t.Errorf("PushAccessLevels = %+v, want one entry with access_level 40 from fallback GET", out.PushAccessLevels)
 	}
 	if out.Name != "main" {
 		t.Errorf("Name = %q, want %q", out.Name, "main")
@@ -1722,7 +1724,7 @@ func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want Output", result)
 	}
-	if out.Name != "main" || out.CommitID != "abc" {
+	if out.Name != "main" || out.Commit == nil || out.Commit.ID != "abc" {
 		t.Fatalf("branch output = %#v, want name main and commit abc", out)
 	}
 }
@@ -1746,6 +1748,335 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 	}
 	if !strings.Contains(notFound.Identifier, "missing") || !strings.Contains(notFound.Identifier, "42") {
 		t.Fatalf("identifier = %q, want branch and project context", notFound.Identifier)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit additions: full commit mirror, access-level arrays, fine-grained
+// permission inputs, and keyset/order_by/sort list options.
+// ---------------------------------------------------------------------------.
+
+// TestBranchGet_FullCommitMirror verifies that a branch's embedded commit object
+// is surfaced in full (id, dates, stats, last_pipeline, trailers, status) on the
+// canonical commit key rather than a flattened commit_id scalar.
+func TestBranchGet_FullCommitMirror(t *testing.T) {
+	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gl/-/tree/main","commit":{` +
+		`"id":"abc123","short_id":"abc","title":"feat: x","message":"feat: x\n","author_name":"Ada","author_email":"ada@x.io",` +
+		`"authored_date":"2024-01-01T10:00:00Z","committer_name":"Bob","committer_email":"bob@x.io","committed_date":"2024-01-02T10:00:00Z",` +
+		`"created_at":"2024-01-02T10:00:00Z","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
+		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Signed-off-by":"Ada"},` +
+		`"stats":{"additions":5,"deletions":2,"total":7},` +
+		`"last_pipeline":{"id":9,"iid":3,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc123","name":"build","web_url":"https://gl/pipelines/9","created_at":"2024-01-02T10:00:00Z","updated_at":"2024-01-02T11:00:00Z"}}}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoBranches+"/main" {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", BranchName: "main"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	assertFullCommitMirror(t, out.Commit)
+}
+
+// assertFullCommitMirror asserts that a CommitOutput surfaces every mirrored
+// gl.Commit field, including nested stats and last_pipeline sub-objects.
+func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
+	t.Helper()
+	if c == nil {
+		t.Fatal("expected non-nil commit object")
+	}
+	wantStr := map[string]struct{ got, want string }{
+		"id":              {c.ID, "abc123"},
+		"short_id":        {c.ShortID, "abc"},
+		"title":           {c.Title, "feat: x"},
+		"author_name":     {c.AuthorName, "Ada"},
+		"committer_email": {c.CommitterEmail, "bob@x.io"},
+		"status":          {c.Status, "success"},
+	}
+	for field, v := range wantStr {
+		if v.got != v.want {
+			t.Errorf("commit %s = %q, want %q", field, v.got, v.want)
+		}
+	}
+	if c.ProjectID != 42 {
+		t.Errorf("commit project_id = %d, want 42", c.ProjectID)
+	}
+	if c.AuthoredDate == "" || c.CommittedDate == "" || c.CreatedAt == "" {
+		t.Errorf("commit dates not surfaced: %+v", c)
+	}
+	if len(c.ParentIDs) != 2 || c.Trailers["Signed-off-by"] != "Ada" || len(c.ExtendedTrailers) != 1 {
+		t.Errorf("commit parent/trailers = %+v", c)
+	}
+	assertCommitStats(t, c.Stats)
+	assertCommitLastPipeline(t, c.LastPipeline)
+}
+
+// assertCommitStats asserts the mirrored gl.CommitStats sub-object.
+func assertCommitStats(t *testing.T, s *CommitStatsOutput) {
+	t.Helper()
+	if s == nil || s.Total != 7 || s.Additions != 5 || s.Deletions != 2 {
+		t.Errorf("commit stats = %+v", s)
+	}
+}
+
+// assertCommitLastPipeline asserts the mirrored gl.PipelineInfo sub-object.
+func assertCommitLastPipeline(t *testing.T, p *LastPipelineOutput) {
+	t.Helper()
+	if p == nil || p.ID != 9 || p.Status != "success" || p.CreatedAt == "" || p.UpdatedAt == "" {
+		t.Errorf("commit last_pipeline = %+v", p)
+	}
+}
+
+// TestProtectedGet_FullAccessLevelArrays verifies that push/merge/unprotect
+// access-level arrays are surfaced in full (id, access_level, description, and
+// scope ids) rather than collapsed to first-entry scalars.
+func TestProtectedGet_FullAccessLevelArrays(t *testing.T) {
+	const respJSON = `{"id":1,"name":"main",` +
+		`"push_access_levels":[{"id":11,"access_level":40,"access_level_description":"Maintainers"},{"id":12,"access_level":0,"access_level_description":"u","user_id":7}],` +
+		`"merge_access_levels":[{"id":21,"access_level":30,"access_level_description":"Devs","group_id":3}],` +
+		`"unprotect_access_levels":[{"id":31,"access_level":40,"access_level_description":"k","deploy_key_id":5}],` +
+		`"allow_force_push":true,"code_owner_approval_required":false}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches+"/main" {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ProtectedGet(context.Background(), client, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+	if err != nil {
+		t.Fatalf("ProtectedGet() unexpected error: %v", err)
+	}
+	if len(out.PushAccessLevels) != 2 {
+		t.Fatalf("PushAccessLevels len = %d, want 2", len(out.PushAccessLevels))
+	}
+	if out.PushAccessLevels[0].ID != 11 || out.PushAccessLevels[0].AccessLevel != 40 ||
+		out.PushAccessLevels[0].AccessLevelDescription != "Maintainers" {
+		t.Errorf("push[0] = %+v", out.PushAccessLevels[0])
+	}
+	if out.PushAccessLevels[1].UserID != 7 {
+		t.Errorf("push[1].UserID = %d, want 7", out.PushAccessLevels[1].UserID)
+	}
+	if len(out.MergeAccessLevels) != 1 || out.MergeAccessLevels[0].GroupID != 3 {
+		t.Errorf("merge = %+v", out.MergeAccessLevels)
+	}
+	if len(out.UnprotectAccessLevels) != 1 || out.UnprotectAccessLevels[0].DeployKeyID != 5 {
+		t.Errorf("unprotect = %+v", out.UnprotectAccessLevels)
+	}
+	if !out.AllowForcePush {
+		t.Error("AllowForcePush = false, want true")
+	}
+}
+
+// TestBranchProtect_SerializesAllOptions verifies that the new ProtectInput
+// fields (name, unprotect_access_level, and fine-grained allowed_to_* arrays)
+// are serialized into the request body sent to GitLab.
+func TestBranchProtect_SerializesAllOptions(t *testing.T) {
+	var gotBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
+			buf := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(buf)
+			gotBody = string(buf)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"release/*","push_access_levels":[{"access_level":40}]}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	uid := int64(7)
+	al := 30
+	destroy := true
+	_, err := Protect(context.Background(), client, ProtectInput{
+		ProjectID:            "42",
+		BranchName:           testReleaseWildcard,
+		PushAccessLevel:      40,
+		MergeAccessLevel:     40,
+		UnprotectAccessLevel: 40,
+		AllowedToPush:        []BranchPermissionInput{{UserID: &uid, AccessLevel: &al}},
+		AllowedToMerge:       []BranchPermissionInput{{AccessLevel: &al}},
+		AllowedToUnprotect:   []BranchPermissionInput{{ID: &uid, Destroy: &destroy}},
+	})
+	if err != nil {
+		t.Fatalf(fmtProtectErr, err)
+	}
+	for _, want := range []string{`"name":"release/*"`, `"unprotect_access_level":40`, `"allowed_to_push"`, `"user_id":7`, `"allowed_to_merge"`, `"allowed_to_unprotect"`, `"_destroy":true`} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("request body missing %q\nbody=%s", want, gotBody)
+		}
+	}
+}
+
+// TestProtectedUpdate_SerializesAllOptions verifies that the new
+// ProtectedUpdateInput fields (name rename and allowed_to_* arrays) are
+// serialized into the PATCH request body.
+func TestProtectedUpdate_SerializesAllOptions(t *testing.T) {
+	var gotBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == pathProtectedBranches+"/main" {
+			buf := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(buf)
+			gotBody = string(buf)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	gid := int64(3)
+	al := 40
+	_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{
+		ProjectID:      "42",
+		BranchName:     "main",
+		Name:           "main-renamed",
+		AllowedToPush:  []BranchPermissionInput{{GroupID: &gid, AccessLevel: &al}},
+		AllowedToMerge: []BranchPermissionInput{{AccessLevel: &al}},
+		AllowedToUnprotect: []BranchPermissionInput{{
+			DeployKeyID: &gid,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ProtectedUpdate() unexpected error: %v", err)
+	}
+	for _, want := range []string{`"name":"main-renamed"`, `"allowed_to_push"`, `"group_id":3`, `"allowed_to_merge"`, `"allowed_to_unprotect"`, `"deploy_key_id":3`} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("request body missing %q\nbody=%s", want, gotBody)
+		}
+	}
+}
+
+// TestBranchList_KeysetAndOrdering verifies that regex, order_by, sort, and
+// keyset pagination parameters are forwarded as query parameters to GitLab.
+func TestBranchList_KeysetAndOrdering(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoBranches {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		Search:                "feat",
+		Regex:                 "^feat",
+		OrderBy:               "updated",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtBranchListErr, err)
+	}
+	for _, want := range []string{"search=feat", "regex=", "order_by=updated", "sort=desc", "pagination=keyset", "page_token=tok"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query missing %q: %s", want, gotQuery)
+		}
+	}
+}
+
+// TestProtectedList_SearchKeysetAndOrdering verifies that search, order_by,
+// sort, and keyset pagination are forwarded for the protected-branches list.
+func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ProtectedList(context.Background(), client, ProtectedListInput{
+		ProjectID:             "42",
+		Search:                "main",
+		OrderBy:               "name",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtProtBranchListErr, err)
+	}
+	for _, want := range []string{"search=main", "order_by=name", "sort=asc", "pagination=keyset", "page_token=tok"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query missing %q: %s", want, gotQuery)
+		}
+	}
+}
+
+// TestShapeConverters_NilAndEmpty exercises nil/empty fast paths of the shape
+// converters that the request flows do not otherwise reach.
+func TestShapeConverters_NilAndEmpty(t *testing.T) {
+	if pipelineInfoToOutput(nil) != nil {
+		t.Error("pipelineInfoToOutput(nil) should be nil")
+	}
+	if commitToOutput(nil) != nil {
+		t.Error("commitToOutput(nil) should be nil")
+	}
+	if branchAccessDescriptionsToOutput(nil) != nil {
+		t.Error("branchAccessDescriptionsToOutput(nil) should be nil")
+	}
+	if got := branchAccessDescriptionsToOutput([]*gl.BranchAccessDescription{nil}); got != nil {
+		t.Errorf("all-nil slice should map to nil, got %+v", got)
+	}
+	if branchPermissionOptions(nil) != nil {
+		t.Error("branchPermissionOptions(nil) should be nil")
+	}
+}
+
+// TestAccessLevelsSummary verifies the compact access-level markdown summary.
+func TestAccessLevelsSummary(t *testing.T) {
+	if got := accessLevelsSummary(nil); got != "—" {
+		t.Errorf("empty summary = %q, want em dash", got)
+	}
+	got := accessLevelsSummary([]BranchAccessDescriptionOutput{{AccessLevel: 30}, {AccessLevel: 40}})
+	if got != "30, 40" {
+		t.Errorf("summary = %q, want \"30, 40\"", got)
+	}
+}
+
+// TestProtectedFlaggedTools_Metadata verifies the five 1:1-audit metadata
+// findings are resolved: non-generic usage, real aliases, and a "Returns:/See
+// also:" individual-tool description for each flagged protected/unprotect tool.
+func TestProtectedFlaggedTools_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	byTool := branchSpecsByTool(t, ActionSpecs(client))
+	flagged := []string{
+		"gitlab_branch_protect",
+		"gitlab_branch_unprotect",
+		"gitlab_protected_branch_get",
+		"gitlab_protected_branches_list",
+		"gitlab_protected_branch_update",
+	}
+	for _, tool := range flagged {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("missing spec for %s", tool)
+		}
+		if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute branches domain action") {
+			t.Errorf("%s: generic/empty usage %q", tool, spec.Usage)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Errorf("%s: no aliases", tool)
+		}
+		for _, a := range spec.Aliases {
+			if a == tool {
+				t.Errorf("%s: alias duplicates tool name", tool)
+			}
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", tool, desc)
+		}
 	}
 }
 

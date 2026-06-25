@@ -19,25 +19,33 @@ type CreateInput struct {
 	Ref        string               `json:"ref"         jsonschema:"Branch name, tag, or commit SHA to create from,required"`
 }
 
-// Output represents a Git branch.
+// Output represents a Git branch. It mirrors gl.Branch field-for-field,
+// surfacing the full embedded commit object on the canonical commit key
+// (C-IMPORTS).
 type Output struct {
 	toolutil.HintableOutput
-	Name               string `json:"name"`
-	Merged             bool   `json:"merged"`
-	Protected          bool   `json:"protected"`
-	Default            bool   `json:"default"`
-	WebURL             string `json:"web_url"`
-	CommitID           string `json:"commit_id"`
-	CanPush            bool   `json:"can_push"`
-	DevelopersCanPush  bool   `json:"developers_can_push"`
-	DevelopersCanMerge bool   `json:"developers_can_merge"`
+	Name               string        `json:"name"`
+	Merged             bool          `json:"merged"`
+	Protected          bool          `json:"protected"`
+	Default            bool          `json:"default"`
+	WebURL             string        `json:"web_url"`
+	Commit             *CommitOutput `json:"commit,omitempty"`
+	CanPush            bool          `json:"can_push"`
+	DevelopersCanPush  bool          `json:"developers_can_push"`
+	DevelopersCanMerge bool          `json:"developers_can_merge"`
 }
 
-// ListInput defines parameters for listing branches.
+// ListInput defines parameters for listing branches. It mirrors
+// gl.ListBranchesOptions, including the regex filter and keyset pagination via
+// the embedded gl.ListOptions (order_by, sort, pagination, page_token).
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Search    string               `json:"search,omitempty" jsonschema:"Filter branches by name (substring match)"`
+	Search    string               `json:"search,omitempty"   jsonschema:"Filter branches by name (substring match)"`
+	Regex     string               `json:"regex,omitempty"    jsonschema:"Filter branches whose names match this regular expression"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name, updated)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of branches.
@@ -47,26 +55,35 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// ProtectInput defines parameters for protecting a branch.
+// ProtectInput defines parameters for protecting a branch. It mirrors
+// gl.ProtectRepositoryBranchesOptions, including the fine-grained
+// allowed_to_{push,merge,unprotect} permission arrays (C-IMPORTS). The branch
+// name or wildcard is accepted on branch_name (the SDK's name field).
 type ProtectInput struct {
-	ProjectID                 toolutil.StringOrInt `json:"project_id"                          jsonschema:"Project ID or URL-encoded path,required"`
-	BranchName                string               `json:"branch_name"                         jsonschema:"Branch name or wildcard (e.g. 'main' or 'release/*'),required"`
-	PushAccessLevel           int                  `json:"push_access_level,omitempty"         jsonschema:"Access level for push (0=No access 30=Developer 40=Maintainer)"`
-	MergeAccessLevel          int                  `json:"merge_access_level,omitempty"        jsonschema:"Access level for merge (0=No access 30=Developer 40=Maintainer)"`
-	AllowForcePush            *bool                `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
-	CodeOwnerApprovalRequired *bool                `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval for changes to matching files"`
+	ProjectID                 toolutil.StringOrInt    `json:"project_id"                          jsonschema:"Project ID or URL-encoded path,required"`
+	BranchName                string                  `json:"branch_name"                         jsonschema:"Branch name or wildcard (e.g. 'main' or 'release/*'),required"`
+	PushAccessLevel           int                     `json:"push_access_level,omitempty"         jsonschema:"Access level for push (0=No access 30=Developer 40=Maintainer)"`
+	MergeAccessLevel          int                     `json:"merge_access_level,omitempty"        jsonschema:"Access level for merge (0=No access 30=Developer 40=Maintainer)"`
+	UnprotectAccessLevel      int                     `json:"unprotect_access_level,omitempty"    jsonschema:"Access level allowed to unprotect (0=No access 30=Developer 40=Maintainer)"`
+	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
+	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Fine-grained push access entries (by user, group, deploy key, or access level)"`
+	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Fine-grained merge access entries (by user, group, deploy key, or access level)"`
+	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Fine-grained unprotect access entries (by user, group, deploy key, or access level)"`
+	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval for changes to matching files"`
 }
 
-// ProtectedOutput represents a protected branch.
+// ProtectedOutput represents a protected branch. It mirrors gl.ProtectedBranch
+// field-for-field, surfacing the full push/merge/unprotect access-level arrays
+// on their canonical keys (C-IMPORTS).
 type ProtectedOutput struct {
 	toolutil.HintableOutput
-	ID                        int64  `json:"id"`
-	Name                      string `json:"name"`
-	PushAccessLevel           int    `json:"push_access_level"`
-	MergeAccessLevel          int    `json:"merge_access_level"`
-	AllowForcePush            bool   `json:"allow_force_push"`
-	CodeOwnerApprovalRequired bool   `json:"code_owner_approval_required"`
-	AlreadyProtected          bool   `json:"already_protected,omitempty"`
+	ID                        int64                           `json:"id"`
+	Name                      string                          `json:"name"`
+	PushAccessLevels          []BranchAccessDescriptionOutput `json:"push_access_levels,omitempty"`
+	MergeAccessLevels         []BranchAccessDescriptionOutput `json:"merge_access_levels,omitempty"`
+	UnprotectAccessLevels     []BranchAccessDescriptionOutput `json:"unprotect_access_levels,omitempty"`
+	AllowForcePush            bool                            `json:"allow_force_push"`
+	CodeOwnerApprovalRequired bool                            `json:"code_owner_approval_required"`
 }
 
 // UnprotectInput defines parameters for unprotecting a branch.
@@ -75,10 +92,17 @@ type UnprotectInput struct {
 	BranchName string               `json:"branch_name" jsonschema:"Name of the protected branch to remove,required"`
 }
 
-// ProtectedListInput defines parameters for listing protected branches.
+// ProtectedListInput defines parameters for listing protected branches. It
+// mirrors gl.ListProtectedBranchesOptions, including the search filter and
+// keyset pagination via the embedded gl.ListOptions (order_by, sort,
+// pagination, page_token).
 type ProtectedListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Search    string               `json:"search,omitempty"   jsonschema:"Filter protected branches by name (substring match)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ProtectedListOutput holds the list of protected branches.
@@ -89,22 +113,18 @@ type ProtectedListOutput struct {
 }
 
 // ProtectedToOutput converts a GitLab API [gl.ProtectedBranch] to the
-// MCP tool output format, extracting push and merge access levels from the
-// first entry of each access level slice.
+// MCP tool output format, surfacing the full push/merge/unprotect access-level
+// arrays.
 func ProtectedToOutput(b *gl.ProtectedBranch) ProtectedOutput {
-	out := ProtectedOutput{
+	return ProtectedOutput{
 		ID:                        b.ID,
 		Name:                      b.Name,
+		PushAccessLevels:          branchAccessDescriptionsToOutput(b.PushAccessLevels),
+		MergeAccessLevels:         branchAccessDescriptionsToOutput(b.MergeAccessLevels),
+		UnprotectAccessLevels:     branchAccessDescriptionsToOutput(b.UnprotectAccessLevels),
 		AllowForcePush:            b.AllowForcePush,
 		CodeOwnerApprovalRequired: b.CodeOwnerApprovalRequired,
 	}
-	if len(b.PushAccessLevels) > 0 {
-		out.PushAccessLevel = int(b.PushAccessLevels[0].AccessLevel)
-	}
-	if len(b.MergeAccessLevels) > 0 {
-		out.MergeAccessLevel = int(b.MergeAccessLevels[0].AccessLevel)
-	}
-	return out
 }
 
 // Protect protects a branch in the specified GitLab project by calling
@@ -125,12 +145,18 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		PushAccessLevel:  new(gl.AccessLevelValue(input.PushAccessLevel)),
 		MergeAccessLevel: new(gl.AccessLevelValue(input.MergeAccessLevel)),
 	}
+	if input.UnprotectAccessLevel != 0 {
+		opts.UnprotectAccessLevel = new(gl.AccessLevelValue(input.UnprotectAccessLevel))
+	}
 	if input.AllowForcePush != nil {
 		opts.AllowForcePush = input.AllowForcePush
 	}
 	if input.CodeOwnerApprovalRequired != nil {
 		opts.CodeOwnerApprovalRequired = input.CodeOwnerApprovalRequired
 	}
+	opts.AllowedToPush = branchPermissionOptions(input.AllowedToPush)
+	opts.AllowedToMerge = branchPermissionOptions(input.AllowedToMerge)
+	opts.AllowedToUnprotect = branchPermissionOptions(input.AllowedToUnprotect)
 	b, _, err := client.GL().ProtectedBranches.ProtectRepositoryBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		// 409 Conflict means branch is already protected — idempotent success
@@ -140,9 +166,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 				return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", err,
 					"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
 			}
-			out := ProtectedToOutput(existing)
-			out.AlreadyProtected = true
-			return out, nil
+			return ProtectedToOutput(existing), nil
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("branchProtect", err, http.StatusForbidden,
 			"protecting branches requires Maintainer or Owner role")
@@ -198,11 +222,15 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 		return ProtectedListOutput{}, errors.New("protectedBranchesList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListProtectedBranchesOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.Search != "" {
+		opts.Search = new(input.Search)
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	branches, resp, err := client.GL().ProtectedBranches.ListProtectedBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -217,22 +245,19 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 }
 
 // ToOutput converts a GitLab API [gl.Branch] to the MCP tool output
-// format, extracting the commit ID from the embedded commit if present.
+// format, surfacing the full embedded commit object when present.
 func ToOutput(b *gl.Branch) Output {
-	out := Output{
+	return Output{
 		Name:               b.Name,
 		Merged:             b.Merged,
 		Protected:          b.Protected,
 		Default:            b.Default,
 		WebURL:             b.WebURL,
+		Commit:             commitToOutput(b.Commit),
 		CanPush:            b.CanPush,
 		DevelopersCanPush:  b.DevelopersCanPush,
 		DevelopersCanMerge: b.DevelopersCanMerge,
 	}
-	if b.Commit != nil {
-		out.CommitID = b.Commit.ID
-	}
-	return out
 }
 
 // Create creates a new branch in the specified GitLab project from the
@@ -279,11 +304,15 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.Regex != "" {
+		opts.Regex = new(input.Regex)
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	branches, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -404,12 +433,20 @@ func ProtectedGet(ctx context.Context, client *gitlabclient.Client, input Protec
 	return ProtectedToOutput(b), nil
 }
 
-// ProtectedUpdateInput defines parameters for updating a protected branch's settings.
+// ProtectedUpdateInput defines parameters for updating a protected branch's
+// settings. It mirrors gl.UpdateProtectedBranchOptions, including the rename
+// (name) and the fine-grained allowed_to_{push,merge,unprotect} permission
+// arrays (C-IMPORTS). The branch to update is identified by branch_name; the
+// new name (when renaming the rule) is supplied via the name field.
 type ProtectedUpdateInput struct {
-	ProjectID                 toolutil.StringOrInt `json:"project_id"                          jsonschema:"Project ID or URL-encoded path,required"`
-	BranchName                string               `json:"branch_name"                         jsonschema:"Name of the protected branch,required"`
-	AllowForcePush            *bool                `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
-	CodeOwnerApprovalRequired *bool                `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval"`
+	ProjectID                 toolutil.StringOrInt    `json:"project_id"                          jsonschema:"Project ID or URL-encoded path,required"`
+	BranchName                string                  `json:"branch_name"                         jsonschema:"Name of the protected branch to update,required"`
+	Name                      string                  `json:"name,omitempty"                      jsonschema:"New name or wildcard for the protected branch rule (rename)"`
+	AllowForcePush            *bool                   `json:"allow_force_push,omitempty"          jsonschema:"Allow force push to this branch"`
+	CodeOwnerApprovalRequired *bool                   `json:"code_owner_approval_required,omitempty" jsonschema:"Require CODEOWNERS approval"`
+	AllowedToPush             []BranchPermissionInput `json:"allowed_to_push,omitempty"           jsonschema:"Fine-grained push access entries (by user, group, deploy key, or access level)"`
+	AllowedToMerge            []BranchPermissionInput `json:"allowed_to_merge,omitempty"          jsonschema:"Fine-grained merge access entries (by user, group, deploy key, or access level)"`
+	AllowedToUnprotect        []BranchPermissionInput `json:"allowed_to_unprotect,omitempty"      jsonschema:"Fine-grained unprotect access entries (by user, group, deploy key, or access level)"`
 }
 
 // ProtectedUpdate updates settings on an existing protected branch.
@@ -424,12 +461,18 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 		return ProtectedOutput{}, toolutil.ErrRequiredString("protectedBranchUpdate", "branch_name")
 	}
 	opts := &gl.UpdateProtectedBranchOptions{}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
 	if input.AllowForcePush != nil {
 		opts.AllowForcePush = input.AllowForcePush
 	}
 	if input.CodeOwnerApprovalRequired != nil {
 		opts.CodeOwnerApprovalRequired = input.CodeOwnerApprovalRequired
 	}
+	opts.AllowedToPush = branchPermissionOptions(input.AllowedToPush)
+	opts.AllowedToMerge = branchPermissionOptions(input.AllowedToMerge)
+	opts.AllowedToUnprotect = branchPermissionOptions(input.AllowedToUnprotect)
 	b, _, err := client.GL().ProtectedBranches.UpdateProtectedBranch(string(input.ProjectID), input.BranchName, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {

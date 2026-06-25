@@ -2,6 +2,7 @@ package branches
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -28,7 +29,9 @@ func FormatOutputMarkdown(br Output) string {
 	fmt.Fprintf(&b, "- **Protected**: %v\n", br.Protected)
 	fmt.Fprintf(&b, "- **Default**: %v\n", br.Default)
 	fmt.Fprintf(&b, "- **Merged**: %v\n", br.Merged)
-	fmt.Fprintf(&b, "- **Commit**: %s\n", br.CommitID)
+	if br.Commit != nil {
+		fmt.Fprintf(&b, "- **Commit**: %s\n", br.Commit.ID)
+	}
 	if br.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, br.WebURL)
 	}
@@ -70,13 +73,28 @@ func FormatListMarkdown(out ListOutput) string {
 	return b.String()
 }
 
+// accessLevelsSummary renders a compact comma-separated list of the numeric
+// access levels in a protected branch access-level array (e.g. "30, 40"), or
+// "—" when the array is empty.
+func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
+	if len(levels) == 0 {
+		return "—"
+	}
+	parts := make([]string, 0, len(levels))
+	for _, l := range levels {
+		parts = append(parts, strconv.Itoa(l.AccessLevel))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // FormatProtectedMarkdown renders a single protected branch as Markdown.
 func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Protected Branch: %s\n\n", toolutil.EscapeMdHeading(pb.Name))
 	fmt.Fprintf(&b, toolutil.FmtMdID, pb.ID)
-	fmt.Fprintf(&b, "- **Push Access Level**: %d\n", pb.PushAccessLevel)
-	fmt.Fprintf(&b, "- **Merge Access Level**: %d\n", pb.MergeAccessLevel)
+	fmt.Fprintf(&b, "- **Push Access Levels**: %s\n", accessLevelsSummary(pb.PushAccessLevels))
+	fmt.Fprintf(&b, "- **Merge Access Levels**: %s\n", accessLevelsSummary(pb.MergeAccessLevels))
+	fmt.Fprintf(&b, "- **Unprotect Access Levels**: %s\n", accessLevelsSummary(pb.UnprotectAccessLevels))
 	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
 	toolutil.WriteHints(
 		&b,
@@ -96,10 +114,10 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 		b.WriteString("No protected branches found.\n")
 		return b.String()
 	}
-	b.WriteString("| Name | Push Level | Merge Level | Force Push |\n")
+	b.WriteString("| Name | Push Levels | Merge Levels | Force Push |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, pb := range out.Branches {
-		fmt.Fprintf(&b, "| %s | %d | %d | %v |\n", toolutil.EscapeMdTableCell(pb.Name), pb.PushAccessLevel, pb.MergeAccessLevel, pb.AllowForcePush)
+		fmt.Fprintf(&b, "| %s | %s | %s | %v |\n", toolutil.EscapeMdTableCell(pb.Name), accessLevelsSummary(pb.PushAccessLevels), accessLevelsSummary(pb.MergeAccessLevels), pb.AllowForcePush)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

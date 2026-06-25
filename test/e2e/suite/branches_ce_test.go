@@ -48,7 +48,7 @@ func TestIndividual_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "create branch")
 		requireTruef(t, out.Name == featureBranch, "expected branch %q, got %q", featureBranch, out.Name)
-		t.Logf("Created branch %s (commit=%s)", out.Name, out.CommitID)
+		t.Logf("Created branch %s (commit=%s)", out.Name, out.Commit.ID)
 	})
 
 	// Get
@@ -59,8 +59,8 @@ func TestIndividual_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "get branch")
 		requireTruef(t, out.Name == featureBranch, "expected branch %q, got %q", featureBranch, out.Name)
-		requireTruef(t, out.CommitID != "", msgCommitIDEmpty)
-		t.Logf("Got branch %s (commit=%s)", out.Name, out.CommitID)
+		requireTruef(t, out.Commit.ID != "", msgCommitIDEmpty)
+		t.Logf("Got branch %s (commit=%s)", out.Name, out.Commit.ID)
 	})
 
 	// List
@@ -83,7 +83,7 @@ func TestIndividual_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "protect branch")
 		requireTruef(t, out.Name == featureBranch, "expected protected branch %q, got %q", featureBranch, out.Name)
-		t.Logf("Protected branch %s (push=%d, merge=%d)", out.Name, out.PushAccessLevel, out.MergeAccessLevel)
+		t.Logf("Protected branch %s (push_levels=%d, merge_levels=%d)", out.Name, len(out.PushAccessLevels), len(out.MergeAccessLevels))
 	})
 
 	// ListProtected
@@ -207,8 +207,8 @@ func TestMeta_Branches(t *testing.T) {
 		})
 		requireNoError(t, err, "meta branch get")
 		requireTruef(t, out.Name == featureBranch, "expected branch %q, got %q", featureBranch, out.Name)
-		requireTruef(t, out.CommitID != "", msgCommitIDEmpty)
-		t.Logf("Got branch %s (commit=%s)", out.Name, out.CommitID[:8])
+		requireTruef(t, out.Commit.ID != "", msgCommitIDEmpty)
+		t.Logf("Got branch %s (commit=%s)", out.Name, out.Commit.ID[:8])
 	})
 
 	// List
