@@ -7,9 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
@@ -114,24 +117,89 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 
 // Markdown Upload List/Delete.
 
-// ListInput defines input for listing a project's markdown uploads.
+// ListInput defines input for listing a project's markdown uploads. It mirrors
+// the offset and keyset pagination supported by the GitLab uploads list endpoint
+// (page/per_page plus order_by/sort/page_token for keyset traversal).
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// ListItem represents a single markdown upload entry.
+// UploadedByOutput mirrors the short-user representation in a markdown upload's
+// uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User). It is the
+// project-side mirror of groupmarkdownuploads.UploadedByOutput.
+type UploadedByOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url"`
+	WebURL    string `json:"web_url"`
+}
+
+// ListItem represents a single markdown upload entry. It mirrors the canonical
+// keys of gl.MarkdownUpload (id, size, filename, created_at, uploaded_by).
 type ListItem struct {
-	ID         int64  `json:"id"`
-	Size       int64  `json:"size"`
-	Filename   string `json:"filename"`
-	CreatedAt  string `json:"created_at,omitempty"`
-	UploadedBy string `json:"uploaded_by,omitempty"`
+	ID         int64             `json:"id"`
+	Size       int64             `json:"size"`
+	Filename   string            `json:"filename"`
+	CreatedAt  string            `json:"created_at,omitempty"`
+	UploadedBy *UploadedByOutput `json:"uploaded_by,omitempty"`
 }
 
 // ListOutput contains the list of markdown uploads for a project.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Uploads []ListItem `json:"uploads"`
+	Uploads    []ListItem                `json:"uploads"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// uploadedByOutput maps an SDK *gl.User embed onto the short-user output shape.
+func uploadedByOutput(u *gl.User) *UploadedByOutput {
+	if u == nil {
+		return nil
+	}
+	return &UploadedByOutput{
+		ID:        u.ID,
+		Username:  u.Username,
+		Name:      u.Name,
+		State:     u.State,
+		AvatarURL: u.AvatarURL,
+		WebURL:    u.WebURL,
+	}
+}
+
+// listQueryParameters renders the offset, keyset, and ordering parameters as a
+// gl.RequestOptionFunc. The ListProjectMarkdownUploads SDK method has no options
+// struct, so pagination is applied via query parameters mirrored from a
+// gl.ListMarkdownUploadsOptions wired with toolutil.ApplyListOptions.
+func listQueryParameters(input ListInput) gl.RequestOptionFunc {
+	opts := &gl.ListMarkdownUploadsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+
+	q := url.Values{}
+	if opts.Page > 0 {
+		q.Set("page", strconv.FormatInt(opts.Page, 10))
+	}
+	if opts.PerPage > 0 {
+		q.Set("per_page", strconv.FormatInt(opts.PerPage, 10))
+	}
+	if opts.Pagination != "" {
+		q.Set("pagination", opts.Pagination)
+	}
+	if opts.PageToken != "" {
+		q.Set("page_token", opts.PageToken)
+	}
+	if input.OrderBy != "" {
+		q.Set("order_by", input.OrderBy)
+	}
+	if input.Sort != "" {
+		q.Set("sort", input.Sort)
+	}
+	return gl.WithKeysetPaginationParameters("?" + q.Encode())
 }
 
 // List lists all markdown uploads for a GitLab project.
@@ -143,7 +211,11 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("projectUploadList: project_id is required")
 	}
 
-	uploads, _, err := client.GL().ProjectMarkdownUploads.ListProjectMarkdownUploads(string(input.ProjectID))
+	uploads, resp, err := client.GL().ProjectMarkdownUploads.ListProjectMarkdownUploads(
+		string(input.ProjectID),
+		gl.WithContext(ctx),
+		listQueryParameters(input),
+	)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list uploads for project %s: %w", input.ProjectID, err)
 	}
@@ -151,20 +223,21 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	items := make([]ListItem, 0, len(uploads))
 	for _, u := range uploads {
 		item := ListItem{
-			ID:       u.ID,
-			Size:     u.Size,
-			Filename: u.Filename,
+			ID:         u.ID,
+			Size:       u.Size,
+			Filename:   u.Filename,
+			UploadedBy: uploadedByOutput(u.UploadedBy),
 		}
 		if u.CreatedAt != nil {
 			item.CreatedAt = u.CreatedAt.String()
 		}
-		if u.UploadedBy != nil {
-			item.UploadedBy = u.UploadedBy.Username
-		}
 		items = append(items, item)
 	}
 
-	return ListOutput{Uploads: items}, nil
+	return ListOutput{
+		Uploads:    items,
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}, nil
 }
 
 // DeleteInput defines input for deleting a project markdown upload.
