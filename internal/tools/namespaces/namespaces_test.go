@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -34,7 +35,7 @@ func TestList_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 20})
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -290,6 +291,40 @@ func TestList_OwnedAndTopLevel(t *testing.T) {
 	}
 }
 
+// TestList_OrderBySortKeyset verifies List forwards order_by, sort, and keyset
+// pagination parameters to the GitLab API.
+func TestList_OrderBySortKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" {
+			t.Errorf("expected order_by=id, got %q", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %q", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "100" {
+			t.Errorf("expected page_token=100, got %q", q.Get("page_token"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"name":"n","path":"n","kind":"group","full_path":"n"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Namespaces) != 1 {
+		t.Fatalf("got %d, want 1", len(out.Namespaces))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // toOutput with AvatarURL
 // ---------------------------------------------------------------------------.
@@ -309,6 +344,28 @@ func TestToOutput_NilAvatarURL(t *testing.T) {
 	o := toOutput(ns)
 	if o.AvatarURL != "" {
 		t.Errorf("expected empty avatar URL, got %q", o.AvatarURL)
+	}
+}
+
+// TestToOutput_SeatAndTrialFields verifies ToOutput maps trial_ends_on,
+// max_seats_used, and seats_in_use from the GitLab namespace.
+func TestToOutput_SeatAndTrialFields(t *testing.T) {
+	trial := gl.ISOTime(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
+	maxSeats := int64(50)
+	inUse := int64(42)
+	ns := &gl.Namespace{
+		ID: 1, Name: "n", Path: "n", Kind: "group", FullPath: "n",
+		TrialEndsOn: &trial, MaxSeatsUsed: &maxSeats, SeatsInUse: &inUse,
+	}
+	o := toOutput(ns)
+	if o.TrialEndsOn != "2026-12-31" {
+		t.Errorf("got trial_ends_on %q, want 2026-12-31", o.TrialEndsOn)
+	}
+	if o.MaxSeatsUsed == nil || *o.MaxSeatsUsed != 50 {
+		t.Errorf("got max_seats_used %v, want 50", o.MaxSeatsUsed)
+	}
+	if o.SeatsInUse == nil || *o.SeatsInUse != 42 {
+		t.Errorf("got seats_in_use %v, want 42", o.SeatsInUse)
 	}
 }
 
@@ -345,9 +402,12 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 
 // TestFormatMarkdownString_AllFields verifies FormatMarkdownString when all fields.
 func TestFormatMarkdownString_AllFields(t *testing.T) {
+	maxSeats := int64(50)
+	inUse := int64(42)
 	s := FormatMarkdownString(Output{
 		ID: 1, Name: "test", Path: "test", FullPath: "grp/test", Kind: "group",
 		ParentID: 5, WebURL: "https://x", Plan: "gold",
+		TrialEndsOn: "2026-12-31", MaxSeatsUsed: &maxSeats, SeatsInUse: &inUse,
 	})
 	if !strings.Contains(s, "Parent ID") {
 		t.Error("expected Parent ID")
@@ -357,6 +417,12 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 	}
 	if !strings.Contains(s, "https://x") {
 		t.Error("expected web URL")
+	}
+	if !strings.Contains(s, "2026-12-31") {
+		t.Error("expected trial ends on")
+	}
+	if !strings.Contains(s, "Max Seats Used") || !strings.Contains(s, "Seats In Use") {
+		t.Error("expected seat usage rows")
 	}
 }
 
