@@ -72,23 +72,35 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 
 	switch actionName {
 	case "request_list_project":
-		options.Usage = "List pending project access requests. Use before approving or denying user access requests at project scope."
+		options.Usage = "List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"list project access requests", "project join requests", "pending project requests"}
+		options.IndividualTool.Description = "List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_member_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
 				ValueSource:    "Project numeric ID or path where access requests are pending.",
 				ExampleBinding: `params.project_id:"group/project"`,
 			},
+			"order_by": {
+				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
+				ExampleBinding:   `params.order_by:"id"`,
+				CommonConfusions: []string{"Combine order_by with sort (asc/desc); do not pass natural-language phrases as the field value."},
+			},
 		}
 	case "request_list_group":
-		options.Usage = "List pending group access requests. Use before approving or denying user access requests at group scope."
+		options.Usage = "List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"list group access requests", "group join requests", "pending group requests"}
+		options.IndividualTool.Description = "List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_member_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"group_id": {
 				SemanticRole:   "scope_group",
 				ValueSource:    "Group numeric ID or full path where requests are pending.",
 				ExampleBinding: `params.group_id:"my-group"`,
+			},
+			"order_by": {
+				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
+				ExampleBinding:   `params.order_by:"id"`,
+				CommonConfusions: []string{"Combine order_by with sort (asc/desc); do not pass natural-language phrases as the field value."},
 			},
 		}
 	case "approve_project":

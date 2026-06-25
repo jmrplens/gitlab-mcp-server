@@ -377,11 +377,24 @@ func TestListProject_APIError(t *testing.T) {
 func TestListProject_PaginationParams(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/access_requests", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("page") != "2" {
-			t.Errorf("expected page=2, got %s", r.URL.Query().Get("page"))
+		q := r.URL.Query()
+		if q.Get("page") != "2" {
+			t.Errorf("expected page=2, got %s", q.Get("page"))
 		}
-		if r.URL.Query().Get("per_page") != "5" {
-			t.Errorf("expected per_page=5, got %s", r.URL.Query().Get("per_page"))
+		if q.Get("per_page") != "5" {
+			t.Errorf("expected per_page=5, got %s", q.Get("per_page"))
+		}
+		if q.Get("order_by") != "id" {
+			t.Errorf("expected order_by=id, got %s", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %s", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "100" {
+			t.Errorf("expected page_token=100, got %s", q.Get("page_token"))
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
 			`[{"id":10,"username":"u","name":"n","state":"pending","access_level":30}]`,
@@ -389,11 +402,16 @@ func TestListProject_PaginationParams(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := ListProject(context.Background(), client, ListProjectInput{
+	in := ListProjectInput{
 		ProjectID: toolutil.StringOrInt("42"),
-		Page:      2,
-		PerPage:   5,
-	})
+		OrderBy:   "id",
+		Sort:      "desc",
+	}
+	in.Page = 2
+	in.PerPage = 5
+	in.Pagination = "keyset"
+	in.PageToken = "100"
+	out, err := ListProject(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -427,11 +445,24 @@ func TestListGroup_APIError(t *testing.T) {
 func TestListGroup_PaginationParams(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/10/access_requests", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("page") != "3" {
-			t.Errorf("expected page=3, got %s", r.URL.Query().Get("page"))
+		q := r.URL.Query()
+		if q.Get("page") != "3" {
+			t.Errorf("expected page=3, got %s", q.Get("page"))
 		}
-		if r.URL.Query().Get("per_page") != "10" {
-			t.Errorf("expected per_page=10, got %s", r.URL.Query().Get("per_page"))
+		if q.Get("per_page") != "10" {
+			t.Errorf("expected per_page=10, got %s", q.Get("per_page"))
+		}
+		if q.Get("order_by") != "id" {
+			t.Errorf("expected order_by=id, got %s", q.Get("order_by"))
+		}
+		if q.Get("sort") != "asc" {
+			t.Errorf("expected sort=asc, got %s", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "200" {
+			t.Errorf("expected page_token=200, got %s", q.Get("page_token"))
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
 			`[{"id":20,"username":"x","name":"X","state":"pending","access_level":20}]`,
@@ -439,11 +470,16 @@ func TestListGroup_PaginationParams(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := ListGroup(context.Background(), client, ListGroupInput{
+	in := ListGroupInput{
 		GroupID: toolutil.StringOrInt("10"),
-		Page:    3,
-		PerPage: 10,
-	})
+		OrderBy: "id",
+		Sort:    "asc",
+	}
+	in.Page = 3
+	in.PerPage = 10
+	in.Pagination = "keyset"
+	in.PageToken = "200"
+	out, err := ListGroup(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
