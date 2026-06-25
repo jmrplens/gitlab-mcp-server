@@ -2,6 +2,7 @@ package boards
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -44,6 +45,11 @@ type BoardListOutput struct {
 	Position       int64                    `json:"position"`
 	MaxIssueCount  int64                    `json:"max_issue_count,omitempty"`
 	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty"`
+	// LimitMetric is the documented REST `limit_metric` field on each board list
+	// (all_metrics / issue_count / issue_weights, or null). The client-go
+	// gl.BoardList struct omits it, so it is decoded via the raw-superset fetch
+	// path (boardListAPI) used by the board get / list-board-lists read handlers.
+	LimitMetric string `json:"limit_metric,omitempty"`
 }
 
 // ListBoardsOutput represents a paginated list of boards.
@@ -58,6 +64,62 @@ type ListBoardListsOutput struct {
 	toolutil.HintableOutput
 	Lists      []BoardListOutput         `json:"lists"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// ---------------------------------------------------------------------------
+// Raw REST superset types
+// ---------------------------------------------------------------------------.
+
+// boardListAPI is a raw-fetch superset over client-go's gl.BoardList. It embeds
+// the SDK struct (so every SDK-known field — id/label/assignee/milestone/
+// iteration/position/max_issue_*) still decodes through the documented json
+// keys) and adds the documented `limit_metric` field that gl.BoardList omits.
+// Decoding is single-pass and naturally version-tolerant: when limit_metric is
+// absent from the response, LimitMetric stays the zero value and is omitted from
+// the MCP envelope.
+type boardListAPI struct {
+	gl.BoardList
+	LimitMetric string `json:"limit_metric"`
+}
+
+// issueBoardAPI is a raw-fetch superset over client-go's gl.IssueBoard. It
+// embeds the SDK struct and shadows the `lists` key with the boardListAPI
+// superset so each list entry's documented limit_metric is captured; the
+// shallower (outer) Lists field wins over the embedded gl.IssueBoard.Lists
+// during json decoding.
+type issueBoardAPI struct {
+	gl.IssueBoard
+	Lists []*boardListAPI `json:"lists"`
+}
+
+// rawGetBoard issues a raw REST GET for a single issue board, decoding the full
+// documented response (including each list's SDK-missing limit_metric) into an
+// [issueBoardAPI].
+func rawGetBoard(ctx context.Context, client *gitlabclient.Client, projectID string, boardID int64) (*issueBoardAPI, *gl.Response, error) {
+	path := fmt.Sprintf("projects/%s/boards/%d", gl.PathEscape(projectID), boardID)
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var board issueBoardAPI
+	resp, err := client.GL().Do(req, &board)
+	return &board, resp, err
+}
+
+// rawListBoardLists issues a raw REST GET for a board's lists, decoding the full
+// documented response (including each list's SDK-missing limit_metric) into a
+// slice of [boardListAPI]. The supplied opts encode pagination via their url
+// struct tags, and the returned gl.Response preserves pagination headers for
+// [toolutil.PaginationFromResponse].
+func rawListBoardLists(ctx context.Context, client *gitlabclient.Client, projectID string, boardID int64, opts *gl.GetIssueBoardListsOptions) ([]*boardListAPI, *gl.Response, error) {
+	path := fmt.Sprintf("projects/%s/boards/%d/lists", gl.PathEscape(projectID), boardID)
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var lists []*boardListAPI
+	resp, err := client.GL().Do(req, &lists)
+	return lists, resp, err
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +146,26 @@ func convertBoard(b *gl.IssueBoard) BoardOutput {
 	return out
 }
 
+// convertBoardAPI maps a raw-fetch issue board (issueBoardAPI superset) into the
+// MCP output shape, preserving each list's documented limit_metric.
+func convertBoardAPI(b *issueBoardAPI) BoardOutput {
+	out := BoardOutput{
+		ID:              b.ID,
+		Name:            b.Name,
+		Project:         projectOutput(b.Project),
+		Milestone:       milestoneOutput(b.Milestone),
+		Assignee:        basicUserOutput(b.Assignee),
+		Weight:          b.Weight,
+		Labels:          labelDetailsOutputs(b.Labels),
+		HideBacklogList: b.HideBacklogList,
+		HideClosedList:  b.HideClosedList,
+	}
+	for _, l := range b.Lists {
+		out.Lists = append(out.Lists, convertBoardListAPI(l))
+	}
+	return out
+}
+
 // convertBoardList maps a GitLab board list into the MCP output shape,
 // surfacing the full label/assignee/milestone/iteration sub-objects.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
@@ -97,6 +179,15 @@ func convertBoardList(l *gl.BoardList) BoardListOutput {
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,
 	}
+}
+
+// convertBoardListAPI maps a raw-fetch board list (boardListAPI superset) into
+// the MCP output shape, additionally surfacing the documented limit_metric the
+// client-go gl.BoardList struct omits.
+func convertBoardListAPI(l *boardListAPI) BoardListOutput {
+	out := convertBoardList(&l.BoardList)
+	out.LimitMetric = l.LimitMetric
+	return out
 }
 
 // applyOrderSort copies the keyset order_by/sort parameters onto a
@@ -163,12 +254,14 @@ func GetBoard(ctx context.Context, client *gitlabclient.Client, input GetBoardIn
 	if input.BoardID == 0 {
 		return BoardOutput{}, toolutil.WrapErrWithMessage("board_get", toolutil.ErrFieldRequired("board_id"))
 	}
-	board, _, err := client.GL().Boards.GetIssueBoard(string(input.ProjectID), input.BoardID, gl.WithContext(ctx))
+	// Raw REST fetch so the documented limit_metric on each list (absent from
+	// client-go's gl.BoardList) is surfaced.
+	board, _, err := rawGetBoard(ctx, client, string(input.ProjectID), input.BoardID)
 	if err != nil {
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_get", err, http.StatusNotFound,
 			"verify board_id with gitlab_board_list \u2014 board_id is the global board ID, not an IID")
 	}
-	return convertBoard(board), nil
+	return convertBoardAPI(board), nil
 }
 
 // CreateBoardInput represents input for creating a board.
@@ -309,14 +402,16 @@ func ListBoardLists(ctx context.Context, client *gitlabclient.Client, input List
 	opts := &gl.GetIssueBoardListsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
-	lists, resp, err := client.GL().Boards.GetIssueBoardLists(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented limit_metric on each list (absent from
+	// client-go's gl.BoardList) is surfaced.
+	lists, resp, err := rawListBoardLists(ctx, client, string(input.ProjectID), input.BoardID, opts)
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("board_list_list", err, http.StatusNotFound,
 			"verify project_id and board_id with gitlab_board_list")
 	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, l := range lists {
-		out.Lists = append(out.Lists, convertBoardList(l))
+		out.Lists = append(out.Lists, convertBoardListAPI(l))
 	}
 	return out, nil
 }

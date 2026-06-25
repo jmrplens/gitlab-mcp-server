@@ -88,6 +88,7 @@ type RuleOutput struct {
 	ApprovalsRequired    int                        `json:"approvals_required"`
 	Approved             bool                       `json:"approved"`
 	ContainsHiddenGroups bool                       `json:"contains_hidden_groups,omitempty"`
+	Overridden           bool                       `json:"overridden,omitempty"`
 	ApprovedBy           []*BasicUserOutput         `json:"approved_by,omitempty"`
 	EligibleApprovers    []*BasicUserOutput         `json:"eligible_approvers,omitempty"`
 	Users                []*BasicUserOutput         `json:"users,omitempty"`
@@ -166,6 +167,69 @@ func RuleToOutput(r *gl.MergeRequestApprovalRule) RuleOutput {
 	}
 }
 
+// rawRuleToOutput converts a raw-fetch [mergeRequestApprovalRuleAPI] to the MCP
+// output representation, surfacing the documented "overridden" boolean alongside
+// the documented-reference-subset approver/user/group objects and the
+// project-level source rule on their canonical keys.
+func rawRuleToOutput(r *mergeRequestApprovalRuleAPI) RuleOutput {
+	return RuleOutput{
+		ID:                   r.ID,
+		Name:                 r.Name,
+		RuleType:             r.RuleType,
+		ReportType:           r.ReportType,
+		Section:              r.Section,
+		ApprovalsRequired:    int(r.ApprovalsRequired),
+		Approved:             r.Approved,
+		ContainsHiddenGroups: r.ContainsHiddenGroups,
+		Overridden:           r.Overridden,
+		ApprovedBy:           basicUserOutputs(r.ApprovedBy),
+		EligibleApprovers:    basicUserOutputs(r.EligibleApprovers),
+		Users:                basicUserOutputs(r.Users),
+		Groups:               groupOutputs(r.Groups),
+		SourceRule:           projectApprovalRuleOutput(r.SourceRule),
+	}
+}
+
+// rawListApprovalRules issues a raw REST GET against an MR approval-rules list
+// path, decoding the documented response (including the SDK-missing "overridden"
+// field) into a slice of [mergeRequestApprovalRuleAPI].
+func rawListApprovalRules(ctx context.Context, client *gitlabclient.Client, path string) ([]*mergeRequestApprovalRuleAPI, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var rules []*mergeRequestApprovalRuleAPI
+	_, err = client.GL().Do(req, &rules)
+	return rules, err
+}
+
+// rawApprovalState issues a raw REST GET against an MR approval_state path,
+// decoding the documented response (including the SDK-missing per-rule
+// "overridden" field) into a [mergeRequestApprovalStateAPI].
+func rawApprovalState(ctx context.Context, client *gitlabclient.Client, path string) (*mergeRequestApprovalStateAPI, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var state mergeRequestApprovalStateAPI
+	_, err = client.GL().Do(req, &state)
+	return &state, err
+}
+
+// rawMutateApprovalRule issues a raw REST request (POST/PUT) against an MR
+// approval-rule path with the supplied options, decoding the documented response
+// (including the SDK-missing "overridden" field) into a single
+// [mergeRequestApprovalRuleAPI].
+func rawMutateApprovalRule(ctx context.Context, client *gitlabclient.Client, method, path string, opt any) (*mergeRequestApprovalRuleAPI, error) {
+	req, err := client.GL().NewRequest(method, path, opt, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var rule mergeRequestApprovalRuleAPI
+	_, err = client.GL().Do(req, &rule)
+	return &rule, err
+}
+
 // configToOutput converts a client-go MergeRequestApprovals to ConfigOutput,
 // surfacing every SDK field including the full approver, suggested-approver,
 // approver-group, and per-rule approval_rules_left objects.
@@ -220,7 +284,8 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 	if input.MRIID <= 0 {
 		return StateOutput{}, toolutil.ErrRequiredInt64("mrApprovalState", "merge_request_iid")
 	}
-	state, _, err := client.GL().MergeRequestApprovals.GetApprovalState(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/merge_requests/%d/approval_state", gl.PathEscape(string(input.ProjectID)), input.MRIID)
+	state, err := rawApprovalState(ctx, client, path)
 	if err != nil {
 		if toolutil.IsNotFound(err) {
 			return StateOutput{}, fmt.Errorf("mrApprovalState: merge request approval features require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
@@ -232,7 +297,9 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 		ApprovalRulesOverwritten: state.ApprovalRulesOverwritten,
 	}
 	for _, r := range state.Rules {
-		out.Rules = append(out.Rules, RuleToOutput(r))
+		if r != nil {
+			out.Rules = append(out.Rules, rawRuleToOutput(r))
+		}
 	}
 	return out, nil
 }
@@ -248,7 +315,8 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 	if input.MRIID <= 0 {
 		return RulesOutput{}, toolutil.ErrRequiredInt64("mrApprovalRules", "merge_request_iid")
 	}
-	rules, _, err := client.GL().MergeRequestApprovals.GetApprovalRules(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/merge_requests/%d/approval_rules", gl.PathEscape(string(input.ProjectID)), input.MRIID)
+	rules, err := rawListApprovalRules(ctx, client, path)
 	if err != nil {
 		if toolutil.IsNotFound(err) {
 			return RulesOutput{}, fmt.Errorf("mrApprovalRules: merge request approval rules require GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
@@ -258,7 +326,9 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 	}
 	out := RulesOutput{}
 	for _, r := range rules {
-		out.Rules = append(out.Rules, RuleToOutput(r))
+		if r != nil {
+			out.Rules = append(out.Rules, rawRuleToOutput(r))
+		}
 	}
 	return out, nil
 }
@@ -338,12 +408,13 @@ func CreateRule(ctx context.Context, client *gitlabclient.Client, input CreateRu
 		opts.GroupIDs = new(input.GroupIDs)
 	}
 
-	rule, _, err := client.GL().MergeRequestApprovals.CreateApprovalRule(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/merge_requests/%d/approval_rules", gl.PathEscape(string(input.ProjectID)), input.MRIID)
+	rule, err := rawMutateApprovalRule(ctx, client, http.MethodPost, path, opts)
 	if err != nil {
 		return RuleOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRuleCreate", err, http.StatusBadRequest,
 			"requires Maintainer + Premium/Ultimate; user_ids/group_ids must be project members; rule_type must be 'regular' or 'any_approver'; cannot have multiple any_approver rules")
 	}
-	return RuleToOutput(rule), nil
+	return rawRuleToOutput(rule), nil
 }
 
 // UpdateRule updates an existing approval rule on a merge request.
@@ -375,12 +446,13 @@ func UpdateRule(ctx context.Context, client *gitlabclient.Client, input UpdateRu
 		opts.GroupIDs = new(input.GroupIDs)
 	}
 
-	rule, _, err := client.GL().MergeRequestApprovals.UpdateApprovalRule(string(input.ProjectID), input.MRIID, input.ApprovalRuleID, opts, gl.WithContext(ctx))
+	path := fmt.Sprintf("projects/%s/merge_requests/%d/approval_rules/%d", gl.PathEscape(string(input.ProjectID)), input.MRIID, input.ApprovalRuleID)
+	rule, err := rawMutateApprovalRule(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
 		return RuleOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalRuleUpdate", err, http.StatusNotFound,
 			"verify approval_rule_id with gitlab_mr_approval_rules; requires Maintainer; cannot change rule_type after creation")
 	}
-	return RuleToOutput(rule), nil
+	return rawRuleToOutput(rule), nil
 }
 
 // DeleteRule removes an approval rule from a merge request.

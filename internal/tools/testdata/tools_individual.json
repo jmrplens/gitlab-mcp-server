@@ -3068,6 +3068,9 @@
                   "object"
                 ]
               },
+              "limit_metric": {
+                "type": "string"
+              },
               "max_issue_count": {
                 "type": "integer"
               },
@@ -3570,6 +3573,9 @@
                   "object"
                 ]
               },
+              "limit_metric": {
+                "type": "string"
+              },
               "max_issue_count": {
                 "type": "integer"
               },
@@ -4040,6 +4046,9 @@
                         "object"
                       ]
                     },
+                    "limit_metric": {
+                      "type": "string"
+                    },
                     "max_issue_count": {
                       "type": "integer"
                     },
@@ -4479,6 +4488,9 @@
             "object"
           ]
         },
+        "limit_metric": {
+          "type": "string"
+        },
         "max_issue_count": {
           "type": "integer"
         },
@@ -4755,6 +4767,9 @@
             "object"
           ]
         },
+        "limit_metric": {
+          "type": "string"
+        },
         "max_issue_count": {
           "type": "integer"
         },
@@ -4993,6 +5008,9 @@
                   "null",
                   "object"
                 ]
+              },
+              "limit_metric": {
+                "type": "string"
               },
               "max_issue_count": {
                 "type": "integer"
@@ -5271,6 +5289,9 @@
             "null",
             "object"
           ]
+        },
+        "limit_metric": {
+          "type": "string"
         },
         "max_issue_count": {
           "type": "integer"
@@ -5602,6 +5623,9 @@
                   "null",
                   "object"
                 ]
+              },
+              "limit_metric": {
+                "type": "string"
               },
               "max_issue_count": {
                 "type": "integer"
@@ -20253,6 +20277,21 @@
                 "object"
               ]
             },
+            "project": {
+              "additionalProperties": false,
+              "properties": {
+                "ci_job_token_scope_enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ci_job_token_scope_enabled"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "ref": {
               "type": "string"
             },
@@ -20634,6 +20673,21 @@
                 "object"
               ]
             },
+            "project": {
+              "additionalProperties": false,
+              "properties": {
+                "ci_job_token_scope_enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ci_job_token_scope_enabled"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "ref": {
               "type": "string"
             },
@@ -21001,6 +21055,21 @@
                     },
                     "required": [
                       "id"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "project": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "ci_job_token_scope_enabled": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "ci_job_token_scope_enabled"
                     ],
                     "type": [
                       "null",
@@ -21389,6 +21458,21 @@
               },
               "required": [
                 "id"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "project": {
+              "additionalProperties": false,
+              "properties": {
+                "ci_job_token_scope_enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ci_job_token_scope_enabled"
               ],
               "type": [
                 "null",
@@ -104308,9 +104392,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -104352,9 +104433,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -104391,9 +104469,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "description": {
@@ -104462,6 +104537,9 @@
                   "array"
                 ]
               },
+              "overridden": {
+                "type": "boolean"
+              },
               "report_type": {
                 "type": "string"
               },
@@ -104488,9 +104566,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "id": {
@@ -104529,9 +104604,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "description": {
@@ -104637,9 +104709,6 @@
                         "avatar_url": {
                           "type": "string"
                         },
-                        "created_at": {
-                          "type": "string"
-                        },
                         "id": {
                           "type": "integer"
                         },
@@ -104689,9 +104758,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "id": {
@@ -104763,9 +104829,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
                     "type": "string"
                   },
                   "id": {
@@ -104882,9 +104945,6 @@
                   "avatar_url": {
                     "type": "string"
                   },
-                  "created_at": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
@@ -104969,9 +105029,6 @@
             "additionalProperties": false,
             "properties": {
               "avatar_url": {
-                "type": "string"
-              },
-              "created_at": {
                 "type": "string"
               },
               "id": {
@@ -105175,9 +105232,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "created_at": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -105219,9 +105273,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "created_at": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -105258,9 +105309,6 @@
             "additionalProperties": false,
             "properties": {
               "avatar_url": {
-                "type": "string"
-              },
-              "created_at": {
                 "type": "string"
               },
               "description": {
@@ -105329,6 +105377,9 @@
             "array"
           ]
         },
+        "overridden": {
+          "type": "boolean"
+        },
         "report_type": {
           "type": "string"
         },
@@ -105355,9 +105406,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
                     "type": "string"
                   },
                   "id": {
@@ -105396,9 +105444,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
                     "type": "string"
                   },
                   "description": {
@@ -105504,9 +105549,6 @@
                   "avatar_url": {
                     "type": "string"
                   },
-                  "created_at": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
@@ -105556,9 +105598,6 @@
             "additionalProperties": false,
             "properties": {
               "avatar_url": {
-                "type": "string"
-              },
-              "created_at": {
                 "type": "string"
               },
               "id": {
@@ -105746,9 +105785,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "created_at": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -105790,9 +105826,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "created_at": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -105829,9 +105862,6 @@
             "additionalProperties": false,
             "properties": {
               "avatar_url": {
-                "type": "string"
-              },
-              "created_at": {
                 "type": "string"
               },
               "description": {
@@ -105900,6 +105930,9 @@
             "array"
           ]
         },
+        "overridden": {
+          "type": "boolean"
+        },
         "report_type": {
           "type": "string"
         },
@@ -105926,9 +105959,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
                     "type": "string"
                   },
                   "id": {
@@ -105967,9 +105997,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "avatar_url": {
-                    "type": "string"
-                  },
-                  "created_at": {
                     "type": "string"
                   },
                   "description": {
@@ -106075,9 +106102,6 @@
                   "avatar_url": {
                     "type": "string"
                   },
-                  "created_at": {
-                    "type": "string"
-                  },
                   "id": {
                     "type": "integer"
                   },
@@ -106127,9 +106151,6 @@
             "additionalProperties": false,
             "properties": {
               "avatar_url": {
-                "type": "string"
-              },
-              "created_at": {
                 "type": "string"
               },
               "id": {
@@ -106229,9 +106250,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -106273,9 +106291,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -106312,9 +106327,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "description": {
@@ -106383,6 +106395,9 @@
                   "array"
                 ]
               },
+              "overridden": {
+                "type": "boolean"
+              },
               "report_type": {
                 "type": "string"
               },
@@ -106409,9 +106424,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "id": {
@@ -106450,9 +106462,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "description": {
@@ -106558,9 +106567,6 @@
                         "avatar_url": {
                           "type": "string"
                         },
-                        "created_at": {
-                          "type": "string"
-                        },
                         "id": {
                           "type": "integer"
                         },
@@ -106610,9 +106616,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "id": {
@@ -106727,9 +106730,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -106771,9 +106771,6 @@
                     "avatar_url": {
                       "type": "string"
                     },
-                    "created_at": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "integer"
                     },
@@ -106810,9 +106807,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "description": {
@@ -106881,6 +106875,9 @@
                   "array"
                 ]
               },
+              "overridden": {
+                "type": "boolean"
+              },
               "report_type": {
                 "type": "string"
               },
@@ -106907,9 +106904,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "id": {
@@ -106948,9 +106942,6 @@
                       "additionalProperties": false,
                       "properties": {
                         "avatar_url": {
-                          "type": "string"
-                        },
-                        "created_at": {
                           "type": "string"
                         },
                         "description": {
@@ -107056,9 +107047,6 @@
                         "avatar_url": {
                           "type": "string"
                         },
-                        "created_at": {
-                          "type": "string"
-                        },
                         "id": {
                           "type": "integer"
                         },
@@ -107108,9 +107096,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "avatar_url": {
-                      "type": "string"
-                    },
-                    "created_at": {
                       "type": "string"
                     },
                     "id": {
@@ -134876,6 +134861,9 @@
               "key": {
                 "type": "string"
               },
+              "raw": {
+                "type": "boolean"
+              },
               "value": {
                 "type": "string"
               },
@@ -135323,6 +135311,9 @@
               "key": {
                 "type": "string"
               },
+              "raw": {
+                "type": "boolean"
+              },
               "value": {
                 "type": "string"
               },
@@ -135585,6 +135576,9 @@
                   "properties": {
                     "key": {
                       "type": "string"
+                    },
+                    "raw": {
+                      "type": "boolean"
                     },
                     "value": {
                       "type": "string"
@@ -135940,6 +135934,9 @@
               "key": {
                 "type": "string"
               },
+              "raw": {
+                "type": "boolean"
+              },
               "value": {
                 "type": "string"
               },
@@ -136129,6 +136126,9 @@
             "properties": {
               "key": {
                 "type": "string"
+              },
+              "raw": {
+                "type": "boolean"
               },
               "value": {
                 "type": "string"
@@ -136368,6 +136368,9 @@
             "properties": {
               "key": {
                 "type": "string"
+              },
+              "raw": {
+                "type": "boolean"
               },
               "value": {
                 "type": "string"

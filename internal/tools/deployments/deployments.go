@@ -95,6 +95,64 @@ type ListOutput struct {
 }
 
 // ---------------------------------------------------------------------------
+// Raw REST superset fetch
+// ---------------------------------------------------------------------------.
+
+// deploymentAPI is the raw-fetch superset of a deployment. It embeds the SDK
+// gitlab.Deployment so every documented scalar and sub-object decodes through the
+// SDK's own unmarshalling, and overrides the deployable key with deployableAPI to
+// additionally capture the documented deployable.project object that the SDK omits.
+//
+// The named Deployable field shadows the embedded gitlab.Deployment.Deployable
+// for the "deployable" JSON key (encoding/json prefers the shallower field), so a
+// single Do(&superset) unmarshal yields both the full SDK deployment shape and the
+// raw project sub-object. The embedded deployment's own Deployable stays zero and
+// is never read.
+type deploymentAPI struct {
+	gitlab.Deployment
+	Deployable deployableAPI `json:"deployable"`
+}
+
+// deployableAPI is the raw-fetch superset of gl.DeploymentDeployable. It embeds
+// the SDK type for all documented deployable fields and adds the SDK-missing
+// project sub-object. A nil Project (older instances omit the key) is naturally
+// tolerated and yields an omitted output field.
+type deployableAPI struct {
+	gitlab.DeploymentDeployable
+	Project *DeployableProjectOutput `json:"project,omitempty"`
+}
+
+// rawGetDeployment issues a raw REST GET against a single-deployment path,
+// decoding the documented superset (including deployable.project) into a
+// [deploymentAPI]. A single unmarshal is naturally tolerant of older instances
+// that omit deployable.project. The single-resource path carries no pagination,
+// so the gl.Response is not returned.
+func rawGetDeployment(ctx context.Context, client *gitlabclient.Client, path string) (*deploymentAPI, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gitlab.RequestOptionFunc{gitlab.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var d deploymentAPI
+	_, err = client.GL().Do(req, &d)
+	return &d, err
+}
+
+// rawListDeployments issues a raw REST GET against the deployments list path,
+// decoding the documented superset into a slice of [deploymentAPI]. The opts
+// encode ordering, filters, and pagination via their url struct tags, and the
+// returned gl.Response preserves the pagination headers for
+// [toolutil.PaginationFromResponse].
+func rawListDeployments(ctx context.Context, client *gitlabclient.Client, path string, opts *gitlab.ListProjectDeploymentsOptions) ([]*deploymentAPI, *gitlab.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gitlab.RequestOptionFunc{gitlab.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var deployments []*deploymentAPI
+	resp, err := client.GL().Do(req, &deployments)
+	return deployments, resp, err
+}
+
+// ---------------------------------------------------------------------------
 // Converter
 // ---------------------------------------------------------------------------.
 
@@ -110,7 +168,25 @@ func toOutput(d *gitlab.Deployment) Output {
 		UpdatedAt:   formatTimePtr(d.UpdatedAt),
 		User:        projectUserOutput(d.User),
 		Environment: environmentOutput(d.Environment),
-		Deployable:  deployableOutput(d.Deployable),
+		Deployable:  deployableOutput(d.Deployable, nil),
+	}
+}
+
+// toOutputAPI converts the raw-fetch superset to the tool output format,
+// surfacing the SDK-missing deployable.project object alongside the standard
+// SDK-decoded fields.
+func toOutputAPI(d *deploymentAPI) Output {
+	return Output{
+		ID:          int(d.ID),
+		IID:         int(d.IID),
+		Ref:         d.Ref,
+		SHA:         d.SHA,
+		Status:      d.Status,
+		CreatedAt:   formatTimePtr(d.CreatedAt),
+		UpdatedAt:   formatTimePtr(d.UpdatedAt),
+		User:        projectUserOutput(d.User),
+		Environment: environmentOutput(d.Environment),
+		Deployable:  deployableOutput(d.Deployable.DeploymentDeployable, d.Deployable.Project),
 	}
 }
 
@@ -146,7 +222,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts.FinishedAfter = toolutil.ParseOptionalTime(input.FinishedAfter)
 	opts.FinishedBefore = toolutil.ParseOptionalTime(input.FinishedBefore)
 
-	deployments, resp, err := client.GL().Deployments.ListProjectDeployments(string(input.ProjectID), opts, gitlab.WithContext(ctx))
+	// Raw REST fetch so the documented deployable.project object
+	// ({ci_job_token_scope_enabled}), absent from gl.DeploymentDeployable, is
+	// surfaced 1:1 with the Deployments API. A single unmarshal is naturally
+	// tolerant of older instances that omit the field.
+	path := fmt.Sprintf("projects/%s/deployments", gitlab.PathEscape(string(input.ProjectID)))
+	deployments, resp, err := rawListDeployments(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list deployments", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; deployments are populated by CI/CD jobs that run in environments")
@@ -154,7 +235,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items := make([]Output, 0, len(deployments))
 	for _, d := range deployments {
-		items = append(items, toOutput(d))
+		items = append(items, toOutputAPI(d))
 	}
 
 	return ListOutput{
@@ -175,13 +256,18 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	d, _, err := client.GL().Deployments.GetProjectDeployment(string(input.ProjectID), int64(input.DeploymentID), gitlab.WithContext(ctx))
+	// Raw REST fetch so the documented deployable.project object
+	// ({ci_job_token_scope_enabled}), absent from gl.DeploymentDeployable, is
+	// surfaced 1:1 with the Deployments API. A single unmarshal is naturally
+	// tolerant of older instances that omit the field.
+	path := fmt.Sprintf("projects/%s/deployments/%d", gitlab.PathEscape(string(input.ProjectID)), input.DeploymentID)
+	d, err := rawGetDeployment(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get deployment", err, http.StatusNotFound,
 			"verify deployment_id with gitlab_deployment_list \u2014 deployment IDs are project-scoped")
 	}
 
-	return toOutput(d), nil
+	return toOutputAPI(d), nil
 }
 
 // Create creates resources for the deployments package.

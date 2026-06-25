@@ -162,6 +162,7 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 				"deployable":{
 					"id":10,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,"coverage":92.5,
 					"created_at":"2026-01-01T00:00:00Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
+					"project":{"ci_job_token_scope_enabled":true},
 					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru","twitter":"ru","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
 					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","web_url":"https://gl/c/abc"},
 					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:05:00Z"},
@@ -205,6 +206,9 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	}
 	if d.Runner == nil || d.Runner.ID != 99 || d.Runner.RunnerType != "instance_type" || !d.Runner.Online || !d.Runner.IsShared {
 		t.Errorf("deployable runner mismatch: %+v", d.Runner)
+	}
+	if d.Project == nil || !d.Project.CIJobTokenScopeEnabled {
+		t.Errorf("deployable project mismatch: %+v", d.Project)
 	}
 }
 
@@ -261,6 +265,76 @@ func TestDeploymentGet_NilDeployable(t *testing.T) {
 	}
 	if out.Deployable != nil {
 		t.Errorf("Deployable = %+v, want nil", out.Deployable)
+	}
+}
+
+// TestDeploymentGet_DeployableWithoutProject verifies version tolerance for the
+// raw-fetched deployable.project object: older GitLab instances omit the
+// deployable.project key, so the single Do(&superset) unmarshal must succeed and
+// leave Project nil (omitted from output) while still surfacing the rest of the
+// deployable. It asserts the request succeeds and Deployable.Project is nil.
+func TestDeploymentGet_DeployableWithoutProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			// deployable present but without the documented project sub-object
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"id":10,"status":"success","stage":"deploy"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Deployable == nil || out.Deployable.ID != 10 {
+		t.Fatalf("expected deployable with id 10, got %+v", out.Deployable)
+	}
+	if out.Deployable.Project != nil {
+		t.Errorf("Deployable.Project = %+v, want nil (omitted on instances without the field)", out.Deployable.Project)
+	}
+}
+
+// TestDeploymentRawFetch_NewRequestError covers the NewRequest error branch of
+// both raw superset helpers. A path containing an invalid percent-escape ("%zz")
+// makes gitlab.NewRequest fail before any HTTP call, exercising the error return
+// that real handlers reach only on malformed routes. It asserts both helpers
+// return a non-nil error and never invoke the transport.
+func TestDeploymentRawFetch_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("transport must not be called when NewRequest fails")
+	}))
+	if _, err := rawGetDeployment(context.Background(), client, "projects/%zz/deployments/1"); err == nil {
+		t.Error("rawGetDeployment: expected NewRequest error, got nil")
+	}
+	if _, _, err := rawListDeployments(context.Background(), client, "projects/%zz/deployments", nil); err == nil {
+		t.Error("rawListDeployments: expected NewRequest error, got nil")
+	}
+}
+
+// TestDeploymentList_DeployableProject verifies that the list handler's raw
+// superset fetch surfaces the documented deployable.project object
+// ({ci_job_token_scope_enabled}) for each deployment. It asserts the project
+// sub-object decodes through the list path as it does through get.
+func TestDeploymentList_DeployableProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","deployable":{"id":10,"status":"success","project":{"ci_job_token_scope_enabled":true}}}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Deployments) != 1 {
+		t.Fatalf("expected 1 deployment, got %d", len(out.Deployments))
+	}
+	d := out.Deployments[0].Deployable
+	if d == nil || d.Project == nil || !d.Project.CIJobTokenScopeEnabled {
+		t.Errorf("deployable project mismatch: %+v", d)
 	}
 }
 

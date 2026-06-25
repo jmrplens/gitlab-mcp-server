@@ -10,6 +10,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -202,6 +205,122 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	}
 	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" || out.Inputs[0].Value != "1.2.3" {
 		t.Errorf("inputs = %+v, want one version=1.2.3", out.Inputs)
+	}
+}
+
+// TestPipelineScheduleGet_RawVariableSurfaced verifies that the documented
+// variables[].raw boolean — which the SDK gl.PipelineVariable omits — is
+// surfaced through the raw REST superset fetch on the get-schedule handler.
+func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"variables":[{"key":"TOKEN","value":"$secret","variable_type":"env_var","raw":true}]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Variables) != 1 || !out.Variables[0].Raw {
+		t.Fatalf("variables = %+v, want one variable with raw=true", out.Variables)
+	}
+	blob, err := json.Marshal(out.Variables[0])
+	if err != nil {
+		t.Fatalf("marshal variable: %v", err)
+	}
+	if !strings.Contains(string(blob), `"raw":true`) {
+		t.Errorf("variable JSON missing raw=true: %s", blob)
+	}
+}
+
+// TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance verifies that a
+// schedule whose variables[] entries omit the raw field (older GitLab versions)
+// still decodes successfully, leaving raw at its false zero value and omitting it
+// from the serialized output via the omitempty tag.
+func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"variables":[{"key":"DEPLOY_ENV","value":"prod","variable_type":"env_var"}]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf("version-tolerant decode must not fail: %v", err)
+	}
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
+		t.Fatalf("variables = %+v, want one DEPLOY_ENV variable", out.Variables)
+	}
+	if out.Variables[0].Raw {
+		t.Errorf("raw = true, want false when field absent")
+	}
+	blob, err := json.Marshal(out.Variables[0])
+	if err != nil {
+		t.Fatalf("marshal variable: %v", err)
+	}
+	if strings.Contains(string(blob), "raw") {
+		t.Errorf("variable JSON unexpectedly contains raw when absent: %s", blob)
+	}
+}
+
+// TestToOutput_SDKConverter_FullSchedule exercises the SDK-wrapper toOutput
+// converter (still used by the list/create/update/take-ownership handlers, which
+// return the gl.PipelineSchedule wrapper) across all of its sub-object and
+// timestamp branches: owner, last_pipeline, variables, inputs, next_run_at,
+// created_at, and updated_at. The get/run handlers now use the raw superset path
+// (toOutputAPI), so this direct test keeps the SDK converter fully covered.
+func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
+	now := time.Date(2026, 3, 8, 1, 0, 0, 0, time.UTC)
+	destroy := true
+	s := &gitlab.PipelineSchedule{
+		ID:           1,
+		Description:  "Nightly",
+		Ref:          "main",
+		Cron:         "0 1 * * *",
+		CronTimezone: "UTC",
+		Active:       true,
+		NextRunAt:    &now,
+		CreatedAt:    &now,
+		UpdatedAt:    &now,
+		Owner:        &gitlab.User{ID: 7, Username: "admin", Name: "Admin User", State: "active"},
+		LastPipeline: &gitlab.LastPipeline{ID: 99, SHA: "abc", Ref: "main", Status: "success"},
+		Variables: []*gitlab.PipelineVariable{
+			{Key: "DEPLOY_ENV", Value: "prod", VariableType: gitlab.EnvVariableType},
+			nil,
+		},
+		Inputs: []*gitlab.PipelineInput{
+			{Name: "version", Value: "1.2.3", Destroy: &destroy},
+			nil,
+		},
+	}
+
+	out := toOutput(s)
+
+	if out.Owner == nil || out.Owner.ID != 7 {
+		t.Errorf("owner = %+v, want id 7", out.Owner)
+	}
+	if out.LastPipeline == nil || out.LastPipeline.ID != 99 {
+		t.Errorf("last_pipeline = %+v, want id 99", out.LastPipeline)
+	}
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
+		t.Errorf("variables = %+v, want one DEPLOY_ENV variable (nil skipped)", out.Variables)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+		t.Errorf("inputs = %+v, want one version input (nil skipped)", out.Inputs)
+	}
+	if out.NextRunAt == "" || out.CreatedAt == "" || out.UpdatedAt == "" {
+		t.Errorf("timestamps not formatted: %+v", out)
 	}
 }
 

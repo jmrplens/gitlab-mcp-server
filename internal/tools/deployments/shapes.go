@@ -14,8 +14,10 @@ import (
 //
 // This file covers the deployment sub-objects surfaced on the canonical json
 // keys: user (gl.ProjectUser), environment (gl.Environment), and deployable
-// (gl.DeploymentDeployable, including its nested user, commit, pipeline,
-// project, and runner objects).
+// (gl.DeploymentDeployable, including its nested user, commit, pipeline, and
+// runner objects). The deployable.project sub-object ({ci_job_token_scope_enabled})
+// is documented but absent from the SDK, so it is surfaced via a raw REST superset
+// fetch (see rawGetDeployment/rawListDeployments in deployments.go).
 
 // formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
 func formatTimePtr(t *time.Time) string {
@@ -206,13 +208,24 @@ func deployableRunnerOutput(r *gitlab.Runner) *DeployableRunnerOutput {
 	}
 }
 
+// DeployableProjectOutput is the documented reference subset of the deployable
+// (CI job) project object. The Deployments API documents a single field on this
+// object, ci_job_token_scope_enabled, indicating whether the project's CI/CD job
+// token scope is enabled. gl.DeploymentDeployable has no Project field, so this
+// is surfaced via a raw REST fetch (see rawGetDeployment/rawListDeployments).
+// Documented reference subset per doc/api/deployments.md.
+type DeployableProjectOutput struct {
+	CIJobTokenScopeEnabled bool `json:"ci_job_token_scope_enabled"`
+}
+
 // DeployableOutput is the documented reference subset of gl.DeploymentDeployable
 // (the CI job backing a deployment), including its nested user, commit,
-// pipeline, and runner objects. The API documents id, status, stage, name, ref,
-// tag, coverage, created_at, started_at, finished_at, plus the nested objects;
-// the SDK's duration field is not documented and is not surfaced. The
+// pipeline, runner, and project objects. The API documents id, status, stage,
+// name, ref, tag, coverage, created_at, started_at, finished_at, plus the nested
+// objects; the SDK's duration field is not documented and is not surfaced. The
 // documented deployable.project object ({ci_job_token_scope_enabled}) has no
-// counterpart on the SDK struct and therefore cannot be surfaced.
+// counterpart on the SDK struct (gl.DeploymentDeployable.Project does not exist)
+// and is therefore surfaced through a raw REST superset fetch.
 // Documented reference subset per doc/api/deployments.md.
 type DeployableOutput struct {
 	ID         int64                     `json:"id"`
@@ -225,6 +238,7 @@ type DeployableOutput struct {
 	CreatedAt  string                    `json:"created_at,omitempty"`
 	StartedAt  string                    `json:"started_at,omitempty"`
 	FinishedAt string                    `json:"finished_at,omitempty"`
+	Project    *DeployableProjectOutput  `json:"project,omitempty"`
 	User       *DeployableUserOutput     `json:"user,omitempty"`
 	Commit     *DeployableCommitOutput   `json:"commit,omitempty"`
 	Pipeline   *DeployablePipelineOutput `json:"pipeline,omitempty"`
@@ -232,11 +246,13 @@ type DeployableOutput struct {
 }
 
 // deployableOutput converts gl.DeploymentDeployable to its output shape,
-// returning nil when the value is empty (no backing job).
-func deployableOutput(d gitlab.DeploymentDeployable) *DeployableOutput {
+// returning nil when the value is empty (no backing job). The optional project
+// argument carries the raw-fetched deployable.project object, which has no SDK
+// counterpart; it is nil on older instances that omit the field.
+func deployableOutput(d gitlab.DeploymentDeployable, project *DeployableProjectOutput) *DeployableOutput {
 	pipeline := deployablePipelineOutput(d.Pipeline)
 	if d.ID == 0 && d.Name == "" && d.Status == "" && d.Stage == "" && d.Ref == "" &&
-		d.User == nil && d.Commit == nil && pipeline == nil && d.Runner == nil {
+		d.User == nil && d.Commit == nil && pipeline == nil && d.Runner == nil && project == nil {
 		return nil
 	}
 	return &DeployableOutput{
@@ -250,6 +266,7 @@ func deployableOutput(d gitlab.DeploymentDeployable) *DeployableOutput {
 		CreatedAt:  formatTimePtr(d.CreatedAt),
 		StartedAt:  formatTimePtr(d.StartedAt),
 		FinishedAt: formatTimePtr(d.FinishedAt),
+		Project:    project,
 		User:       deployableUserOutput(d.User),
 		Commit:     deployableCommitOutput(d.Commit),
 		Pipeline:   pipeline,

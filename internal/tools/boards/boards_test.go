@@ -5,6 +5,7 @@ package boards
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -318,6 +319,104 @@ func TestListBoardLists_Success(t *testing.T) {
 	}
 	if out.Lists[0].Milestone == nil || out.Lists[0].Milestone.Title != "v1.0" {
 		t.Errorf("expected milestone v1.0, got %+v", out.Lists[0].Milestone)
+	}
+}
+
+// boardListWithLimitMetricJSON is a board-list array whose entry includes the
+// documented limit_metric REST field that client-go's gl.BoardList omits. Used
+// to verify the raw-superset fetch path surfaces it.
+var boardListWithLimitMetricJSON = `[{
+	"id": 100,
+	"label": {"id": 20, "name": "To Do"},
+	"position": 0,
+	"max_issue_count": 10,
+	"limit_metric": "issue_count"
+}]`
+
+// boardWithLimitMetricJSON is a single board whose list entry includes the
+// documented limit_metric REST field absent from gl.BoardList.
+var boardWithLimitMetricJSON = `{
+	"id": 1,
+	"name": "Development",
+	"lists": [
+		{"id": 100, "label": {"id": 20, "name": "To Do"}, "position": 0, "limit_metric": "all_metrics"}
+	]
+}`
+
+// TestListBoardLists_LimitMetricSurfaced verifies that the documented
+// limit_metric REST field (absent from client-go's gl.BoardList) is surfaced
+// through the raw-superset fetch path used by ListBoardLists.
+func TestListBoardLists_LimitMetricSurfaced(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, boardListWithLimitMetricJSON,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListBoardLists(context.Background(), client, ListBoardListsInput{
+		ProjectID: toolutil.StringOrInt("10"), BoardID: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Lists) != 1 {
+		t.Fatalf("expected 1 list, got %d", len(out.Lists))
+	}
+	if out.Lists[0].LimitMetric != "issue_count" {
+		t.Errorf("expected limit_metric issue_count, got %q", out.Lists[0].LimitMetric)
+	}
+}
+
+// TestGetBoard_LimitMetricSurfaced verifies that each list's documented
+// limit_metric is surfaced through the raw-superset fetch path used by GetBoard.
+func TestGetBoard_LimitMetricSurfaced(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, boardWithLimitMetricJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: toolutil.StringOrInt("10"), BoardID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Lists) != 1 || out.Lists[0].LimitMetric != "all_metrics" {
+		t.Errorf("expected list limit_metric all_metrics, got %+v", out.Lists)
+	}
+}
+
+// TestListBoardLists_LimitMetricAbsentOmitted verifies version tolerance: when
+// the GitLab response does not include limit_metric (older instances), the field
+// decodes to its zero value and is omitted from the marshaled MCP envelope,
+// without failing the request.
+func TestListBoardLists_LimitMetricAbsentOmitted(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
+		// boardListsArrayJSON intentionally omits limit_metric.
+		testutil.RespondJSONWithPagination(w, http.StatusOK, boardListsArrayJSON,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListBoardLists(context.Background(), client, ListBoardListsInput{
+		ProjectID: toolutil.StringOrInt("10"), BoardID: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Lists) != 1 {
+		t.Fatalf("expected 1 list, got %d", len(out.Lists))
+	}
+	if out.Lists[0].LimitMetric != "" {
+		t.Errorf("expected empty limit_metric when absent, got %q", out.Lists[0].LimitMetric)
+	}
+	data, err := json.Marshal(out.Lists[0])
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	if strings.Contains(string(data), "limit_metric") {
+		t.Errorf("expected limit_metric omitted from envelope, got %s", data)
 	}
 }
 

@@ -3,6 +3,7 @@ package pipelineschedules
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -133,6 +134,26 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 	return out
 }
 
+// rawGetSchedule issues a raw REST GET against a single pipeline schedule path,
+// decoding the documented superset (including the SDK-missing
+// `variables[].raw` boolean) into a [rawScheduleAPI]. The SDK
+// gl.PipelineSchedule wrapper drops `raw`, so this raw-fetch path is used for the
+// single-schedule reads that return the documented `variables[]` array. A single
+// Do(&superset) unmarshal naturally tolerates instances that omit `raw`, leaving
+// it at its zero value.
+func rawGetSchedule(ctx context.Context, client *gitlabclient.Client, projectID string, scheduleID int) (*rawScheduleAPI, error) {
+	path := fmt.Sprintf("projects/%s/pipeline_schedules/%d", gitlab.PathEscape(projectID), scheduleID)
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gitlab.RequestOptionFunc{gitlab.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var s rawScheduleAPI
+	if _, err = client.GL().Do(req, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------.
@@ -188,13 +209,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	s, _, err := client.GL().PipelineSchedules.GetPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), gitlab.WithContext(ctx))
+	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get pipeline schedule", err, http.StatusNotFound,
 			"verify schedule_id with gitlab_pipeline_schedule_list \u2014 schedule_id is the database ID, not a name")
 	}
 
-	return toOutput(s), nil
+	return toOutputAPI(s), nil
 }
 
 // Create creates resources for the pipelineschedules package.
@@ -342,13 +363,14 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 			hintVerifyScheduleID)
 	}
 
-	// Fetch the schedule after triggering to return current state
-	s, _, err := client.GL().PipelineSchedules.GetPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), gitlab.WithContext(ctx))
+	// Fetch the schedule after triggering to return current state, using the raw
+	// superset path so the documented variables[].raw field is preserved.
+	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("get pipeline schedule after run", err)
 	}
 
-	return toOutput(s), nil
+	return toOutputAPI(s), nil
 }
 
 // Take Ownership.

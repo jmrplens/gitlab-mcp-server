@@ -18,6 +18,10 @@ func TestBasicUserOutput_NilAndFull(t *testing.T) {
 	if got := basicUserOutput(nil); got != nil {
 		t.Errorf("basicUserOutput(nil) = %v, want nil", got)
 	}
+	// created_at is intentionally not projected: the documented reference subset
+	// (doc/api/merge_request_approvals.md) omits it. Supplying it on the SDK
+	// input must not surface a CreatedAt field on the output (the field no
+	// longer exists on BasicUserOutput).
 	created := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
 	out := basicUserOutput(&gl.BasicUser{
 		ID: 7, Username: "alice", Name: "Alice", State: "active",
@@ -26,9 +30,6 @@ func TestBasicUserOutput_NilAndFull(t *testing.T) {
 	if out == nil || out.ID != 7 || out.Username != "alice" || out.Name != "Alice" ||
 		out.State != "active" || out.AvatarURL != "https://a" || out.WebURL != "https://w" {
 		t.Fatalf("basicUserOutput full = %+v", out)
-	}
-	if out.CreatedAt != "2026-02-01T09:00:00Z" {
-		t.Errorf("CreatedAt = %q, want RFC3339", out.CreatedAt)
 	}
 }
 
@@ -113,8 +114,10 @@ func TestApproverGroupOutputs_EmptyAndNilElements(t *testing.T) {
 	}
 }
 
-// TestGroupOutput_NilAndFull verifies groupOutput maps the compact identifying
-// fields, formats the timestamp, and returns nil for a nil input.
+// TestGroupOutput_NilAndFull verifies groupOutput maps the documented reference
+// subset fields and returns nil for a nil input. created_at is intentionally not
+// projected per doc/api/merge_request_approvals.md, so supplying it on the SDK
+// input must not surface a CreatedAt field on the output.
 func TestGroupOutput_NilAndFull(t *testing.T) {
 	if got := groupOutput(nil); got != nil {
 		t.Errorf("groupOutput(nil) = %v, want nil", got)
@@ -129,7 +132,7 @@ func TestGroupOutput_NilAndFull(t *testing.T) {
 	if out == nil || out.ID != 9 || out.Name != "Eng" || out.Path != "eng" || out.FullPath != "org/eng" ||
 		out.FullName != "Engineering" || out.Description != "team" || out.Visibility != "private" ||
 		out.WebURL != "https://w" || out.AvatarURL != "https://a" || out.ParentID != 2 ||
-		!out.RequestAccessEnabled || !out.LFSEnabled || out.CreatedAt != "2025-12-31T00:00:00Z" {
+		!out.RequestAccessEnabled || !out.LFSEnabled {
 		t.Fatalf("groupOutput full = %+v", out)
 	}
 }

@@ -28,9 +28,15 @@ func formatTimePtr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in
-// approval payloads (suggested_approvers, eligible_approvers, users, and the
-// approved_by list on approval rules).
+// BasicUserOutput is the documented reference subset of the compact user object
+// embedded in approval payloads (suggested_approvers, eligible_approvers, users,
+// and the approved_by list on approval rules).
+//
+// Documented reference subset per doc/api/merge_request_approvals.md: the rule
+// users[]/eligible_approvers[]/approved_by[] examples surface only id, name,
+// username, state, avatar_url, and web_url. gl.BasicUser additionally carries
+// created_at, which the documented reference object omits; it is therefore not
+// projected here.
 type BasicUserOutput struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -38,7 +44,6 @@ type BasicUserOutput struct {
 	State     string `json:"state,omitempty"`
 	AvatarURL string `json:"avatar_url,omitempty"`
 	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // basicUserOutput converts a single gl.BasicUser to its output shape, returning
@@ -49,7 +54,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
 }
 
@@ -70,7 +75,9 @@ func basicUserOutputs(users []*gl.BasicUser) []*BasicUserOutput {
 }
 
 // MergeRequestApproverUserOutput mirrors gl.MergeRequestApproverUser, pairing an
-// approver's user object with the timestamp at which they approved.
+// approver's user object with the timestamp at which they approved. Its nested
+// user object is the documented reference subset BasicUserOutput per
+// doc/api/merge_request_approvals.md (the approved_by[].user example).
 type MergeRequestApproverUserOutput struct {
 	User       *BasicUserOutput `json:"user,omitempty"`
 	ApprovedAt string           `json:"approved_at,omitempty"`
@@ -160,10 +167,17 @@ func approverGroupOutputs(groups []*gl.MergeRequestApproverGroup) []*MergeReques
 	return out
 }
 
-// GroupOutput mirrors the identifying fields of gl.Group as embedded in an
-// approval rule's groups list. It follows the compact-mirror depth used by
-// internal/tools/groups Output: the large nested statistics, deprecated project
-// lists, and LDAP/SAML links carried by gl.Group are intentionally omitted.
+// GroupOutput is the documented reference subset of the group object embedded
+// in an approval rule's groups list.
+//
+// Documented reference subset per doc/api/merge_request_approvals.md: the rule
+// groups[] example surfaces id, name, path, description, visibility,
+// lfs_enabled, avatar_url, web_url, request_access_enabled, full_name,
+// full_path, and parent_id (the ldap_cn/ldap_access LDAP extras are EE-only and
+// the large nested statistics/deprecated project lists carried by gl.Group are
+// not part of the documented reference object). gl.Group additionally carries
+// created_at, which the documented reference object omits; it is therefore not
+// projected here.
 type GroupOutput struct {
 	ID                   int64  `json:"id"`
 	Name                 string `json:"name"`
@@ -177,7 +191,6 @@ type GroupOutput struct {
 	ParentID             int64  `json:"parent_id,omitempty"`
 	RequestAccessEnabled bool   `json:"request_access_enabled"`
 	LFSEnabled           bool   `json:"lfs_enabled"`
-	CreatedAt            string `json:"created_at,omitempty"`
 }
 
 // groupOutput converts a single gl.Group to its compact output shape, returning
@@ -191,7 +204,7 @@ func groupOutput(g *gl.Group) *GroupOutput {
 		FullName: g.FullName, Description: g.Description,
 		Visibility: string(g.Visibility), WebURL: g.WebURL, AvatarURL: g.AvatarURL,
 		ParentID: g.ParentID, RequestAccessEnabled: g.RequestAccessEnabled,
-		LFSEnabled: g.LFSEnabled, CreatedAt: formatTimePtr(g.CreatedAt),
+		LFSEnabled: g.LFSEnabled,
 	}
 }
 
@@ -241,6 +254,13 @@ func protectedBranchOutputs(branches []*gl.ProtectedBranch) []*ProtectedBranchOu
 
 // ProjectApprovalRuleOutput mirrors gl.ProjectApprovalRule, the project-level
 // approval rule referenced as the source_rule of a merge-request approval rule.
+//
+// The documented examples in doc/api/merge_request_approvals.md always render
+// source_rule as null, so the doc provides no reference sub-field shape to trim
+// against. This SDK-modeled superset is retained additively (version drift →
+// keep) so instances that populate source_rule do not lose data. Its nested
+// user lists reuse the documented reference subset BasicUserOutput and its
+// groups reuse the documented reference subset GroupOutput.
 type ProjectApprovalRuleOutput struct {
 	ID                            int64                    `json:"id"`
 	Name                          string                   `json:"name"`
@@ -271,4 +291,43 @@ func projectApprovalRuleOutput(r *gl.ProjectApprovalRule) *ProjectApprovalRuleOu
 		ProtectedBranches:             protectedBranchOutputs(r.ProtectedBranches),
 		AppliesToAllProtectedBranches: r.AppliesToAllProtectedBranches,
 	}
+}
+
+// mergeRequestApprovalRuleAPI is the raw-fetch superset of
+// gl.MergeRequestApprovalRule. It mirrors every SDK field on its canonical JSON
+// key and additionally decodes the documented "overridden" boolean, which the
+// SDK's gl.MergeRequestApprovalRule does not model (the SDK struct has no
+// Overridden field, yet the approval_state/list/create/update rule responses
+// document it).
+//
+// The single client.GL().Do(&rule) unmarshal is naturally version-tolerant: on
+// older instances that omit "overridden" the field decodes to its zero value
+// (false) with no error, and the omitempty tag on RuleOutput.Overridden keeps
+// it out of the rendered JSON. The nested objects reuse the SDK sub-object
+// types so the documented-reference-subset converters (basicUserOutputs,
+// groupOutputs, projectApprovalRuleOutput) apply uniformly.
+type mergeRequestApprovalRuleAPI struct {
+	ID                   int64                   `json:"id"`
+	Name                 string                  `json:"name"`
+	RuleType             string                  `json:"rule_type"`
+	ReportType           string                  `json:"report_type"`
+	Section              string                  `json:"section"`
+	ApprovalsRequired    int64                   `json:"approvals_required"`
+	Approved             bool                    `json:"approved"`
+	ContainsHiddenGroups bool                    `json:"contains_hidden_groups"`
+	Overridden           bool                    `json:"overridden,omitempty"`
+	ApprovedBy           []*gl.BasicUser         `json:"approved_by"`
+	EligibleApprovers    []*gl.BasicUser         `json:"eligible_approvers"`
+	Users                []*gl.BasicUser         `json:"users"`
+	Groups               []*gl.Group             `json:"groups"`
+	SourceRule           *gl.ProjectApprovalRule `json:"source_rule"`
+}
+
+// mergeRequestApprovalStateAPI is the raw-fetch superset of
+// gl.MergeRequestApprovalState. It mirrors the SDK's approval_rules_overwritten
+// flag and decodes each rule into the [mergeRequestApprovalRuleAPI] superset so
+// the documented per-rule "overridden" boolean is preserved.
+type mergeRequestApprovalStateAPI struct {
+	ApprovalRulesOverwritten bool                           `json:"approval_rules_overwritten"`
+	Rules                    []*mergeRequestApprovalRuleAPI `json:"rules"`
 }

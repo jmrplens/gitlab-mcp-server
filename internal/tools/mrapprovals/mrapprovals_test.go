@@ -5,6 +5,7 @@ package mrapprovals
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1350,5 +1351,207 @@ func fakeConfigNilEntries(t *testing.T) gl.MergeRequestApprovals {
 			nil,
 			{Name: "Bob"},
 		},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// overridden raw-fetch + version-tolerance tests
+// ---------------------------------------------------------------------------.
+
+// TestState_OverriddenSurfaced verifies the raw-fetched, SDK-missing "overridden"
+// boolean on an approval_state rule is surfaced on RuleOutput.Overridden.
+func TestState_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_state" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"approval_rules_overwritten": true,
+				"rules": [
+					{"id": 1, "name": "Ruby", "rule_type": "regular", "approvals_required": 2, "approved": true, "overridden": true}
+				]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := State(context.Background(), client, StateInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(out.Rules))
+	}
+	if !out.Rules[0].Overridden {
+		t.Errorf("expected Overridden=true, got %+v", out.Rules[0])
+	}
+}
+
+// TestRules_OverriddenSurfaced verifies the raw-fetched "overridden" boolean is
+// surfaced on each rule of the approval_rules list response.
+func TestRules_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testApprovalRulesPath && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": 1, "name": "security", "rule_type": "regular", "approvals_required": 3, "overridden": true}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 || !out.Rules[0].Overridden {
+		t.Fatalf("expected one rule with Overridden=true, got %+v", out.Rules)
+	}
+}
+
+// TestCreateRule_OverriddenSurfaced verifies the raw create response surfaces
+// the documented "overridden" boolean.
+func TestCreateRule_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == testApprovalRulesPath {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id": 7, "name": "new", "rule_type": "regular", "approvals_required": 1, "overridden": true}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
+	}))
+
+	out, err := CreateRule(context.Background(), client, CreateRuleInput{
+		ProjectID: "42", MRIID: 1, Name: "new", ApprovalsRequired: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Overridden || out.ID != 7 {
+		t.Fatalf("expected created rule with Overridden=true, got %+v", out)
+	}
+}
+
+// TestUpdateRule_OverriddenSurfaced verifies the raw update response surfaces
+// the documented "overridden" boolean.
+func TestUpdateRule_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id": 5, "name": "upd", "rule_type": "regular", "approvals_required": 2, "overridden": true}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"nf"}`)
+	}))
+
+	out, err := UpdateRule(context.Background(), client, UpdateRuleInput{
+		ProjectID: "42", MRIID: 1, ApprovalRuleID: 5,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Overridden {
+		t.Fatalf("expected Overridden=true, got %+v", out)
+	}
+}
+
+// TestRules_OverriddenVersionTolerant verifies that older GitLab instances which
+// omit the "overridden" field decode successfully (no error) and that the absent
+// field marshals out of the rendered JSON via the omitempty tag. This pins the
+// version-tolerance guarantee: a single Do(&superset) unmarshal treats an absent
+// field as its zero value rather than failing the tool.
+func TestRules_OverriddenVersionTolerant(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testApprovalRulesPath && r.Method == http.MethodGet {
+			// Response without the "overridden" field (older instance).
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": 1, "name": "security", "rule_type": "regular", "approvals_required": 3}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf("expected success when overridden omitted, got error: %v", err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(out.Rules))
+	}
+	if out.Rules[0].Overridden {
+		t.Errorf("expected Overridden=false (zero) when omitted, got true")
+	}
+	b, err := json.Marshal(out.Rules[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "overridden") {
+		t.Errorf("expected omitempty to drop overridden from JSON, got %s", b)
+	}
+}
+
+// TestRawRuleToOutput_NilNested verifies rawRuleToOutput is nil-safe for absent
+// nested approver/user/group/source-rule objects and maps the scalar fields.
+func TestRawRuleToOutput_NilNested(t *testing.T) {
+	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+		ID: 3, Name: "n", RuleType: "regular", ReportType: "rt", Section: "s",
+		ApprovalsRequired: 4, Approved: true, ContainsHiddenGroups: true, Overridden: true,
+	})
+	if out.ID != 3 || out.Name != "n" || out.RuleType != "regular" || out.ReportType != "rt" ||
+		out.Section != "s" || out.ApprovalsRequired != 4 || !out.Approved ||
+		!out.ContainsHiddenGroups || !out.Overridden {
+		t.Fatalf("rawRuleToOutput scalar mapping = %+v", out)
+	}
+	if out.ApprovedBy != nil || out.EligibleApprovers != nil || out.Users != nil ||
+		out.Groups != nil || out.SourceRule != nil {
+		t.Errorf("expected nil nested objects, got %+v", out)
+	}
+}
+
+// TestRawRuleToOutput_NestedSubsets verifies rawRuleToOutput projects nested
+// objects through the documented-reference-subset converters (BasicUserOutput,
+// GroupOutput, ProjectApprovalRuleOutput).
+func TestRawRuleToOutput_NestedSubsets(t *testing.T) {
+	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+		ID:                1,
+		ApprovedBy:        []*gl.BasicUser{{Name: "Ann"}},
+		EligibleApprovers: []*gl.BasicUser{{Name: "Eli"}},
+		Users:             []*gl.BasicUser{{Name: "Usr"}},
+		Groups:            []*gl.Group{{Name: "Grp"}},
+		SourceRule:        &gl.ProjectApprovalRule{ID: 9, Name: "src"},
+	})
+	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Ann" {
+		t.Errorf("ApprovedBy = %+v", out.ApprovedBy)
+	}
+	if len(out.EligibleApprovers) != 1 || out.EligibleApprovers[0].Name != "Eli" {
+		t.Errorf("EligibleApprovers = %+v", out.EligibleApprovers)
+	}
+	if len(out.Users) != 1 || out.Users[0].Name != "Usr" {
+		t.Errorf("Users = %+v", out.Users)
+	}
+	if len(out.Groups) != 1 || out.Groups[0].Name != "Grp" {
+		t.Errorf("Groups = %+v", out.Groups)
+	}
+	if out.SourceRule == nil || out.SourceRule.ID != 9 || out.SourceRule.Name != "src" {
+		t.Errorf("SourceRule = %+v", out.SourceRule)
+	}
+}
+
+// TestRawHelpers_NewRequestError verifies the raw-fetch helpers propagate the
+// error from client.GL().NewRequest when the path cannot be parsed (an invalid
+// percent-escape makes url.PathUnescape fail), covering the early-return branch.
+func TestRawHelpers_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx := context.Background()
+	const badPath = "projects/%zz/merge_requests/1/approval_rules"
+
+	if _, err := rawListApprovalRules(ctx, client, badPath); err == nil {
+		t.Error("rawListApprovalRules: expected error for malformed path")
+	}
+	if _, err := rawApprovalState(ctx, client, badPath); err == nil {
+		t.Error("rawApprovalState: expected error for malformed path")
+	}
+	if _, err := rawMutateApprovalRule(ctx, client, http.MethodPost, badPath, nil); err == nil {
+		t.Error("rawMutateApprovalRule: expected error for malformed path")
 	}
 }

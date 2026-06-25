@@ -142,6 +142,11 @@ var curatedRefSubsets = map[string]string{
 	"pipelineschedules.LastPipelineOutput":      "pipeline_schedules.md",
 	"pipelineschedules.VariableObject":          "pipeline_schedules.md",
 	"pipelineschedules.TriggeredPipelineOutput": "pipeline_schedules.md",
+
+	// mrapprovals — nested user/group reference objects of the approval-rule /
+	// approval-state responses (doc/api/merge_request_approvals.md).
+	"mrapprovals.BasicUserOutput": "merge_request_approvals.md",
+	"mrapprovals.GroupOutput":     "merge_request_approvals.md",
 }
 
 // isCuratedRefSubset reports whether the MCP output type (scoped by package) is a
@@ -193,6 +198,27 @@ var docAddedFields = map[string]string{
 	"jobs.RunnerObject.paused":      "jobs.md#get-a-single-job",
 	"jobs.RunnerObject.runner_type": "jobs.md#get-a-single-job",
 	"jobs.RunnerObject.status":      "jobs.md#get-a-single-job",
+
+	// boards — limit_metric is documented in doc/api/boards.md on each board list
+	// (all_metrics / issue_count / issue_weights, or null) but absent from
+	// gl.BoardList; fetched via raw REST (rawGetBoard/rawListBoardLists into the
+	// boardListAPI superset).
+	"boards.BoardListOutput.limit_metric": "boards.md#list-all-board-lists-in-an-issue-board",
+
+	// deployments — deployable.project {ci_job_token_scope_enabled} is documented in
+	// doc/api/deployments.md but absent from gl.DeploymentDeployable; fetched via raw
+	// REST (rawGetDeployment/rawListDeployments into the deploymentAPI superset).
+	"deployments.DeployableOutput.project": "deployments.md",
+
+	// pipelineschedules — variables[].raw is documented on the single-schedule
+	// response but absent from gl.PipelineVariable; fetched via raw REST
+	// (rawGetSchedule into the rawScheduleAPI superset).
+	"pipelineschedules.VariableObject.raw": "pipeline_schedules.md",
+
+	// mrapprovals — approval rule `overridden` is documented (approval_state/list/
+	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
+	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
+	"mrapprovals.RuleOutput.overridden": "merge_request_approvals.md",
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we
