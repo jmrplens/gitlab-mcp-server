@@ -69,14 +69,76 @@ func groupDatadogDeleteSpec(name string, route toolutil.ActionRoute, individualT
 	return toolutil.NewDeleteActionSpec(name, route, groupDatadogOptions(individualTool, description))
 }
 
+// integrationActionMeta is the per-action discovery metadata (purpose-specific
+// Usage sentence, natural-language aliases beyond the canonical tool name, and
+// related canonical action IDs) used to satisfy the 1:1 metadata-completeness
+// norm (R-META). The map is keyed by the individual tool name.
+var integrationActionMeta = map[string]struct {
+	usage   string
+	aliases []string
+	related []string
+}{
+	"gitlab_list_integrations": {
+		usage:   "List every integration (service) wired up on a project to see what is active before reading or removing one.",
+		aliases: []string{"list project integrations", "show project services", "what integrations are enabled"},
+		related: []string{"project.integration_get", "project.integration_set_jira", "project.integration_delete"},
+	},
+	"gitlab_get_integration": {
+		usage:   "Inspect one project integration by slug to read its active status and event-trigger configuration.",
+		aliases: []string{"get integration details", "show service config", "view integration settings"},
+		related: []string{"project.integration_list", "project.integration_delete", "project.integration_set_jira"},
+	},
+	"gitlab_delete_integration": {
+		usage:   "Disable and remove a project integration by slug when it is no longer needed.",
+		aliases: []string{"disable integration", "remove project service", "turn off integration"},
+		related: []string{"project.integration_list", "project.integration_get"},
+	},
+	"gitlab_set_jira_integration": {
+		usage:   "Connect a project to a Jira instance, setting the URL, credentials, and which events sync to Jira.",
+		aliases: []string{"configure jira", "set up jira integration", "connect project to jira"},
+		related: []string{"project.integration_list", "project.integration_get", "project.integration_delete"},
+	},
+	"gitlab_get_group_datadog_integration": {
+		usage:   "Read the Datadog integration on a group to confirm the configured site, env, service, and tags.",
+		aliases: []string{"get group datadog config", "show group datadog integration", "view group datadog settings"},
+		related: []string{"project.integration_set_group_datadog", "project.integration_delete_group_datadog", "group.get"},
+	},
+	"gitlab_set_group_datadog_integration": {
+		usage:   "Create or update a group's Datadog integration so logs and CI traces forward to the chosen Datadog site.",
+		aliases: []string{"configure group datadog", "set up group datadog", "update group datadog integration"},
+		related: []string{"project.integration_get_group_datadog", "project.integration_delete_group_datadog", "group.get"},
+	},
+	"gitlab_delete_group_datadog_integration": {
+		usage:   "Remove a group's Datadog integration and clear its stored API key when forwarding is no longer wanted.",
+		aliases: []string{"disable group datadog", "remove group datadog integration", "delete group datadog config"},
+		related: []string{"project.integration_get_group_datadog", "project.integration_set_group_datadog"},
+	},
+}
+
+// applyIntegrationMeta overlays the per-action discovery metadata onto the
+// shared spec options, replacing the generic Usage placeholder, the
+// toolname-only alias, and the generic RelatedActions. Unknown tools keep the
+// shared defaults.
+func applyIntegrationMeta(opts toolutil.ActionSpecOptions, individualTool string) toolutil.ActionSpecOptions {
+	meta, ok := integrationActionMeta[individualTool]
+	if !ok {
+		return opts
+	}
+	opts.Usage = meta.usage
+	opts.Aliases = append([]string{individualTool}, meta.aliases...)
+	opts.RelatedActions = append([]string(nil), meta.related...)
+	return opts
+}
+
 func integrationOptions(individualTool, description string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	opts := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute integrations domain action.", Tags: []string{"project", "integration"},
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "integrations",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
 	}
+	return applyIntegrationMeta(opts, individualTool)
 }
 
 // groupDatadogOptions returns the spec options shared by the three group-level
@@ -85,7 +147,11 @@ func integrationOptions(individualTool, description string) toolutil.ActionSpecO
 func groupDatadogOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := integrationOptions(individualTool, description)
 	opts.Tags = []string{"group", "integration", "datadog"}
-	opts.RelatedActions = []string{"group.get"}
 	opts.Edition = "premium"
-	return opts
+	// applyIntegrationMeta already set group-specific RelatedActions; only fall
+	// back to the generic group.get when no per-action metadata was found.
+	if _, ok := integrationActionMeta[individualTool]; !ok {
+		opts.RelatedActions = []string{"group.get"}
+	}
+	return applyIntegrationMeta(opts, individualTool)
 }

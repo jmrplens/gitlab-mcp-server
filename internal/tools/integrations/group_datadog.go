@@ -14,21 +14,43 @@ import (
 
 // GroupDatadogItem is a JSON-serializable view of [gl.GroupDatadogIntegration]
 // returned by the group-level Datadog integration tools. The struct flattens
-// the embedded [gl.Integration] fields and the Datadog-specific fields so the
-// LLM-facing schema stays stable even when client-go adds new embedded types.
+// the embedded [gl.Integration] base fields (identity, lifecycle, and the full
+// set of event trigger flags) and the Datadog-specific fields so the LLM-facing
+// schema stays stable even when client-go adds new embedded types. The event
+// flags are plain bool in client-go and are surfaced unconditionally (no
+// omitempty) so a false value is explicit in the output.
 type GroupDatadogItem struct {
-	ID                 int64  `json:"id"`
-	Title              string `json:"title"`
-	Slug               string `json:"slug"`
-	Active             bool   `json:"active"`
-	CreatedAt          string `json:"created_at,omitempty"`
-	UpdatedAt          string `json:"updated_at,omitempty"`
-	APIURL             string `json:"api_url,omitempty"`
-	DatadogEnv         string `json:"datadog_env,omitempty"`
-	DatadogService     string `json:"datadog_service,omitempty"`
-	DatadogSite        string `json:"datadog_site,omitempty"`
-	DatadogTags        string `json:"datadog_tags,omitempty"`
-	ArchiveTraceEvents *bool  `json:"archive_trace_events,omitempty"`
+	ID                             int64  `json:"id"`
+	Title                          string `json:"title"`
+	Slug                           string `json:"slug"`
+	Active                         bool   `json:"active"`
+	CreatedAt                      string `json:"created_at,omitempty"`
+	UpdatedAt                      string `json:"updated_at,omitempty"`
+	AlertEvents                    bool   `json:"alert_events"`
+	CommitEvents                   bool   `json:"commit_events"`
+	ConfidentialIssuesEvents       bool   `json:"confidential_issues_events"`
+	ConfidentialNoteEvents         bool   `json:"confidential_note_events"`
+	DeploymentEvents               bool   `json:"deployment_events"`
+	GroupConfidentialMentionEvents bool   `json:"group_confidential_mention_events"`
+	GroupMentionEvents             bool   `json:"group_mention_events"`
+	IncidentEvents                 bool   `json:"incident_events"`
+	IssuesEvents                   bool   `json:"issues_events"`
+	JobEvents                      bool   `json:"job_events"`
+	MergeRequestsEvents            bool   `json:"merge_requests_events"`
+	NoteEvents                     bool   `json:"note_events"`
+	PipelineEvents                 bool   `json:"pipeline_events"`
+	PushEvents                     bool   `json:"push_events"`
+	TagPushEvents                  bool   `json:"tag_push_events"`
+	VulnerabilityEvents            bool   `json:"vulnerability_events"`
+	WikiPageEvents                 bool   `json:"wiki_page_events"`
+	CommentOnEventEnabled          bool   `json:"comment_on_event_enabled"`
+	Inherited                      bool   `json:"inherited"`
+	APIURL                         string `json:"api_url,omitempty"`
+	DatadogEnv                     string `json:"datadog_env,omitempty"`
+	DatadogService                 string `json:"datadog_service,omitempty"`
+	DatadogSite                    string `json:"datadog_site,omitempty"`
+	DatadogTags                    string `json:"datadog_tags,omitempty"`
+	ArchiveTraceEvents             *bool  `json:"archive_trace_events,omitempty"`
 }
 
 func groupDatadogToItem(g *gl.GroupDatadogIntegration) GroupDatadogItem {
@@ -36,15 +58,34 @@ func groupDatadogToItem(g *gl.GroupDatadogIntegration) GroupDatadogItem {
 		return GroupDatadogItem{}
 	}
 	item := GroupDatadogItem{
-		ID:             g.ID,
-		Title:          g.Title,
-		Slug:           g.Slug,
-		Active:         g.Active,
-		APIURL:         g.APIURL,
-		DatadogEnv:     g.DatadogEnv,
-		DatadogService: g.DatadogService,
-		DatadogSite:    g.DatadogSite,
-		DatadogTags:    g.DatadogTags,
+		ID:                             g.ID,
+		Title:                          g.Title,
+		Slug:                           g.Slug,
+		Active:                         g.Active,
+		AlertEvents:                    g.AlertEvents,
+		CommitEvents:                   g.CommitEvents,
+		ConfidentialIssuesEvents:       g.ConfidentialIssuesEvents,
+		ConfidentialNoteEvents:         g.ConfidentialNoteEvents,
+		DeploymentEvents:               g.DeploymentEvents,
+		GroupConfidentialMentionEvents: g.GroupConfidentialMentionEvents,
+		GroupMentionEvents:             g.GroupMentionEvents,
+		IncidentEvents:                 g.IncidentEvents,
+		IssuesEvents:                   g.IssuesEvents,
+		JobEvents:                      g.JobEvents,
+		MergeRequestsEvents:            g.MergeRequestsEvents,
+		NoteEvents:                     g.NoteEvents,
+		PipelineEvents:                 g.PipelineEvents,
+		PushEvents:                     g.PushEvents,
+		TagPushEvents:                  g.TagPushEvents,
+		VulnerabilityEvents:            g.VulnerabilityEvents,
+		WikiPageEvents:                 g.WikiPageEvents,
+		CommentOnEventEnabled:          g.CommentOnEventEnabled,
+		Inherited:                      g.Inherited,
+		APIURL:                         g.APIURL,
+		DatadogEnv:                     g.DatadogEnv,
+		DatadogService:                 g.DatadogService,
+		DatadogSite:                    g.DatadogSite,
+		DatadogTags:                    g.DatadogTags,
 	}
 	if g.CreatedAt != nil {
 		item.CreatedAt = g.CreatedAt.UTC().Format(time.RFC3339)
