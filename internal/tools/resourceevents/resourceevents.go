@@ -27,7 +27,10 @@ const (
 type ListIssueLabelEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetIssueLabelEventInput defines parameters for getting a single issue label event.
@@ -41,7 +44,10 @@ type GetIssueLabelEventInput struct {
 type ListMRLabelEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetMRLabelEventInput defines parameters for getting a single MR label event.
@@ -55,7 +61,10 @@ type GetMRLabelEventInput struct {
 type ListIssueMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetIssueMilestoneEventInput defines parameters for getting a single issue milestone event.
@@ -69,7 +78,10 @@ type GetIssueMilestoneEventInput struct {
 type ListMRMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetMRMilestoneEventInput defines parameters for getting a single MR milestone event.
@@ -83,7 +95,10 @@ type GetMRMilestoneEventInput struct {
 type ListIssueStateEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetIssueStateEventInput defines parameters for getting a single issue state event.
@@ -97,7 +112,10 @@ type GetIssueStateEventInput struct {
 type ListMRStateEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid" jsonschema:"Merge request internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetMRStateEventInput defines parameters for getting a single MR state event.
@@ -111,26 +129,16 @@ type GetMRStateEventInput struct {
 // Output types
 // ---------------------------------------------------------------------------.
 
-// LabelEventLabelOutput represents the label in a label event.
-type LabelEventLabelOutput struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	TextColor   string `json:"text_color"`
-	Description string `json:"description"`
-}
-
 // LabelEventOutput represents a resource label event.
 type LabelEventOutput struct {
 	toolutil.HintableOutput
-	ID           int64                 `json:"id"`
-	Action       string                `json:"action"`
-	CreatedAt    string                `json:"created_at"`
-	ResourceType string                `json:"resource_type"`
-	ResourceID   int64                 `json:"resource_id"`
-	UserID       int64                 `json:"user_id"`
-	Username     string                `json:"username"`
-	Label        LabelEventLabelOutput `json:"label"`
+	ID           int64                  `json:"id"`
+	Action       string                 `json:"action"`
+	CreatedAt    string                 `json:"created_at"`
+	ResourceType string                 `json:"resource_type"`
+	ResourceID   int64                  `json:"resource_id"`
+	User         *EventUserOutput       `json:"user,omitempty"`
+	Label        *LabelEventLabelOutput `json:"label,omitempty"`
 }
 
 // ListLabelEventsOutput wraps a list of label events.
@@ -143,15 +151,13 @@ type ListLabelEventsOutput struct {
 // MilestoneEventOutput represents a resource milestone event.
 type MilestoneEventOutput struct {
 	toolutil.HintableOutput
-	ID             int64  `json:"id"`
-	Action         string `json:"action"`
-	CreatedAt      string `json:"created_at"`
-	ResourceType   string `json:"resource_type"`
-	ResourceID     int64  `json:"resource_id"`
-	UserID         int64  `json:"user_id"`
-	Username       string `json:"username"`
-	MilestoneID    int64  `json:"milestone_id"`
-	MilestoneTitle string `json:"milestone_title"`
+	ID           int64            `json:"id"`
+	Action       string           `json:"action"`
+	CreatedAt    string           `json:"created_at"`
+	ResourceType string           `json:"resource_type"`
+	ResourceID   int64            `json:"resource_id"`
+	User         *EventUserOutput `json:"user,omitempty"`
+	Milestone    *MilestoneOutput `json:"milestone,omitempty"`
 }
 
 // ListMilestoneEventsOutput wraps a list of milestone events.
@@ -164,13 +170,12 @@ type ListMilestoneEventsOutput struct {
 // StateEventOutput represents a resource state event.
 type StateEventOutput struct {
 	toolutil.HintableOutput
-	ID           int64  `json:"id"`
-	State        string `json:"state"`
-	CreatedAt    string `json:"created_at"`
-	ResourceType string `json:"resource_type"`
-	ResourceID   int64  `json:"resource_id"`
-	UserID       int64  `json:"user_id"`
-	Username     string `json:"username"`
+	ID           int64            `json:"id"`
+	State        string           `json:"state"`
+	CreatedAt    string           `json:"created_at"`
+	ResourceType string           `json:"resource_type"`
+	ResourceID   int64            `json:"resource_id"`
+	User         *EventUserOutput `json:"user,omitempty"`
 }
 
 // ListStateEventsOutput wraps a list of state events.
@@ -192,9 +197,8 @@ func ListIssueLabelEvents(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.IssueIID <= 0 {
 		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_label_event_list", "issue_iid")
 	}
-	opts := &gl.ListLabelEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListLabelEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceLabelEvents.ListIssueLabelEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_label_event_list", err, http.StatusNotFound,
@@ -230,9 +234,8 @@ func ListMRLabelEvents(ctx context.Context, client *gitlabclient.Client, input L
 	if input.MRIID <= 0 {
 		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_label_event_list", "merge_request_iid")
 	}
-	opts := &gl.ListLabelEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListLabelEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceLabelEvents.ListMergeRequestsLabelEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_list", err, http.StatusNotFound,
@@ -272,9 +275,8 @@ func ListIssueMilestoneEvents(ctx context.Context, client *gitlabclient.Client, 
 	if input.IssueIID <= 0 {
 		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_milestone_event_list", "issue_iid")
 	}
-	opts := &gl.ListMilestoneEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListMilestoneEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListIssueMilestoneEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_milestone_event_list", err, http.StatusNotFound,
@@ -310,9 +312,8 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 	if input.MRIID <= 0 {
 		return ListMilestoneEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_list", "merge_request_iid")
 	}
-	opts := &gl.ListMilestoneEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListMilestoneEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListMergeMilestoneEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_list", err, http.StatusNotFound,
@@ -352,9 +353,8 @@ func ListIssueStateEvents(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.IssueIID <= 0 {
 		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_state_event_list", "issue_iid")
 	}
-	opts := &gl.ListStateEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListStateEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceStateEvents.ListIssueStateEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_state_event_list", err, http.StatusNotFound,
@@ -390,9 +390,8 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 	if input.MRIID <= 0 {
 		return ListStateEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_list", "merge_request_iid")
 	}
-	opts := &gl.ListStateEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListStateEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceStateEvents.ListMergeStateEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_list", err, http.StatusNotFound,
@@ -424,6 +423,23 @@ func GetMRStateEvent(ctx context.Context, client *gitlabclient.Client, input Get
 // Converters
 // ---------------------------------------------------------------------------.
 
+// applyEventListOptions copies the order_by/sort plus offset and keyset
+// pagination parameters from a list input onto a gl.ListOptions. The resource
+// event endpoints expose only the shared ListOptions, so order_by and sort are
+// set directly on the embedded struct (gl.ListOptions.OrderBy / .Sort).
+func applyEventListOptions(opts *gl.ListOptions, orderBy, sort string, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput) {
+	if opts == nil {
+		return
+	}
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+	toolutil.ApplyListOptions(opts, page, keyset)
+}
+
 // toLabelEventOutput converts the GitLab API response to the tool output format.
 func toLabelEventOutput(e *gl.LabelEvent) LabelEventOutput {
 	if e == nil {
@@ -434,15 +450,8 @@ func toLabelEventOutput(e *gl.LabelEvent) LabelEventOutput {
 		Action:       e.Action,
 		ResourceType: e.ResourceType,
 		ResourceID:   e.ResourceID,
-		UserID:       e.User.ID,
-		Username:     e.User.Username,
-		Label: LabelEventLabelOutput{
-			ID:          e.Label.ID,
-			Name:        e.Label.Name,
-			Color:       e.Label.Color,
-			TextColor:   e.Label.TextColor,
-			Description: e.Label.Description,
-		},
+		User:         eventUserOutput(&e.User),
+		Label:        labelEventLabelOutput(e.Label),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -472,14 +481,8 @@ func toMilestoneEventOutput(e *gl.MilestoneEvent) MilestoneEventOutput {
 		Action:       e.Action,
 		ResourceType: e.ResourceType,
 		ResourceID:   e.ResourceID,
-	}
-	if e.User != nil {
-		out.UserID = e.User.ID
-		out.Username = e.User.Username
-	}
-	if e.Milestone != nil {
-		out.MilestoneID = e.Milestone.ID
-		out.MilestoneTitle = e.Milestone.Title
+		User:         eventUserOutput(e.User),
+		Milestone:    milestoneOutput(e.Milestone),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -509,10 +512,7 @@ func toStateEventOutput(e *gl.StateEvent) StateEventOutput {
 		State:        string(e.State),
 		ResourceType: e.ResourceType,
 		ResourceID:   e.ResourceID,
-	}
-	if e.User != nil {
-		out.UserID = e.User.ID
-		out.Username = e.User.Username
+		User:         eventUserOutput(e.User),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -540,7 +540,10 @@ func toStateEventsOutput(events []*gl.StateEvent, resp *gl.Response) ListStateEv
 type ListIssueIterationEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetIssueIterationEventInput defines parameters for getting a single issue iteration event.
@@ -558,37 +561,26 @@ type GetIssueIterationEventInput struct {
 type ListIssueWeightEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	IssueIID  int64                `json:"issue_iid" jsonschema:"Issue internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ---------------------------------------------------------------------------
 // Output types — Iteration Events
 // ---------------------------------------------------------------------------.
 
-// IterationEventIterationOutput represents the iteration in an iteration event.
-type IterationEventIterationOutput struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid"`
-	Sequence  int64  `json:"sequence"`
-	GroupID   int64  `json:"group_id"`
-	Title     string `json:"title"`
-	State     int64  `json:"state"`
-	WebURL    string `json:"web_url,omitempty"`
-	StartDate string `json:"start_date,omitempty"`
-	DueDate   string `json:"due_date,omitempty"`
-}
-
 // IterationEventOutput represents a resource iteration event.
 type IterationEventOutput struct {
 	toolutil.HintableOutput
-	ID           int64                         `json:"id"`
-	Action       string                        `json:"action"`
-	CreatedAt    string                        `json:"created_at"`
-	ResourceType string                        `json:"resource_type"`
-	ResourceID   int64                         `json:"resource_id"`
-	UserID       int64                         `json:"user_id"`
-	Username     string                        `json:"username"`
-	Iteration    IterationEventIterationOutput `json:"iteration"`
+	ID           int64            `json:"id"`
+	Action       string           `json:"action"`
+	CreatedAt    string           `json:"created_at"`
+	ResourceType string           `json:"resource_type"`
+	ResourceID   int64            `json:"resource_id"`
+	User         *EventUserOutput `json:"user,omitempty"`
+	Iteration    *IterationOutput `json:"iteration,omitempty"`
 }
 
 // ListIterationEventsOutput wraps a list of iteration events.
@@ -604,15 +596,14 @@ type ListIterationEventsOutput struct {
 
 // WeightEventOutput represents a resource weight event.
 type WeightEventOutput struct {
-	ID           int64  `json:"id"`
-	CreatedAt    string `json:"created_at"`
-	ResourceType string `json:"resource_type"`
-	ResourceID   int64  `json:"resource_id"`
-	State        string `json:"state"`
-	IssueID      int64  `json:"issue_id"`
-	Weight       int64  `json:"weight"`
-	UserID       int64  `json:"user_id"`
-	Username     string `json:"username"`
+	ID           int64            `json:"id"`
+	CreatedAt    string           `json:"created_at"`
+	ResourceType string           `json:"resource_type"`
+	ResourceID   int64            `json:"resource_id"`
+	State        string           `json:"state"`
+	IssueID      int64            `json:"issue_id"`
+	Weight       int64            `json:"weight"`
+	User         *EventUserOutput `json:"user,omitempty"`
 }
 
 // ListWeightEventsOutput wraps a list of weight events.
@@ -634,9 +625,8 @@ func ListIssueIterationEvents(ctx context.Context, client *gitlabclient.Client, 
 	if input.IssueIID <= 0 {
 		return ListIterationEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_iteration_event_list", "issue_iid")
 	}
-	opts := &gl.ListIterationEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListIterationEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceIterationEvents.ListIssueIterationEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListIterationEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_list", err, http.StatusNotFound,
@@ -676,9 +666,8 @@ func ListIssueWeightEvents(ctx context.Context, client *gitlabclient.Client, inp
 	if input.IssueIID <= 0 {
 		return ListWeightEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_weight_event_list", "issue_iid")
 	}
-	opts := &gl.ListWeightEventsOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListWeightEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
 	events, resp, err := client.GL().ResourceWeightEvents.ListIssueWeightEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListWeightEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_weight_event_list", err, http.StatusNotFound,
@@ -700,27 +689,8 @@ func toIterationEventOutput(e *gl.IterationEvent) IterationEventOutput {
 		Action:       e.Action,
 		ResourceType: e.ResourceType,
 		ResourceID:   e.ResourceID,
-	}
-	if e.User != nil {
-		out.UserID = e.User.ID
-		out.Username = e.User.Username
-	}
-	if e.Iteration != nil {
-		out.Iteration = IterationEventIterationOutput{
-			ID:       e.Iteration.ID,
-			IID:      e.Iteration.IID,
-			Sequence: e.Iteration.Sequence,
-			GroupID:  e.Iteration.GroupID,
-			Title:    e.Iteration.Title,
-			State:    e.Iteration.State,
-			WebURL:   e.Iteration.WebURL,
-		}
-		if e.Iteration.StartDate != nil {
-			out.Iteration.StartDate = e.Iteration.StartDate.String()
-		}
-		if e.Iteration.DueDate != nil {
-			out.Iteration.DueDate = e.Iteration.DueDate.String()
-		}
+		User:         eventUserOutput(e.User),
+		Iteration:    iterationOutput(e.Iteration),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -754,10 +724,7 @@ func toWeightEventOutput(e *gl.WeightEvent) WeightEventOutput {
 		State:        string(e.State),
 		IssueID:      e.IssueID,
 		Weight:       e.Weight,
-	}
-	if e.User != nil {
-		out.UserID = e.User.ID
-		out.Username = e.User.Username
+		User:         eventUserOutput(e.User),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)

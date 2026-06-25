@@ -130,7 +130,7 @@ func resourceEventSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 func TestFormatIterationEventsMarkdown_NonEmpty(t *testing.T) {
 	md := FormatIterationEventsMarkdown(ListIterationEventsOutput{
 		Events: []IterationEventOutput{
-			{ID: 1, Action: "add", Iteration: IterationEventIterationOutput{ID: 5, Title: "Sprint 1"}, Username: "user", CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 1, Action: "add", Iteration: &IterationOutput{ID: 5, Title: "Sprint 1"}, User: &EventUserOutput{Username: "user"}, CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
 	if md == "" || !strings.Contains(md, "Sprint 1") {
@@ -141,8 +141,8 @@ func TestFormatIterationEventsMarkdown_NonEmpty(t *testing.T) {
 // TestFormatIterationEventMarkdown_NonEmpty verifies the single iteration event formatter.
 func TestFormatIterationEventMarkdown_NonEmpty(t *testing.T) {
 	md := FormatIterationEventMarkdown(IterationEventOutput{
-		ID: 1, Action: "add", Iteration: IterationEventIterationOutput{ID: 5, Title: "Sprint 1"},
-		Username: "user", ResourceType: "Issue", ResourceID: 10, CreatedAt: "2026-01-01T00:00:00Z",
+		ID: 1, Action: "add", Iteration: &IterationOutput{ID: 5, Title: "Sprint 1"},
+		User: &EventUserOutput{Username: "user"}, ResourceType: "Issue", ResourceID: 10, CreatedAt: "2026-01-01T00:00:00Z",
 	})
 	if md == "" || !strings.Contains(md, "Sprint 1") {
 		t.Fatalf("unexpected markdown: %q", md)
@@ -153,7 +153,7 @@ func TestFormatIterationEventMarkdown_NonEmpty(t *testing.T) {
 func TestFormatWeightEventsMarkdown_NonEmpty(t *testing.T) {
 	md := FormatWeightEventsMarkdown(ListWeightEventsOutput{
 		Events: []WeightEventOutput{
-			{ID: 2, Weight: 5, Username: "user", ResourceType: "Issue", ResourceID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, Weight: 5, User: &EventUserOutput{Username: "user"}, ResourceType: "Issue", ResourceID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
 	if md == "" || !strings.Contains(md, "5") {
