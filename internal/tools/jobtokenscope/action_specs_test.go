@@ -163,6 +163,52 @@ func TestCatalogSurface_RemoveConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestDecorateJobTokenScopeMeta_UnknownToolNoOp verifies the decorator leaves
+// options untouched for a tool name absent from jobTokenScopeActionMeta.
+func TestDecorateJobTokenScopeMeta_UnknownToolNoOp(t *testing.T) {
+	options := jobTokenScopeOptions("gitlab_unknown_job_token_tool")
+	before := options
+	decorateJobTokenScopeMeta(&options, "gitlab_unknown_job_token_tool")
+	if options.Usage != before.Usage {
+		t.Errorf("Usage changed for unknown tool: %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description set for unknown tool: %q", options.IndividualTool.Description)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions set for unknown tool: %v", options.RelatedActions)
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadataPopulated verifies every projected job token
+// scope tool carries non-generic usage, natural-language aliases, related
+// actions, and a Returns/See also individual-tool description.
+func TestActionSpecs_DiscoveryMetadataPopulated(t *testing.T) {
+	byTool := jobTokenScopeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, jobTokenScopeActionHandler())))
+	const genericUsage = "Use to execute jobtokenscope domain action."
+	for tool, spec := range byTool {
+		if spec.Usage == genericUsage || spec.Usage == "" {
+			t.Errorf("%s: generic or empty usage %q", tool, spec.Usage)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty related actions", tool)
+		}
+		hasNaturalAlias := false
+		for _, a := range spec.Aliases {
+			if a != tool {
+				hasNaturalAlias = true
+				break
+			}
+		}
+		if !hasNaturalAlias {
+			t.Errorf("%s: aliases only contain the tool name: %v", tool, spec.Aliases)
+		}
+		if spec.IndividualTool.Description == "" {
+			t.Errorf("%s: empty individual-tool description", tool)
+		}
+	}
+}
+
 func jobTokenScopeActionHandler() http.Handler {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/42/job_token_scope", func(w http.ResponseWriter, _ *http.Request) {

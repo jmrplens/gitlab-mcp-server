@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -332,7 +333,10 @@ func TestListInboundAllowlist_WithPagination(t *testing.T) {
 			{"id": 11, "name": "proj-b", "path_with_namespace": "grp/proj-b", "web_url": "https://gitlab.example.com/grp/proj-b"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "2"})
 	}))
-	out, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{ProjectID: "42", Page: 1, PerPage: 2})
+	out, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{
+		ProjectID:       "42",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -344,6 +348,37 @@ func TestListInboundAllowlist_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.NextPage != 2 {
 		t.Errorf("NextPage = %d, want 2", out.Pagination.NextPage)
+	}
+}
+
+// TestListInboundAllowlist_KeysetOrdering verifies ListInboundAllowlist forwards
+// the keyset pagination cursor and order_by/sort query parameters to the API.
+func TestListInboundAllowlist_KeysetOrdering(t *testing.T) {
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{
+		ProjectID:             "42",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got := gotQuery.Get("order_by"); got != "id" {
+		t.Errorf("order_by = %q, want id", got)
+	}
+	if got := gotQuery.Get("sort"); got != "desc" {
+		t.Errorf("sort = %q, want desc", got)
+	}
+	if got := gotQuery.Get("pagination"); got != "keyset" {
+		t.Errorf("pagination = %q, want keyset", got)
+	}
+	if got := gotQuery.Get("page_token"); got != "tok-1" {
+		t.Errorf("page_token = %q, want tok-1", got)
 	}
 }
 
@@ -433,7 +468,10 @@ func TestListGroupAllowlist_WithPagination(t *testing.T) {
 			{"id": 6, "name": "group-b", "full_path": "group-b", "web_url": "https://gitlab.example.com/groups/group-b"}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "2", Total: "4", TotalPages: "2", NextPage: "2"})
 	}))
-	out, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{ProjectID: "42", Page: 1, PerPage: 2})
+	out, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{
+		ProjectID:       "42",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -445,6 +483,37 @@ func TestListGroupAllowlist_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.NextPage != 2 {
 		t.Errorf("NextPage = %d, want 2", out.Pagination.NextPage)
+	}
+}
+
+// TestListGroupAllowlist_KeysetOrdering verifies ListGroupAllowlist forwards the
+// keyset pagination cursor and order_by/sort query parameters to the API.
+func TestListGroupAllowlist_KeysetOrdering(t *testing.T) {
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{
+		ProjectID:             "42",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-2"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got := gotQuery.Get("order_by"); got != "id" {
+		t.Errorf("order_by = %q, want id", got)
+	}
+	if got := gotQuery.Get("sort"); got != "asc" {
+		t.Errorf("sort = %q, want asc", got)
+	}
+	if got := gotQuery.Get("pagination"); got != "keyset" {
+		t.Errorf("pagination = %q, want keyset", got)
+	}
+	if got := gotQuery.Get("page_token"); got != "tok-2" {
+		t.Errorf("page_token = %q, want tok-2", got)
 	}
 }
 

@@ -59,8 +59,10 @@ func PatchAccessSettings(ctx context.Context, client *gitlabclient.Client, input
 // ListInboundAllowlistInput is the input for listing job token inbound allowlist projects.
 type ListInboundAllowlistInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // AllowlistProjectItem is a project on the inbound allowlist.
@@ -78,14 +80,25 @@ type ListInboundAllowlistOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// applyAllowlistListOptions copies the offset, keyset, and keyset-only
+// order_by/sort parameters onto a [gl.ListOptions]. It is shared by the
+// inbound project and group allowlist list handlers, which both embed
+// [toolutil.PaginationInput] and [toolutil.KeysetPaginationInput] plus
+// OrderBy/Sort fields.
+func applyAllowlistListOptions(opts *gl.ListOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
+	toolutil.ApplyListOptions(opts, page, keyset)
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
+
 // ListInboundAllowlist returns the projects on the job token inbound allowlist.
 func ListInboundAllowlist(ctx context.Context, client *gitlabclient.Client, input ListInboundAllowlistInput) (ListInboundAllowlistOutput, error) {
-	opts := &gl.GetJobTokenInboundAllowListOptions{
-		ListOptions: gl.ListOptions{
-			Page:    input.Page,
-			PerPage: input.PerPage,
-		},
-	}
+	opts := &gl.GetJobTokenInboundAllowListOptions{}
+	applyAllowlistListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 	projects, resp, err := client.GL().JobTokenScope.GetProjectJobTokenInboundAllowList(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListInboundAllowlistOutput{}, toolutil.WrapErrWithStatusHint("list_job_token_inbound_allowlist", err, http.StatusNotFound,
@@ -162,8 +175,10 @@ func RemoveProjectAllowlist(ctx context.Context, client *gitlabclient.Client, in
 // ListGroupAllowlistInput is the input for listing job token allowlist groups.
 type ListGroupAllowlistInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // AllowlistGroupItem is a group on the job token allowlist.
@@ -183,12 +198,8 @@ type ListGroupAllowlistOutput struct {
 
 // ListGroupAllowlist returns the groups on the job token allowlist.
 func ListGroupAllowlist(ctx context.Context, client *gitlabclient.Client, input ListGroupAllowlistInput) (ListGroupAllowlistOutput, error) {
-	opts := &gl.GetJobTokenAllowlistGroupsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    input.Page,
-			PerPage: input.PerPage,
-		},
-	}
+	opts := &gl.GetJobTokenAllowlistGroupsOptions{}
+	applyAllowlistListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().JobTokenScope.GetJobTokenAllowlistGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupAllowlistOutput{}, toolutil.WrapErrWithStatusHint("list_job_token_group_allowlist", err, http.StatusNotFound,
