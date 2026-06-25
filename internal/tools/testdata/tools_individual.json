@@ -1101,7 +1101,7 @@
   },
   {
     "name": "gitlab_add_group_badge",
-    "description": "Add a new badge to a group. Badge URLs support placeholders like %{project_path}, %{default_branch}, %{commit_sha}.\n\nSee also: gitlab_list_group_badges, gitlab_preview_group_badge\n\nReturns: JSON with the badge details.",
+    "description": "Add a badge to a group. Returns: the created badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_group_badges, gitlab_get_group_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1862,7 +1862,7 @@
   },
   {
     "name": "gitlab_add_project_badge",
-    "description": "Add a new badge to a project. Badge URLs support placeholders like %{project_path}, %{default_branch}, %{commit_sha}.\n\nSee also: gitlab_list_project_badges, gitlab_preview_project_badge\n\nReturns: JSON with the badge details.",
+    "description": "Add a badge to a project. Returns: the created badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_project_badges, gitlab_get_project_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -11127,11 +11127,20 @@
         "agent_id": {
           "type": "integer"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by_user_id": {
+          "type": "integer"
+        },
         "description": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "last_used_at": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -15669,7 +15678,7 @@
   },
   {
     "name": "gitlab_delete_group_badge",
-    "description": "Remove a badge from a group.\n\nSee also: gitlab_list_group_badges, gitlab_add_group_badge\n\nReturns: confirmation message.",
+    "description": "Delete a group badge by badge_id. Returns: a success confirmation. See also: gitlab_list_group_badges, gitlab_get_group_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16530,7 +16539,7 @@
   },
   {
     "name": "gitlab_delete_project_badge",
-    "description": "Remove a badge from a project.\n\nSee also: gitlab_list_project_badges, gitlab_add_project_badge\n\nReturns: confirmation message.",
+    "description": "Delete a project badge by badge_id. Returns: a success confirmation. See also: gitlab_list_project_badges, gitlab_get_project_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20796,7 +20805,7 @@
   },
   {
     "name": "gitlab_edit_group_badge",
-    "description": "Edit an existing group badge.\n\nSee also: gitlab_get_group_badge, gitlab_list_group_badges\n\nReturns: JSON with the badge details.",
+    "description": "Edit a group badge's name, link_url, or image_url. Returns: the updated badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_group_badges, gitlab_get_group_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20885,7 +20894,7 @@
   },
   {
     "name": "gitlab_edit_project_badge",
-    "description": "Edit an existing project badge.\n\nSee also: gitlab_get_project_badge, gitlab_list_project_badges\n\nReturns: JSON with the badge details.",
+    "description": "Edit a project badge's name, link_url, or image_url. Returns: the updated badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_project_badges, gitlab_get_project_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25039,7 +25048,7 @@
   },
   {
     "name": "gitlab_feature_flag_create",
-    "description": "Create a new feature flag for a project.\n\nReturns: JSON with created feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_ff_user_list_create",
+    "description": "Create a feature flag with optional activation strategies and scopes. Returns: the created flag with active state, version, scopes, and strategies. See also: gitlab_feature_flag_get, gitlab_feature_flag_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25063,8 +25072,68 @@
           "type": "string"
         },
         "strategies": {
-          "description": "JSON array of strategy objects: [{name, parameters, scopes}]",
-          "type": "string"
+          "description": "Activation strategies for the flag; each has a name, optional parameters, and optional environment scopes",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "percentage": {
+                    "type": "string"
+                  },
+                  "rollout": {
+                    "type": "string"
+                  },
+                  "stickiness": {
+                    "type": "string"
+                  },
+                  "user_ids": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment_scope": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "environment_scope"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "version": {
           "description": "Version of the feature flag (new_version_flag)",
@@ -25095,6 +25164,28 @@
         "next_steps": {
           "items": {
             "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "environment_scope": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "environment_scope"
+            ],
+            "type": "object"
           },
           "type": [
             "null",
@@ -25191,7 +25282,7 @@
   },
   {
     "name": "gitlab_feature_flag_delete",
-    "description": "Delete a feature flag.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_create",
+    "description": "Delete a feature flag permanently. Returns: a success confirmation naming the flag. See also: gitlab_feature_flag_get, gitlab_feature_flag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25248,7 +25339,7 @@
   },
   {
     "name": "gitlab_feature_flag_get",
-    "description": "Get a single feature flag by name.\n\nReturns: JSON with feature flag details including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_list, gitlab_feature_flag_update",
+    "description": "Get a single feature flag by name. Returns: the flag with active state, version, environment scopes, and activation strategies. See also: gitlab_feature_flag_list, gitlab_feature_flag_update, gitlab_feature_flag_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25285,6 +25376,28 @@
         "next_steps": {
           "items": {
             "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "environment_scope": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "environment_scope"
+            ],
+            "type": "object"
           },
           "type": [
             "null",
@@ -25383,13 +25496,25 @@
   },
   {
     "name": "gitlab_feature_flag_list",
-    "description": "List feature flags for a project.\n\nReturns: JSON with feature flags array including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_ff_user_list_list",
+    "description": "List feature flags in a project with optional scope filter, ordering, and pagination. Returns: matching feature flags with active state, version, scopes, strategies, and pagination metadata. See also: gitlab_feature_flag_get, gitlab_feature_flag_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (e.g. name, created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -25401,6 +25526,10 @@
         },
         "scope": {
           "description": "Filter by scope (enabled or disabled)",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -25431,6 +25560,28 @@
               "next_steps": {
                 "items": {
                   "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment_scope": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "environment_scope"
+                  ],
+                  "type": "object"
                 },
                 "type": [
                   "null",
@@ -25586,7 +25737,7 @@
   },
   {
     "name": "gitlab_feature_flag_update",
-    "description": "Update an existing feature flag.\n\nReturns: JSON with updated feature flag including name, active status, and strategies.\n\nSee also: gitlab_feature_flag_get, gitlab_feature_flag_delete",
+    "description": "Update a feature flag's name, description, active state, or strategies. Returns: the updated flag with active state, version, scopes, and strategies. See also: gitlab_feature_flag_get, gitlab_feature_flag_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25614,8 +25765,68 @@
           "type": "string"
         },
         "strategies": {
-          "description": "JSON array of strategy objects: [{id, name, parameters, scopes}]",
-          "type": "string"
+          "description": "Activation strategies for the flag; each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "percentage": {
+                    "type": "string"
+                  },
+                  "rollout": {
+                    "type": "string"
+                  },
+                  "stickiness": {
+                    "type": "string"
+                  },
+                  "user_ids": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment_scope": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "environment_scope"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
@@ -25642,6 +25853,28 @@
         "next_steps": {
           "items": {
             "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "environment_scope": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "environment_scope"
+            ],
+            "type": "object"
           },
           "type": [
             "null",
@@ -27856,6 +28089,40 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "config_project": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "name_with_namespace": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "created_at": {
+          "type": "string"
+        },
         "created_by_user_id": {
           "type": "integer"
         },
@@ -27877,7 +28144,8 @@
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "config_project"
       ],
       "type": "object"
     },
@@ -27920,11 +28188,20 @@
         "agent_id": {
           "type": "integer"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by_user_id": {
+          "type": "integer"
+        },
         "description": {
           "type": "string"
         },
         "id": {
           "type": "integer"
+        },
+        "last_used_at": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -29008,7 +29285,7 @@
   },
   {
     "name": "gitlab_get_group_badge",
-    "description": "Get a specific group badge by ID.\n\nSee also: gitlab_list_group_badges, gitlab_edit_group_badge\n\nReturns: JSON with badge details.",
+    "description": "Get a single group badge by badge_id. Returns: the badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_group_badges, gitlab_edit_group_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31704,7 +31981,7 @@
   },
   {
     "name": "gitlab_get_project_badge",
-    "description": "Get a specific project badge by ID.\n\nSee also: gitlab_list_project_badges, gitlab_edit_project_badge\n\nReturns: JSON with badge details.",
+    "description": "Get a single project badge by badge_id. Returns: the badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_list_project_badges, gitlab_edit_project_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -79010,24 +79287,38 @@
           "description": "Agent ID",
           "type": "integer"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset pagination: asc or desc.",
+          "type": "string"
         }
       },
       "required": [
         "project_id",
-        "agent_id",
-        "page",
-        "per_page"
+        "agent_id"
       ],
       "type": "object"
     },
@@ -79086,11 +79377,20 @@
               "agent_id": {
                 "type": "integer"
               },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by_user_id": {
+                "type": "integer"
+              },
               "description": {
                 "type": "string"
               },
               "id": {
                 "type": "integer"
+              },
+              "last_used_at": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -79144,23 +79444,37 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'.",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number for pagination",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset pagination: asc or desc.",
+          "type": "string"
         }
       },
       "required": [
-        "project_id",
-        "page",
-        "per_page"
+        "project_id"
       ],
       "type": "object"
     },
@@ -79171,6 +79485,40 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "config_project": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "name_with_namespace": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "path_with_namespace": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "created_at": {
+                "type": "string"
+              },
               "created_by_user_id": {
                 "type": "integer"
               },
@@ -79192,7 +79540,8 @@
             },
             "required": [
               "id",
-              "name"
+              "name",
+              "config_project"
             ],
             "type": "object"
           },
@@ -82332,7 +82681,7 @@
   },
   {
     "name": "gitlab_list_group_badges",
-    "description": "List all badges of a group.\n\nSee also: gitlab_add_group_badge, gitlab_list_project_badges\n\nReturns: JSON array of badges with pagination.",
+    "description": "List badges for a group, including inherited group badges. Returns: badges (id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind) plus pagination metadata. See also: gitlab_get_group_badge, gitlab_add_group_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -82344,13 +82693,29 @@
           "description": "Filter by badge name",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, name)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "required": [
@@ -85626,7 +85991,7 @@
   },
   {
     "name": "gitlab_list_project_badges",
-    "description": "List all badges of a project, including inherited group badges.\n\nSee also: gitlab_add_project_badge, gitlab_list_group_badges\n\nReturns: JSON array of badges with pagination.",
+    "description": "List badges for a project, including inherited group badges. Returns: badges (id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind) plus pagination metadata. See also: gitlab_get_project_badge, gitlab_add_project_badge.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -85634,16 +85999,32 @@
           "description": "Filter by badge name",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order results by for keyset pagination (e.g. id, name)",
+          "type": "string"
+        },
         "page": {
-          "description": "Page number",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Items per page",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
           "type": "string"
         }
       },
@@ -115950,7 +116331,7 @@
   },
   {
     "name": "gitlab_namespace_exists",
-    "description": "Check whether a namespace path exists (is taken). Returns availability and suggested alternatives if the path is taken.\n\nReturns: JSON with namespace availability status.\n\nSee also: gitlab_namespace_get, gitlab_namespace_search",
+    "description": "Check whether a namespace path is taken. Returns: an exists flag and suggested alternative paths when the path is unavailable. See also: gitlab_namespace_get, gitlab_namespace_search.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -116007,7 +116388,7 @@
   },
   {
     "name": "gitlab_namespace_get",
-    "description": "Get details of a single namespace by ID or path.\n\nReturns: JSON with namespace details.\n\nSee also: gitlab_namespace_list, gitlab_namespace_search",
+    "description": "Get a single namespace by ID or path. Returns: the namespace with id, name, path, kind, full path, parent id, plan, trial state, and seat usage. See also: gitlab_namespace_list, gitlab_namespace_search.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -116039,6 +116420,12 @@
         "kind": {
           "type": "string"
         },
+        "max_seats_used": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "members_count_with_descendants": {
           "type": "integer"
         },
@@ -116063,8 +116450,17 @@
         "plan": {
           "type": "string"
         },
+        "seats_in_use": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "trial": {
           "type": "boolean"
+        },
+        "trial_ends_on": {
+          "type": "string"
         },
         "web_url": {
           "type": "string"
@@ -116088,24 +116484,40 @@
   },
   {
     "name": "gitlab_namespace_list",
-    "description": "List all namespaces visible to the authenticated user. Supports filtering by search, owned-only, top-level-only, and pagination.\n\nReturns: JSON array of namespaces with pagination.\n\nSee also: gitlab_namespace_get, gitlab_group_list",
+    "description": "List namespaces visible to the authenticated user. Returns: matching namespaces with id, name, path, kind, plan, seat usage, and pagination metadata. See also: gitlab_namespace_get, gitlab_namespace_search, gitlab_group_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id)",
+          "type": "string"
+        },
         "owned_only": {
           "description": "If true return only namespaces owned by the authenticated user",
           "type": "boolean"
         },
         "page": {
-          "description": "Page number for pagination (default 1)",
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
-          "description": "Number of items per page (default 20, max 100)",
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
         },
         "search": {
           "description": "Filter namespaces by search term",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction for keyset-paginated results (asc, desc)",
           "type": "string"
         },
         "top_level_only": {
@@ -116137,6 +116549,12 @@
               "kind": {
                 "type": "string"
               },
+              "max_seats_used": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "members_count_with_descendants": {
                 "type": "integer"
               },
@@ -116161,8 +116579,17 @@
               "plan": {
                 "type": "string"
               },
+              "seats_in_use": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "trial": {
                 "type": "boolean"
+              },
+              "trial_ends_on": {
+                "type": "string"
               },
               "web_url": {
                 "type": "string"
@@ -116243,7 +116670,7 @@
   },
   {
     "name": "gitlab_namespace_search",
-    "description": "Search namespaces by query string. Returns matching namespaces with pagination.\n\nReturns: JSON array of matching namespaces with pagination.\n\nSee also: gitlab_namespace_list, gitlab_namespace_exists",
+    "description": "Search namespaces by name or path. Returns: matching namespaces with id, name, path, kind, and pagination metadata. See also: gitlab_namespace_list, gitlab_namespace_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -116279,6 +116706,12 @@
               "kind": {
                 "type": "string"
               },
+              "max_seats_used": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "members_count_with_descendants": {
                 "type": "integer"
               },
@@ -116303,8 +116736,17 @@
               "plan": {
                 "type": "string"
               },
+              "seats_in_use": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "trial": {
                 "type": "boolean"
+              },
+              "trial_ends_on": {
+                "type": "string"
               },
               "web_url": {
                 "type": "string"
@@ -125151,7 +125593,7 @@
   },
   {
     "name": "gitlab_preview_group_badge",
-    "description": "Preview how a group badge renders after placeholder interpolation, without creating it.\n\nSee also: gitlab_add_group_badge, gitlab_list_group_badges\n\nReturns: JSON with rendered badge URLs.",
+    "description": "Preview how a group badge's link_url and image_url resolve after placeholder interpolation, without persisting it. Returns: the rendered badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_add_group_badge, gitlab_list_group_badges.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -125238,7 +125680,7 @@
   },
   {
     "name": "gitlab_preview_project_badge",
-    "description": "Preview how a project badge renders after placeholder interpolation, without creating it.\n\nSee also: gitlab_add_project_badge, gitlab_list_project_badges\n\nReturns: JSON with rendered badge URLs.",
+    "description": "Preview how a project badge's link_url and image_url resolve after placeholder interpolation, without persisting it. Returns: the rendered badge with id, name, link_url, image_url, rendered_link_url, rendered_image_url, and kind. See also: gitlab_add_project_badge, gitlab_list_project_badges.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155489,6 +155931,40 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "config_project": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "name_with_namespace": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "path_with_namespace": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "created_at": {
+          "type": "string"
+        },
         "created_by_user_id": {
           "type": "integer"
         },
@@ -155510,7 +155986,8 @@
       },
       "required": [
         "id",
-        "name"
+        "name",
+        "config_project"
       ],
       "type": "object"
     },
@@ -158954,10 +159431,18 @@
   },
   {
     "name": "gitlab_release_link_create",
-    "description": "Add an asset link to a GitLab release. IMPORTANT: (1) When linking to uploaded packages, use the real 'url' value returned by gitlab_package_publish — do NOT construct package URLs manually. (2) The 'name' MUST be the exact filename (e.g. 'checksums.txt.asc'), NEVER add descriptive suffixes. Consider using gitlab_package_publish_and_link instead to upload and link in one step. Supports link types: runbook, package, image, or other. Links appear in the release's assets section.\n\nReturns: JSON with the created release link (ID, name, URL, type). See also: gitlab_release_get.",
+    "description": "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "direct_asset_path": {
+          "description": "Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath.",
+          "type": "string"
+        },
+        "filepath": {
+          "description": "Deprecated alias of direct_asset_path; prefer direct_asset_path.",
+          "type": "string"
+        },
         "link_type": {
           "description": "Type of the release link: other, runbook, image, or package.",
           "enum": [
@@ -159042,15 +159527,23 @@
   },
   {
     "name": "gitlab_release_link_create_batch",
-    "description": "Add multiple asset links to a GitLab release in a single call. Use this instead of calling gitlab_release_link_create multiple times. Each link requires a name and url; link_type is optional (runbook, package, image, other). IMPORTANT: (1) For package links, use the real 'url' values returned by gitlab_package_publish. (2) Link names MUST be exact filenames — never add descriptive suffixes.\n\nReturns: JSON with arrays of created links and any failures. See also: gitlab_release_link_list.",
+    "description": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "links": {
-          "description": "Array of release asset links. Each item supports only name, url, and link_type.",
+          "description": "Array of release asset links. Each item supports name, url, link_type, direct_asset_path, and the deprecated filepath.",
           "items": {
             "additionalProperties": false,
             "properties": {
+              "direct_asset_path": {
+                "description": "Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath.",
+                "type": "string"
+              },
+              "filepath": {
+                "description": "Deprecated alias of direct_asset_path; prefer direct_asset_path.",
+                "type": "string"
+              },
               "link_type": {
                 "description": "Type of the link: package, runbook, image, or other. Use package for package registry assets.",
                 "type": "string"
@@ -159173,7 +159666,7 @@
   },
   {
     "name": "gitlab_release_link_delete",
-    "description": "Remove an asset link from a GitLab release by its link ID.\n\nReturns: JSON with the deleted release link details. See also: gitlab_release_link_list.",
+    "description": "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -159250,7 +159743,7 @@
   },
   {
     "name": "gitlab_release_link_get",
-    "description": "Get details of a specific release asset link by its ID, including name, URL, type, and whether it is external.\n\nReturns: JSON with release link details (ID, name, URL, type, external flag). See also: gitlab_release_link_list.",
+    "description": "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -159323,13 +159816,25 @@
   },
   {
     "name": "gitlab_release_link_list",
-    "description": "List all asset links attached to a specific GitLab release identified by tag name. Returns link names, URLs, types, and IDs.\n\nReturns: JSON with array of release links and pagination info. See also: gitlab_release_get, gitlab_release_link_get.",
+    "description": "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. created_at, updated_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -159337,6 +159842,10 @@
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction (asc or desc)",
           "type": "string"
         },
         "tag_name": {
@@ -159460,7 +159969,7 @@
   },
   {
     "name": "gitlab_release_link_update",
-    "description": "Update an existing release asset link. Can change name, URL, filepath, direct asset path, or link type. Only specified fields are changed.\n\nReturns: JSON with the updated release link details. See also: gitlab_release_link_get.",
+    "description": "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
