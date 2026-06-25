@@ -8,6 +8,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// userDisplay returns a human-readable name for a commit comment/status author,
+// preferring the username and falling back to the display name. Returns an
+// em dash when the author is absent.
+func userDisplay(u *BasicUserOutput) string {
+	if u == nil {
+		return "—"
+	}
+	if u.Username != "" {
+		return u.Username
+	}
+	if u.Name != "" {
+		return u.Name
+	}
+	return "—"
+}
+
 // FormatOutputMarkdown renders a single commit as a Markdown summary.
 func FormatOutputMarkdown(c Output) string {
 	var b strings.Builder
@@ -146,7 +162,7 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 		if c.Line > 0 {
 			line = strconv.FormatInt(c.Line, 10)
 		}
-		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(c.Author), toolutil.EscapeMdTableCell(c.Note), toolutil.EscapeMdTableCell(path), line)
+		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(userDisplay(c.Author)), toolutil.EscapeMdTableCell(c.Note), toolutil.EscapeMdTableCell(path), line)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -161,7 +177,7 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 func FormatCommentMarkdown(c CommentOutput) string {
 	var b strings.Builder
 	b.WriteString("## Commit Comment\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, c.Author)
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, userDisplay(c.Author))
 	fmt.Fprintf(&b, "- **Note**: %s\n", toolutil.EscapeMdTableCell(c.Note))
 	if c.Path != "" {
 		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", c.Path, c.Line)

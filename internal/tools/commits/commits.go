@@ -11,47 +11,139 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Action specifies a single file operation within a commit.
+// Action specifies a single file operation within a commit. It mirrors
+// gl.CommitActionOptions field-for-field (C-IMPORTS).
 type Action struct {
-	Action       string `json:"action"    jsonschema:"Action to perform on the file (create, update, delete, move),required"`
-	FilePath     string `json:"file_path" jsonschema:"Full path of the file (e.g. src/main.go),required"`
-	Content      string `json:"content,omitempty"    jsonschema:"File content (required for create and update)"`
-	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Original path when action is move"`
-	LastCommitID string `json:"last_commit_id,omitempty" jsonschema:"Last known commit ID of this file for conflict detection"`
+	Action          string `json:"action"    jsonschema:"Action to perform on the file (create, update, delete, move, chmod),required"`
+	FilePath        string `json:"file_path" jsonschema:"Full path of the file (e.g. src/main.go),required"`
+	PreviousPath    string `json:"previous_path,omitempty" jsonschema:"Original path when action is move"`
+	Content         string `json:"content,omitempty"    jsonschema:"File content (required for create and update)"`
+	Encoding        string `json:"encoding,omitempty"   jsonschema:"Content encoding: 'text' (default) or 'base64'"`
+	LastCommitID    string `json:"last_commit_id,omitempty" jsonschema:"Last known commit ID of this file for conflict detection"`
+	ExecuteFilemode bool   `json:"execute_filemode,omitempty" jsonschema:"When true, enable or disable the executable flag on the file"`
 }
 
 // CreateInput defines parameters for creating a commit with file actions.
+// It mirrors gl.CreateCommitOptions (C-IMPORTS).
 type CreateInput struct {
 	ProjectID     toolutil.StringOrInt `json:"project_id"      jsonschema:"Project ID or URL-encoded path,required"`
 	Branch        string               `json:"branch"          jsonschema:"Target branch name,required"`
 	CommitMessage string               `json:"commit_message"  jsonschema:"Commit message,required"`
-	Actions       []Action             `json:"actions"         jsonschema:"List of file actions (create, update, delete, move),required"`
 	StartBranch   string               `json:"start_branch,omitempty" jsonschema:"Branch to start from if target branch does not exist"`
 	StartSHA      string               `json:"start_sha,omitempty"    jsonschema:"SHA to start from if target branch does not exist (alternative to start_branch)"`
+	StartProject  string               `json:"start_project,omitempty" jsonschema:"Project ID or path of the source project to start the branch from (for cross-project commits)"`
+	Actions       []Action             `json:"actions"         jsonschema:"List of file actions (create, update, delete, move, chmod),required"`
 	AuthorEmail   string               `json:"author_email,omitempty" jsonschema:"Custom author email"`
 	AuthorName    string               `json:"author_name,omitempty"  jsonschema:"Custom author name"`
+	Stats         bool                 `json:"stats,omitempty"        jsonschema:"Include commit stats (additions, deletions, total) in the response"`
 	Force         bool                 `json:"force,omitempty"        jsonschema:"When true, force-overwrite the target branch even if a conflict exists"`
 }
 
-// Output represents a created commit.
+// Output represents a created commit. It mirrors the full gl.Commit payload
+// (C-IMPORTS), surfacing trailers, the last associated pipeline, and stats.
 type Output struct {
 	toolutil.HintableOutput
-	ID             string       `json:"id"`
-	ShortID        string       `json:"short_id"`
-	Title          string       `json:"title"`
-	Message        string       `json:"message,omitempty"`
-	AuthorName     string       `json:"author_name"`
-	AuthorEmail    string       `json:"author_email"`
-	AuthoredDate   string       `json:"authored_date,omitempty"`
-	CommitterName  string       `json:"committer_name"`
-	CommitterEmail string       `json:"committer_email"`
-	CommittedDate  string       `json:"committed_date"`
-	CreatedAt      string       `json:"created_at,omitempty"`
-	WebURL         string       `json:"web_url"`
-	ParentIDs      []string     `json:"parent_ids,omitempty"`
-	Status         string       `json:"status,omitempty"`
-	ProjectID      int64        `json:"project_id,omitempty"`
-	Stats          *StatsOutput `json:"stats,omitempty"`
+	ID               string              `json:"id"`
+	ShortID          string              `json:"short_id"`
+	Title            string              `json:"title"`
+	Message          string              `json:"message,omitempty"`
+	AuthorName       string              `json:"author_name"`
+	AuthorEmail      string              `json:"author_email"`
+	AuthoredDate     string              `json:"authored_date,omitempty"`
+	CommitterName    string              `json:"committer_name"`
+	CommitterEmail   string              `json:"committer_email"`
+	CommittedDate    string              `json:"committed_date"`
+	CreatedAt        string              `json:"created_at,omitempty"`
+	WebURL           string              `json:"web_url"`
+	ParentIDs        []string            `json:"parent_ids,omitempty"`
+	Status           string              `json:"status,omitempty"`
+	ProjectID        int64               `json:"project_id,omitempty"`
+	Trailers         map[string]string   `json:"trailers,omitempty"`
+	ExtendedTrailers map[string]string   `json:"extended_trailers,omitempty"`
+	LastPipeline     *LastPipelineOutput `json:"last_pipeline,omitempty"`
+	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
+}
+
+// CommitStatsOutput mirrors gl.CommitStats: line additions/deletions/total
+// for a commit.
+type CommitStatsOutput struct {
+	Additions int64 `json:"additions"`
+	Deletions int64 `json:"deletions"`
+	Total     int64 `json:"total"`
+}
+
+// LastPipelineOutput mirrors gl.PipelineInfo, the pipeline summary embedded in
+// a commit payload as last_pipeline.
+type LastPipelineOutput struct {
+	ID        int64  `json:"id"`
+	IID       int64  `json:"iid,omitempty"`
+	ProjectID int64  `json:"project_id,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Ref       string `json:"ref,omitempty"`
+	SHA       string `json:"sha,omitempty"`
+	Name      string `json:"name,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// BasicUserOutput mirrors gl.Author, the user object returned on commit
+// comments and commit statuses.
+type BasicUserOutput struct {
+	ID        int64  `json:"id,omitempty"`
+	Username  string `json:"username,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Email     string `json:"email,omitempty"`
+	State     string `json:"state,omitempty"`
+	Blocked   bool   `json:"blocked,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// pipelineInfoToOutput maps gl.PipelineInfo to LastPipelineOutput, or nil when
+// the commit has no associated pipeline.
+func pipelineInfoToOutput(p *gl.PipelineInfo) *LastPipelineOutput {
+	if p == nil {
+		return nil
+	}
+	out := &LastPipelineOutput{
+		ID:        p.ID,
+		IID:       p.IID,
+		ProjectID: p.ProjectID,
+		Status:    p.Status,
+		Source:    p.Source,
+		Ref:       p.Ref,
+		SHA:       p.SHA,
+		Name:      p.Name,
+		WebURL:    p.WebURL,
+	}
+	if p.CreatedAt != nil {
+		out.CreatedAt = p.CreatedAt.String()
+	}
+	if p.UpdatedAt != nil {
+		out.UpdatedAt = p.UpdatedAt.String()
+	}
+	return out
+}
+
+// authorToOutput maps gl.Author to *BasicUserOutput, or nil when the author is
+// empty (zero-valued).
+func authorToOutput(a gl.Author) *BasicUserOutput {
+	if a.ID == 0 && a.Username == "" && a.Name == "" && a.Email == "" {
+		return nil
+	}
+	out := &BasicUserOutput{
+		ID:       a.ID,
+		Username: a.Username,
+		Name:     a.Name,
+		Email:    a.Email,
+		State:    a.State,
+		Blocked:  a.Blocked,
+	}
+	if a.CreatedAt != nil {
+		out.CreatedAt = a.CreatedAt.String()
+	}
+	return out
 }
 
 // Create creates a new commit in the specified GitLab project with one
@@ -72,14 +164,20 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			Action:   new(gl.FileActionValue(a.Action)),
 			FilePath: new(a.FilePath),
 		}
-		if a.Content != "" {
-			action.Content = new(toolutil.NormalizeText(a.Content))
-		}
 		if a.PreviousPath != "" {
 			action.PreviousPath = new(a.PreviousPath)
 		}
+		if a.Content != "" {
+			action.Content = new(toolutil.NormalizeText(a.Content))
+		}
+		if a.Encoding != "" {
+			action.Encoding = new(a.Encoding)
+		}
 		if a.LastCommitID != "" {
 			action.LastCommitID = new(a.LastCommitID)
+		}
+		if a.ExecuteFilemode {
+			action.ExecuteFilemode = new(true)
 		}
 		actions[i] = action
 	}
@@ -95,11 +193,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.StartSHA != "" {
 		opts.StartSHA = new(input.StartSHA)
 	}
+	if input.StartProject != "" {
+		opts.StartProject = new(input.StartProject)
+	}
 	if input.AuthorEmail != "" {
 		opts.AuthorEmail = new(input.AuthorEmail)
 	}
 	if input.AuthorName != "" {
 		opts.AuthorName = new(input.AuthorName)
+	}
+	if input.Stats {
+		opts.Stats = new(true)
 	}
 	if input.Force {
 		opts.Force = new(true)
@@ -115,45 +219,93 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return ToOutput(c), nil
 }
 
-// ToOutput converts a GitLab API [gl.Commit] to the MCP tool output
-// format, formatting the committed date as a string if present.
-func ToOutput(c *gl.Commit) Output {
-	out := Output{
-		ID:             c.ID,
-		ShortID:        c.ShortID,
-		Title:          c.Title,
-		Message:        c.Message,
-		AuthorName:     c.AuthorName,
-		AuthorEmail:    c.AuthorEmail,
-		CommitterName:  c.CommitterName,
-		CommitterEmail: c.CommitterEmail,
-		WebURL:         c.WebURL,
-		ParentIDs:      c.ParentIDs,
-		ProjectID:      c.ProjectID,
+// commitFields holds the gl.Commit values shared by Output and DetailOutput.
+// Centralizing the mapping keeps the two typed constructors from diverging and
+// avoids duplicated conversion logic.
+type commitFields struct {
+	id, shortID, title, message                    string
+	authorName, authorEmail                        string
+	committerName, committerEmail                  string
+	authoredDate, committedDate, createdAt, webURL string
+	status                                         string
+	projectID                                      int64
+	parentIDs                                      []string
+	trailers, extendedTrailers                     map[string]string
+	lastPipeline                                   *LastPipelineOutput
+	stats                                          *CommitStatsOutput
+}
+
+// commitToFields maps a gl.Commit into the shared commitFields intermediate,
+// stringifying timestamps and projecting nested objects.
+func commitToFields(c *gl.Commit) commitFields {
+	f := commitFields{
+		id:               c.ID,
+		shortID:          c.ShortID,
+		title:            c.Title,
+		message:          c.Message,
+		authorName:       c.AuthorName,
+		authorEmail:      c.AuthorEmail,
+		committerName:    c.CommitterName,
+		committerEmail:   c.CommitterEmail,
+		webURL:           c.WebURL,
+		parentIDs:        c.ParentIDs,
+		projectID:        c.ProjectID,
+		trailers:         c.Trailers,
+		extendedTrailers: c.ExtendedTrailers,
+		lastPipeline:     pipelineInfoToOutput(c.LastPipeline),
 	}
 	if c.CommittedDate != nil {
-		out.CommittedDate = c.CommittedDate.String()
+		f.committedDate = c.CommittedDate.String()
 	}
 	if c.AuthoredDate != nil {
-		out.AuthoredDate = c.AuthoredDate.String()
+		f.authoredDate = c.AuthoredDate.String()
 	}
 	if c.CreatedAt != nil {
-		out.CreatedAt = c.CreatedAt.String()
+		f.createdAt = c.CreatedAt.String()
 	}
 	if c.Status != nil {
-		out.Status = string(*c.Status)
+		f.status = string(*c.Status)
 	}
 	if c.Stats != nil {
-		out.Stats = &StatsOutput{
+		f.stats = &CommitStatsOutput{
 			Additions: c.Stats.Additions,
 			Deletions: c.Stats.Deletions,
 			Total:     c.Stats.Total,
 		}
 	}
-	return out
+	return f
+}
+
+// ToOutput converts a GitLab API [gl.Commit] to the list/summary MCP tool
+// output format, mirroring the full commit payload.
+func ToOutput(c *gl.Commit) Output {
+	f := commitToFields(c)
+	return Output{
+		ID:               f.id,
+		ShortID:          f.shortID,
+		Title:            f.title,
+		Message:          f.message,
+		AuthorName:       f.authorName,
+		AuthorEmail:      f.authorEmail,
+		AuthoredDate:     f.authoredDate,
+		CommitterName:    f.committerName,
+		CommitterEmail:   f.committerEmail,
+		CommittedDate:    f.committedDate,
+		CreatedAt:        f.createdAt,
+		WebURL:           f.webURL,
+		ParentIDs:        f.parentIDs,
+		Status:           f.status,
+		ProjectID:        f.projectID,
+		Trailers:         f.trailers,
+		ExtendedTrailers: f.extendedTrailers,
+		LastPipeline:     f.lastPipeline,
+		Stats:            f.stats,
+	}
 }
 
 // ListInput defines parameters for listing commits in a GitLab project.
+// It mirrors gl.ListCommitsOptions (C-IMPORTS) and supports offset and keyset
+// pagination via order_by/sort/page_token.
 type ListInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	RefName     string               `json:"ref_name,omitempty"    jsonschema:"Branch name, tag, or commit SHA to list commits from (default: default branch)"`
@@ -161,9 +313,14 @@ type ListInput struct {
 	Until       string               `json:"until,omitempty"       jsonschema:"Return commits before this date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	Path        string               `json:"path,omitempty"        jsonschema:"File path to filter commits by (only commits touching this path)"`
 	Author      string               `json:"author,omitempty"      jsonschema:"Filter by commit author name or email"`
+	All         bool                 `json:"all,omitempty"         jsonschema:"Retrieve every commit from the whole repository (across all branches)"`
 	WithStats   bool                 `json:"with_stats,omitempty"  jsonschema:"Include commit stats (additions, deletions, total)"`
 	FirstParent bool                 `json:"first_parent,omitempty" jsonschema:"Follow only the first parent commit upon seeing a merge commit"`
+	Trailers    bool                 `json:"trailers,omitempty"    jsonschema:"Parse and include Git trailers for every commit"`
+	OrderBy     string               `json:"order_by,omitempty"    jsonschema:"For keyset pagination, the column to order results by"`
+	Sort        string               `json:"sort,omitempty"        jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of commits.
@@ -184,6 +341,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListCommitsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	if input.RefName != "" {
 		opts.RefName = new(input.RefName)
 	}
@@ -195,17 +359,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Author != "" {
 		opts.Author = new(input.Author)
 	}
+	if input.All {
+		opts.All = new(true)
+	}
 	if input.WithStats {
 		opts.WithStats = new(true)
 	}
 	if input.FirstParent {
 		opts.FirstParent = new(true)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Trailers {
+		opts.Trailers = new(true)
 	}
 
 	commits, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -221,35 +385,37 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Commits: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// GetInput defines parameters for retrieving a single commit.
+// GetInput defines parameters for retrieving a single commit. It mirrors
+// gl.GetCommitOptions (C-IMPORTS).
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA hash to retrieve,required"`
+	Stats     bool                 `json:"stats,omitempty" jsonschema:"Include commit stats (additions, deletions, total); defaults to true on GitLab"`
 }
 
-// DetailOutput represents a single commit with full details.
+// DetailOutput represents a single commit with full details. It mirrors the
+// full gl.Commit payload (C-IMPORTS).
 type DetailOutput struct {
 	toolutil.HintableOutput
-	ID             string       `json:"id"`
-	ShortID        string       `json:"short_id"`
-	Title          string       `json:"title"`
-	Message        string       `json:"message"`
-	AuthorName     string       `json:"author_name"`
-	AuthorEmail    string       `json:"author_email"`
-	CommitterName  string       `json:"committer_name"`
-	CommitterEmail string       `json:"committer_email"`
-	CommittedDate  string       `json:"committed_date"`
-	WebURL         string       `json:"web_url"`
-	ParentIDs      []string     `json:"parent_ids"`
-	Status         string       `json:"status,omitempty"`
-	Stats          *StatsOutput `json:"stats,omitempty"`
-}
-
-// StatsOutput holds additions/deletions/total for a commit.
-type StatsOutput struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-	Total     int64 `json:"total"`
+	ID               string              `json:"id"`
+	ShortID          string              `json:"short_id"`
+	Title            string              `json:"title"`
+	Message          string              `json:"message"`
+	AuthorName       string              `json:"author_name"`
+	AuthorEmail      string              `json:"author_email"`
+	AuthoredDate     string              `json:"authored_date,omitempty"`
+	CommitterName    string              `json:"committer_name"`
+	CommitterEmail   string              `json:"committer_email"`
+	CommittedDate    string              `json:"committed_date"`
+	CreatedAt        string              `json:"created_at,omitempty"`
+	WebURL           string              `json:"web_url"`
+	ParentIDs        []string            `json:"parent_ids"`
+	Status           string              `json:"status,omitempty"`
+	ProjectID        int64               `json:"project_id,omitempty"`
+	Trailers         map[string]string   `json:"trailers,omitempty"`
+	ExtendedTrailers map[string]string   `json:"extended_trailers,omitempty"`
+	LastPipeline     *LastPipelineOutput `json:"last_pipeline,omitempty"`
+	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
 }
 
 // Get retrieves a single commit by SHA from a GitLab project.
@@ -261,7 +427,11 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailOutput{}, errors.New("commitGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 
-	c, _, err := client.GL().Commits.GetCommit(string(input.ProjectID), input.SHA, nil, gl.WithContext(ctx))
+	var opts *gl.GetCommitOptions
+	if input.Stats {
+		opts = &gl.GetCommitOptions{Stats: new(true)}
+	}
+	c, _, err := client.GL().Commits.GetCommit(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("commitGet", err, http.StatusNotFound,
 			"verify SHA exists in this project (use full or short SHA, branch name, or tag name)")
@@ -270,42 +440,44 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 }
 
 // detailToOutput converts a GitLab API [gl.Commit] to the detailed MCP
-// output format including message, parent IDs, and optional stats.
+// output format, mirroring the full commit payload including trailers,
+// last pipeline, and optional stats.
 func detailToOutput(c *gl.Commit) DetailOutput {
-	out := DetailOutput{
-		ID:             c.ID,
-		ShortID:        c.ShortID,
-		Title:          c.Title,
-		Message:        c.Message,
-		AuthorName:     c.AuthorName,
-		AuthorEmail:    c.AuthorEmail,
-		CommitterName:  c.CommitterName,
-		CommitterEmail: c.CommitterEmail,
-		WebURL:         c.WebURL,
-		ParentIDs:      c.ParentIDs,
+	f := commitToFields(c)
+	return DetailOutput{
+		ID:               f.id,
+		ShortID:          f.shortID,
+		Title:            f.title,
+		Message:          f.message,
+		AuthorName:       f.authorName,
+		AuthorEmail:      f.authorEmail,
+		AuthoredDate:     f.authoredDate,
+		CommitterName:    f.committerName,
+		CommitterEmail:   f.committerEmail,
+		CommittedDate:    f.committedDate,
+		CreatedAt:        f.createdAt,
+		WebURL:           f.webURL,
+		ParentIDs:        f.parentIDs,
+		Status:           f.status,
+		ProjectID:        f.projectID,
+		Trailers:         f.trailers,
+		ExtendedTrailers: f.extendedTrailers,
+		LastPipeline:     f.lastPipeline,
+		Stats:            f.stats,
 	}
-	if c.CommittedDate != nil {
-		out.CommittedDate = c.CommittedDate.String()
-	}
-	if c.Status != nil {
-		out.Status = string(*c.Status)
-	}
-	if c.Stats != nil {
-		out.Stats = &StatsOutput{
-			Additions: c.Stats.Additions,
-			Deletions: c.Stats.Deletions,
-			Total:     c.Stats.Total,
-		}
-	}
-	return out
 }
 
-// DiffInput defines parameters for retrieving diffs of a commit.
+// DiffInput defines parameters for retrieving diffs of a commit. It mirrors
+// gl.GetCommitDiffOptions (C-IMPORTS) and supports offset and keyset
+// pagination via order_by/sort/page_token.
 type DiffInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA hash to get diffs for,required"`
 	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // DiffOutput holds the list of file diffs for a commit.
@@ -325,14 +497,15 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 	}
 
 	opts := &gl.GetCommitDiffOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	if input.Unidiff {
 		opts.Unidiff = new(true)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
 	}
 
 	diffs, resp, err := client.GL().Commits.GetCommitDiff(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
@@ -352,12 +525,17 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 // GetCommitRefs — branches/tags referencing a commit
 // ---------------------------------------------------------------------------.
 
-// RefsInput defines parameters for retrieving branches/tags referencing a commit.
+// RefsInput defines parameters for retrieving branches/tags referencing a
+// commit. It mirrors gl.GetCommitRefsOptions (C-IMPORTS) and supports offset
+// and keyset pagination via order_by/sort/page_token.
 type RefsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA to look up,required"`
 	Type      string               `json:"type,omitempty" jsonschema:"Filter by ref type: branch, tag, or all (default: all)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // RefOutput represents a branch or tag referencing a commit.
@@ -382,14 +560,15 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 		return RefsOutput{}, errors.New("getCommitRefs: project_id is required")
 	}
 	opts := &gl.GetCommitRefsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	if input.Type != "" {
 		opts.Type = new(input.Type)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
 	}
 	refs, resp, err := client.GL().Commits.GetCommitRefs(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -407,21 +586,27 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 // GetCommitComments / PostCommitComment
 // ---------------------------------------------------------------------------.
 
-// CommentsInput defines parameters for listing comments on a commit.
+// CommentsInput defines parameters for listing comments on a commit. It mirrors
+// gl.GetCommitCommentsOptions (C-IMPORTS) and supports offset and keyset
+// pagination via order_by/sort/page_token.
 type CommentsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// CommentOutput represents a single commit comment.
+// CommentOutput represents a single commit comment. It mirrors gl.CommitComment
+// (C-IMPORTS), surfacing the author as a full user object.
 type CommentOutput struct {
 	toolutil.HintableOutput
-	Note     string `json:"note"`
-	Path     string `json:"path,omitempty"`
-	Line     int64  `json:"line,omitempty"`
-	LineType string `json:"line_type,omitempty"`
-	Author   string `json:"author"`
+	Note     string           `json:"note"`
+	Path     string           `json:"path,omitempty"`
+	Line     int64            `json:"line,omitempty"`
+	LineType string           `json:"line_type,omitempty"`
+	Author   *BasicUserOutput `json:"author,omitempty"`
 }
 
 // CommentsOutput holds a paginated list of commit comments.
@@ -440,11 +625,12 @@ func GetComments(ctx context.Context, client *gitlabclient.Client, input Comment
 		return CommentsOutput{}, errors.New("getCommitComments: project_id is required")
 	}
 	opts := &gl.GetCommitCommentsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	comments, resp, err := client.GL().Commits.GetCommitComments(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -458,20 +644,15 @@ func GetComments(ctx context.Context, client *gitlabclient.Client, input Comment
 	return CommentsOutput{Comments: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// commentToOutput converts the GitLab API response to the tool output format.
+// commentToOutput converts the GitLab API response to the tool output format,
+// mirroring the full author user object.
 func commentToOutput(c *gl.CommitComment) CommentOutput {
-	author := ""
-	if c.Author.Username != "" {
-		author = c.Author.Username
-	} else if c.Author.Name != "" {
-		author = c.Author.Name
-	}
 	return CommentOutput{
 		Note:     c.Note,
 		Path:     c.Path,
 		Line:     c.Line,
 		LineType: c.LineType,
-		Author:   author,
+		Author:   authorToOutput(c.Author),
 	}
 }
 
@@ -522,6 +703,8 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 // ---------------------------------------------------------------------------.
 
 // StatusesInput defines parameters for listing pipeline statuses of a commit.
+// It mirrors gl.GetCommitStatusesOptions (C-IMPORTS) and supports offset and
+// keyset pagination via order_by/sort/page_token.
 type StatusesInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	SHA        string               `json:"sha"         jsonschema:"Commit SHA,required"`
@@ -530,26 +713,30 @@ type StatusesInput struct {
 	Name       string               `json:"name,omitempty"       jsonschema:"Status name filter"`
 	PipelineID int64                `json:"pipeline_id,omitempty" jsonschema:"Pipeline ID filter"`
 	All        bool                 `json:"all,omitempty"        jsonschema:"Return all statuses including retries"`
+	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"For keyset pagination, the column to order results by"`
+	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// StatusOutput represents a single commit pipeline status.
+// StatusOutput represents a single commit pipeline status. It mirrors
+// gl.CommitStatus (C-IMPORTS), surfacing the author as a full user object.
 type StatusOutput struct {
 	toolutil.HintableOutput
-	ID           int64   `json:"id"`
-	SHA          string  `json:"sha"`
-	Ref          string  `json:"ref"`
-	Status       string  `json:"status"`
-	Name         string  `json:"name"`
-	TargetURL    string  `json:"target_url,omitempty"`
-	Description  string  `json:"description,omitempty"`
-	Coverage     float64 `json:"coverage,omitempty"`
-	PipelineID   int64   `json:"pipeline_id,omitempty"`
-	AllowFailure bool    `json:"allow_failure,omitempty"`
-	CreatedAt    string  `json:"created_at,omitempty"`
-	StartedAt    string  `json:"started_at,omitempty"`
-	FinishedAt   string  `json:"finished_at,omitempty"`
-	Author       string  `json:"author,omitempty"`
+	ID           int64            `json:"id"`
+	SHA          string           `json:"sha"`
+	Ref          string           `json:"ref"`
+	Status       string           `json:"status"`
+	Name         string           `json:"name"`
+	TargetURL    string           `json:"target_url,omitempty"`
+	Description  string           `json:"description,omitempty"`
+	Coverage     float64          `json:"coverage,omitempty"`
+	PipelineID   int64            `json:"pipeline_id,omitempty"`
+	AllowFailure bool             `json:"allow_failure,omitempty"`
+	CreatedAt    string           `json:"created_at,omitempty"`
+	StartedAt    string           `json:"started_at,omitempty"`
+	FinishedAt   string           `json:"finished_at,omitempty"`
+	Author       *BasicUserOutput `json:"author,omitempty"`
 }
 
 // StatusesOutput holds a paginated list of commit statuses.
@@ -568,6 +755,13 @@ func GetStatuses(ctx context.Context, client *gitlabclient.Client, input Statuse
 		return StatusesOutput{}, errors.New("getCommitStatuses: project_id is required")
 	}
 	opts := &gl.GetCommitStatusesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
 	}
@@ -582,12 +776,6 @@ func GetStatuses(ctx context.Context, client *gitlabclient.Client, input Statuse
 	}
 	if input.All {
 		opts.All = new(true)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
 	}
 	statuses, resp, err := client.GL().Commits.GetCommitStatuses(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -624,9 +812,7 @@ func statusToOutput(s *gl.CommitStatus) StatusOutput {
 	if s.FinishedAt != nil {
 		out.FinishedAt = s.FinishedAt.String()
 	}
-	if s.Author.Username != "" {
-		out.Author = s.Author.Username
-	}
+	out.Author = authorToOutput(s.Author)
 	return out
 }
 

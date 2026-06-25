@@ -749,7 +749,7 @@ func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 	p := pipelines.DetailOutput{
 		ID: 100, IID: 10, Status: "success", Source: "push", Ref: "main",
 		SHA: "abc123", Duration: 120, QueuedDuration: 5, Coverage: "85.5",
-		YamlErrors: "", UserUsername: "admin", WebURL: "https://gl.example.com/p/100",
+		YamlErrors: "", User: &pipelines.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
 	}
 	md := pipelines.FormatDetailMarkdown(p)
 	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: admin"}
@@ -858,7 +858,7 @@ func TestFormatCommit_DetailMarkdown(t *testing.T) {
 		ShortID: "abc1234", Title: "feat: add feature", Message: "feat: add feature\n\nDetailed description",
 		AuthorName: "dev", AuthorEmail: "dev@example.com", CommittedDate: testDate20260101,
 		ParentIDs: []string{"parent1", "parent2"}, WebURL: "https://gl.example.com/commit/abc",
-		Stats: &commits.StatsOutput{Additions: 10, Deletions: 3, Total: 13},
+		Stats: &commits.CommitStatsOutput{Additions: 10, Deletions: 3, Total: 13},
 	}
 	md := commits.FormatDetailMarkdown(c)
 	checks := []string{"## Commit abc1234", "+10 -3", "parent1, parent2", "### Message"}
@@ -1105,7 +1105,7 @@ func TestFormatJob_Markdown(t *testing.T) {
 	j := jobs.Output{
 		ID: 200, Name: "build", Stage: "build", Status: "failed",
 		Ref: "main", Duration: 45.5, FailureReason: "script_failure",
-		WebURL: "https://gl.example.com/j/200", UserUsername: "ci-bot",
+		WebURL: "https://gl.example.com/j/200", User: &jobs.UserObject{Username: "ci-bot"},
 	}
 	md := jobs.FormatOutputMarkdown(j)
 	checks := []string{"Job #200", "build", "**Stage**: build", "**Failure Reason**: script_failure", "45.5s"}
