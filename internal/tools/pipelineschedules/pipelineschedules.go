@@ -25,9 +25,12 @@ const (
 
 // ListInput contains parameters for listing pipeline schedules.
 type ListInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id"       jsonschema:"Project ID or URL-encoded path,required"`
-	Scope     string               `json:"scope,omitempty"  jsonschema:"Filter by scope: active or inactive"`
+	ProjectID toolutil.StringOrInt `json:"project_id"        jsonschema:"Project ID or URL-encoded path,required"`
+	Scope     string               `json:"scope,omitempty"   jsonschema:"Filter by scope: active or inactive"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for retrieving a single pipeline schedule.
@@ -44,6 +47,7 @@ type CreateInput struct {
 	Cron         string               `json:"cron"                    jsonschema:"Cron expression (e.g. 0 1 * * *),required"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Cron timezone (e.g. UTC or America/New_York)"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Whether the schedule is active (default: true)"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to seed on the schedule; each entry has name and value"`
 }
 
 // UpdateInput contains parameters for editing a pipeline schedule.
@@ -55,6 +59,7 @@ type UpdateInput struct {
 	Cron         string               `json:"cron,omitempty"          jsonschema:"Updated cron expression"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Updated cron timezone"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Enable or disable the schedule"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to set on the schedule; each entry has name, value, and optional destroy"`
 }
 
 // DeleteInput contains parameters for deleting a pipeline schedule.
@@ -76,16 +81,19 @@ type RunInput struct {
 // Output represents a single pipeline schedule in MCP responses.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int    `json:"id"`
-	Description  string `json:"description"`
-	Ref          string `json:"ref"`
-	Cron         string `json:"cron"`
-	CronTimezone string `json:"cron_timezone"`
-	NextRunAt    string `json:"next_run_at,omitempty"`
-	Active       bool   `json:"active"`
-	OwnerName    string `json:"owner_name,omitempty"`
-	CreatedAt    string `json:"created_at,omitempty"`
-	UpdatedAt    string `json:"updated_at,omitempty"`
+	ID           int                 `json:"id"`
+	Description  string              `json:"description"`
+	Ref          string              `json:"ref"`
+	Cron         string              `json:"cron"`
+	CronTimezone string              `json:"cron_timezone"`
+	NextRunAt    string              `json:"next_run_at,omitempty"`
+	Active       bool                `json:"active"`
+	Owner        *OwnerOutput        `json:"owner,omitempty"`
+	LastPipeline *LastPipelineOutput `json:"last_pipeline,omitempty"`
+	Variables    []VariableObject    `json:"variables,omitempty"`
+	Inputs       []InputObject       `json:"inputs,omitempty"`
+	CreatedAt    string              `json:"created_at,omitempty"`
+	UpdatedAt    string              `json:"updated_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of pipeline schedules.
@@ -108,9 +116,10 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 		Cron:         s.Cron,
 		CronTimezone: s.CronTimezone,
 		Active:       s.Active,
-	}
-	if s.Owner != nil {
-		out.OwnerName = s.Owner.Username
+		Owner:        ownerOutput(s.Owner),
+		LastPipeline: lastPipelineOutput(s.LastPipeline),
+		Variables:    variableObjects(s.Variables),
+		Inputs:       inputObjects(s.Inputs),
 	}
 	if s.NextRunAt != nil {
 		out.NextRunAt = s.NextRunAt.Format(time.RFC3339)
@@ -137,11 +146,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gitlab.ListPipelineSchedulesOptions{
-		ListOptions: gitlab.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gitlab.ListPipelineSchedulesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Scope != "" {
 		scope := gitlab.PipelineScheduleScopeValue(input.Scope)
@@ -215,6 +226,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Active != nil {
 		opts.Active = input.Active
 	}
+	if len(input.Inputs) > 0 {
+		opts.Inputs = toPipelineInputs(input.Inputs)
+	}
 
 	s, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
@@ -260,6 +274,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Active != nil {
 		opts.Active = input.Active
+	}
+	if len(input.Inputs) > 0 {
+		opts.Inputs = toPipelineInputs(input.Inputs)
 	}
 
 	s, _, err := client.GL().PipelineSchedules.EditPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx))
@@ -507,10 +524,10 @@ func DeleteVariable(ctx context.Context, client *gitlabclient.Client, input Dele
 
 // ListTriggeredPipelinesInput defines parameters for listing pipelines triggered by a schedule.
 type ListTriggeredPipelinesInput struct {
-	ProjectID  toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	ScheduleID int                  `json:"schedule_id" jsonschema:"Pipeline schedule ID,required"`
-	Page       int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage    int64                `json:"per_page,omitempty" jsonschema:"Items per page (max 100)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // TriggeredPipelineOutput represents a pipeline triggered by a schedule.
@@ -541,12 +558,7 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gitlab.ListPipelinesTriggeredByScheduleOptions{}
-	if input.Page > 0 {
-		opts.Page = input.Page
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = input.PerPage
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	pipelines, resp, err := client.GL().PipelineSchedules.ListPipelinesTriggeredBySchedule(
 		string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx),

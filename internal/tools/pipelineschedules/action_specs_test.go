@@ -254,3 +254,41 @@ func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName
 	}
 	return description
 }
+
+// TestPipelineScheduleOptions_UnknownToolKeepsGenericUsage verifies the
+// decorateScheduleMeta no-op path: a tool name with no scheduleActionMeta entry
+// retains the generic placeholder usage rather than panicking.
+func TestPipelineScheduleOptions_UnknownToolKeepsGenericUsage(t *testing.T) {
+	options := pipelineScheduleOptions("schedule_unknown", "gitlab_pipeline_schedule_unknown")
+	if options.Usage != "Use to execute pipelineschedules domain action." {
+		t.Errorf("Usage = %q, want generic placeholder", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want empty for unknown tool", options.IndividualTool.Description)
+	}
+}
+
+// TestToPipelineInputs_EmptyReturnsNil verifies the empty-slice branch of
+// toPipelineInputs returns nil so omitempty drops the field on the wire.
+func TestToPipelineInputs_EmptyReturnsNil(t *testing.T) {
+	if got := toPipelineInputs(nil); got != nil {
+		t.Errorf("toPipelineInputs(nil) = %v, want nil", got)
+	}
+}
+
+// TestPipelineScheduleConverters_NilSubObjects verifies the nil-guard branches
+// of the schedule sub-object converters return nil.
+func TestPipelineScheduleConverters_NilSubObjects(t *testing.T) {
+	if ownerOutput(nil) != nil {
+		t.Error("ownerOutput(nil) != nil")
+	}
+	if lastPipelineOutput(nil) != nil {
+		t.Error("lastPipelineOutput(nil) != nil")
+	}
+	if variableObjects(nil) != nil {
+		t.Error("variableObjects(nil) != nil")
+	}
+	if inputObjects(nil) != nil {
+		t.Error("inputObjects(nil) != nil")
+	}
+}

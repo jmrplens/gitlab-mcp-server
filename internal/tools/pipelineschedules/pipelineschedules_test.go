@@ -5,6 +5,7 @@ package pipelineschedules
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -59,8 +60,8 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 	if out.Schedules[0].Description != "Nightly build" {
 		t.Errorf("description = %q, want %q", out.Schedules[0].Description, "Nightly build")
 	}
-	if out.Schedules[0].OwnerName != "admin" {
-		t.Errorf("owner = %q, want %q", out.Schedules[0].OwnerName, "admin")
+	if out.Schedules[0].Owner == nil || out.Schedules[0].Owner.Username != "admin" {
+		t.Errorf("owner = %+v, want username %q", out.Schedules[0].Owner, "admin")
 	}
 }
 
@@ -80,6 +81,41 @@ func TestPipelineScheduleList_WithScope(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID: "123",
 		Scope:     "active",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestPipelineScheduleList_KeysetAndSort verifies List forwards order_by, sort,
+// and keyset pagination (pagination, page_token) query parameters.
+func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedules {
+			q := r.URL.Query()
+			if q.Get("order_by") != "id" {
+				t.Errorf("order_by = %q, want id", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok123" {
+				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "123",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -114,7 +150,11 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"owner":{"id":7,"username":"admin","name":"Admin User","state":"active","avatar_url":"http://av","web_url":"http://u"},
+				"last_pipeline":{"id":99,"sha":"abc","ref":"main","status":"success","web_url":"http://p"},
+				"variables":[{"key":"DEPLOY_ENV","value":"prod","variable_type":"env_var"},null],
+				"inputs":[{"name":"version","value":"1.2.3"},null]
 			}`)
 			return
 		}
@@ -133,6 +173,18 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	}
 	if out.Cron != "0 1 * * *" {
 		t.Errorf("cron = %q, want %q", out.Cron, "0 1 * * *")
+	}
+	if out.Owner == nil || out.Owner.ID != 7 || out.Owner.Name != "Admin User" || out.Owner.State != "active" {
+		t.Errorf("owner = %+v, want full user object", out.Owner)
+	}
+	if out.LastPipeline == nil || out.LastPipeline.ID != 99 || out.LastPipeline.Status != "success" {
+		t.Errorf("last_pipeline = %+v, want id 99 status success", out.LastPipeline)
+	}
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" || out.Variables[0].VariableType != "env_var" {
+		t.Errorf("variables = %+v, want one DEPLOY_ENV env_var", out.Variables)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" || out.Inputs[0].Value != "1.2.3" {
+		t.Errorf("inputs = %+v, want one version=1.2.3", out.Inputs)
 	}
 }
 
@@ -165,25 +217,37 @@ func TestPipelineScheduleGet_CancelledContext(t *testing.T) {
 func TestPipelineScheduleCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules && r.Method == http.MethodPost {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"name":"version"`) {
+				t.Errorf("create body missing inputs: %s", body)
+			}
 			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id":10,"description":"Weekly deploy","ref":"main","cron":"0 9 * * 1","cron_timezone":"UTC","active":true
+				"id":10,"description":"Weekly deploy","ref":"main","cron":"0 9 * * 1","cron_timezone":"UTC","active":true,
+				"inputs":[{"name":"version","value":"1.0.0"}]
 			}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
 	}))
 
+	active := true
 	out, err := Create(context.Background(), client, CreateInput{
-		ProjectID:   "123",
-		Description: "Weekly deploy",
-		Ref:         "main",
-		Cron:        "0 9 * * 1",
+		ProjectID:    "123",
+		Description:  "Weekly deploy",
+		Ref:          "main",
+		Cron:         "0 9 * * 1",
+		CronTimezone: "UTC",
+		Active:       &active,
+		Inputs:       []InputObject{{Name: "version", Value: "1.0.0"}},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.ID != 10 {
 		t.Errorf("id = %d, want 10", out.ID)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+		t.Errorf("inputs = %+v, want one version input", out.Inputs)
 	}
 }
 
@@ -229,6 +293,10 @@ func TestPipelineScheduleCreate_CancelledContext(t *testing.T) {
 func TestPipelineScheduleUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodPut {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"name":"old_input"`) {
+				t.Errorf("update body missing inputs: %s", body)
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,"description":"Updated desc","ref":"develop","cron":"0 2 * * *","cron_timezone":"UTC","active":false
 			}`)
@@ -237,10 +305,12 @@ func TestPipelineScheduleUpdate_Success(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
 	}))
 
+	destroy := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:   "123",
 		ScheduleID:  1,
 		Description: testUpdatedDesc,
+		Inputs:      []InputObject{{Name: "old_input", Destroy: &destroy}},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -391,8 +461,8 @@ func TestTakeOwnership_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TakeOwnership() error: %v", err)
 	}
-	if out.OwnerName != "newowner" {
-		t.Errorf("OwnerName = %q, want %q", out.OwnerName, "newowner")
+	if out.Owner == nil || out.Owner.Username != "newowner" {
+		t.Errorf("Owner = %+v, want username %q", out.Owner, "newowner")
 	}
 }
 
@@ -1246,7 +1316,8 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
-		ProjectID: "1", ScheduleID: 1, Page: 2, PerPage: 2,
+		ProjectID: "1", ScheduleID: 1,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1272,7 +1343,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		Cron:         "0 1 * * *",
 		CronTimezone: "UTC",
 		Active:       true,
-		OwnerName:    "admin",
+		Owner:        &OwnerOutput{Username: "admin"},
+		LastPipeline: &LastPipelineOutput{ID: 99, Status: "success", WebURL: "http://p"},
 		NextRunAt:    "2026-03-08T01:00:00Z",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 		UpdatedAt:    "2026-03-07T12:00:00Z",
@@ -1287,6 +1359,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		"| Active | ✅ |",
 		"| Next Run | 8 Mar 2026 01:00 UTC |",
 		"| Owner | admin |",
+		"| Last Pipeline |",
+		"#99 (success)",
 		"| Created | 1 Jan 2026 00:00 UTC |",
 		"| Updated | 7 Mar 2026 12:00 UTC |",
 	} {
@@ -1342,8 +1416,8 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListMarkdown_WithSchedules(t *testing.T) {
 	out := ListOutput{
 		Schedules: []Output{
-			{ID: 1, Description: "Nightly", Ref: "main", Cron: "0 1 * * *", Active: true, OwnerName: "admin"},
-			{ID: 2, Description: "Weekly", Ref: "develop", Cron: "0 9 * * 1", Active: false, OwnerName: "user1"},
+			{ID: 1, Description: "Nightly", Ref: "main", Cron: "0 1 * * *", Active: true, Owner: &OwnerOutput{Username: "admin"}},
+			{ID: 2, Description: "Weekly", Ref: "develop", Cron: "0 9 * * 1", Active: false, Owner: &OwnerOutput{Username: "user1"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
