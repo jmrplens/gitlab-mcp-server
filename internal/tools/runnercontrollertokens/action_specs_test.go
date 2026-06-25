@@ -4,6 +4,7 @@ package runnercontrollertokens
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -117,6 +118,49 @@ func TestCatalogSurface_RevokeConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestActionSpecs_MetadataIsNonGeneric verifies every runner controller token
+// action carries action-specific Usage, natural-language aliases beyond the tool
+// name, cross-linked RelatedActions, and a "Returns: … See also: …" description.
+func TestActionSpecs_MetadataIsNonGeneric(t *testing.T) {
+	byTool := runnerControllerTokenSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerTokenActionHandler())))
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" || strings.HasPrefix(spec.Usage, "Use to execute") {
+				t.Errorf("%s has generic/empty Usage: %q", tool, spec.Usage)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s has empty RelatedActions", tool)
+			}
+			hasNaturalAlias := false
+			for _, alias := range spec.Aliases {
+				if alias != tool && alias != spec.Name {
+					hasNaturalAlias = true
+				}
+			}
+			if !hasNaturalAlias {
+				t.Errorf("%s has no natural-language alias beyond the tool name: %v", tool, spec.Aliases)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description missing Returns:/See also:: %q", tool, desc)
+			}
+		})
+	}
+}
+
+// TestDecorateRunnerControllerTokenMeta_UnknownToolFallback covers the fallback
+// branch when an individual tool has no dedicated metadata entry.
+func TestDecorateRunnerControllerTokenMeta_UnknownToolFallback(t *testing.T) {
+	opts := runnerControllerTokenOptions("gitlab_runner_controller_token_unknown")
+	if opts.Usage != "Use to execute runnercontrollertokens domain action." {
+		t.Errorf("unknown tool Usage = %q, want generic fallback", opts.Usage)
+	}
+	if len(opts.RelatedActions) != 0 {
+		t.Errorf("unknown tool RelatedActions = %v, want none", opts.RelatedActions)
 	}
 }
 

@@ -78,6 +78,7 @@ func toDetailsOutput(rc *gl.RunnerControllerDetails) DetailsOutput {
 // ListInput defines parameters for listing runner controllers.
 type ListInput struct {
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // List retrieves all runner controllers (admin only).
@@ -87,12 +88,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListRunnerControllersOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
 	controllers, resp, err := client.GL().RunnerControllers.ListRunnerControllers(opts, gl.WithContext(ctx))
 	if err != nil {
