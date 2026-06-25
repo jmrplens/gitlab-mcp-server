@@ -53,5 +53,26 @@ func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			},
 		}
 	}
+	options.IndividualTool.Description = userListDescription(actionName)
 	return options
+}
+
+// userListDescription returns the non-generic "Returns: … See also: …"
+// individual-tool description for each feature flag user list action so the
+// discovery surface mirrors the issues domain (1:1 audit R-META).
+func userListDescription(actionName string) string {
+	switch actionName {
+	case "ff_user_list_list":
+		return "List feature flag user lists for a project with search, ordering, and offset or keyset pagination. Returns: each list's id, iid, project_id, name, user_xids, created_at, updated_at, plus pagination metadata. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_create."
+	case "ff_user_list_get":
+		return "Get a single feature flag user list by its user_list_iid. Returns: the list's id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_list, gitlab_ff_user_list_update, gitlab_ff_user_list_delete."
+	case "ff_user_list_create":
+		return "Create a feature flag user list in a project. Returns: the created list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_list, gitlab_ff_user_list_get, gitlab_ff_user_list_update."
+	case "ff_user_list_update":
+		return "Update a feature flag user list's name or user_xids by its user_list_iid. Returns: the updated list with id, iid, project_id, name, user_xids, created_at, and updated_at. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_list, gitlab_ff_user_list_delete."
+	case "ff_user_list_delete":
+		return "Delete a feature flag user list by its user_list_iid. Returns: a success confirmation naming the deleted list. See also: gitlab_ff_user_list_get, gitlab_ff_user_list_list."
+	default:
+		return ""
+	}
 }

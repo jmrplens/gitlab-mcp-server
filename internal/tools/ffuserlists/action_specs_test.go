@@ -187,6 +187,29 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	t.Error("expected text content in cancellation result")
 }
 
+// TestActionSpecs_Descriptions verifies that every feature flag user list
+// action carries a non-generic "Returns: … See also: …" individual-tool
+// description (1:1 audit R-META) and that the helper returns "" for unknown
+// action names.
+func TestActionSpecs_Descriptions(t *testing.T) {
+	byTool := userListSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+	for _, toolName := range []string{
+		"gitlab_ff_user_list_list",
+		"gitlab_ff_user_list_get",
+		"gitlab_ff_user_list_create",
+		"gitlab_ff_user_list_update",
+		"gitlab_ff_user_list_delete",
+	} {
+		desc := byTool[toolName].IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s description = %q, want Returns/See also form", toolName, desc)
+		}
+	}
+	if got := userListDescription("unknown_action"); got != "" {
+		t.Errorf("userListDescription(unknown) = %q, want empty", got)
+	}
+}
+
 func userListSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
