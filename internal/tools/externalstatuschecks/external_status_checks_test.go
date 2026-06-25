@@ -580,6 +580,79 @@ func TestListProjectStatusChecks_WithPagination(t *testing.T) {
 	}
 }
 
+// TestListProjectExternalStatusChecks_Keyset verifies that ListProjectExternalStatusChecks forwards keyset pagination and order_by/sort query parameters to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts pagination, page_token, order_by, and sort reach the request URL.
+func TestListProjectExternalStatusChecks_Keyset(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok123")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := ListProjectExternalStatusChecks(context.Background(), client, ListProjectInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestListProjectStatusChecks_Keyset verifies that the deprecated ListProjectStatusChecks forwards keyset pagination and order_by/sort query parameters to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts pagination, page_token, order_by, and sort reach the request URL.
+func TestListProjectStatusChecks_Keyset(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok456")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "asc")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := ListProjectStatusChecks(context.Background(), client, ListProjectStatusChecksInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok456"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestListProjectMRExternalStatusChecks_Keyset verifies that ListProjectMRExternalStatusChecks forwards keyset pagination and order_by/sort query parameters to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts pagination, page_token, order_by, and sort reach the request URL.
+func TestListProjectMRExternalStatusChecks_Keyset(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok789")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSON(w, http.StatusOK, mergeStatusCheckListJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := ListProjectMRExternalStatusChecks(context.Background(), client, ListProjectMRInput{
+		ProjectID:             "1",
+		MRIID:                 10,
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok789"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
 // TestListProjectMRExternalStatusChecks_ContextCancelled verifies the ListProjectMRExternalStatusChecks_ContextCancelled handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.

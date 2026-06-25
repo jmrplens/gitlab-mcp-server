@@ -136,6 +136,37 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 	}
 }
 
+// TestDecorateExternalStatusCheckMeta_Coverage verifies the discovery-metadata
+// decorator both enriches a known tool and leaves the generic placeholder
+// metadata untouched for an unknown tool (the no-op early-return branch).
+// It asserts every known tool gains a non-generic Usage and a
+// "Returns: … See also: …" description, and that an unrecognized tool keeps
+// the default placeholder Usage.
+func TestDecorateExternalStatusCheckMeta_Coverage(t *testing.T) {
+	const genericUsage = "Use to execute externalstatuschecks domain action."
+
+	for tool := range externalStatusCheckActionMeta {
+		options := externalStatusCheckOptions(tool)
+		decorateExternalStatusCheckMeta(&options, tool)
+		if options.Usage == genericUsage || options.Usage == "" {
+			t.Errorf("%s: Usage not enriched: %q", tool, options.Usage)
+		}
+		if !strings.Contains(options.IndividualTool.Description, "Returns:") ||
+			!strings.Contains(options.IndividualTool.Description, "See also:") {
+			t.Errorf("%s: description missing Returns/See also: %q", tool, options.IndividualTool.Description)
+		}
+		if len(options.Aliases) == 0 {
+			t.Errorf("%s: expected natural-language aliases", tool)
+		}
+	}
+
+	unknown := externalStatusCheckOptions("gitlab_unknown_tool")
+	decorateExternalStatusCheckMeta(&unknown, "gitlab_unknown_tool")
+	if unknown.Usage != genericUsage {
+		t.Errorf("unknown tool Usage = %q, want generic placeholder", unknown.Usage)
+	}
+}
+
 func externalStatusCheckSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
