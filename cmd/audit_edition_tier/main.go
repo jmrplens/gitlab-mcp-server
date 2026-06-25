@@ -66,6 +66,19 @@ func (t tier) String() string {
 	}
 }
 
+// parseEditionTier maps an action's Edition metadata string to its tier.
+// Empty/"core"/unknown is Free; "premium" and "ultimate" map to their tiers.
+func parseEditionTier(edition string) tier {
+	switch strings.ToLower(strings.TrimSpace(edition)) {
+	case "premium":
+		return tierPremium
+	case "ultimate":
+		return tierUltimate
+	default:
+		return tierFree
+	}
+}
+
 // parseTierBadge maps a doc `- Tier:` badge value to the minimum required tier.
 // The badge lists the tiers an endpoint is available in; the minimum is the
 // lowest listed tier.
@@ -141,6 +154,7 @@ type reportSummary struct {
 	DomainsNeedWork   int            `json:"domains_need_work"`
 	CurrentFree       int            `json:"current_free"`
 	CurrentEnterprise int            `json:"current_enterprise"`
+	TierMismatches    int            `json:"tier_mismatches"`
 	Classification    map[string]int `json:"classification"`
 }
 
@@ -155,6 +169,7 @@ type domainReport struct {
 	Actions           int            `json:"actions"`
 	CurrentFree       int            `json:"current_free"`
 	CurrentEnterprise int            `json:"current_enterprise"`
+	Mismatches        int            `json:"mismatches"`
 	DocFetched        bool           `json:"doc_fetched"`
 	Note              string         `json:"note,omitempty"`
 	ActionDetails     []actionDetail `json:"action_details,omitempty"`
@@ -165,6 +180,20 @@ type actionDetail struct {
 	OwnerPkg    string `json:"owner_pkg"`
 	CurrentGate string `json:"current_gate"` // free | enterprise
 	Edition     string `json:"edition"`      // current Edition field (may be empty)
+	Expected    string `json:"expected"`     // expected min tier (free/premium/ultimate)
+	Mismatch    bool   `json:"mismatch,omitempty"`
+	Note        string `json:"note,omitempty"` // exception rationale, when applicable
+}
+
+// expectedTierForAction returns the doc-grounded minimum tier expected for an
+// action and a rationale note. An accepted exception (an action whose true doc
+// page differs from its owner domain's page, or a per-section override) wins;
+// otherwise the domain page tier applies.
+func expectedTierForAction(id string, pageTier tier) (expected tier, reason string) {
+	if ex, ok := acceptedTierExceptions[id]; ok {
+		return ex.tier, ex.reason
+	}
+	return pageTier, ""
 }
 
 func buildReport(root string, offline bool) (*report, error) {
@@ -238,6 +267,7 @@ func buildReport(root string, offline bool) (*report, error) {
 		rep.Summary.CurrentFree += dr.CurrentFree
 		rep.Summary.CurrentEnterprise += dr.CurrentEnterprise
 		rep.Summary.Classification[dr.Classification]++
+		rep.Summary.TierMismatches += dr.Mismatches
 		if dr.NeedsWork {
 			rep.Summary.DomainsNeedWork++
 		}
@@ -288,11 +318,22 @@ func buildDomainReport(pkg string, actions []actionDetail, cacheDir string, offl
 	for _, ot := range overrideTiers {
 		dr.OverrideTiers = append(dr.OverrideTiers, ot.String())
 	}
-	for _, a := range actions {
+	for i := range dr.ActionDetails {
+		a := &dr.ActionDetails[i]
 		if a.CurrentGate == "free" {
 			dr.CurrentFree++
 		} else {
 			dr.CurrentEnterprise++
+		}
+		if !docFetched {
+			continue
+		}
+		exp, reason := expectedTierForAction(a.ID, pageTier)
+		a.Expected = exp.String()
+		a.Note = reason
+		if edition := parseEditionTier(a.Edition); edition != exp {
+			a.Mismatch = true
+			dr.Mismatches++
 		}
 	}
 	dr.Classification, dr.NeedsWork = classifyDomain(dr, overrideTiers, pageTier, docFetched)
