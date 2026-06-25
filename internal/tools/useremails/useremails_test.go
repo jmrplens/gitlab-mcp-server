@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -226,6 +227,17 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
+// assertQuery fails the test if any expected query parameter is missing or
+// does not match the value observed on the inbound request.
+func assertQuery(t *testing.T, r *http.Request, want map[string]string) {
+	t.Helper()
+	for key, value := range want {
+		if got := r.URL.Query().Get(key); got != value {
+			t.Errorf("query %q = %q, want %q", key, got, value)
+		}
+	}
+}
+
 // TestListForUser_TableDriven validates ListForUser across pagination parameters,
 // negative user IDs, and API failure scenarios.
 func TestListForUser_TableDriven(t *testing.T) {
@@ -234,14 +246,19 @@ func TestListForUser_TableDriven(t *testing.T) {
 		input      ListForUserInput
 		mockStatus int
 		mockBody   string
+		wantQuery  map[string]string
 		wantErr    bool
 		validate   func(t *testing.T, out ListOutput)
 	}{
 		{
-			name:       "passes pagination parameters to API",
-			input:      ListForUserInput{UserID: 42, Page: 2, PerPage: 10},
+			name: "passes pagination parameters to API",
+			input: ListForUserInput{
+				UserID:          42,
+				PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+			},
 			mockStatus: http.StatusOK,
 			mockBody:   `[{"id":3,"email":"page2@example.com"}]`,
+			wantQuery:  map[string]string{"page": "2", "per_page": "10"},
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if len(out.Emails) != 1 {
@@ -249,6 +266,26 @@ func TestListForUser_TableDriven(t *testing.T) {
 				}
 				if out.Emails[0].Email != "page2@example.com" {
 					t.Errorf("Email = %q, want %q", out.Emails[0].Email, "page2@example.com")
+				}
+			},
+		},
+		{
+			name: "passes keyset, order_by and sort parameters to API",
+			input: ListForUserInput{
+				UserID:                42,
+				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+				OrderBy:               "id",
+				Sort:                  "desc",
+			},
+			mockStatus: http.StatusOK,
+			mockBody:   `[{"id":3,"email":"keyset@example.com"}]`,
+			wantQuery: map[string]string{
+				"pagination": "keyset", "page_token": "100", "order_by": "id", "sort": "desc",
+			},
+			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Emails) != 1 {
+					t.Fatalf("len(Emails) = %d, want 1", len(out.Emails))
 				}
 			},
 		},
@@ -281,6 +318,7 @@ func TestListForUser_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertQuery(t, r, tt.wantQuery)
 				if tt.mockStatus > 0 {
 					testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
 					return
