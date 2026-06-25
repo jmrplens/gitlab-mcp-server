@@ -22345,7 +22345,7 @@
   },
   {
     "name": "gitlab_download_attestation",
-    "description": "Download a specific build attestation by IID. Returns the attestation content as base64-encoded data.\n\nReturns: JSON with attestation_iid, size, and content_base64. See also: gitlab_list_attestations.",
+    "description": "Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: gitlab_list_attestations, gitlab_list_packages, gitlab_get_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31210,7 +31210,7 @@
   },
   {
     "name": "gitlab_get_compliance_policy_settings",
-    "description": "Get the admin-level compliance policy settings for the GitLab instance.\n\nReturns: JSON with compliance policy settings.\n\nSee also: gitlab_update_compliance_policy_settings",
+    "description": "Get the instance compliance policy settings. Returns: the centralized compliance security policy (CSP) namespace ID, or unset when no namespace hosts the compliance policy project. See also: gitlab_update_compliance_policy_settings, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -35982,7 +35982,7 @@
   },
   {
     "name": "gitlab_get_project_security_settings",
-    "description": "Get security settings for a GitLab project. Returns auto-fix, vulnerability scanning, and secret push protection status.\n\nReturns: JSON with project security settings. See also: gitlab_update_project_secret_push_protection.",
+    "description": "Read a project's security settings (Ultimate). Returns: secret_push_protection_enabled, continuous_vulnerability_scans_enabled, container scanning, and per-analyzer auto-fix flags. See also: gitlab_update_project_secret_push_protection, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -88056,7 +88056,7 @@
   },
   {
     "name": "gitlab_list_attestations",
-    "description": "List all build attestations for a project matching a subject digest.\n\nReturns: JSON with attestations array. See also: gitlab_download_attestation.",
+    "description": "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_list_packages, gitlab_get_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -99107,7 +99107,7 @@
   },
   {
     "name": "gitlab_list_security_findings",
-    "description": "List security report findings for a pipeline (requires Ultimate/Premium). Replaces deprecated REST vulnerability_findings endpoint. Supports filtering by severity, confidence, scanner, and report type. Returns: paginated list with finding details, scanner info, and linked vulnerabilities. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary.",
+    "description": "List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination. Returns: matching findings with UUID, name, severity, confidence, report type, scanner, identifiers (CVE, CWE, OWASP), code location, state, evidence, and linked vulnerability state. See also: gitlab_list_vulnerabilities, gitlab_pipeline_security_summary, gitlab_vulnerability_severity_count.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -193292,7 +193292,7 @@
   },
   {
     "name": "gitlab_update_compliance_policy_settings",
-    "description": "Update the admin-level compliance policy settings for the GitLab instance.\n\nReturns: JSON with updated compliance policy settings.\n\nSee also: gitlab_get_compliance_policy_settings",
+    "description": "Update the instance compliance policy settings. Returns: the compliance policy settings with the newly bound centralized compliance security policy (CSP) namespace ID. See also: gitlab_get_compliance_policy_settings, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -193764,7 +193764,7 @@
   },
   {
     "name": "gitlab_update_group_secret_push_protection",
-    "description": "Enable or disable secret push protection for a GitLab group. Optionally exclude specific projects.\n\nReturns: JSON with updated group security settings. See also: gitlab_get_project_security_settings.",
+    "description": "Enable or disable secret push protection for a whole group, inherited by its projects (Ultimate). Returns: the group's secret_push_protection_enabled state and any errors. See also: gitlab_update_project_secret_push_protection, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194408,7 +194408,7 @@
   },
   {
     "name": "gitlab_update_project_secret_push_protection",
-    "description": "Enable or disable secret push protection for a GitLab project.\n\nReturns: JSON with updated security settings. See also: gitlab_get_project_security_settings.",
+    "description": "Enable or disable secret push protection for a project (Ultimate). Returns: the project's security settings including secret_push_protection_enabled, continuous vulnerability scanning, and auto-fix flags. See also: gitlab_get_project_security_settings, gitlab_update_group_secret_push_protection.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
