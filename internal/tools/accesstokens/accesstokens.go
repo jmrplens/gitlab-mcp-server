@@ -430,6 +430,7 @@ type GroupListInput struct {
 	ExpiresBefore  string               `json:"expires_before,omitempty" jsonschema:"Return tokens that expire on or before this date (YYYY-MM-DD)"`
 	LastUsedAfter  string               `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
 	LastUsedBefore string               `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
+	OrderBy        string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
 	Sort           string               `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -471,6 +472,9 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
 	}); err != nil {
 		return ListOutput{}, err
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
 	if input.Sort != "" {
 		sort := gl.AccessTokenSort(input.Sort)
@@ -789,6 +793,7 @@ type PersonalListInput struct {
 	ExpiresBefore  string `json:"expires_before,omitempty" jsonschema:"Return tokens that expire on or before this date (YYYY-MM-DD)"`
 	LastUsedAfter  string `json:"last_used_after,omitempty" jsonschema:"Return tokens last used on or after this date (YYYY-MM-DD)"`
 	LastUsedBefore string `json:"last_used_before,omitempty" jsonschema:"Return tokens last used on or before this date (YYYY-MM-DD)"`
+	OrderBy        string `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. created_at, expires_at, last_used_at)"`
 	Sort           string `json:"sort,omitempty" jsonschema:"Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -829,6 +834,9 @@ func PersonalList(ctx context.Context, client *gitlabclient.Client, input Person
 		lastUsedBefore: func(v *gl.ISOTime) { opts.LastUsedBefore = v },
 	}); err != nil {
 		return ListOutput{}, err
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)

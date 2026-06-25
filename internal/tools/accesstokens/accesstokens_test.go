@@ -2058,6 +2058,7 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 				"expires_before":   "2025-12-31",
 				"last_used_after":  "2024-06-01",
 				"last_used_before": "2024-06-30",
+				"order_by":         "created_at",
 				"sort":             "created_desc",
 				"pagination":       "keyset",
 				"page_token":       "xyz",
@@ -2083,6 +2084,7 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 		ExpiresBefore:         "2025-12-31",
 		LastUsedAfter:         "2024-06-01",
 		LastUsedBefore:        "2024-06-30",
+		OrderBy:               "created_at",
 		Sort:                  "created_desc",
 		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "xyz"},
 	})
@@ -2122,6 +2124,7 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 				"expires_before":   "2025-12-31",
 				"last_used_after":  "2024-06-01",
 				"last_used_before": "2024-06-30",
+				"order_by":         "created_at",
 				"sort":             "name_asc",
 				"pagination":       "keyset",
 				"page_token":       "pat-cursor",
@@ -2145,6 +2148,7 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 		ExpiresBefore:         "2025-12-31",
 		LastUsedAfter:         "2024-06-01",
 		LastUsedBefore:        "2024-06-30",
+		OrderBy:               "created_at",
 		Sort:                  "name_asc",
 		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "pat-cursor"},
 	})

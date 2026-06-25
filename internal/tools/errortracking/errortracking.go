@@ -75,10 +75,14 @@ func EnableDisable(ctx context.Context, client *gitlabclient.Client, input Enabl
 // ListClientKeys.
 
 // ListClientKeysInput contains parameters for listing error tracking client keys.
+// It supports offset pagination and GitLab keyset pagination via
+// order_by/sort/page_token, mirroring the embedded gl.ListOptions.
 type ListClientKeysInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ClientKeyItem represents an error tracking client key.
@@ -100,8 +104,12 @@ type ListClientKeysOutput struct {
 // ListClientKeys retrieves error tracking client keys for a project.
 func ListClientKeys(ctx context.Context, client *gitlabclient.Client, input ListClientKeysInput) (ListClientKeysOutput, error) {
 	opts := &gl.ListClientKeysOptions{}
-	if input.Page > 0 || input.PerPage > 0 {
-		opts.ListOptions = gl.ListOptions{Page: input.Page, PerPage: input.PerPage}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	keys, resp, err := client.GL().ErrorTracking.ListClientKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -246,22 +247,33 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// ListClientKeys — pagination branch (Page > 0, PerPage > 0)
+// ListClientKeys — offset pagination branch (Page > 0, PerPage > 0)
 // ---------------------------------------------------------------------------.
 
-// TestListClientKeys_WithPagination verifies that ListClientKeys_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// TestListClientKeys_WithPagination verifies that ListClientKeys forwards offset
+// pagination parameters to the GitLab API and parses the response metadata.
 // The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (GET) responds with HTTP OK.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// It asserts the page/per_page query parameters are forwarded and the response
+// metadata is propagated to the [toolutil.PaginationOutput].
 func TestListClientKeys_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/error_tracking/client_keys" && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("page"); got != "2" {
+				t.Errorf("page query = %q, want 2", got)
+			}
+			if got := r.URL.Query().Get("per_page"); got != "1" {
+				t.Errorf("per_page query = %q, want 1", got)
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+covKeyJSON+`]`,
 				testutil.PaginationHeaders{Page: "2", PerPage: "1", Total: "3", TotalPages: "3", NextPage: "3", PrevPage: "1"})
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{ProjectID: "1", Page: 2, PerPage: 1})
+	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{
+		ProjectID:       "1",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -270,6 +282,50 @@ func TestListClientKeys_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 3 {
 		t.Errorf("TotalPages = %d, want 3", out.Pagination.TotalPages)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListClientKeys — keyset pagination branch (order_by/sort/page_token/pagination)
+// ---------------------------------------------------------------------------.
+
+// TestListClientKeys_WithKeyset verifies that ListClientKeys forwards keyset
+// pagination parameters (order_by, sort, pagination, page_token) onto the
+// underlying gl.ListOptions and through to the GitLab API query string.
+// The mock GitLab API at /api/v4/projects/1/error_tracking/client_keys (GET) responds with HTTP OK.
+// It asserts each keyset query parameter is forwarded exactly as supplied.
+func TestListClientKeys_WithKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/error_tracking/client_keys" && r.Method == http.MethodGet {
+			q := r.URL.Query()
+			if got := q.Get("order_by"); got != "id" {
+				t.Errorf("order_by query = %q, want id", got)
+			}
+			if got := q.Get("sort"); got != "asc" {
+				t.Errorf("sort query = %q, want asc", got)
+			}
+			if got := q.Get("pagination"); got != "keyset" {
+				t.Errorf("pagination query = %q, want keyset", got)
+			}
+			if got := q.Get("page_token"); got != "tok-5" {
+				t.Errorf("page_token query = %q, want tok-5", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[`+covKeyJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-5"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Keys) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(out.Keys))
 	}
 }
 
