@@ -16911,7 +16911,7 @@
   },
   {
     "name": "gitlab_delete_group_scim_identity",
-    "description": "Delete a SCIM identity from a GitLab group.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_group_scim_identities.",
+    "description": "Delete a SCIM identity from a top-level group by its SCIM external UID. Returns: a success confirmation naming the deleted SCIM identity and group. See also: gitlab_get_group_scim_identity, gitlab_list_group_scim_identities, gitlab_update_group_scim_identity.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -23165,7 +23165,7 @@
   },
   {
     "name": "gitlab_edit_resource_group",
-    "description": "Edit a resource group process mode.\n\nReturns: JSON with the updated resource group details.\n\nSee also: gitlab_get_resource_group, gitlab_list_resource_group_upcoming_jobs",
+    "description": "Update the process mode of one CI resource group by key. Returns: the updated resource group ID, key, and new process mode that controls how queued jobs sharing the resource group are serialized. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32978,7 +32978,7 @@
   },
   {
     "name": "gitlab_get_group_scim_identity",
-    "description": "Get a single SCIM identity for a GitLab group by UID.\n\nReturns: JSON with identity details. See also: gitlab_list_group_scim_identities.",
+    "description": "Get one SCIM identity of a top-level group by its SCIM external UID. Returns: the identity's external_uid, user_id, and active status. See also: gitlab_list_group_scim_identities, gitlab_update_group_scim_identity, gitlab_delete_group_scim_identity.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36479,7 +36479,7 @@
   },
   {
     "name": "gitlab_get_resource_group",
-    "description": "Get details of a resource group.\n\nReturns: JSON with resource group details.\n\nSee also: gitlab_list_resource_groups, gitlab_edit_resource_group",
+    "description": "Get one CI resource group in a project by key. Returns: the resource group ID, key, and process mode (the concurrency mode that controls how jobs sharing the resource group are serialized). See also: gitlab_list_resource_groups, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -93648,7 +93648,7 @@
   },
   {
     "name": "gitlab_list_group_scim_identities",
-    "description": "List all SCIM identities for a GitLab group. Returns external UIDs, user IDs, and active status.\n\nReturns: JSON with identities array. See also: gitlab_get_group_scim_identity.",
+    "description": "List a top-level group's SCIM identities provisioned through SAML SSO SCIM. Returns: each identity with external_uid, user_id, and active status. See also: gitlab_get_group_scim_identity, gitlab_update_group_scim_identity, gitlab_delete_group_scim_identity.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98059,7 +98059,7 @@
   },
   {
     "name": "gitlab_list_resource_group_upcoming_jobs",
-    "description": "List upcoming jobs for a resource group.\n\nReturns: JSON array of upcoming jobs with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_list_resource_groups",
+    "description": "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98135,7 +98135,7 @@
   },
   {
     "name": "gitlab_list_resource_groups",
-    "description": "List resource groups for a GitLab project.\n\nReturns: JSON array of resource groups with pagination.\n\nSee also: gitlab_get_resource_group, gitlab_pipeline_list",
+    "description": "List the CI resource groups configured for a project. Returns: each resource group's ID, key, and process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency. See also: gitlab_get_resource_group, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176087,7 +176087,7 @@
   },
   {
     "name": "gitlab_runner_controller_create",
-    "description": "Register a new runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with the created runner controller details.\n\nSee also: gitlab_runner_controller_list, gitlab_runner_controller_scope_add_instance",
+    "description": "Register a new runner controller (admin-only, experimental API) with optional description and state (enabled/disabled/dry_run). Returns: the created controller with id, description, state, and timestamps. See also: gitlab_runner_controller_get, gitlab_runner_controller_update, gitlab_runner_controller_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176144,7 +176144,7 @@
   },
   {
     "name": "gitlab_runner_controller_delete",
-    "description": "Delete a runner controller. Admin only. This action cannot be undone. Experimental: may change or be removed.\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_runner_controller_list, gitlab_runner_controller_create",
+    "description": "Delete a runner controller by controller_id (destructive, admin-only, experimental API). Returns: a success confirmation. See also: gitlab_runner_controller_list, gitlab_runner_controller_get, gitlab_runner_controller_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176196,7 +176196,7 @@
   },
   {
     "name": "gitlab_runner_controller_get",
-    "description": "Get detailed information about a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with runner controller details (ID, description, state).\n\nSee also: gitlab_runner_controller_list, gitlab_runner_controller_token_list",
+    "description": "Get one runner controller by controller_id (admin-only, experimental API). Returns: the controller with id, description, state, connected flag, and created/updated timestamps. See also: gitlab_runner_controller_list, gitlab_runner_controller_update, gitlab_runner_controller_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176258,13 +176258,21 @@
   },
   {
     "name": "gitlab_runner_controller_list",
-    "description": "List all runner controllers. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with array of runner controllers and pagination info.\n\nSee also: gitlab_runner_controller_get, gitlab_runner_controller_scope_list",
+    "description": "List registered runner controllers (admin-only, experimental API) with offset or keyset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: gitlab_runner_controller_get, gitlab_runner_controller_create, gitlab_runner_controller_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -176378,7 +176386,7 @@
   },
   {
     "name": "gitlab_runner_controller_scope_add_instance",
-    "description": "Add an instance-level scope to a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with the added instance-level scope details.\n\nSee also: gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_instance",
+    "description": "Grant a runner controller the instance-level scope (admin only). Returns: the created instance-level scoping with created/updated timestamps. See also: gitlab_runner_controller_scope_remove_instance, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_runner.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176420,7 +176428,7 @@
   },
   {
     "name": "gitlab_runner_controller_scope_add_runner",
-    "description": "Add a runner scope to a runner controller. The runner must be instance-level. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with the added runner scope details.\n\nSee also: gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_runner",
+    "description": "Scope a runner controller to a specific instance runner by runner ID (admin only). Returns: the created runner-level scoping with the runner ID and created/updated timestamps. See also: gitlab_runner_controller_scope_remove_runner, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_instance.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176473,7 +176481,7 @@
   },
   {
     "name": "gitlab_runner_controller_scope_list",
-    "description": "List all scopes for a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with array of scopes for the controller.\n\nSee also: gitlab_runner_controller_list, gitlab_runner_controller_token_list",
+    "description": "List every scope assigned to a runner controller (admin only). Returns: instance-level scopings with timestamps and runner-level scopings with runner IDs and timestamps. See also: gitlab_runner_controller_scope_add_instance, gitlab_runner_controller_scope_add_runner, gitlab_runner_controller_scope_remove_runner.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176557,7 +176565,7 @@
   },
   {
     "name": "gitlab_runner_controller_scope_remove_instance",
-    "description": "Remove the instance-level scope from a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON confirmation of scope removal.\n\nSee also: gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_instance",
+    "description": "Revoke a runner controller's instance-level scope (admin only, destructive). Returns: a success confirmation naming the removed instance-level scope. See also: gitlab_runner_controller_scope_add_instance, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_runner.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176609,7 +176617,7 @@
   },
   {
     "name": "gitlab_runner_controller_scope_remove_runner",
-    "description": "Remove a runner scope from a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON confirmation of scope removal.\n\nSee also: gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_runner",
+    "description": "Remove a specific runner from a runner controller's scope by runner ID (admin only, destructive). Returns: a success confirmation naming the removed runner scope. See also: gitlab_runner_controller_scope_add_runner, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_instance.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176666,7 +176674,7 @@
   },
   {
     "name": "gitlab_runner_controller_token_create",
-    "description": "Create a new runner controller token. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with created token including ID and token value.\n\nSee also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke",
+    "description": "Create a runner controller token (admin-only). Returns: the new token including its one-time secret value, id, runner controller id, and description. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176732,7 +176740,7 @@
   },
   {
     "name": "gitlab_runner_controller_token_get",
-    "description": "Get a specific runner controller token. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with token details including ID, description, and status.\n\nSee also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate",
+    "description": "Get one runner controller token by id (admin-only). Returns: the token's id, runner controller id, description, last-used time, and timestamps. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176801,7 +176809,7 @@
   },
   {
     "name": "gitlab_runner_controller_token_list",
-    "description": "List all tokens for a runner controller. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with tokens array including ID, description, and status.\n\nSee also: gitlab_runner_controller_token_create, gitlab_runner_controller_list",
+    "description": "List runner controller tokens for a controller (admin-only). Returns: each token's id, runner controller id, description, last-used time, and timestamps, with pagination metadata. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_create, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176812,6 +176820,14 @@
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -176934,7 +176950,7 @@
   },
   {
     "name": "gitlab_runner_controller_token_revoke",
-    "description": "Revoke a runner controller token. This action cannot be undone. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_create",
+    "description": "Revoke a runner controller token permanently (admin-only). Returns: a success confirmation that the runner controller token was deleted. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_get, gitlab_runner_controller_token_rotate.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -176991,7 +177007,7 @@
   },
   {
     "name": "gitlab_runner_controller_token_rotate",
-    "description": "Rotate a runner controller token. Returns a new token replacing the old one. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with new token including ID and rotated token value.\n\nSee also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_revoke",
+    "description": "Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -177059,7 +177075,7 @@
   },
   {
     "name": "gitlab_runner_controller_update",
-    "description": "Update a runner controller's description or state. Admin only. Experimental: may change or be removed.\n\nReturns: JSON with the updated runner controller details.\n\nSee also: gitlab_runner_controller_get, gitlab_runner_controller_delete",
+    "description": "Update a runner controller's description or state (enabled/disabled/dry_run) by controller_id (admin-only, experimental API). Returns: the updated controller with id, description, state, and timestamps. See also: gitlab_runner_controller_get, gitlab_runner_controller_list, gitlab_runner_controller_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -192934,7 +192950,7 @@
   },
   {
     "name": "gitlab_update_group_scim_identity",
-    "description": "Update a SCIM identity for a GitLab group. Changes the external UID.\n\nReturns: JSON with confirmation. See also: gitlab_get_group_scim_identity.",
+    "description": "Update the extern_uid of an existing group SCIM identity. Returns: a confirmation that the SCIM identity's external UID was rewritten. See also: gitlab_get_group_scim_identity, gitlab_list_group_scim_identities, gitlab_delete_group_scim_identity.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
