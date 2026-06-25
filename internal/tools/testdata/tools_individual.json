@@ -12252,7 +12252,7 @@
   },
   {
     "name": "gitlab_create_geo_site",
-    "description": "Create a new Geo replication site.\n\nReturns: JSON with the created Geo site configuration.\n\nSee also: gitlab_list_geo_sites, gitlab_edit_geo_site",
+    "description": "Create a new Geo site. Returns: the site with id, name, url, primary/enabled flags, capacities, selective-sync settings, and navigation links. See also: gitlab_list_geo_sites, gitlab_get_geo_site, gitlab_edit_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -12366,6 +12366,21 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "repair": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -12437,6 +12452,9 @@
         },
         "web_edit_url": {
           "type": "string"
+        },
+        "web_geo_replication_details_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -12451,7 +12469,8 @@
         "verification_max_capacity",
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
-        "sync_object_storage"
+        "sync_object_storage",
+        "_links"
       ],
       "type": "object"
     },
@@ -14906,7 +14925,7 @@
   },
   {
     "name": "gitlab_create_work_item",
-    "description": "Create a new work item. Requires full_path, work_item_type_id, and title. Supports linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the created work item details.\n\nSee also: gitlab_list_work_items, gitlab_update_work_item",
+    "description": "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15726,7 +15745,7 @@
   },
   {
     "name": "gitlab_delete_enterprise_user",
-    "description": "Delete an enterprise user from a group.\n\nReturns: JSON with deletion confirmation. See also: gitlab_list_enterprise_users.",
+    "description": "Delete an enterprise user, optionally with hard_delete. Returns: a success confirmation naming the user and group. See also: gitlab_get_enterprise_user, gitlab_list_enterprise_users, gitlab_disable_2fa_enterprise_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -16018,7 +16037,7 @@
   },
   {
     "name": "gitlab_delete_geo_site",
-    "description": "Delete a Geo replication site by ID.\n\nReturns: JSON with deletion confirmation.\n\nSee also: gitlab_list_geo_sites",
+    "description": "Delete a Geo site permanently. Returns: a success confirmation naming the site. See also: gitlab_get_geo_site, gitlab_list_geo_sites.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17831,7 +17850,7 @@
   },
   {
     "name": "gitlab_delete_work_item",
-    "description": "Permanently delete a work item by IID. This action cannot be undone. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON confirmation of deletion.\n\nSee also: gitlab_list_work_items, gitlab_create_work_item",
+    "description": "Delete a work item permanently by namespace path and IID. Returns: a success confirmation naming the work item and namespace. Experimental. See also: gitlab_get_work_item, gitlab_update_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -21470,7 +21489,7 @@
   },
   {
     "name": "gitlab_disable_2fa_enterprise_user",
-    "description": "Disable two-factor authentication for an enterprise user.\n\nReturns: JSON with confirmation. See also: gitlab_get_enterprise_user.",
+    "description": "Disable two-factor authentication for an enterprise user. Returns: a success confirmation naming the user and group. See also: gitlab_get_enterprise_user, gitlab_list_enterprise_users, gitlab_delete_enterprise_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22156,7 +22175,7 @@
   },
   {
     "name": "gitlab_edit_geo_site",
-    "description": "Update configuration of an existing Geo site.\n\nReturns: JSON with updated Geo site configuration.\n\nSee also: gitlab_get_geo_site, gitlab_create_geo_site",
+    "description": "Edit a Geo site's settings. Returns: the updated site with its capacities and selective-sync configuration. See also: gitlab_get_geo_site, gitlab_list_geo_sites, gitlab_repair_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22263,6 +22282,21 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "repair": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -22334,6 +22368,9 @@
         },
         "web_edit_url": {
           "type": "string"
+        },
+        "web_geo_replication_details_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -22348,7 +22385,8 @@
         "verification_max_capacity",
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
-        "sync_object_storage"
+        "sync_object_storage",
+        "_links"
       ],
       "type": "object"
     },
@@ -24799,7 +24837,7 @@
   },
   {
     "name": "gitlab_epic_create",
-    "description": "Create a new epic in a GitLab group (via Work Items GraphQL API). Supports title, description, confidentiality, color, dates, assignees, labels, weight, and health status.\n\nReturns: JSON with created epic details. See also: gitlab_epic_get.",
+    "description": "Create a new epic in a group. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -24877,7 +24915,38 @@
       "properties": {
         "assignees": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -24885,7 +24954,38 @@
           ]
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "closed_at": {
           "type": "string"
@@ -24902,8 +25002,23 @@
         "description": {
           "type": "string"
         },
+        "downvotes": {
+          "type": "integer"
+        },
         "due_date": {
           "type": "string"
+        },
+        "due_date_fixed": {
+          "type": "string"
+        },
+        "due_date_from_milestones": {
+          "type": "string"
+        },
+        "due_date_is_fixed": {
+          "type": "boolean"
+        },
+        "group_id": {
+          "type": "integer"
         },
         "health_status": {
           "type": "string"
@@ -24957,6 +25072,9 @@
             "array"
           ]
         },
+        "parent_id": {
+          "type": "integer"
+        },
         "parent_iid": {
           "type": "integer"
         },
@@ -24965,6 +25083,15 @@
         },
         "start_date": {
           "type": "string"
+        },
+        "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_milestones": {
+          "type": "string"
+        },
+        "start_date_is_fixed": {
+          "type": "boolean"
         },
         "state": {
           "type": "string"
@@ -24980,6 +25107,15 @@
         },
         "updated_at": {
           "type": "string"
+        },
+        "upvotes": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "user_notes_count": {
+          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -25007,7 +25143,7 @@
   },
   {
     "name": "gitlab_epic_delete",
-    "description": "Permanently delete an epic from a GitLab group (via Work Items GraphQL API).\n\nReturns: JSON with deletion confirmation. See also: gitlab_epic_get.",
+    "description": "Permanently delete an epic from a group. Returns: a success confirmation naming the epic and group. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25064,7 +25200,7 @@
   },
   {
     "name": "gitlab_epic_get",
-    "description": "Get a single group epic by its IID (via Work Items GraphQL API). Returns title, description, state, labels, dates, author, assignees, linked items, and health status.\n\nReturns: JSON with epic details. See also: gitlab_epic_list, gitlab_epic_get_links.",
+    "description": "Get a single epic from a group by epic IID. Returns: epic metadata, state, labels, author, assignees, start/due dates, health status, weight, parent, and linked items. See also: gitlab_epic_list, gitlab_epic_update, gitlab_epic_get_links, gitlab_epic_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25088,7 +25224,38 @@
       "properties": {
         "assignees": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -25096,7 +25263,38 @@
           ]
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "closed_at": {
           "type": "string"
@@ -25113,8 +25311,23 @@
         "description": {
           "type": "string"
         },
+        "downvotes": {
+          "type": "integer"
+        },
         "due_date": {
           "type": "string"
+        },
+        "due_date_fixed": {
+          "type": "string"
+        },
+        "due_date_from_milestones": {
+          "type": "string"
+        },
+        "due_date_is_fixed": {
+          "type": "boolean"
+        },
+        "group_id": {
+          "type": "integer"
         },
         "health_status": {
           "type": "string"
@@ -25168,6 +25381,9 @@
             "array"
           ]
         },
+        "parent_id": {
+          "type": "integer"
+        },
         "parent_iid": {
           "type": "integer"
         },
@@ -25176,6 +25392,15 @@
         },
         "start_date": {
           "type": "string"
+        },
+        "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_milestones": {
+          "type": "string"
+        },
+        "start_date_is_fixed": {
+          "type": "boolean"
         },
         "state": {
           "type": "string"
@@ -25191,6 +25416,15 @@
         },
         "updated_at": {
           "type": "string"
+        },
+        "upvotes": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "user_notes_count": {
+          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -25220,7 +25454,7 @@
   },
   {
     "name": "gitlab_epic_get_links",
-    "description": "Get all child epics of a parent epic (via REST API). Returns the list of sub-epics linked to the specified epic.\n\nNote: This tool uses the REST API because the Work Items GraphQL API does not yet support listing children.\n\nReturns: JSON with child_epics array. See also: gitlab_epic_get.",
+    "description": "List child epics linked to a parent epic. Returns: child epics with state, labels, author, dates, and parent reference. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -25247,6 +25481,40 @@
             "additionalProperties": false,
             "properties": {
               "author": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "closed_at": {
                 "type": "string"
               },
               "confidential": {
@@ -25254,6 +25522,27 @@
               },
               "created_at": {
                 "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "downvotes": {
+                "type": "integer"
+              },
+              "due_date": {
+                "type": "string"
+              },
+              "due_date_fixed": {
+                "type": "string"
+              },
+              "due_date_from_milestones": {
+                "type": "string"
+              },
+              "due_date_is_fixed": {
+                "type": "boolean"
+              },
+              "group_id": {
+                "type": "integer"
               },
               "id": {
                 "type": "integer"
@@ -25270,11 +25559,38 @@
                   "array"
                 ]
               },
+              "parent_id": {
+                "type": "integer"
+              },
+              "start_date": {
+                "type": "string"
+              },
+              "start_date_fixed": {
+                "type": "string"
+              },
+              "start_date_from_milestones": {
+                "type": "string"
+              },
+              "start_date_is_fixed": {
+                "type": "boolean"
+              },
               "state": {
                 "type": "string"
               },
               "title": {
                 "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "upvotes": {
+                "type": "integer"
+              },
+              "url": {
+                "type": "string"
+              },
+              "user_notes_count": {
+                "type": "integer"
               },
               "web_url": {
                 "type": "string"
@@ -25719,13 +26035,20 @@
   },
   {
     "name": "gitlab_epic_list",
-    "description": "List epics for a GitLab group (via Work Items GraphQL API with type=Epic). Supports filtering by state, labels, author, search text, and cursor-based pagination.\n\nReturns: JSON with epics array. See also: gitlab_epic_get.",
+    "description": "List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, and pagination cursors. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
           "description": "Cursor for forward pagination",
           "type": "string"
+        },
+        "author_id": {
+          "description": "Filter by author user ID",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "author_username": {
           "description": "Filter by author username",
@@ -25737,6 +26060,14 @@
             "null",
             "boolean"
           ]
+        },
+        "created_after": {
+          "description": "Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "type": "string"
         },
         "first": {
           "description": "Number of items to return (cursor-based pagination)",
@@ -25773,12 +26104,36 @@
             "array"
           ]
         },
+        "my_reaction_emoji": {
+          "description": "Filter by reaction emoji the authenticated user awarded (e.g. thumbsup or None/Any)",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Order epics by field (created_at, updated_at, title)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
         "search": {
           "description": "Search in title and description",
           "type": "string"
         },
         "sort": {
-          "description": "Sort order",
+          "description": "Sort order (asc or desc)",
           "type": "string"
         },
         "state": {
@@ -25800,7 +26155,38 @@
             "properties": {
               "assignees": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -25808,7 +26194,38 @@
                 ]
               },
               "author": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "closed_at": {
                 "type": "string"
@@ -25825,8 +26242,23 @@
               "description": {
                 "type": "string"
               },
+              "downvotes": {
+                "type": "integer"
+              },
               "due_date": {
                 "type": "string"
+              },
+              "due_date_fixed": {
+                "type": "string"
+              },
+              "due_date_from_milestones": {
+                "type": "string"
+              },
+              "due_date_is_fixed": {
+                "type": "boolean"
+              },
+              "group_id": {
+                "type": "integer"
               },
               "health_status": {
                 "type": "string"
@@ -25880,6 +26312,9 @@
                   "array"
                 ]
               },
+              "parent_id": {
+                "type": "integer"
+              },
               "parent_iid": {
                 "type": "integer"
               },
@@ -25888,6 +26323,15 @@
               },
               "start_date": {
                 "type": "string"
+              },
+              "start_date_fixed": {
+                "type": "string"
+              },
+              "start_date_from_milestones": {
+                "type": "string"
+              },
+              "start_date_is_fixed": {
+                "type": "boolean"
               },
               "state": {
                 "type": "string"
@@ -25903,6 +26347,15 @@
               },
               "updated_at": {
                 "type": "string"
+              },
+              "upvotes": {
+                "type": "integer"
+              },
+              "url": {
+                "type": "string"
+              },
+              "user_notes_count": {
+                "type": "integer"
               },
               "web_url": {
                 "type": "string"
@@ -26372,7 +26825,7 @@
   },
   {
     "name": "gitlab_epic_update",
-    "description": "Update an existing group epic (via Work Items GraphQL API). Can modify title, description, labels, state (CLOSE/REOPEN), confidentiality, parent, color, dates, assignees, weight, health status, and status.\n\nReturns: JSON with updated epic details. See also: gitlab_epic_get.",
+    "description": "Update an existing epic; supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26472,7 +26925,38 @@
       "properties": {
         "assignees": {
           "items": {
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
           },
           "type": [
             "null",
@@ -26480,7 +26964,38 @@
           ]
         },
         "author": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "closed_at": {
           "type": "string"
@@ -26497,8 +27012,23 @@
         "description": {
           "type": "string"
         },
+        "downvotes": {
+          "type": "integer"
+        },
         "due_date": {
           "type": "string"
+        },
+        "due_date_fixed": {
+          "type": "string"
+        },
+        "due_date_from_milestones": {
+          "type": "string"
+        },
+        "due_date_is_fixed": {
+          "type": "boolean"
+        },
+        "group_id": {
+          "type": "integer"
         },
         "health_status": {
           "type": "string"
@@ -26552,6 +27082,9 @@
             "array"
           ]
         },
+        "parent_id": {
+          "type": "integer"
+        },
         "parent_iid": {
           "type": "integer"
         },
@@ -26560,6 +27093,15 @@
         },
         "start_date": {
           "type": "string"
+        },
+        "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_milestones": {
+          "type": "string"
+        },
+        "start_date_is_fixed": {
+          "type": "boolean"
         },
         "state": {
           "type": "string"
@@ -26575,6 +27117,15 @@
         },
         "updated_at": {
           "type": "string"
+        },
+        "upvotes": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "user_notes_count": {
+          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -30369,7 +30920,7 @@
   },
   {
     "name": "gitlab_get_enterprise_user",
-    "description": "Get details of a specific enterprise user.\n\nReturns: JSON with user details. See also: gitlab_list_enterprise_users.",
+    "description": "Get a single enterprise user by group_id and user_id. Returns: the full user profile (identities, SCIM identities, custom attributes, sign-in metadata, admin/auditor flags, license seat usage, and web URL). See also: gitlab_list_enterprise_users, gitlab_disable_2fa_enterprise_user, gitlab_delete_enterprise_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30391,29 +30942,166 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "avatar_url": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
+        },
+        "can_create_group": {
+          "type": "boolean"
+        },
+        "can_create_organization": {
+          "type": "boolean"
+        },
+        "can_create_project": {
+          "type": "boolean"
+        },
+        "color_scheme_id": {
+          "type": "integer"
+        },
+        "confirmed_at": {
+          "type": "string"
         },
         "created_at": {
           "type": "string"
         },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "current_sign_in_at": {
+          "type": "string"
+        },
+        "current_sign_in_ip": {
+          "type": "string"
+        },
+        "custom_attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "email": {
+          "type": "string"
+        },
+        "extern_uid": {
           "type": "string"
         },
         "external": {
           "type": "boolean"
         },
+        "extra_shared_runners_minutes_limit": {
+          "type": "integer"
+        },
         "id": {
           "type": "integer"
         },
+        "identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "extern_uid": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "extern_uid"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "is_admin": {
           "type": "boolean"
+        },
+        "is_auditor": {
+          "type": "boolean"
+        },
+        "job_title": {
+          "type": "string"
+        },
+        "last_activity_on": {
+          "type": "string"
+        },
+        "last_sign_in_at": {
+          "type": "string"
+        },
+        "last_sign_in_ip": {
+          "type": "string"
+        },
+        "linkedin": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
         },
         "locked": {
           "type": "boolean"
         },
         "name": {
           "type": "string"
+        },
+        "namespace_id": {
+          "type": "integer"
         },
         "next_steps": {
           "items": {
@@ -30424,7 +31112,63 @@
             "array"
           ]
         },
+        "note": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "private_profile": {
+          "type": "boolean"
+        },
+        "projects_limit": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "public_email": {
+          "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "shared_runners_minutes_limit": {
+          "type": "integer"
+        },
+        "skype": {
+          "type": "string"
+        },
         "state": {
+          "type": "string"
+        },
+        "theme_id": {
+          "type": "integer"
+        },
+        "twitter": {
           "type": "string"
         },
         "two_factor_enabled": {
@@ -30433,21 +31177,34 @@
         "username": {
           "type": "string"
         },
+        "using_license_seat": {
+          "type": "boolean"
+        },
         "web_url": {
+          "type": "string"
+        },
+        "website_url": {
           "type": "string"
         }
       },
       "required": [
         "id",
         "username",
-        "name",
         "email",
+        "name",
         "state",
         "web_url",
-        "is_admin",
         "bot",
+        "is_admin",
+        "is_auditor",
+        "can_create_group",
+        "can_create_project",
+        "can_create_organization",
+        "projects_limit",
         "two_factor_enabled",
         "external",
+        "private_profile",
+        "using_license_seat",
         "locked"
       ],
       "type": "object"
@@ -30687,7 +31444,7 @@
   },
   {
     "name": "gitlab_get_geo_site",
-    "description": "Get configuration of a specific Geo site by ID.\n\nReturns: JSON with Geo site configuration.\n\nSee also: gitlab_list_geo_sites, gitlab_get_status_geo_site",
+    "description": "Get a single Geo site by id. Returns: the site with name, url, primary/enabled flags, capacities, selective-sync settings, and navigation links. See also: gitlab_list_geo_sites, gitlab_edit_geo_site, gitlab_get_status_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -30704,6 +31461,21 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "repair": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -30775,6 +31547,9 @@
         },
         "web_edit_url": {
           "type": "string"
+        },
+        "web_geo_replication_details_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -30789,7 +31564,8 @@
         "verification_max_capacity",
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
-        "sync_object_storage"
+        "sync_object_storage",
+        "_links"
       ],
       "type": "object"
     },
@@ -36087,7 +36863,7 @@
   },
   {
     "name": "gitlab_get_status_geo_site",
-    "description": "Retrieve replication status of a specific Geo site by ID.\n\nReturns: JSON with the Geo site's replication status.\n\nSee also: gitlab_list_status_all_geo_sites, gitlab_get_geo_site",
+    "description": "Get replication status for one Geo site. Returns: health, replication lag, and detailed sync/verification/checksum counts and percentages plus navigation links. See also: gitlab_list_status_all_geo_sites, gitlab_get_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -36104,11 +36880,218 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "self": {
+              "type": "string"
+            },
+            "site": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "ci_secure_files_checksum_failed_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_checksum_total_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_checksummed_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_failed_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_registry_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_synced_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_synced_in_percentage": {
+          "type": "string"
+        },
+        "ci_secure_files_verification_failed_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_verification_total_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_verified_count": {
+          "type": "integer"
+        },
+        "ci_secure_files_verified_in_percentage": {
+          "type": "string"
+        },
+        "container_repositories_checksum_failed_count": {
+          "type": "integer"
+        },
+        "container_repositories_checksum_total_count": {
+          "type": "integer"
+        },
+        "container_repositories_checksummed_count": {
+          "type": "integer"
+        },
+        "container_repositories_count": {
+          "type": "integer"
+        },
+        "container_repositories_failed_count": {
+          "type": "integer"
+        },
+        "container_repositories_registry_count": {
+          "type": "integer"
+        },
+        "container_repositories_replication_enabled": {
+          "type": "boolean"
+        },
+        "container_repositories_synced_count": {
+          "type": "integer"
+        },
+        "container_repositories_synced_in_percentage": {
+          "type": "string"
+        },
+        "container_repositories_verification_failed_count": {
+          "type": "integer"
+        },
+        "container_repositories_verification_total_count": {
+          "type": "integer"
+        },
+        "container_repositories_verified_count": {
+          "type": "integer"
+        },
+        "container_repositories_verified_in_percentage": {
+          "type": "string"
+        },
+        "cursor_last_event_id": {
+          "type": "integer"
+        },
+        "cursor_last_event_timestamp": {
+          "type": "integer"
+        },
         "db_replication_lag_seconds": {
           "type": "integer"
         },
+        "dependency_proxy_blobs_checksum_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_checksum_total_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_checksummed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_registry_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_synced_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_synced_in_percentage": {
+          "type": "string"
+        },
+        "dependency_proxy_blobs_verification_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_verification_total_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_verified_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_blobs_verified_in_percentage": {
+          "type": "string"
+        },
+        "dependency_proxy_manifests_checksum_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_checksum_total_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_checksummed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_registry_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_synced_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_synced_in_percentage": {
+          "type": "string"
+        },
+        "dependency_proxy_manifests_verification_failed_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_verification_total_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_verified_count": {
+          "type": "integer"
+        },
+        "dependency_proxy_manifests_verified_in_percentage": {
+          "type": "string"
+        },
         "geo_node_id": {
           "type": "integer"
+        },
+        "git_fetch_event_count_weekly": {
+          "type": "integer"
+        },
+        "git_push_event_count_weekly": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_checksum_failed_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_checksum_total_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_checksummed_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_failed_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_registry_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_synced_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_synced_in_percentage": {
+          "type": "string"
+        },
+        "group_wiki_repositories_verification_failed_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_verification_total_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_verified_count": {
+          "type": "integer"
+        },
+        "group_wiki_repositories_verified_in_percentage": {
+          "type": "string"
         },
         "health": {
           "type": "string"
@@ -36119,14 +37102,134 @@
         "healthy": {
           "type": "boolean"
         },
+        "job_artifacts_checksum_failed_count": {
+          "type": "integer"
+        },
+        "job_artifacts_checksum_total_count": {
+          "type": "integer"
+        },
+        "job_artifacts_checksummed_count": {
+          "type": "integer"
+        },
+        "job_artifacts_count": {
+          "type": "integer"
+        },
+        "job_artifacts_failed_count": {
+          "type": "integer"
+        },
+        "job_artifacts_registry_count": {
+          "type": "integer"
+        },
+        "job_artifacts_synced_count": {
+          "type": "integer"
+        },
         "job_artifacts_synced_in_percentage": {
           "type": "string"
+        },
+        "job_artifacts_verification_failed_count": {
+          "type": "integer"
+        },
+        "job_artifacts_verification_total_count": {
+          "type": "integer"
+        },
+        "job_artifacts_verified_count": {
+          "type": "integer"
+        },
+        "job_artifacts_verified_in_percentage": {
+          "type": "string"
+        },
+        "last_event_id": {
+          "type": "integer"
+        },
+        "last_event_timestamp": {
+          "type": "integer"
+        },
+        "last_successful_status_check_timestamp": {
+          "type": "integer"
+        },
+        "lfs_objects_checksum_failed_count": {
+          "type": "integer"
+        },
+        "lfs_objects_checksum_total_count": {
+          "type": "integer"
+        },
+        "lfs_objects_checksummed_count": {
+          "type": "integer"
+        },
+        "lfs_objects_count": {
+          "type": "integer"
+        },
+        "lfs_objects_failed_count": {
+          "type": "integer"
+        },
+        "lfs_objects_registry_count": {
+          "type": "integer"
+        },
+        "lfs_objects_synced_count": {
+          "type": "integer"
         },
         "lfs_objects_synced_in_percentage": {
           "type": "string"
         },
+        "lfs_objects_verification_failed_count": {
+          "type": "integer"
+        },
+        "lfs_objects_verification_total_count": {
+          "type": "integer"
+        },
+        "lfs_objects_verified_count": {
+          "type": "integer"
+        },
+        "lfs_objects_verified_in_percentage": {
+          "type": "string"
+        },
+        "merge_request_diffs_checksum_failed_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_checksum_total_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_checksummed_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_failed_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_registry_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_synced_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_synced_in_percentage": {
+          "type": "string"
+        },
+        "merge_request_diffs_verification_failed_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_verification_total_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_verified_count": {
+          "type": "integer"
+        },
+        "merge_request_diffs_verified_in_percentage": {
+          "type": "string"
+        },
         "missing_oauth_application": {
           "type": "boolean"
+        },
+        "namespaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "next_steps": {
           "items": {
@@ -36137,19 +37240,298 @@
             "array"
           ]
         },
+        "package_files_checksum_failed_count": {
+          "type": "integer"
+        },
+        "package_files_checksum_total_count": {
+          "type": "integer"
+        },
+        "package_files_checksummed_count": {
+          "type": "integer"
+        },
+        "package_files_count": {
+          "type": "integer"
+        },
+        "package_files_failed_count": {
+          "type": "integer"
+        },
+        "package_files_registry_count": {
+          "type": "integer"
+        },
+        "package_files_synced_count": {
+          "type": "integer"
+        },
+        "package_files_synced_in_percentage": {
+          "type": "string"
+        },
+        "package_files_verification_failed_count": {
+          "type": "integer"
+        },
+        "package_files_verification_total_count": {
+          "type": "integer"
+        },
+        "package_files_verified_count": {
+          "type": "integer"
+        },
+        "package_files_verified_in_percentage": {
+          "type": "string"
+        },
+        "pages_deployments_checksum_failed_count": {
+          "type": "integer"
+        },
+        "pages_deployments_checksum_total_count": {
+          "type": "integer"
+        },
+        "pages_deployments_checksummed_count": {
+          "type": "integer"
+        },
+        "pages_deployments_count": {
+          "type": "integer"
+        },
+        "pages_deployments_failed_count": {
+          "type": "integer"
+        },
+        "pages_deployments_registry_count": {
+          "type": "integer"
+        },
+        "pages_deployments_synced_count": {
+          "type": "integer"
+        },
+        "pages_deployments_synced_in_percentage": {
+          "type": "string"
+        },
+        "pages_deployments_verification_failed_count": {
+          "type": "integer"
+        },
+        "pages_deployments_verification_total_count": {
+          "type": "integer"
+        },
+        "pages_deployments_verified_count": {
+          "type": "integer"
+        },
+        "pages_deployments_verified_in_percentage": {
+          "type": "string"
+        },
+        "pipeline_artifacts_checksum_failed_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_checksum_total_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_checksummed_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_failed_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_registry_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_synced_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_synced_in_percentage": {
+          "type": "string"
+        },
+        "pipeline_artifacts_verification_failed_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_verification_total_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_verified_count": {
+          "type": "integer"
+        },
+        "pipeline_artifacts_verified_in_percentage": {
+          "type": "string"
+        },
+        "project_wiki_repositories_checksum_failed_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_checksum_total_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_checksummed_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_failed_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_registry_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_synced_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_synced_in_percentage": {
+          "type": "string"
+        },
+        "project_wiki_repositories_verification_failed_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_verification_total_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_verified_count": {
+          "type": "integer"
+        },
+        "project_wiki_repositories_verified_in_percentage": {
+          "type": "string"
+        },
         "projects_count": {
           "type": "integer"
         },
+        "proxy_local_requests_event_count_weekly": {
+          "type": "integer"
+        },
+        "proxy_remote_requests_event_count_weekly": {
+          "type": "integer"
+        },
+        "replication_slots_count": {
+          "type": "integer"
+        },
+        "replication_slots_max_retained_wal_bytes": {
+          "type": "integer"
+        },
+        "replication_slots_used_count": {
+          "type": "integer"
+        },
+        "replication_slots_used_in_percentage": {
+          "type": "string"
+        },
+        "repositories_checked_count": {
+          "type": "integer"
+        },
+        "repositories_checked_failed_count": {
+          "type": "integer"
+        },
+        "repositories_checked_in_percentage": {
+          "type": "string"
+        },
         "revision": {
+          "type": "string"
+        },
+        "selective_sync_type": {
+          "type": "string"
+        },
+        "snippet_repositories_checksum_failed_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_checksum_total_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_checksummed_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_failed_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_registry_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_synced_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_synced_in_percentage": {
+          "type": "string"
+        },
+        "snippet_repositories_verification_failed_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_verification_total_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_verified_count": {
+          "type": "integer"
+        },
+        "snippet_repositories_verified_in_percentage": {
           "type": "string"
         },
         "storage_shards_match": {
           "type": "boolean"
         },
+        "terraform_state_versions_checksum_failed_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_checksum_total_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_checksummed_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_failed_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_registry_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_synced_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_synced_in_percentage": {
+          "type": "string"
+        },
+        "terraform_state_versions_verification_failed_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_verification_total_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_verified_count": {
+          "type": "integer"
+        },
+        "terraform_state_versions_verified_in_percentage": {
+          "type": "string"
+        },
         "updated_at": {
           "type": "string"
         },
+        "uploads_checksum_failed_count": {
+          "type": "integer"
+        },
+        "uploads_checksum_total_count": {
+          "type": "integer"
+        },
+        "uploads_checksummed_count": {
+          "type": "integer"
+        },
+        "uploads_count": {
+          "type": "integer"
+        },
+        "uploads_failed_count": {
+          "type": "integer"
+        },
+        "uploads_registry_count": {
+          "type": "integer"
+        },
+        "uploads_synced_count": {
+          "type": "integer"
+        },
         "uploads_synced_in_percentage": {
+          "type": "string"
+        },
+        "uploads_verification_failed_count": {
+          "type": "integer"
+        },
+        "uploads_verification_total_count": {
+          "type": "integer"
+        },
+        "uploads_verified_count": {
+          "type": "integer"
+        },
+        "uploads_verified_in_percentage": {
           "type": "string"
         },
         "version": {
@@ -36158,19 +37540,215 @@
       },
       "required": [
         "geo_node_id",
+        "projects_count",
+        "container_repositories_replication_enabled",
+        "lfs_objects_count",
+        "lfs_objects_checksum_total_count",
+        "lfs_objects_checksummed_count",
+        "lfs_objects_checksum_failed_count",
+        "lfs_objects_synced_count",
+        "lfs_objects_failed_count",
+        "lfs_objects_registry_count",
+        "lfs_objects_verification_total_count",
+        "lfs_objects_verified_count",
+        "lfs_objects_verification_failed_count",
+        "merge_request_diffs_count",
+        "merge_request_diffs_checksum_total_count",
+        "merge_request_diffs_checksummed_count",
+        "merge_request_diffs_checksum_failed_count",
+        "merge_request_diffs_synced_count",
+        "merge_request_diffs_failed_count",
+        "merge_request_diffs_registry_count",
+        "merge_request_diffs_verification_total_count",
+        "merge_request_diffs_verified_count",
+        "merge_request_diffs_verification_failed_count",
+        "package_files_count",
+        "package_files_checksum_total_count",
+        "package_files_checksummed_count",
+        "package_files_checksum_failed_count",
+        "package_files_synced_count",
+        "package_files_failed_count",
+        "package_files_registry_count",
+        "package_files_verification_total_count",
+        "package_files_verified_count",
+        "package_files_verification_failed_count",
+        "terraform_state_versions_count",
+        "terraform_state_versions_checksum_total_count",
+        "terraform_state_versions_checksummed_count",
+        "terraform_state_versions_checksum_failed_count",
+        "terraform_state_versions_synced_count",
+        "terraform_state_versions_failed_count",
+        "terraform_state_versions_registry_count",
+        "terraform_state_versions_verification_total_count",
+        "terraform_state_versions_verified_count",
+        "terraform_state_versions_verification_failed_count",
+        "snippet_repositories_count",
+        "snippet_repositories_checksum_total_count",
+        "snippet_repositories_checksummed_count",
+        "snippet_repositories_checksum_failed_count",
+        "snippet_repositories_synced_count",
+        "snippet_repositories_failed_count",
+        "snippet_repositories_registry_count",
+        "snippet_repositories_verification_total_count",
+        "snippet_repositories_verified_count",
+        "snippet_repositories_verification_failed_count",
+        "group_wiki_repositories_count",
+        "group_wiki_repositories_checksum_total_count",
+        "group_wiki_repositories_checksummed_count",
+        "group_wiki_repositories_checksum_failed_count",
+        "group_wiki_repositories_synced_count",
+        "group_wiki_repositories_failed_count",
+        "group_wiki_repositories_registry_count",
+        "group_wiki_repositories_verification_total_count",
+        "group_wiki_repositories_verified_count",
+        "group_wiki_repositories_verification_failed_count",
+        "pipeline_artifacts_count",
+        "pipeline_artifacts_checksum_total_count",
+        "pipeline_artifacts_checksummed_count",
+        "pipeline_artifacts_checksum_failed_count",
+        "pipeline_artifacts_synced_count",
+        "pipeline_artifacts_failed_count",
+        "pipeline_artifacts_registry_count",
+        "pipeline_artifacts_verification_total_count",
+        "pipeline_artifacts_verified_count",
+        "pipeline_artifacts_verification_failed_count",
+        "pages_deployments_count",
+        "pages_deployments_checksum_total_count",
+        "pages_deployments_checksummed_count",
+        "pages_deployments_checksum_failed_count",
+        "pages_deployments_synced_count",
+        "pages_deployments_failed_count",
+        "pages_deployments_registry_count",
+        "pages_deployments_verification_total_count",
+        "pages_deployments_verified_count",
+        "pages_deployments_verification_failed_count",
+        "uploads_count",
+        "uploads_checksum_total_count",
+        "uploads_checksummed_count",
+        "uploads_checksum_failed_count",
+        "uploads_synced_count",
+        "uploads_failed_count",
+        "uploads_registry_count",
+        "uploads_verification_total_count",
+        "uploads_verified_count",
+        "uploads_verification_failed_count",
+        "job_artifacts_count",
+        "job_artifacts_checksum_total_count",
+        "job_artifacts_checksummed_count",
+        "job_artifacts_checksum_failed_count",
+        "job_artifacts_synced_count",
+        "job_artifacts_failed_count",
+        "job_artifacts_registry_count",
+        "job_artifacts_verification_total_count",
+        "job_artifacts_verified_count",
+        "job_artifacts_verification_failed_count",
+        "ci_secure_files_count",
+        "ci_secure_files_checksum_total_count",
+        "ci_secure_files_checksummed_count",
+        "ci_secure_files_checksum_failed_count",
+        "ci_secure_files_synced_count",
+        "ci_secure_files_failed_count",
+        "ci_secure_files_registry_count",
+        "ci_secure_files_verification_total_count",
+        "ci_secure_files_verified_count",
+        "ci_secure_files_verification_failed_count",
+        "container_repositories_count",
+        "container_repositories_checksum_total_count",
+        "container_repositories_checksummed_count",
+        "container_repositories_checksum_failed_count",
+        "container_repositories_synced_count",
+        "container_repositories_failed_count",
+        "container_repositories_registry_count",
+        "container_repositories_verification_total_count",
+        "container_repositories_verified_count",
+        "container_repositories_verification_failed_count",
+        "dependency_proxy_blobs_count",
+        "dependency_proxy_blobs_checksum_total_count",
+        "dependency_proxy_blobs_checksummed_count",
+        "dependency_proxy_blobs_checksum_failed_count",
+        "dependency_proxy_blobs_synced_count",
+        "dependency_proxy_blobs_failed_count",
+        "dependency_proxy_blobs_registry_count",
+        "dependency_proxy_blobs_verification_total_count",
+        "dependency_proxy_blobs_verified_count",
+        "dependency_proxy_blobs_verification_failed_count",
+        "dependency_proxy_manifests_count",
+        "dependency_proxy_manifests_checksum_total_count",
+        "dependency_proxy_manifests_checksummed_count",
+        "dependency_proxy_manifests_checksum_failed_count",
+        "dependency_proxy_manifests_synced_count",
+        "dependency_proxy_manifests_failed_count",
+        "dependency_proxy_manifests_registry_count",
+        "dependency_proxy_manifests_verification_total_count",
+        "dependency_proxy_manifests_verified_count",
+        "dependency_proxy_manifests_verification_failed_count",
+        "project_wiki_repositories_count",
+        "project_wiki_repositories_checksum_total_count",
+        "project_wiki_repositories_checksummed_count",
+        "project_wiki_repositories_checksum_failed_count",
+        "project_wiki_repositories_synced_count",
+        "project_wiki_repositories_failed_count",
+        "project_wiki_repositories_registry_count",
+        "project_wiki_repositories_verification_total_count",
+        "project_wiki_repositories_verified_count",
+        "project_wiki_repositories_verification_failed_count",
+        "git_fetch_event_count_weekly",
+        "git_push_event_count_weekly",
+        "proxy_remote_requests_event_count_weekly",
+        "proxy_local_requests_event_count_weekly",
+        "repositories_checked_in_percentage",
+        "replication_slots_used_in_percentage",
+        "lfs_objects_synced_in_percentage",
+        "lfs_objects_verified_in_percentage",
+        "merge_request_diffs_synced_in_percentage",
+        "merge_request_diffs_verified_in_percentage",
+        "package_files_synced_in_percentage",
+        "package_files_verified_in_percentage",
+        "terraform_state_versions_synced_in_percentage",
+        "terraform_state_versions_verified_in_percentage",
+        "snippet_repositories_synced_in_percentage",
+        "snippet_repositories_verified_in_percentage",
+        "group_wiki_repositories_synced_in_percentage",
+        "group_wiki_repositories_verified_in_percentage",
+        "pipeline_artifacts_synced_in_percentage",
+        "pipeline_artifacts_verified_in_percentage",
+        "pages_deployments_synced_in_percentage",
+        "pages_deployments_verified_in_percentage",
+        "uploads_synced_in_percentage",
+        "uploads_verified_in_percentage",
+        "job_artifacts_synced_in_percentage",
+        "job_artifacts_verified_in_percentage",
+        "ci_secure_files_synced_in_percentage",
+        "ci_secure_files_verified_in_percentage",
+        "container_repositories_synced_in_percentage",
+        "container_repositories_verified_in_percentage",
+        "dependency_proxy_blobs_synced_in_percentage",
+        "dependency_proxy_blobs_verified_in_percentage",
+        "dependency_proxy_manifests_synced_in_percentage",
+        "dependency_proxy_manifests_verified_in_percentage",
+        "project_wiki_repositories_synced_in_percentage",
+        "project_wiki_repositories_verified_in_percentage",
+        "replication_slots_count",
+        "replication_slots_used_count",
         "healthy",
         "health",
         "health_status",
         "missing_oauth_application",
         "db_replication_lag_seconds",
-        "projects_count",
-        "lfs_objects_synced_in_percentage",
-        "job_artifacts_synced_in_percentage",
-        "uploads_synced_in_percentage",
+        "replication_slots_max_retained_wal_bytes",
+        "repositories_checked_count",
+        "repositories_checked_failed_count",
+        "last_event_id",
+        "last_event_timestamp",
+        "cursor_last_event_id",
+        "cursor_last_event_timestamp",
+        "last_successful_status_check_timestamp",
         "version",
         "revision",
+        "selective_sync_type",
+        "updated_at",
         "storage_shards_match",
-        "updated_at"
+        "_links"
       ],
       "type": "object"
     },
@@ -37260,7 +38838,7 @@
   },
   {
     "name": "gitlab_get_work_item",
-    "description": "Get a single work item by IID. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with work item details (IID, title, state, type, description, assignees, labels, dates).\n\nSee also: gitlab_list_work_items, gitlab_update_work_item",
+    "description": "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50229,7 +51807,7 @@
   },
   {
     "name": "gitlab_group_saml_users_list",
-    "description": "List SAML SSO-provisioned users of a top-level GitLab group. Returns: matching users with id, username, name, and state. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get.",
+    "description": "List SAML SSO-provisioned users of a top-level GitLab group, with keyset pagination. Returns: matching users with full profile (id, username, name, state, email, identities, scim_identities, custom_attributes, created_by) plus pagination metadata. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50259,9 +51837,21 @@
           "description": "Top-level group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id, name, username, created_at)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -50269,6 +51859,10 @@
         },
         "search": {
           "description": "Filter SAML users by name, username, or public email",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: 'asc' or 'desc'",
           "type": "string"
         },
         "username": {
@@ -50345,34 +51939,140 @@
               "can_create_group": {
                 "type": "boolean"
               },
+              "can_create_organization": {
+                "type": "boolean"
+              },
               "can_create_project": {
                 "type": "boolean"
               },
               "color_scheme_id": {
                 "type": "integer"
               },
+              "confirmed_at": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "current_sign_in_at": {
                 "type": "string"
               },
+              "current_sign_in_ip": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "email": {
+                "type": "string"
+              },
+              "extern_uid": {
                 "type": "string"
               },
               "external": {
                 "type": "boolean"
               },
+              "extra_shared_runners_minutes_limit": {
+                "type": "integer"
+              },
               "id": {
                 "type": "integer"
               },
+              "identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "extern_uid"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "is_admin": {
+                "type": "boolean"
+              },
+              "is_auditor": {
                 "type": "boolean"
               },
               "job_title": {
                 "type": "string"
               },
               "last_activity_on": {
+                "type": "string"
+              },
+              "last_sign_in_at": {
+                "type": "string"
+              },
+              "last_sign_in_ip": {
+                "type": "string"
+              },
+              "linkedin": {
                 "type": "string"
               },
               "location": {
@@ -50383,6 +52083,9 @@
               },
               "name": {
                 "type": "string"
+              },
+              "namespace_id": {
+                "type": "integer"
               },
               "note": {
                 "type": "string"
@@ -50395,6 +52098,9 @@
               },
               "projects_limit": {
                 "type": "integer"
+              },
+              "provider": {
+                "type": "string"
               },
               "public_email": {
                 "type": "string"
@@ -50425,11 +52131,20 @@
                   "array"
                 ]
               },
+              "shared_runners_minutes_limit": {
+                "type": "integer"
+              },
+              "skype": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
               "theme_id": {
                 "type": "integer"
+              },
+              "twitter": {
+                "type": "string"
               },
               "two_factor_enabled": {
                 "type": "boolean"
@@ -50456,6 +52171,7 @@
               "web_url",
               "avatar_url",
               "is_admin",
+              "is_auditor",
               "bot",
               "two_factor_enabled",
               "external",
@@ -50464,6 +52180,7 @@
               "projects_limit",
               "can_create_project",
               "can_create_group",
+              "can_create_organization",
               "using_license_seat"
             ],
             "type": "object"
@@ -83852,7 +85569,7 @@
   },
   {
     "name": "gitlab_list_enterprise_users",
-    "description": "List all enterprise users for a GitLab group.\n\nReturns: JSON with users array and pagination. See also: gitlab_get_enterprise_user.",
+    "description": "List enterprise users for a top-level group with filtering and pagination. Returns: enterprise users with full profile fields (identities, SCIM identities, custom attributes, sign-in metadata, license seat usage) and pagination metadata. See also: gitlab_get_enterprise_user, gitlab_disable_2fa_enterprise_user, gitlab_delete_enterprise_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -83882,9 +85599,21 @@
           "description": "Group ID or URL-encoded path",
           "type": "string"
         },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
@@ -83892,6 +85621,10 @@
         },
         "search": {
           "description": "Search by name or username or email",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order for keyset pagination: asc or desc",
           "type": "string"
         },
         "two_factor": {
@@ -83960,29 +85693,166 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "bio": {
+                "type": "string"
+              },
               "bot": {
                 "type": "boolean"
+              },
+              "can_create_group": {
+                "type": "boolean"
+              },
+              "can_create_organization": {
+                "type": "boolean"
+              },
+              "can_create_project": {
+                "type": "boolean"
+              },
+              "color_scheme_id": {
+                "type": "integer"
+              },
+              "confirmed_at": {
+                "type": "string"
               },
               "created_at": {
                 "type": "string"
               },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "current_sign_in_at": {
+                "type": "string"
+              },
+              "current_sign_in_ip": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "email": {
+                "type": "string"
+              },
+              "extern_uid": {
                 "type": "string"
               },
               "external": {
                 "type": "boolean"
               },
+              "extra_shared_runners_minutes_limit": {
+                "type": "integer"
+              },
               "id": {
                 "type": "integer"
               },
+              "identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "extern_uid"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "is_admin": {
                 "type": "boolean"
+              },
+              "is_auditor": {
+                "type": "boolean"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "last_activity_on": {
+                "type": "string"
+              },
+              "last_sign_in_at": {
+                "type": "string"
+              },
+              "last_sign_in_ip": {
+                "type": "string"
+              },
+              "linkedin": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
               },
               "locked": {
                 "type": "boolean"
               },
               "name": {
                 "type": "string"
+              },
+              "namespace_id": {
+                "type": "integer"
               },
               "next_steps": {
                 "items": {
@@ -83993,7 +85863,63 @@
                   "array"
                 ]
               },
+              "note": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "private_profile": {
+                "type": "boolean"
+              },
+              "projects_limit": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "scim_identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "extern_uid",
+                    "group_id",
+                    "active"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "shared_runners_minutes_limit": {
+                "type": "integer"
+              },
+              "skype": {
+                "type": "string"
+              },
               "state": {
+                "type": "string"
+              },
+              "theme_id": {
+                "type": "integer"
+              },
+              "twitter": {
                 "type": "string"
               },
               "two_factor_enabled": {
@@ -84002,21 +85928,34 @@
               "username": {
                 "type": "string"
               },
+              "using_license_seat": {
+                "type": "boolean"
+              },
               "web_url": {
+                "type": "string"
+              },
+              "website_url": {
                 "type": "string"
               }
             },
             "required": [
               "id",
               "username",
-              "name",
               "email",
+              "name",
               "state",
               "web_url",
-              "is_admin",
               "bot",
+              "is_admin",
+              "is_auditor",
+              "can_create_group",
+              "can_create_project",
+              "can_create_organization",
+              "projects_limit",
               "two_factor_enabled",
               "external",
+              "private_profile",
+              "using_license_seat",
               "locked"
             ],
             "type": "object"
@@ -84652,17 +86591,33 @@
   },
   {
     "name": "gitlab_list_geo_sites",
-    "description": "List all Geo replication sites.\n\nReturns: JSON with array of Geo sites and pagination.\n\nSee also: gitlab_get_geo_site, gitlab_list_status_all_geo_sites",
+    "description": "List all Geo sites. Returns: each site with id, name, url, primary/enabled flags, capacities, and pagination metadata. See also: gitlab_get_geo_site, gitlab_list_status_all_geo_sites, gitlab_create_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -84719,6 +86674,21 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "repair": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
               "container_repositories_max_capacity": {
                 "type": "integer"
               },
@@ -84790,6 +86760,9 @@
               },
               "web_edit_url": {
                 "type": "string"
+              },
+              "web_geo_replication_details_url": {
+                "type": "string"
               }
             },
             "required": [
@@ -84804,7 +86777,8 @@
               "verification_max_capacity",
               "container_repositories_max_capacity",
               "minimum_reverification_interval",
-              "sync_object_storage"
+              "sync_object_storage",
+              "_links"
             ],
             "type": "object"
           },
@@ -91627,17 +93601,33 @@
   },
   {
     "name": "gitlab_list_status_all_geo_sites",
-    "description": "Retrieve replication status of all Geo sites.\n\nReturns: JSON with array of Geo site statuses and pagination.\n\nSee also: gitlab_get_status_geo_site, gitlab_list_geo_sites",
+    "description": "List replication status for all Geo sites. Returns: per-site health, replication lag, and detailed sync/verification/checksum counts and percentages, with pagination metadata. See also: gitlab_get_status_geo_site, gitlab_list_geo_sites.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "order_by": {
+          "description": "Column to order results by (keyset pagination)",
+          "type": "string"
+        },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
           "type": "integer"
         },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction (asc, desc)",
+          "type": "string"
         }
       },
       "type": "object"
@@ -91694,11 +93684,218 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "self": {
+                    "type": "string"
+                  },
+                  "site": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "ci_secure_files_checksum_failed_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_checksum_total_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_checksummed_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_failed_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_registry_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_synced_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_synced_in_percentage": {
+                "type": "string"
+              },
+              "ci_secure_files_verification_failed_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_verification_total_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_verified_count": {
+                "type": "integer"
+              },
+              "ci_secure_files_verified_in_percentage": {
+                "type": "string"
+              },
+              "container_repositories_checksum_failed_count": {
+                "type": "integer"
+              },
+              "container_repositories_checksum_total_count": {
+                "type": "integer"
+              },
+              "container_repositories_checksummed_count": {
+                "type": "integer"
+              },
+              "container_repositories_count": {
+                "type": "integer"
+              },
+              "container_repositories_failed_count": {
+                "type": "integer"
+              },
+              "container_repositories_registry_count": {
+                "type": "integer"
+              },
+              "container_repositories_replication_enabled": {
+                "type": "boolean"
+              },
+              "container_repositories_synced_count": {
+                "type": "integer"
+              },
+              "container_repositories_synced_in_percentage": {
+                "type": "string"
+              },
+              "container_repositories_verification_failed_count": {
+                "type": "integer"
+              },
+              "container_repositories_verification_total_count": {
+                "type": "integer"
+              },
+              "container_repositories_verified_count": {
+                "type": "integer"
+              },
+              "container_repositories_verified_in_percentage": {
+                "type": "string"
+              },
+              "cursor_last_event_id": {
+                "type": "integer"
+              },
+              "cursor_last_event_timestamp": {
+                "type": "integer"
+              },
               "db_replication_lag_seconds": {
                 "type": "integer"
               },
+              "dependency_proxy_blobs_checksum_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_checksum_total_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_checksummed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_registry_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_synced_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_synced_in_percentage": {
+                "type": "string"
+              },
+              "dependency_proxy_blobs_verification_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_verification_total_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_verified_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_blobs_verified_in_percentage": {
+                "type": "string"
+              },
+              "dependency_proxy_manifests_checksum_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_checksum_total_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_checksummed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_registry_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_synced_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_synced_in_percentage": {
+                "type": "string"
+              },
+              "dependency_proxy_manifests_verification_failed_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_verification_total_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_verified_count": {
+                "type": "integer"
+              },
+              "dependency_proxy_manifests_verified_in_percentage": {
+                "type": "string"
+              },
               "geo_node_id": {
                 "type": "integer"
+              },
+              "git_fetch_event_count_weekly": {
+                "type": "integer"
+              },
+              "git_push_event_count_weekly": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_checksum_failed_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_checksum_total_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_checksummed_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_failed_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_registry_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_synced_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_synced_in_percentage": {
+                "type": "string"
+              },
+              "group_wiki_repositories_verification_failed_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_verification_total_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_verified_count": {
+                "type": "integer"
+              },
+              "group_wiki_repositories_verified_in_percentage": {
+                "type": "string"
               },
               "health": {
                 "type": "string"
@@ -91709,14 +93906,134 @@
               "healthy": {
                 "type": "boolean"
               },
+              "job_artifacts_checksum_failed_count": {
+                "type": "integer"
+              },
+              "job_artifacts_checksum_total_count": {
+                "type": "integer"
+              },
+              "job_artifacts_checksummed_count": {
+                "type": "integer"
+              },
+              "job_artifacts_count": {
+                "type": "integer"
+              },
+              "job_artifacts_failed_count": {
+                "type": "integer"
+              },
+              "job_artifacts_registry_count": {
+                "type": "integer"
+              },
+              "job_artifacts_synced_count": {
+                "type": "integer"
+              },
               "job_artifacts_synced_in_percentage": {
                 "type": "string"
+              },
+              "job_artifacts_verification_failed_count": {
+                "type": "integer"
+              },
+              "job_artifacts_verification_total_count": {
+                "type": "integer"
+              },
+              "job_artifacts_verified_count": {
+                "type": "integer"
+              },
+              "job_artifacts_verified_in_percentage": {
+                "type": "string"
+              },
+              "last_event_id": {
+                "type": "integer"
+              },
+              "last_event_timestamp": {
+                "type": "integer"
+              },
+              "last_successful_status_check_timestamp": {
+                "type": "integer"
+              },
+              "lfs_objects_checksum_failed_count": {
+                "type": "integer"
+              },
+              "lfs_objects_checksum_total_count": {
+                "type": "integer"
+              },
+              "lfs_objects_checksummed_count": {
+                "type": "integer"
+              },
+              "lfs_objects_count": {
+                "type": "integer"
+              },
+              "lfs_objects_failed_count": {
+                "type": "integer"
+              },
+              "lfs_objects_registry_count": {
+                "type": "integer"
+              },
+              "lfs_objects_synced_count": {
+                "type": "integer"
               },
               "lfs_objects_synced_in_percentage": {
                 "type": "string"
               },
+              "lfs_objects_verification_failed_count": {
+                "type": "integer"
+              },
+              "lfs_objects_verification_total_count": {
+                "type": "integer"
+              },
+              "lfs_objects_verified_count": {
+                "type": "integer"
+              },
+              "lfs_objects_verified_in_percentage": {
+                "type": "string"
+              },
+              "merge_request_diffs_checksum_failed_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_checksum_total_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_checksummed_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_failed_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_registry_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_synced_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_synced_in_percentage": {
+                "type": "string"
+              },
+              "merge_request_diffs_verification_failed_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_verification_total_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_verified_count": {
+                "type": "integer"
+              },
+              "merge_request_diffs_verified_in_percentage": {
+                "type": "string"
+              },
               "missing_oauth_application": {
                 "type": "boolean"
+              },
+              "namespaces": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "next_steps": {
                 "items": {
@@ -91727,19 +94044,298 @@
                   "array"
                 ]
               },
+              "package_files_checksum_failed_count": {
+                "type": "integer"
+              },
+              "package_files_checksum_total_count": {
+                "type": "integer"
+              },
+              "package_files_checksummed_count": {
+                "type": "integer"
+              },
+              "package_files_count": {
+                "type": "integer"
+              },
+              "package_files_failed_count": {
+                "type": "integer"
+              },
+              "package_files_registry_count": {
+                "type": "integer"
+              },
+              "package_files_synced_count": {
+                "type": "integer"
+              },
+              "package_files_synced_in_percentage": {
+                "type": "string"
+              },
+              "package_files_verification_failed_count": {
+                "type": "integer"
+              },
+              "package_files_verification_total_count": {
+                "type": "integer"
+              },
+              "package_files_verified_count": {
+                "type": "integer"
+              },
+              "package_files_verified_in_percentage": {
+                "type": "string"
+              },
+              "pages_deployments_checksum_failed_count": {
+                "type": "integer"
+              },
+              "pages_deployments_checksum_total_count": {
+                "type": "integer"
+              },
+              "pages_deployments_checksummed_count": {
+                "type": "integer"
+              },
+              "pages_deployments_count": {
+                "type": "integer"
+              },
+              "pages_deployments_failed_count": {
+                "type": "integer"
+              },
+              "pages_deployments_registry_count": {
+                "type": "integer"
+              },
+              "pages_deployments_synced_count": {
+                "type": "integer"
+              },
+              "pages_deployments_synced_in_percentage": {
+                "type": "string"
+              },
+              "pages_deployments_verification_failed_count": {
+                "type": "integer"
+              },
+              "pages_deployments_verification_total_count": {
+                "type": "integer"
+              },
+              "pages_deployments_verified_count": {
+                "type": "integer"
+              },
+              "pages_deployments_verified_in_percentage": {
+                "type": "string"
+              },
+              "pipeline_artifacts_checksum_failed_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_checksum_total_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_checksummed_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_failed_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_registry_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_synced_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_synced_in_percentage": {
+                "type": "string"
+              },
+              "pipeline_artifacts_verification_failed_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_verification_total_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_verified_count": {
+                "type": "integer"
+              },
+              "pipeline_artifacts_verified_in_percentage": {
+                "type": "string"
+              },
+              "project_wiki_repositories_checksum_failed_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_checksum_total_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_checksummed_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_failed_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_registry_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_synced_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_synced_in_percentage": {
+                "type": "string"
+              },
+              "project_wiki_repositories_verification_failed_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_verification_total_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_verified_count": {
+                "type": "integer"
+              },
+              "project_wiki_repositories_verified_in_percentage": {
+                "type": "string"
+              },
               "projects_count": {
                 "type": "integer"
               },
+              "proxy_local_requests_event_count_weekly": {
+                "type": "integer"
+              },
+              "proxy_remote_requests_event_count_weekly": {
+                "type": "integer"
+              },
+              "replication_slots_count": {
+                "type": "integer"
+              },
+              "replication_slots_max_retained_wal_bytes": {
+                "type": "integer"
+              },
+              "replication_slots_used_count": {
+                "type": "integer"
+              },
+              "replication_slots_used_in_percentage": {
+                "type": "string"
+              },
+              "repositories_checked_count": {
+                "type": "integer"
+              },
+              "repositories_checked_failed_count": {
+                "type": "integer"
+              },
+              "repositories_checked_in_percentage": {
+                "type": "string"
+              },
               "revision": {
+                "type": "string"
+              },
+              "selective_sync_type": {
+                "type": "string"
+              },
+              "snippet_repositories_checksum_failed_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_checksum_total_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_checksummed_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_failed_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_registry_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_synced_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_synced_in_percentage": {
+                "type": "string"
+              },
+              "snippet_repositories_verification_failed_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_verification_total_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_verified_count": {
+                "type": "integer"
+              },
+              "snippet_repositories_verified_in_percentage": {
                 "type": "string"
               },
               "storage_shards_match": {
                 "type": "boolean"
               },
+              "terraform_state_versions_checksum_failed_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_checksum_total_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_checksummed_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_failed_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_registry_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_synced_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_synced_in_percentage": {
+                "type": "string"
+              },
+              "terraform_state_versions_verification_failed_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_verification_total_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_verified_count": {
+                "type": "integer"
+              },
+              "terraform_state_versions_verified_in_percentage": {
+                "type": "string"
+              },
               "updated_at": {
                 "type": "string"
               },
+              "uploads_checksum_failed_count": {
+                "type": "integer"
+              },
+              "uploads_checksum_total_count": {
+                "type": "integer"
+              },
+              "uploads_checksummed_count": {
+                "type": "integer"
+              },
+              "uploads_count": {
+                "type": "integer"
+              },
+              "uploads_failed_count": {
+                "type": "integer"
+              },
+              "uploads_registry_count": {
+                "type": "integer"
+              },
+              "uploads_synced_count": {
+                "type": "integer"
+              },
               "uploads_synced_in_percentage": {
+                "type": "string"
+              },
+              "uploads_verification_failed_count": {
+                "type": "integer"
+              },
+              "uploads_verification_total_count": {
+                "type": "integer"
+              },
+              "uploads_verified_count": {
+                "type": "integer"
+              },
+              "uploads_verified_in_percentage": {
                 "type": "string"
               },
               "version": {
@@ -91748,19 +94344,215 @@
             },
             "required": [
               "geo_node_id",
+              "projects_count",
+              "container_repositories_replication_enabled",
+              "lfs_objects_count",
+              "lfs_objects_checksum_total_count",
+              "lfs_objects_checksummed_count",
+              "lfs_objects_checksum_failed_count",
+              "lfs_objects_synced_count",
+              "lfs_objects_failed_count",
+              "lfs_objects_registry_count",
+              "lfs_objects_verification_total_count",
+              "lfs_objects_verified_count",
+              "lfs_objects_verification_failed_count",
+              "merge_request_diffs_count",
+              "merge_request_diffs_checksum_total_count",
+              "merge_request_diffs_checksummed_count",
+              "merge_request_diffs_checksum_failed_count",
+              "merge_request_diffs_synced_count",
+              "merge_request_diffs_failed_count",
+              "merge_request_diffs_registry_count",
+              "merge_request_diffs_verification_total_count",
+              "merge_request_diffs_verified_count",
+              "merge_request_diffs_verification_failed_count",
+              "package_files_count",
+              "package_files_checksum_total_count",
+              "package_files_checksummed_count",
+              "package_files_checksum_failed_count",
+              "package_files_synced_count",
+              "package_files_failed_count",
+              "package_files_registry_count",
+              "package_files_verification_total_count",
+              "package_files_verified_count",
+              "package_files_verification_failed_count",
+              "terraform_state_versions_count",
+              "terraform_state_versions_checksum_total_count",
+              "terraform_state_versions_checksummed_count",
+              "terraform_state_versions_checksum_failed_count",
+              "terraform_state_versions_synced_count",
+              "terraform_state_versions_failed_count",
+              "terraform_state_versions_registry_count",
+              "terraform_state_versions_verification_total_count",
+              "terraform_state_versions_verified_count",
+              "terraform_state_versions_verification_failed_count",
+              "snippet_repositories_count",
+              "snippet_repositories_checksum_total_count",
+              "snippet_repositories_checksummed_count",
+              "snippet_repositories_checksum_failed_count",
+              "snippet_repositories_synced_count",
+              "snippet_repositories_failed_count",
+              "snippet_repositories_registry_count",
+              "snippet_repositories_verification_total_count",
+              "snippet_repositories_verified_count",
+              "snippet_repositories_verification_failed_count",
+              "group_wiki_repositories_count",
+              "group_wiki_repositories_checksum_total_count",
+              "group_wiki_repositories_checksummed_count",
+              "group_wiki_repositories_checksum_failed_count",
+              "group_wiki_repositories_synced_count",
+              "group_wiki_repositories_failed_count",
+              "group_wiki_repositories_registry_count",
+              "group_wiki_repositories_verification_total_count",
+              "group_wiki_repositories_verified_count",
+              "group_wiki_repositories_verification_failed_count",
+              "pipeline_artifacts_count",
+              "pipeline_artifacts_checksum_total_count",
+              "pipeline_artifacts_checksummed_count",
+              "pipeline_artifacts_checksum_failed_count",
+              "pipeline_artifacts_synced_count",
+              "pipeline_artifacts_failed_count",
+              "pipeline_artifacts_registry_count",
+              "pipeline_artifacts_verification_total_count",
+              "pipeline_artifacts_verified_count",
+              "pipeline_artifacts_verification_failed_count",
+              "pages_deployments_count",
+              "pages_deployments_checksum_total_count",
+              "pages_deployments_checksummed_count",
+              "pages_deployments_checksum_failed_count",
+              "pages_deployments_synced_count",
+              "pages_deployments_failed_count",
+              "pages_deployments_registry_count",
+              "pages_deployments_verification_total_count",
+              "pages_deployments_verified_count",
+              "pages_deployments_verification_failed_count",
+              "uploads_count",
+              "uploads_checksum_total_count",
+              "uploads_checksummed_count",
+              "uploads_checksum_failed_count",
+              "uploads_synced_count",
+              "uploads_failed_count",
+              "uploads_registry_count",
+              "uploads_verification_total_count",
+              "uploads_verified_count",
+              "uploads_verification_failed_count",
+              "job_artifacts_count",
+              "job_artifacts_checksum_total_count",
+              "job_artifacts_checksummed_count",
+              "job_artifacts_checksum_failed_count",
+              "job_artifacts_synced_count",
+              "job_artifacts_failed_count",
+              "job_artifacts_registry_count",
+              "job_artifacts_verification_total_count",
+              "job_artifacts_verified_count",
+              "job_artifacts_verification_failed_count",
+              "ci_secure_files_count",
+              "ci_secure_files_checksum_total_count",
+              "ci_secure_files_checksummed_count",
+              "ci_secure_files_checksum_failed_count",
+              "ci_secure_files_synced_count",
+              "ci_secure_files_failed_count",
+              "ci_secure_files_registry_count",
+              "ci_secure_files_verification_total_count",
+              "ci_secure_files_verified_count",
+              "ci_secure_files_verification_failed_count",
+              "container_repositories_count",
+              "container_repositories_checksum_total_count",
+              "container_repositories_checksummed_count",
+              "container_repositories_checksum_failed_count",
+              "container_repositories_synced_count",
+              "container_repositories_failed_count",
+              "container_repositories_registry_count",
+              "container_repositories_verification_total_count",
+              "container_repositories_verified_count",
+              "container_repositories_verification_failed_count",
+              "dependency_proxy_blobs_count",
+              "dependency_proxy_blobs_checksum_total_count",
+              "dependency_proxy_blobs_checksummed_count",
+              "dependency_proxy_blobs_checksum_failed_count",
+              "dependency_proxy_blobs_synced_count",
+              "dependency_proxy_blobs_failed_count",
+              "dependency_proxy_blobs_registry_count",
+              "dependency_proxy_blobs_verification_total_count",
+              "dependency_proxy_blobs_verified_count",
+              "dependency_proxy_blobs_verification_failed_count",
+              "dependency_proxy_manifests_count",
+              "dependency_proxy_manifests_checksum_total_count",
+              "dependency_proxy_manifests_checksummed_count",
+              "dependency_proxy_manifests_checksum_failed_count",
+              "dependency_proxy_manifests_synced_count",
+              "dependency_proxy_manifests_failed_count",
+              "dependency_proxy_manifests_registry_count",
+              "dependency_proxy_manifests_verification_total_count",
+              "dependency_proxy_manifests_verified_count",
+              "dependency_proxy_manifests_verification_failed_count",
+              "project_wiki_repositories_count",
+              "project_wiki_repositories_checksum_total_count",
+              "project_wiki_repositories_checksummed_count",
+              "project_wiki_repositories_checksum_failed_count",
+              "project_wiki_repositories_synced_count",
+              "project_wiki_repositories_failed_count",
+              "project_wiki_repositories_registry_count",
+              "project_wiki_repositories_verification_total_count",
+              "project_wiki_repositories_verified_count",
+              "project_wiki_repositories_verification_failed_count",
+              "git_fetch_event_count_weekly",
+              "git_push_event_count_weekly",
+              "proxy_remote_requests_event_count_weekly",
+              "proxy_local_requests_event_count_weekly",
+              "repositories_checked_in_percentage",
+              "replication_slots_used_in_percentage",
+              "lfs_objects_synced_in_percentage",
+              "lfs_objects_verified_in_percentage",
+              "merge_request_diffs_synced_in_percentage",
+              "merge_request_diffs_verified_in_percentage",
+              "package_files_synced_in_percentage",
+              "package_files_verified_in_percentage",
+              "terraform_state_versions_synced_in_percentage",
+              "terraform_state_versions_verified_in_percentage",
+              "snippet_repositories_synced_in_percentage",
+              "snippet_repositories_verified_in_percentage",
+              "group_wiki_repositories_synced_in_percentage",
+              "group_wiki_repositories_verified_in_percentage",
+              "pipeline_artifacts_synced_in_percentage",
+              "pipeline_artifacts_verified_in_percentage",
+              "pages_deployments_synced_in_percentage",
+              "pages_deployments_verified_in_percentage",
+              "uploads_synced_in_percentage",
+              "uploads_verified_in_percentage",
+              "job_artifacts_synced_in_percentage",
+              "job_artifacts_verified_in_percentage",
+              "ci_secure_files_synced_in_percentage",
+              "ci_secure_files_verified_in_percentage",
+              "container_repositories_synced_in_percentage",
+              "container_repositories_verified_in_percentage",
+              "dependency_proxy_blobs_synced_in_percentage",
+              "dependency_proxy_blobs_verified_in_percentage",
+              "dependency_proxy_manifests_synced_in_percentage",
+              "dependency_proxy_manifests_verified_in_percentage",
+              "project_wiki_repositories_synced_in_percentage",
+              "project_wiki_repositories_verified_in_percentage",
+              "replication_slots_count",
+              "replication_slots_used_count",
               "healthy",
               "health",
               "health_status",
               "missing_oauth_application",
               "db_replication_lag_seconds",
-              "projects_count",
-              "lfs_objects_synced_in_percentage",
-              "job_artifacts_synced_in_percentage",
-              "uploads_synced_in_percentage",
+              "replication_slots_max_retained_wal_bytes",
+              "repositories_checked_count",
+              "repositories_checked_failed_count",
+              "last_event_id",
+              "last_event_timestamp",
+              "cursor_last_event_id",
+              "cursor_last_event_timestamp",
+              "last_successful_status_check_timestamp",
               "version",
               "revision",
+              "selective_sync_type",
+              "updated_at",
               "storage_shards_match",
-              "updated_at"
+              "_links"
             ],
             "type": "object"
           },
@@ -92846,6 +95638,10 @@
           "description": "Cursor for forward pagination",
           "type": "string"
         },
+        "before": {
+          "description": "Cursor for backward pagination",
+          "type": "string"
+        },
         "first": {
           "description": "Number of types to return from the beginning (cursor pagination)",
           "type": "integer"
@@ -92853,6 +95649,10 @@
         "full_path": {
           "description": "Project or group full path (namespace path)",
           "type": "string"
+        },
+        "last": {
+          "description": "Number of types to return from the end (backward cursor pagination)",
+          "type": "integer"
         },
         "name": {
           "description": "Filter by work item type name",
@@ -92944,7 +95744,7 @@
   },
   {
     "name": "gitlab_list_work_items",
-    "description": "List work items for a project or group. Supports filtering by state, type, labels, author, search. Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with array of work items and pagination info.\n\nSee also: gitlab_get_work_item, gitlab_create_work_item",
+    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164090,7 +166890,7 @@
   },
   {
     "name": "gitlab_repair_geo_site",
-    "description": "Repair the OAuth authentication of a Geo site.\n\nReturns: JSON with the repaired Geo site configuration.\n\nSee also: gitlab_get_geo_site",
+    "description": "Repair a Geo site's OAuth application. Returns: the repaired site (or a hint to refresh via get when GitLab returns no body). See also: gitlab_get_geo_site, gitlab_get_status_geo_site.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -164107,6 +166907,21 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "repair": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -164178,6 +166993,9 @@
         },
         "web_edit_url": {
           "type": "string"
+        },
+        "web_geo_replication_details_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -164192,7 +167010,8 @@
         "verification_max_capacity",
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
-        "sync_object_storage"
+        "sync_object_storage",
+        "_links"
       ],
       "type": "object"
     },
@@ -184895,7 +187714,7 @@
   },
   {
     "name": "gitlab_update_work_item",
-    "description": "Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). Experimental: the Work Items API may introduce breaking changes between minor versions.\n\nReturns: JSON with the updated work item details.\n\nSee also: gitlab_get_work_item, gitlab_delete_work_item",
+    "description": "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
