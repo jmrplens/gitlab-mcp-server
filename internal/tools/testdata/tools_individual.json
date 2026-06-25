@@ -27022,7 +27022,7 @@
   },
   {
     "name": "gitlab_get_project_storage_move",
-    "description": "Get a single project repository storage move by its global move id. Returns the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves.",
+    "description": "Get a single project repository storage move by its global move id. Returns: the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27120,7 +27120,7 @@
   },
   {
     "name": "gitlab_get_project_storage_move_for_project",
-    "description": "Get a single repository storage move for a specific project by project_id and move id. Returns the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves.",
+    "description": "Get a single repository storage move for a specific project by project_id and move id. Returns: the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27223,7 +27223,7 @@
   },
   {
     "name": "gitlab_get_project_template",
-    "description": "Returns one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project.",
+    "description": "Returns: one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -74027,7 +74027,7 @@
   },
   {
     "name": "gitlab_list_project_templates",
-    "description": "Lists project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. See also: gitlab_get_project_template, gitlab_create_project.",
+    "description": "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -127249,7 +127249,7 @@
   },
   {
     "name": "gitlab_project_member_add",
-    "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
+    "description": "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -127470,7 +127470,7 @@
   },
   {
     "name": "gitlab_project_member_delete",
-    "description": "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. See also: gitlab_project_member_edit, gitlab_project_members_list.",
+    "description": "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -127527,7 +127527,7 @@
   },
   {
     "name": "gitlab_project_member_edit",
-    "description": "Edit a project member's access level, expiry, or custom member role. Returns the updated membership. Requires at least the same access level as the target member. See also: gitlab_project_member_add, gitlab_project_member_delete, gitlab_project_members_list.",
+    "description": "Edit a project member's access level, expiry, or custom member role. Returns: the updated membership. Requires at least the same access level as the target member. See also: gitlab_project_member_add, gitlab_project_member_delete, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -144240,7 +144240,7 @@
   },
   {
     "name": "gitlab_retrieve_all_project_storage_moves",
-    "description": "List all project repository storage moves on the instance. Returns each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move, gitlab_schedule_all_project_storage_moves.",
+    "description": "List all project repository storage moves on the instance. Returns: each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move, gitlab_schedule_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -144711,7 +144711,7 @@
   },
   {
     "name": "gitlab_retrieve_project_storage_moves",
-    "description": "List repository storage moves for a single project. Returns each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move_for_project, gitlab_schedule_project_storage_move.",
+    "description": "List repository storage moves for a single project. Returns: each move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_get_project_storage_move_for_project, gitlab_schedule_project_storage_move.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148394,7 +148394,7 @@
   },
   {
     "name": "gitlab_schedule_all_project_storage_moves",
-    "description": "Schedule repository storage moves for all projects on a Gitaly storage shard. Drains source_storage_name onto destination_storage_name. Returns a confirmation message. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves, gitlab_schedule_project_storage_move.",
+    "description": "Schedule repository storage moves for all projects on a Gitaly storage shard. Drains source_storage_name onto destination_storage_name. Returns: a confirmation message. Admin-only and self-managed only. See also: gitlab_retrieve_all_project_storage_moves, gitlab_schedule_project_storage_move.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148746,7 +148746,7 @@
   },
   {
     "name": "gitlab_schedule_project_storage_move",
-    "description": "Schedule a repository storage move for a single project to another Gitaly storage shard. Returns the created move's id, state, source and destination shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves, gitlab_schedule_all_project_storage_moves.",
+    "description": "Schedule a repository storage move for a single project to another Gitaly storage shard. Returns: the created move's id, state, source and destination shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves, gitlab_schedule_all_project_storage_moves.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

@@ -134,7 +134,7 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 				CommonConfusions: []string{"Use the numeric level, not a role name; set member_role_id for a custom role."},
 			},
 		}
-		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
+		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
 	case "gitlab_project_member_edit":
 		opts.Usage = "Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member."
 		opts.Aliases = []string{individualTool, "edit project member", "change member access level", "promote member", "update membership"}
@@ -149,13 +149,13 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 				CommonConfusions: []string{"Use the numeric level, not a role name; you must hold at least the same level as the target."},
 			},
 		}
-		opts.IndividualTool.Description = "Edit a project member's access level, expiry, or custom member role. Returns the updated membership. Requires at least the same access level as the target member. See also: gitlab_project_member_add, gitlab_project_member_delete, gitlab_project_members_list."
+		opts.IndividualTool.Description = "Edit a project member's access level, expiry, or custom member role. Returns: the updated membership. Requires at least the same access level as the target member. See also: gitlab_project_member_add, gitlab_project_member_delete, gitlab_project_members_list."
 	case "gitlab_project_member_delete":
 		opts.Usage = "Remove a member from a project by user_id. Destructive and requires confirmation. Requires Maintainer; the last Owner cannot be removed."
 		opts.Aliases = []string{individualTool, "remove project member", "revoke project access", "delete membership", "kick user from project"}
 		opts.RelatedActions = []string{"members.list", "member.get", "member.edit"}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"project_id": projectIDGuidance, "user_id": userIDGuidance}
-		opts.IndividualTool.Description = "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. See also: gitlab_project_member_edit, gitlab_project_members_list."
+		opts.IndividualTool.Description = "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list."
 	}
 
 	return opts

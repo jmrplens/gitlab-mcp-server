@@ -50,7 +50,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 			"read dockerfile template",
 		}
 		opts.RelatedActions = []string{"projecttemplates.project_template_list", "project.create", "project.get"}
-		opts.IndividualTool.Description = "Returns one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project."
+		opts.IndividualTool.Description = "Returns: one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project."
 		opts.ParameterGuidance["key"] = toolutil.ParameterGuidance{
 			SemanticRole:   "template_key",
 			ValueSource:    "Template key from project template list output (e.g. mit, apache-2.0, Go, Python).",
@@ -69,7 +69,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		"ci yaml templates",
 	}
 	opts.RelatedActions = []string{"projecttemplates.project_template_get", "project.create", "project.list"}
-	opts.IndividualTool.Description = "Lists project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. See also: gitlab_get_project_template, gitlab_create_project."
+	opts.IndividualTool.Description = "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_create_project."
 	opts.ParameterGuidance["type"] = toolutil.ParameterGuidance{
 		SemanticRole:   "template_type_filter",
 		ValueSource:    "Optional secondary filter passed as the 'type' query parameter; " + templateTypeGuidance,
