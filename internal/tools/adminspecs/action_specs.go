@@ -192,6 +192,8 @@ func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Usage = "Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information."
 	options.Aliases = []string{"application settings", "instance settings", "current settings", "admin settings", "gitlab settings"}
 	options.Tags = append(options.Tags, "settings", "application_settings")
+	options.RelatedActions = []string{"admin.settings_update", "admin.appearance_get", actionAdminMetadataGet}
+	options.IndividualTool.Description = "Get the current GitLab application (instance) settings. Returns: the full application settings object including sign-up, visibility, CI/CD, and rate-limit configuration. See also: gitlab_update_settings, gitlab_get_appearance, gitlab_get_metadata."
 	return toolutil.NewReadActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
 }
 
@@ -267,14 +269,573 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id."}),
 	}
+	options.IndividualTool.Description = "Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states."
 	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute adminspecs domain action.", Tags: []string{"admin"},
 		OpenWorld:      true,
 		OwnerPackage:   "adminspecs",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	decorateAdminMeta(&options, individualTool)
+	return options
+}
+
+// adminActionMetaEntry is the discovery metadata for one admin action.
+type adminActionMetaEntry struct {
+	usage       string
+	aliases     []string
+	related     []string
+	description string
+}
+
+// decorateAdminMeta fills non-generic Usage, natural-language Aliases,
+// RelatedActions, and the "Returns: … See also: …" individual-tool description
+// for every admin action that would otherwise inherit the generic placeholder
+// metadata from adminOptions. Actions whose dedicated builders already set rich
+// metadata (settings_get, metadata_get, appearance_*, app_statistics_get,
+// system_hook_edit/set/delete URL variable, terraform_state_unlock) are absent
+// from the map and left untouched. When an entry omits usage, any tailored Usage
+// already set by a dedicated builder is preserved while aliases, related actions,
+// and the description are still added.
+func decorateAdminMeta(options *toolutil.ActionSpecOptions, individualTool string) {
+	meta, ok := adminActionMeta[individualTool]
+	if !ok {
+		return
+	}
+	if meta.usage != "" {
+		options.Usage = meta.usage
+	}
+	if len(meta.aliases) > 0 {
+		options.Aliases = append([]string(nil), meta.aliases...)
+	}
+	if len(meta.related) > 0 {
+		options.RelatedActions = append([]string(nil), meta.related...)
+	}
+	if meta.description != "" {
+		options.IndividualTool.Description = meta.description
+	}
+}
+
+// adminActionMeta maps each individual admin tool to its discovery metadata.
+// Entries cover every admin action that routes through the shared adminOptions
+// placeholder; actions handled by dedicated builders with bespoke metadata are
+// intentionally omitted so their tailored text is preserved.
+//
+//nolint:funlen // A flat, reviewable lookup table; one entry per admin action.
+var adminActionMeta = map[string]adminActionMetaEntry{
+	"gitlab_list_topics": {
+		usage:       "List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.",
+		aliases:     []string{"list topics", "show project topics", "browse topics"},
+		related:     []string{"admin.topic_get", "admin.topic_create", "admin.topic_update"},
+		description: "List instance project topics. Returns: an array of topics with id, name, title, description, and project counts. See also: gitlab_get_topic, gitlab_create_topic.",
+	},
+	"gitlab_get_topic": {
+		usage:       "Get one instance project topic by its numeric topic id.",
+		aliases:     []string{"get topic", "show topic", "topic details"},
+		related:     []string{"admin.topic_list", "admin.topic_update", "admin.topic_delete"},
+		description: "Get a single project topic by id. Returns: the topic with id, name, title, description, avatar, and project count. See also: gitlab_list_topics, gitlab_update_topic.",
+	},
+	"gitlab_create_topic": {
+		usage:       "Create a new instance project topic (admin only). Provide name and optionally title, description, and avatar.",
+		aliases:     []string{"create topic", "add topic", "new project topic"},
+		related:     []string{"admin.topic_list", "admin.topic_update", "admin.topic_delete"},
+		description: "Create an instance project topic. Returns: the created topic with id, name, title, and description. See also: gitlab_update_topic, gitlab_list_topics.",
+	},
+	"gitlab_update_topic": {
+		usage:       "Update an existing project topic by id (admin only). Send only the fields to change: name, title, description, or avatar.",
+		aliases:     []string{"update topic", "edit topic", "rename topic"},
+		related:     []string{"admin.topic_get", "admin.topic_list", "admin.topic_delete"},
+		description: "Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, gitlab_delete_topic.",
+	},
+	"gitlab_delete_topic": {
+		usage:       "Delete a project topic by id (admin only). Projects keep their other topics; this only removes the topic definition.",
+		aliases:     []string{"delete topic", "remove topic", "drop project topic"},
+		related:     []string{"admin.topic_get", "admin.topic_list", "admin.topic_create"},
+		description: "Delete a project topic. Returns: a success status. See also: gitlab_get_topic, gitlab_create_topic.",
+	},
+	"gitlab_update_settings": {
+		usage:       "Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.",
+		aliases:     []string{"update application settings", "change instance settings", "configure gitlab settings", "edit admin settings"},
+		related:     []string{"admin.settings_get", "admin.appearance_update", "admin.metadata_get"},
+		description: "Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.",
+	},
+	"gitlab_list_broadcast_messages": {
+		usage:       "List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.",
+		aliases:     []string{"list broadcast messages", "show announcements", "instance banners"},
+		related:     []string{"admin.broadcast_message_get", "admin.broadcast_message_create", "admin.broadcast_message_update"},
+		description: "List instance broadcast messages. Returns: an array of broadcast messages with id, message, theme, target, starts_at, and ends_at. See also: gitlab_get_broadcast_message, gitlab_create_broadcast_message.",
+	},
+	"gitlab_get_broadcast_message": {
+		usage:       "Get one broadcast message by id.",
+		aliases:     []string{"get broadcast message", "show announcement", "broadcast details"},
+		related:     []string{"admin.broadcast_message_list", "admin.broadcast_message_update", "admin.broadcast_message_delete"},
+		description: "Get a broadcast message by id. Returns: the message with text, theme, target, and schedule. See also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message.",
+	},
+	"gitlab_create_broadcast_message": {
+		usage:       "Create a broadcast message banner or notification (admin only). Provide message text and optionally theme, target_path, broadcast_type, dismissable, starts_at, and ends_at.",
+		aliases:     []string{"create broadcast message", "add announcement", "post instance banner"},
+		related:     []string{"admin.broadcast_message_list", "admin.broadcast_message_update", "admin.broadcast_message_delete"},
+		description: "Create a broadcast message. Returns: the created message with id, theme, target, and schedule. See also: gitlab_update_broadcast_message, gitlab_list_broadcast_messages.",
+	},
+	"gitlab_update_broadcast_message": {
+		usage:       "Update a broadcast message by id (admin only). Send only the fields to change such as message, theme, schedule, or target.",
+		aliases:     []string{"update broadcast message", "edit announcement", "change instance banner"},
+		related:     []string{"admin.broadcast_message_get", "admin.broadcast_message_list", "admin.broadcast_message_delete"},
+		description: "Update a broadcast message. Returns: the updated message. See also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message.",
+	},
+	"gitlab_delete_broadcast_message": {
+		usage:       "Delete a broadcast message by id (admin only), removing the banner or notification from the instance.",
+		aliases:     []string{"delete broadcast message", "remove announcement", "dismiss instance banner"},
+		related:     []string{"admin.broadcast_message_get", "admin.broadcast_message_list", "admin.broadcast_message_create"},
+		description: "Delete a broadcast message. Returns: a success status. See also: gitlab_get_broadcast_message, gitlab_create_broadcast_message.",
+	},
+	"gitlab_list_features": {
+		usage:       "List all defined feature flags and their current gate state on the instance. Use list_feature_definitions for the flag catalog with metadata.",
+		aliases:     []string{"list feature flags", "show feature toggles", "instance features"},
+		related:     []string{"admin.feature_list_definitions", "admin.feature_set", "admin.feature_delete"},
+		description: "List instance feature flags. Returns: an array of features with name, state, and gates (boolean, actors, groups, percentages). See also: gitlab_list_feature_definitions, gitlab_set_feature_flag.",
+	},
+	"gitlab_list_feature_definitions": {
+		usage:       "List feature flag definitions (the catalog) with metadata such as type, group, default state, and introduction milestone.",
+		aliases:     []string{"list feature definitions", "feature flag catalog", "show feature metadata"},
+		related:     []string{"admin.feature_list", "admin.feature_set", "admin.feature_delete"},
+		description: "List feature flag definitions. Returns: an array of definitions with name, type, default_enabled, group, and milestone. See also: gitlab_list_features, gitlab_set_feature_flag.",
+	},
+	"gitlab_set_feature_flag": {
+		usage:       "Set or update a feature flag's gate (admin only). Provide name and a value such as true/false, a percentage, or scope it to feature_group, user, group, project, or namespace.",
+		aliases:     []string{"set feature flag", "enable feature flag", "toggle feature", "configure feature gate"},
+		related:     []string{"admin.feature_list", "admin.feature_list_definitions", "admin.feature_delete"},
+		description: "Set a feature flag gate. Returns: the updated feature with its name, state, and gate values. See also: gitlab_list_features, gitlab_delete_feature_flag.",
+	},
+	"gitlab_delete_feature_flag": {
+		usage:       "Delete a feature flag by name (admin only), removing all of its gates and resetting it to its default state.",
+		aliases:     []string{"delete feature flag", "remove feature toggle", "reset feature gate"},
+		related:     []string{"admin.feature_list", "admin.feature_set", "admin.feature_list_definitions"},
+		description: "Delete a feature flag. Returns: a success status. See also: gitlab_set_feature_flag, gitlab_list_features.",
+	},
+	"gitlab_get_license": {
+		usage:       "Get the currently installed GitLab Enterprise license, including plan, expiration, user limits, and add-on entitlements. Requires administrator access.",
+		aliases:     []string{"get license", "show current license", "instance license details", "license status"},
+		related:     []string{"admin.license_add", "admin.license_delete", "admin.metadata_get"},
+		description: "Get the active instance license. Returns: the license with plan, expires_at, user_limit, active_users, and add-ons. See also: gitlab_add_license, gitlab_delete_license.",
+	},
+	"gitlab_add_license": {
+		usage:       "Install a new GitLab Enterprise license (admin only). Provide the license key string. Replaces the active license entitlements.",
+		aliases:     []string{"add license", "install license", "upload license key", "activate license"},
+		related:     []string{"admin.license_get", "admin.license_delete"},
+		description: "Add a GitLab Enterprise license. Returns: the installed license with plan, expiration, and entitlements. See also: gitlab_get_license, gitlab_delete_license.",
+	},
+	"gitlab_delete_license": {
+		usage:       "Delete an installed license by id (admin only). Removing the active license downgrades the instance to Community/Free features.",
+		aliases:     []string{"delete license", "remove license", "uninstall license"},
+		related:     []string{"admin.license_get", "admin.license_add"},
+		description: "Delete an instance license. Returns: a success status. See also: gitlab_get_license, gitlab_add_license.",
+	},
+	"gitlab_list_system_hooks": {
+		usage:       "List instance-wide system hooks that fire on global events such as project, group, user, and key changes. Distinct from per-project webhooks.",
+		aliases:     []string{"list system hooks", "show instance webhooks", "system hook list"},
+		related:     []string{"admin.system_hook_get", "admin.system_hook_add", "admin.system_hook_test"},
+		description: "List instance system hooks. Returns: an array of system hooks with id, url, and event triggers. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
+	},
+	"gitlab_get_system_hook": {
+		usage:       "Get one instance system hook by its numeric hook id.",
+		aliases:     []string{"get system hook", "show instance webhook", "system hook details"},
+		related:     []string{"admin.system_hook_list", "admin.system_hook_edit", "admin.system_hook_test"},
+		description: "Get a system hook by id. Returns: the system hook with url, event triggers, and SSL verification setting. See also: gitlab_list_system_hooks, gitlab_edit_system_hook.",
+	},
+	"gitlab_add_system_hook": {
+		usage:       "Add an instance system hook (admin only). Provide url and optionally a token, SSL verification flag, and which event triggers to enable.",
+		aliases:     []string{"add system hook", "create instance webhook", "register system hook"},
+		related:     []string{"admin.system_hook_list", "admin.system_hook_edit", "admin.system_hook_test"},
+		description: "Add an instance system hook. Returns: the created system hook with id, url, and triggers. See also: gitlab_edit_system_hook, gitlab_test_system_hook.",
+	},
+	"gitlab_test_system_hook": {
+		usage:       "Fire a test event against an instance system hook by id to verify it is reachable and configured correctly.",
+		aliases:     []string{"test system hook", "ping system hook", "verify instance webhook"},
+		related:     []string{"admin.system_hook_get", "admin.system_hook_edit", "admin.system_hook_list"},
+		description: "Send a test event to a system hook. Returns: the delivery status of the test event. See also: gitlab_get_system_hook, gitlab_edit_system_hook.",
+	},
+	"gitlab_delete_system_hook": {
+		usage:       "Delete an instance system hook by id (admin only), stopping it from receiving global event notifications.",
+		aliases:     []string{"delete system hook", "remove instance webhook", "unregister system hook"},
+		related:     []string{"admin.system_hook_get", "admin.system_hook_list", "admin.system_hook_add"},
+		description: "Delete an instance system hook. Returns: a success status. See also: gitlab_get_system_hook, gitlab_add_system_hook.",
+	},
+	// system_hook_edit/set_url_variable/delete_url_variable have dedicated builders
+	// that set bespoke "Returns: … See also: …" descriptions; only Usage, Aliases,
+	// and RelatedActions are filled here (description omitted to preserve the
+	// builder text).
+	"gitlab_edit_system_hook": {
+		usage:   "Edit an instance system hook by id (admin only). Send only the fields to change: url, token, event triggers, or SSL verification.",
+		aliases: []string{"edit system hook", "update instance webhook", "change system hook"},
+		related: []string{"admin.system_hook_get", "admin.system_hook_list", "admin.system_hook_test"},
+	},
+	"gitlab_set_system_hook_url_variable": {
+		usage:   "Create or update one URL variable for an instance system hook (admin only). Provide the hook id, variable key, and value.",
+		aliases: []string{"set system hook url variable", "add system hook url variable", "configure system hook variable"},
+		related: []string{"admin.system_hook_delete_url_variable", "admin.system_hook_edit", "admin.system_hook_get"},
+	},
+	"gitlab_delete_system_hook_url_variable": {
+		usage:   "Delete one URL variable from an instance system hook (admin only). Provide the hook id and variable key.",
+		aliases: []string{"delete system hook url variable", "remove system hook url variable", "clear system hook variable"},
+		related: []string{"admin.system_hook_set_url_variable", "admin.system_hook_edit", "admin.system_hook_get"},
+	},
+	"gitlab_get_sidekiq_queue_metrics": {
+		usage:       "Get Sidekiq background-job queue metrics for the instance, including per-queue backlog and latency.",
+		aliases:     []string{"sidekiq queue metrics", "background job queues", "show sidekiq queues"},
+		related:     []string{"admin.sidekiq_process_metrics", "admin.sidekiq_job_stats", "admin.sidekiq_compound_metrics"},
+		description: "Get Sidekiq queue metrics. Returns: per-queue backlog and latency figures. See also: gitlab_get_sidekiq_process_metrics, gitlab_get_sidekiq_compound_metrics.",
+	},
+	"gitlab_get_sidekiq_process_metrics": {
+		usage:       "Get Sidekiq process metrics for the instance, listing running Sidekiq processes and their state.",
+		aliases:     []string{"sidekiq process metrics", "background job processes", "show sidekiq workers"},
+		related:     []string{"admin.sidekiq_queue_metrics", "admin.sidekiq_job_stats", "admin.sidekiq_compound_metrics"},
+		description: "Get Sidekiq process metrics. Returns: the list of Sidekiq processes with concurrency and queue assignments. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_compound_metrics.",
+	},
+	"gitlab_get_sidekiq_job_stats": {
+		usage:       "Get aggregate Sidekiq job statistics for the instance such as processed, failed, and enqueued counts.",
+		aliases:     []string{"sidekiq job stats", "background job statistics", "show sidekiq jobs"},
+		related:     []string{"admin.sidekiq_queue_metrics", "admin.sidekiq_process_metrics", "admin.sidekiq_compound_metrics"},
+		description: "Get Sidekiq job statistics. Returns: aggregate counts of processed, failed, and enqueued jobs. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_compound_metrics.",
+	},
+	"gitlab_get_sidekiq_compound_metrics": {
+		usage:       "Get all Sidekiq metrics in one call: queue, process, and job statistics combined.",
+		aliases:     []string{"sidekiq compound metrics", "all sidekiq metrics", "combined background job metrics"},
+		related:     []string{"admin.sidekiq_queue_metrics", "admin.sidekiq_process_metrics", "admin.sidekiq_job_stats"},
+		description: "Get combined Sidekiq metrics. Returns: queue, process, and job statistics in a single object. See also: gitlab_get_sidekiq_queue_metrics, gitlab_get_sidekiq_job_stats.",
+	},
+	"gitlab_get_plan_limits": {
+		usage:       "Get the configured plan limits for a plan (admin only). Provide plan_name (e.g. default, free, premium) to read its resource caps.",
+		aliases:     []string{"get plan limits", "show plan caps", "instance plan limits"},
+		related:     []string{"admin.plan_limits_change", "admin.settings_get"},
+		description: "Get plan limits for a plan. Returns: the limit values for CI, registry, import, and other resource caps. See also: gitlab_change_plan_limits, gitlab_get_settings.",
+	},
+	"gitlab_change_plan_limits": {
+		usage:       "Change plan limits for a plan (admin only). Provide plan_name and only the limit keys to change, such as ci_pipeline_size or import file sizes.",
+		aliases:     []string{"change plan limits", "update plan caps", "set plan limits"},
+		related:     []string{"admin.plan_limits_get", "admin.settings_get"},
+		description: "Change plan limits. Returns: the updated plan limit values. See also: gitlab_get_plan_limits, gitlab_get_settings.",
+	},
+	"gitlab_get_service_ping": {
+		usage:       "Get the latest Service Ping (usage data) payload that GitLab reports for the instance.",
+		aliases:     []string{"get service ping", "usage ping", "instance usage data"},
+		related:     []string{"admin.usage_data_non_sql_metrics", "admin.usage_data_queries", "admin.usage_data_metric_definitions"},
+		description: "Get the Service Ping payload. Returns: the aggregated instance usage data report. See also: gitlab_get_non_sql_metrics, gitlab_get_usage_queries.",
+	},
+	"gitlab_get_non_sql_metrics": {
+		usage:       "Get the non-SQL Service Ping metrics for the instance (metrics not derived from database queries).",
+		aliases:     []string{"non-sql metrics", "service ping non-sql", "usage data non-sql metrics"},
+		related:     []string{"admin.usage_data_service_ping", "admin.usage_data_queries", "admin.usage_data_metric_definitions"},
+		description: "Get non-SQL usage metrics. Returns: the non-SQL portion of the Service Ping data. See also: gitlab_get_service_ping, gitlab_get_usage_queries.",
+	},
+	"gitlab_get_usage_queries": {
+		usage:       "Get the SQL queries that GitLab uses to build Service Ping metrics, useful for auditing what usage data is collected.",
+		aliases:     []string{"usage queries", "service ping queries", "usage data sql queries"},
+		related:     []string{"admin.usage_data_service_ping", "admin.usage_data_non_sql_metrics", "admin.usage_data_metric_definitions"},
+		description: "Get usage data queries. Returns: the SQL query definitions backing Service Ping metrics. See also: gitlab_get_service_ping, gitlab_get_metric_definitions.",
+	},
+	"gitlab_get_metric_definitions": {
+		usage:       "Get the Service Ping metric definitions (the dictionary describing each usage metric, its category, and data type).",
+		aliases:     []string{"metric definitions", "usage metric dictionary", "service ping metric definitions"},
+		related:     []string{"admin.usage_data_service_ping", "admin.usage_data_queries", "admin.usage_data_non_sql_metrics"},
+		description: "Get usage metric definitions. Returns: the metric dictionary with key, description, and category for each Service Ping metric. See also: gitlab_get_service_ping, gitlab_get_usage_queries.",
+	},
+	"gitlab_track_event": {
+		usage:       "Track a single internal usage event (admin only). Provide the event name and optional context for usage analytics.",
+		aliases:     []string{"track event", "record usage event", "send analytics event"},
+		related:     []string{"admin.usage_data_track_events", "admin.usage_data_service_ping"},
+		description: "Track one usage event. Returns: a success status. See also: gitlab_track_events, gitlab_get_service_ping.",
+	},
+	"gitlab_track_events": {
+		usage:       "Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.",
+		aliases:     []string{"track events", "record usage events batch", "send analytics events"},
+		related:     []string{"admin.usage_data_track_event", "admin.usage_data_service_ping"},
+		description: "Track multiple usage events. Returns: a success status. See also: gitlab_track_event, gitlab_get_service_ping.",
+	},
+	"gitlab_mark_migration": {
+		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care; intended for recovering stuck migrations.",
+		aliases:     []string{"mark migration", "mark database migration done", "force migration complete"},
+		related:     []string{"admin.settings_get", "admin.metadata_get"},
+		description: "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
+	},
+	"gitlab_list_applications": {
+		usage:       "List instance-level OAuth applications registered for the GitLab instance (admin only).",
+		aliases:     []string{"list applications", "list oauth applications", "instance oauth apps"},
+		related:     []string{"admin.application_create", "admin.application_delete"},
+		description: "List instance OAuth applications. Returns: an array of applications with id, application_id, name, redirect URIs, and scopes. See also: gitlab_create_application, gitlab_delete_application.",
+	},
+	"gitlab_create_application": {
+		usage:       "Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes; optionally mark it confidential or trusted.",
+		aliases:     []string{"create application", "register oauth application", "add instance oauth app"},
+		related:     []string{"admin.application_list", "admin.application_delete"},
+		description: "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
+	},
+	"gitlab_delete_application": {
+		usage:       "Delete an instance-level OAuth application by id (admin only), revoking its credentials.",
+		aliases:     []string{"delete application", "remove oauth application", "revoke instance oauth app"},
+		related:     []string{"admin.application_list", "admin.application_create"},
+		description: "Delete an instance OAuth application. Returns: a success status. See also: gitlab_list_applications, gitlab_create_application.",
+	},
+	"gitlab_list_custom_attributes": {
+		usage:       "List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.",
+		aliases:     []string{"list custom attributes", "show custom attributes", "custom metadata list"},
+		related:     []string{"admin.custom_attr_get", "admin.custom_attr_set", "admin.custom_attr_delete"},
+		description: "List custom attributes for a resource. Returns: an array of key/value custom attributes. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
+	},
+	"gitlab_get_custom_attribute": {
+		usage:       "Get one custom attribute by key for a user, group, or project (admin only).",
+		aliases:     []string{"get custom attribute", "show custom attribute", "read custom metadata"},
+		related:     []string{"admin.custom_attr_list", "admin.custom_attr_set", "admin.custom_attr_delete"},
+		description: "Get a custom attribute by key. Returns: the attribute with key and value. See also: gitlab_list_custom_attributes, gitlab_set_custom_attribute.",
+	},
+	"gitlab_set_custom_attribute": {
+		usage:       "Set (create or update) a custom attribute by key on a user, group, or project (admin only). Provide key and value.",
+		aliases:     []string{"set custom attribute", "create custom attribute", "update custom metadata"},
+		related:     []string{"admin.custom_attr_list", "admin.custom_attr_get", "admin.custom_attr_delete"},
+		description: "Set a custom attribute. Returns: the stored attribute with key and value. See also: gitlab_get_custom_attribute, gitlab_delete_custom_attribute.",
+	},
+	"gitlab_delete_custom_attribute": {
+		usage:       "Delete a custom attribute by key from a user, group, or project (admin only).",
+		aliases:     []string{"delete custom attribute", "remove custom attribute", "clear custom metadata"},
+		related:     []string{"admin.custom_attr_list", "admin.custom_attr_get", "admin.custom_attr_set"},
+		description: "Delete a custom attribute. Returns: a success status. See also: gitlab_get_custom_attribute, gitlab_set_custom_attribute.",
+	},
+	"gitlab_start_bulk_import": {
+		usage:       "Start a group/project migration by direct transfer from another GitLab instance (admin/maintainer). Provide the source instance URL, access token, and entities to import.",
+		aliases:     []string{"start bulk import", "migrate by direct transfer", "begin gitlab migration"},
+		related:     []string{"admin.bulk_import_list", "admin.bulk_import_get", "admin.bulk_import_entity_list"},
+		description: "Start a bulk import (direct transfer). Returns: the created bulk import with id and status. See also: gitlab_list_bulk_imports, gitlab_get_bulk_import.",
+	},
+	"gitlab_list_bulk_imports": {
+		usage:       "List bulk imports (direct-transfer migrations) started by the authenticated user, with their status.",
+		aliases:     []string{"list bulk imports", "show migrations", "direct transfer imports"},
+		related:     []string{"admin.bulk_import_start", "admin.bulk_import_get", "admin.bulk_import_entity_list"},
+		description: "List bulk imports. Returns: an array of bulk imports with id, status, source_type, and timestamps. See also: gitlab_start_bulk_import, gitlab_get_bulk_import.",
+	},
+	"gitlab_get_bulk_import": {
+		usage:       "Get one bulk import (direct-transfer migration) by id to inspect its overall status.",
+		aliases:     []string{"get bulk import", "show migration", "bulk import status"},
+		related:     []string{"admin.bulk_import_list", "admin.bulk_import_cancel", "admin.bulk_import_entity_list"},
+		description: "Get a bulk import by id. Returns: the bulk import with status, source URL, and timestamps. See also: gitlab_list_bulk_imports, gitlab_list_bulk_import_entities.",
+	},
+	"gitlab_cancel_bulk_import": {
+		usage:       "Cancel an in-progress bulk import (direct-transfer migration) by id.",
+		aliases:     []string{"cancel bulk import", "stop migration", "abort direct transfer"},
+		related:     []string{"admin.bulk_import_get", "admin.bulk_import_list", "admin.bulk_import_entity_list"},
+		description: "Cancel a bulk import. Returns: the bulk import with its updated (canceled) status. See also: gitlab_get_bulk_import, gitlab_list_bulk_imports.",
+	},
+	"gitlab_list_bulk_import_entities": {
+		usage:       "List the entities (groups and projects) being migrated within a bulk import, with per-entity status. Provide the bulk import id.",
+		aliases:     []string{"list bulk import entities", "migration entities", "show import entities"},
+		related:     []string{"admin.bulk_import_get", "admin.bulk_import_entity_get", "admin.bulk_import_entity_failures"},
+		description: "List bulk import entities. Returns: an array of migrated entities with id, source_full_path, entity_type, and status. See also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entity_failures.",
+	},
+	"gitlab_get_bulk_import_entity": {
+		usage:       "Get one entity (group or project) within a bulk import by import id and entity id to inspect its migration status.",
+		aliases:     []string{"get bulk import entity", "migration entity status", "show import entity"},
+		related:     []string{"admin.bulk_import_entity_list", "admin.bulk_import_entity_failures", "admin.bulk_import_get"},
+		description: "Get a bulk import entity. Returns: the entity with source path, destination path, entity_type, and status. See also: gitlab_list_bulk_import_entities, gitlab_list_bulk_import_entity_failures.",
+	},
+	"gitlab_list_bulk_import_entity_failures": {
+		usage:       "List the failures recorded for one bulk import entity, useful for diagnosing partial migrations. Provide import id and entity id.",
+		aliases:     []string{"list bulk import entity failures", "migration failures", "show import errors"},
+		related:     []string{"admin.bulk_import_entity_get", "admin.bulk_import_entity_list", "admin.bulk_import_get"},
+		description: "List bulk import entity failures. Returns: an array of failure records with relation, exception, and correlation id. See also: gitlab_get_bulk_import_entity, gitlab_list_bulk_import_entities.",
+	},
+	"gitlab_list_error_tracking_client_keys": {
+		usage:       "List the error-tracking client keys configured for a project (used by the integrated error tracking feature). Provide project_id.",
+		aliases:     []string{"list error tracking client keys", "error tracking keys", "show sentry client keys"},
+		related:     []string{"admin.error_tracking_create", "admin.error_tracking_delete", "admin.error_tracking_get_settings"},
+		description: "List error-tracking client keys. Returns: an array of client keys with id, public_key, and sentry_dsn. See also: gitlab_create_error_tracking_client_key, gitlab_get_error_tracking_settings.",
+	},
+	"gitlab_create_error_tracking_client_key": {
+		usage:       "Create an error-tracking client key for a project's integrated error tracking. Provide project_id.",
+		aliases:     []string{"create error tracking client key", "add error tracking key", "new sentry client key"},
+		related:     []string{"admin.error_tracking_list", "admin.error_tracking_delete", "admin.error_tracking_get_settings"},
+		description: "Create an error-tracking client key. Returns: the created client key with public_key and sentry_dsn. See also: gitlab_list_error_tracking_client_keys, gitlab_get_error_tracking_settings.",
+	},
+	"gitlab_delete_error_tracking_client_key": {
+		usage:       "Delete an error-tracking client key from a project by project_id and key id.",
+		aliases:     []string{"delete error tracking client key", "remove error tracking key", "revoke sentry client key"},
+		related:     []string{"admin.error_tracking_list", "admin.error_tracking_create", "admin.error_tracking_get_settings"},
+		description: "Delete an error-tracking client key. Returns: a success status. See also: gitlab_list_error_tracking_client_keys, gitlab_create_error_tracking_client_key.",
+	},
+	"gitlab_get_error_tracking_settings": {
+		usage:       "Get the integrated error-tracking settings for a project, including whether it is enabled. Provide project_id.",
+		aliases:     []string{"get error tracking settings", "error tracking config", "show error tracking status"},
+		related:     []string{"admin.error_tracking_update_settings", "admin.error_tracking_list"},
+		description: "Get error-tracking settings. Returns: the settings with active flag and integrated mode. See also: gitlab_enable_disable_error_tracking, gitlab_list_error_tracking_client_keys.",
+	},
+	"gitlab_enable_disable_error_tracking": {
+		usage:       "Enable or disable integrated error tracking for a project. Provide project_id and the active flag (and integrated mode where applicable).",
+		aliases:     []string{"enable error tracking", "disable error tracking", "toggle error tracking"},
+		related:     []string{"admin.error_tracking_get_settings", "admin.error_tracking_list"},
+		description: "Enable or disable error tracking. Returns: the updated error-tracking settings. See also: gitlab_get_error_tracking_settings, gitlab_list_error_tracking_client_keys.",
+	},
+	"gitlab_list_alert_metric_images": {
+		usage:       "List the metric images attached to an alert in a project's incident/alert management. Provide project_id and alert_iid.",
+		aliases:     []string{"list alert metric images", "alert metric screenshots", "show alert images"},
+		related:     []string{"admin.alert_metric_image_upload", "admin.alert_metric_image_update", "admin.alert_metric_image_delete"},
+		description: "List alert metric images. Returns: an array of metric images with id, filename, url, and url_text. See also: gitlab_upload_alert_metric_image, gitlab_update_alert_metric_image.",
+	},
+	"gitlab_upload_alert_metric_image": {
+		usage:       "Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file; optionally a url and url_text.",
+		aliases:     []string{"upload alert metric image", "attach alert screenshot", "add alert metric image"},
+		related:     []string{"admin.alert_metric_image_list", "admin.alert_metric_image_update", "admin.alert_metric_image_delete"},
+		description: "Upload an alert metric image. Returns: the uploaded metric image with id, filename, and url. See also: gitlab_list_alert_metric_images, gitlab_update_alert_metric_image.",
+	},
+	"gitlab_update_alert_metric_image": {
+		usage:       "Update the url or url_text of an existing alert metric image. Provide project_id, alert_iid, and image id.",
+		aliases:     []string{"update alert metric image", "edit alert image link", "change alert metric image"},
+		related:     []string{"admin.alert_metric_image_list", "admin.alert_metric_image_upload", "admin.alert_metric_image_delete"},
+		description: "Update an alert metric image. Returns: the updated metric image. See also: gitlab_list_alert_metric_images, gitlab_delete_alert_metric_image.",
+	},
+	"gitlab_delete_alert_metric_image": {
+		usage:       "Delete a metric image from an alert. Provide project_id, alert_iid, and image id.",
+		aliases:     []string{"delete alert metric image", "remove alert screenshot", "drop alert metric image"},
+		related:     []string{"admin.alert_metric_image_list", "admin.alert_metric_image_upload", "admin.alert_metric_image_update"},
+		description: "Delete an alert metric image. Returns: a success status. See also: gitlab_list_alert_metric_images, gitlab_upload_alert_metric_image.",
+	},
+	"gitlab_list_secure_files": {
+		usage:       "List the CI/CD secure files stored for a project (certificates, provisioning profiles, and similar). Provide project_id.",
+		aliases:     []string{"list secure files", "ci secure files", "show project secure files"},
+		related:     []string{"admin.secure_file_get", "admin.secure_file_create", "admin.secure_file_delete"},
+		description: "List project secure files. Returns: an array of secure files with id, name, checksum, and created_at. See also: gitlab_show_secure_file, gitlab_create_secure_file.",
+	},
+	"gitlab_show_secure_file": {
+		usage:       "Get metadata for one CI/CD secure file by project_id and secure file id.",
+		aliases:     []string{"show secure file", "get secure file", "secure file details"},
+		related:     []string{"admin.secure_file_list", "admin.secure_file_create", "admin.secure_file_delete"},
+		description: "Show a secure file. Returns: the secure file with id, name, checksum, and metadata. See also: gitlab_list_secure_files, gitlab_create_secure_file.",
+	},
+	"gitlab_create_secure_file": {
+		usage:       "Upload a CI/CD secure file to a project. Provide project_id, the name, and the file content.",
+		aliases:     []string{"create secure file", "upload secure file", "add ci secure file"},
+		related:     []string{"admin.secure_file_list", "admin.secure_file_get", "admin.secure_file_delete"},
+		description: "Create a secure file. Returns: the created secure file with id, name, and checksum. See also: gitlab_list_secure_files, gitlab_show_secure_file.",
+	},
+	"gitlab_remove_secure_file": {
+		usage:       "Remove a CI/CD secure file from a project by project_id and secure file id.",
+		aliases:     []string{"remove secure file", "delete secure file", "drop ci secure file"},
+		related:     []string{"admin.secure_file_list", "admin.secure_file_get", "admin.secure_file_create"},
+		description: "Remove a secure file. Returns: a success status. See also: gitlab_list_secure_files, gitlab_create_secure_file.",
+	},
+	"gitlab_list_terraform_states": {
+		usage:       "List the Terraform states stored in a project's Terraform state backend. Provide project_id.",
+		aliases:     []string{"list terraform states", "show terraform states", "project terraform states"},
+		related:     []string{"admin.terraform_state_get", "admin.terraform_state_lock", "admin.terraform_state_delete"},
+		description: "List Terraform states. Returns: an array of states with name, lock status, and latest version. See also: gitlab_get_terraform_state, gitlab_lock_terraform_state.",
+	},
+	"gitlab_get_terraform_state": {
+		usage:       "Get one Terraform state by project_id and state name, including its lock status.",
+		aliases:     []string{"get terraform state", "show terraform state", "terraform state details"},
+		related:     []string{"admin.terraform_state_list", "admin.terraform_state_lock", "admin.terraform_state_unlock"},
+		description: "Get a Terraform state. Returns: the state with name, lock info, and latest version. See also: gitlab_list_terraform_states, gitlab_lock_terraform_state.",
+	},
+	"gitlab_delete_terraform_state": {
+		usage:       "Delete a Terraform state by project_id and state name (admin/maintainer). Removes all versions of the state.",
+		aliases:     []string{"delete terraform state", "remove terraform state", "drop terraform state"},
+		related:     []string{"admin.terraform_state_get", "admin.terraform_state_list", "admin.terraform_version_delete"},
+		description: "Delete a Terraform state. Returns: a success status. See also: gitlab_get_terraform_state, gitlab_delete_terraform_state_version.",
+	},
+	"gitlab_lock_terraform_state": {
+		usage:       "Lock a Terraform state to prevent concurrent applies. Provide project_id and the state name.",
+		aliases:     []string{"lock terraform state", "acquire terraform state lock", "terraform state lock"},
+		related:     []string{"admin.terraform_state_unlock", "admin.terraform_state_get", "admin.terraform_state_list"},
+		description: "Lock a Terraform state. Returns: the state with its lock acquired. See also: gitlab_unlock_terraform_state, gitlab_get_terraform_state.",
+	},
+	"gitlab_delete_terraform_state_version": {
+		usage:       "Delete a single version of a Terraform state by project_id, state name, and serial/version number.",
+		aliases:     []string{"delete terraform state version", "remove terraform state version", "drop terraform state serial"},
+		related:     []string{"admin.terraform_state_delete", "admin.terraform_state_get", "admin.terraform_state_list"},
+		description: "Delete a Terraform state version. Returns: a success status. See also: gitlab_delete_terraform_state, gitlab_get_terraform_state.",
+	},
+	"gitlab_list_cluster_agents": {
+		usage:       "List the GitLab Agents for Kubernetes registered in a project. Provide project_id.",
+		aliases:     []string{"list cluster agents", "list kubernetes agents", "show k8s agents"},
+		related:     []string{"admin.cluster_agent_get", "admin.cluster_agent_register", "admin.cluster_agent_token_list"},
+		description: "List project cluster agents. Returns: an array of agents with id, name, and created_at. See also: gitlab_get_cluster_agent, gitlab_register_cluster_agent.",
+	},
+	"gitlab_get_cluster_agent": {
+		usage:       "Get one GitLab Agent for Kubernetes by project_id and agent id.",
+		aliases:     []string{"get cluster agent", "get kubernetes agent", "show k8s agent"},
+		related:     []string{"admin.cluster_agent_list", "admin.cluster_agent_delete", "admin.cluster_agent_token_list"},
+		description: "Get a cluster agent. Returns: the agent with id, name, config project, and created_at. See also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens.",
+	},
+	"gitlab_register_cluster_agent": {
+		usage:       "Register a new GitLab Agent for Kubernetes in a project. Provide project_id and the agent name.",
+		aliases:     []string{"register cluster agent", "create kubernetes agent", "add k8s agent"},
+		related:     []string{"admin.cluster_agent_list", "admin.cluster_agent_delete", "admin.cluster_agent_token_create"},
+		description: "Register a cluster agent. Returns: the created agent with id and name. See also: gitlab_list_cluster_agents, gitlab_create_cluster_agent_token.",
+	},
+	"gitlab_delete_cluster_agent": {
+		usage:       "Delete a GitLab Agent for Kubernetes from a project by project_id and agent id.",
+		aliases:     []string{"delete cluster agent", "remove kubernetes agent", "unregister k8s agent"},
+		related:     []string{"admin.cluster_agent_list", "admin.cluster_agent_get", "admin.cluster_agent_register"},
+		description: "Delete a cluster agent. Returns: a success status. See also: gitlab_get_cluster_agent, gitlab_register_cluster_agent.",
+	},
+	"gitlab_list_cluster_agent_tokens": {
+		usage:       "List the tokens for a GitLab Agent for Kubernetes. Provide project_id and agent id.",
+		aliases:     []string{"list cluster agent tokens", "kubernetes agent tokens", "show k8s agent tokens"},
+		related:     []string{"admin.cluster_agent_token_get", "admin.cluster_agent_token_create", "admin.cluster_agent_token_revoke"},
+		description: "List cluster agent tokens. Returns: an array of agent tokens with id, name, and status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
+	},
+	"gitlab_get_cluster_agent_token": {
+		usage:       "Get one cluster agent token by project_id, agent id, and token id.",
+		aliases:     []string{"get cluster agent token", "kubernetes agent token details", "show k8s agent token"},
+		related:     []string{"admin.cluster_agent_token_list", "admin.cluster_agent_token_create", "admin.cluster_agent_token_revoke"},
+		description: "Get a cluster agent token. Returns: the token with id, name, status, and last_used_at. See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token.",
+	},
+	"gitlab_create_cluster_agent_token": {
+		usage:       "Create a token for a GitLab Agent for Kubernetes. Provide project_id, agent id, and a token name.",
+		aliases:     []string{"create cluster agent token", "new kubernetes agent token", "add k8s agent token"},
+		related:     []string{"admin.cluster_agent_token_list", "admin.cluster_agent_token_get", "admin.cluster_agent_token_revoke"},
+		description: "Create a cluster agent token. Returns: the created token including the secret value (shown once). See also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token.",
+	},
+	"gitlab_revoke_cluster_agent_token": {
+		usage:       "Revoke a cluster agent token by project_id, agent id, and token id, immediately invalidating it.",
+		aliases:     []string{"revoke cluster agent token", "delete kubernetes agent token", "invalidate k8s agent token"},
+		related:     []string{"admin.cluster_agent_token_list", "admin.cluster_agent_token_get", "admin.cluster_agent_token_create"},
+		description: "Revoke a cluster agent token. Returns: a success status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
+	},
+	"gitlab_purge_dependency_proxy": {
+		usage:       "Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.",
+		aliases:     []string{"purge dependency proxy", "clear dependency proxy cache", "flush dependency proxy"},
+		related:     []string{"group.get", "admin.settings_get"},
+		description: "Purge a group's dependency proxy cache. Returns: a success status. See also: gitlab_group_get, gitlab_get_settings.",
+	},
+	"gitlab_import_from_github": {
+		usage:       "Import a repository from GitHub into GitLab. Provide a GitHub personal access token, the repo_id, and the target namespace.",
+		aliases:     []string{"import from github", "migrate github repository", "github import"},
+		related:     []string{"admin.import_cancel_github", "admin.import_gists", "admin.import_bitbucket"},
+		description: "Import a repository from GitHub. Returns: the created project for the imported repository with its import status. See also: gitlab_cancel_github_import, gitlab_import_github_gists.",
+	},
+	"gitlab_cancel_github_import": {
+		usage:       "Cancel an in-progress GitHub import for a project. Provide the project_id of the importing project.",
+		aliases:     []string{"cancel github import", "stop github migration", "abort github import"},
+		related:     []string{"admin.import_github", "admin.import_gists"},
+		description: "Cancel a GitHub import. Returns: the project with its updated import status. See also: gitlab_import_from_github, gitlab_import_github_gists.",
+	},
+	"gitlab_import_github_gists": {
+		usage:       "Import the authenticated user's GitHub gists into GitLab snippets. Provide a GitHub personal access token.",
+		aliases:     []string{"import github gists", "migrate gists", "import gists to snippets"},
+		related:     []string{"admin.import_github", "admin.import_cancel_github"},
+		description: "Import GitHub gists into snippets. Returns: a success status; the import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
+	},
+	"gitlab_import_from_bitbucket_cloud": {
+		usage:       "Import a repository from Bitbucket Cloud into GitLab. Provide Bitbucket credentials, the source repo, and the target namespace.",
+		aliases:     []string{"import from bitbucket cloud", "migrate bitbucket cloud repository", "bitbucket cloud import"},
+		related:     []string{"admin.import_bitbucket_server", "admin.import_github"},
+		description: "Import a repository from Bitbucket Cloud. Returns: the created project for the imported repository. See also: gitlab_import_from_bitbucket_server, gitlab_import_from_github.",
+	},
+	"gitlab_import_from_bitbucket_server": {
+		usage:       "Import a repository from a self-hosted Bitbucket Server into GitLab. Provide the Bitbucket Server URL, credentials, the source project/repo, and the target namespace.",
+		aliases:     []string{"import from bitbucket server", "migrate bitbucket server repository", "bitbucket server import"},
+		related:     []string{"admin.import_bitbucket", "admin.import_github"},
+		description: "Import a repository from Bitbucket Server. Returns: the created project for the imported repository. See also: gitlab_import_from_bitbucket_cloud, gitlab_import_from_github.",
+	},
 }

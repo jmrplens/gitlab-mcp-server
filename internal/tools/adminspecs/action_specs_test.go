@@ -198,6 +198,66 @@ func TestActionSpecs_SystemHookDescriptionsIncludeOutputGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_NoGenericMetadata verifies that every admin action carries
+// non-generic discovery metadata: a tailored Usage (not the placeholder),
+// natural-language Aliases beyond the bare tool name, a non-empty RelatedActions
+// list of canonical {domain}.{action} ids, and an individual-tool description in
+// the "Returns: … See also: …" form. This is the 1:1 audit R-META guard.
+func TestActionSpecs_NoGenericMetadata(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.Name, func(t *testing.T) {
+			assertNonGenericUsage(t, spec)
+			assertNaturalLanguageAliases(t, spec)
+			assertCanonicalRelatedActions(t, spec)
+			assertReturnsSeeAlsoDescription(t, spec)
+		})
+	}
+}
+
+func assertNonGenericUsage(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	const genericUsage = "Use to execute adminspecs domain action."
+	if spec.Usage == "" || spec.Usage == genericUsage {
+		t.Fatalf("%s Usage = %q, want action-specific guidance", spec.Name, spec.Usage)
+	}
+}
+
+func assertNaturalLanguageAliases(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	tool := spec.IndividualTool.Name
+	nonName := 0
+	for _, alias := range spec.Aliases {
+		if alias != tool {
+			nonName++
+		}
+	}
+	if nonName < 2 {
+		t.Fatalf("%s Aliases = %v, want >= 2 natural-language aliases beyond %q", spec.Name, spec.Aliases, tool)
+	}
+}
+
+func assertCanonicalRelatedActions(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	if len(spec.RelatedActions) == 0 {
+		t.Fatalf("%s RelatedActions is empty, want canonical related ids", spec.Name)
+	}
+	for _, rel := range spec.RelatedActions {
+		if !strings.Contains(rel, ".") {
+			t.Fatalf("%s RelatedActions entry %q is not a {domain}.{action} id", spec.Name, rel)
+		}
+	}
+}
+
+func assertReturnsSeeAlsoDescription(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	desc := spec.IndividualTool.Description
+	for _, want := range []string{"Returns:", "See also:"} {
+		if !strings.Contains(desc, want) {
+			t.Fatalf("%s description = %q, want %q", spec.Name, desc, want)
+		}
+	}
+}
+
 func specsByName(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byName := make(map[string]toolutil.ActionSpec, len(specs))
