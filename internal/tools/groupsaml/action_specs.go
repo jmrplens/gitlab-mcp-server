@@ -61,10 +61,20 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 			},
 		}
 		options.IndividualTool.Description = "List SAML SSO-provisioned users of a top-level GitLab group, with keyset pagination. Returns: matching users with full profile (id, username, name, state, email, identities, scim_identities, custom_attributes, created_by) plus pagination metadata. See also: gitlab_group_saml_link_list, gitlab_group_members_list, gitlab_group_get."
+	case "gitlab_group_saml_link_get":
+		options.Usage = "Get a single SAML group link on a group by its SAML group name (Premium/Ultimate). Use to inspect the access level and provider for one specific SAML SSO group mapping rather than listing them all."
+		options.Aliases = []string{"get saml link", "show one saml group mapping", "inspect saml group link", "fetch saml sso mapping"}
+		options.RelatedActions = []string{"group.saml_link_list", "group.saml_link_add", "group.saml_link_delete"}
+		options.IndividualTool.Description = "Get one SAML group link of a GitLab group by SAML group name. Returns: the link's SAML group name, access level, and provider. See also: gitlab_group_saml_link_list, gitlab_group_saml_link_add, gitlab_group_saml_link_delete."
 	case "gitlab_group_saml_link_add":
 		options.Usage = "Add a SAML group link mapping a SAML group name to an access level (Premium/Ultimate)."
 		options.Aliases = []string{"add saml link", "create group saml mapping", "link saml group"}
 		options.RelatedActions = []string{"group.saml_link_list", "group.saml_users_list", "group.saml_link_delete"}
+	case "gitlab_group_saml_link_delete":
+		options.Usage = "Delete a SAML group link from a group by its SAML group name (Premium/Ultimate). Removes the mapping between a SAML SSO group and its access level; existing members are not removed."
+		options.Aliases = []string{"delete saml link", "remove group saml mapping", "unlink saml group", "drop saml sso mapping"}
+		options.RelatedActions = []string{"group.saml_link_list", "group.saml_link_get", "group.saml_link_add"}
+		options.IndividualTool.Description = "Delete a SAML group link from a GitLab group by SAML group name. Returns: a confirmation that the SAML group mapping was removed (members are not deleted). See also: gitlab_group_saml_link_list, gitlab_group_saml_link_get, gitlab_group_saml_link_add."
 	}
 
 	return options

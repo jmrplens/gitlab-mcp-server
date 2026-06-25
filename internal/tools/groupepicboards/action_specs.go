@@ -6,9 +6,11 @@ import (
 )
 
 // epicBoardMeta carries the non-generic discovery metadata for a group epic
-// board action: natural-language aliases, related action IDs, and the
-// "Returns: … See also: …" individual-tool description (R-META).
+// board action: a task-oriented usage line, natural-language aliases, related
+// action IDs, and the "Returns: … See also: …" individual-tool description
+// (R-META).
 type epicBoardMeta struct {
+	usage       string
 	aliases     []string
 	related     []string
 	description string
@@ -17,13 +19,15 @@ type epicBoardMeta struct {
 // epicBoardMetaByName maps each canonical action name to its discovery metadata.
 var epicBoardMetaByName = map[string]epicBoardMeta{
 	"epic_board_list": {
+		usage:   "List the epic boards configured for a group, with their scope labels and lists (columns).",
 		aliases: []string{"list epic boards", "show group epic boards", "find epic boards in group"},
-		related: []string{"group.epic_list", "group.epics"},
+		related: []string{"group.epic_board_get", "group.epic_list"},
 		description: "List all epic boards in a group with pagination (Premium/Ultimate). " +
 			"Returns: each epic board with its group, scope labels, and lists (columns) with their assignee, label, iteration, and milestone scope, plus pagination metadata. " +
 			"See also: gitlab_group_epic_board_get, gitlab_group_epic_list.",
 	},
 	"epic_board_get": {
+		usage:   "Get one group epic board by its ID, including its scope labels and lists (columns).",
 		aliases: []string{"get epic board", "show epic board details", "fetch epic board"},
 		related: []string{"group.epic_board_list", "group.epic_list"},
 		description: "Get a single group epic board by ID (Premium/Ultimate). " +
@@ -54,6 +58,7 @@ func groupEpicBoardOptions(name, individualTool string) toolutil.ActionSpecOptio
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if meta, ok := epicBoardMetaByName[name]; ok {
+		opts.Usage = meta.usage
 		opts.Aliases = append([]string{individualTool}, meta.aliases...)
 		opts.RelatedActions = append([]string(nil), meta.related...)
 		opts.IndividualTool.Description = meta.description

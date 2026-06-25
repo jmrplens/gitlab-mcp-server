@@ -34,12 +34,13 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		OpenWorld:      true,
 		OwnerPackage:   "licensetemplates",
 		Tags:           []string{"template", "license"},
-		Aliases:        []string{individualTool},
+		Aliases:        []string{individualTool, "list license templates", "show available open-source licenses", "browse MIT/Apache/GPL templates"},
 		RelatedActions: []string{"licensetemplates.license_get", "repository.file_create", "project.create"},
 		Usage:          "List available license templates with optional popular filter, ordering, and keyset pagination.",
 	}
 	if actionName == "license_get" {
 		opts.Usage = "Get one license template by key for project README/LICENSE scaffolding."
+		opts.Aliases = []string{individualTool, "get license template by key", "render LICENSE file for a project", "fetch MIT/Apache license text"}
 		opts.RelatedActions = []string{"licensetemplates.license_list", "repository.file_create", "project.create"}
 		opts.IndividualTool.Description = "Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_create_file."
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{

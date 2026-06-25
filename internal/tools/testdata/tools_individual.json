@@ -31363,7 +31363,7 @@
   },
   {
     "name": "gitlab_get_dockerfile_template",
-    "description": "Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content. See also: gitlab_list_dockerfile_templates, gitlab_get_gitignore_template.",
+    "description": "Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content ready to commit as a project's Dockerfile. See also: gitlab_list_dockerfile_templates, gitlab_get_gitignore_template.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -55641,7 +55641,7 @@
   },
   {
     "name": "gitlab_group_saml_link_delete",
-    "description": "Delete a SAML group link from a GitLab group.\n\nReturns: confirmation of deletion. See also: gitlab_group_saml_link_list, gitlab_group_saml_link_get.",
+    "description": "Delete a SAML group link from a GitLab group by SAML group name. Returns: a confirmation that the SAML group mapping was removed (members are not deleted). See also: gitlab_group_saml_link_list, gitlab_group_saml_link_get, gitlab_group_saml_link_add.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -55698,7 +55698,7 @@
   },
   {
     "name": "gitlab_group_saml_link_get",
-    "description": "Get a single SAML group link by name.\n\nReturns: SAML link details with access level. See also: gitlab_group_saml_link_list, gitlab_group_saml_link_delete.",
+    "description": "Get one SAML group link of a GitLab group by SAML group name. Returns: the link's SAML group name, access level, and provider. See also: gitlab_group_saml_link_list, gitlab_group_saml_link_add, gitlab_group_saml_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

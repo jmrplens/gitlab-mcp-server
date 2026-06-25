@@ -20,27 +20,37 @@ func dockerfileTemplateSpec(name string, route toolutil.ActionRoute, individualT
 func dockerfileTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	if actionName == "dockerfile_get" {
 		return toolutil.ActionSpecOptions{
-			Aliases: []string{individualTool},
-			Tags:    []string{"template", "dockerfile"},
-			Usage:   "Get one Dockerfile template by key for scaffold/bootstrap workflows.",
+			Aliases: []string{
+				individualTool,
+				"fetch Dockerfile template content by key",
+				"show GitLab-provided Dockerfile boilerplate",
+				"scaffold a container image build file from a template",
+			},
+			Tags:  []string{"template", "dockerfile"},
+			Usage: "Fetch the full Dockerfile boilerplate for one template key (e.g. \"Go\", \"Python\") to scaffold a project's container image build file.",
 			ParameterGuidance: map[string]toolutil.ParameterGuidance{
 				"key": {SemanticRole: "template_key", ValueSource: "Template key returned by dockerfile template list output.", ExampleBinding: `params.key:"Go"`},
 			},
-			RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
+			RelatedActions: []string{"dockerfiletemplates.dockerfile_list", "repository.file_create"},
 			OpenWorld:      true,
 			OwnerPackage:   "dockerfiletemplates",
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        individualTool,
 				Title:       toolutil.TitleFromName(individualTool),
-				Description: "Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content. See also: gitlab_list_dockerfile_templates, gitlab_get_gitignore_template.",
+				Description: "Get a single Dockerfile template by key. Returns: the template name and full Dockerfile content ready to commit as a project's Dockerfile. See also: gitlab_list_dockerfile_templates, gitlab_get_gitignore_template.",
 			},
 		}
 	}
 	return toolutil.ActionSpecOptions{
-		Aliases:        []string{individualTool},
+		Aliases: []string{
+			individualTool,
+			"browse available Dockerfile boilerplate templates",
+			"discover Dockerfile template keys for scaffolding",
+			"list GitLab-provided container image build templates",
+		},
 		Tags:           []string{"template", "dockerfile"},
-		Usage:          "List available Dockerfile templates.",
-		RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
+		Usage:          "Browse the catalog of GitLab-provided Dockerfile templates to discover template keys before fetching one for container image scaffolding.",
+		RelatedActions: []string{"dockerfiletemplates.dockerfile_get", "repository.file_create"},
 		OpenWorld:      true,
 		OwnerPackage:   "dockerfiletemplates",
 		IndividualTool: toolutil.IndividualToolSpec{
