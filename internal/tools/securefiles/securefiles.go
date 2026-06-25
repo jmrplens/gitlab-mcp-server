@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -17,20 +18,88 @@ import (
 
 // List.
 
-// ListInput contains parameters for listing secure files.
+// ListInput contains parameters for listing secure files. It mirrors
+// gl.ListProjectSecureFilesOptions (embedded gl.ListOptions), exposing keyset
+// pagination (order_by, sort, pagination, page_token) alongside offset
+// pagination.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// SecureFileItem represents a single secure file.
+// SecureFileIssuer mirrors gl.SecureFileIssuer (the certificate issuer fields).
+type SecureFileIssuer struct {
+	C  string `json:"C"`
+	O  string `json:"O"`
+	CN string `json:"CN"`
+	OU string `json:"OU"`
+}
+
+// SecureFileSubject mirrors gl.SecureFileSubject (the certificate subject fields).
+type SecureFileSubject struct {
+	C   string `json:"C"`
+	O   string `json:"O"`
+	CN  string `json:"CN"`
+	OU  string `json:"OU"`
+	UID string `json:"UID"`
+}
+
+// SecureFileMetadata mirrors gl.SecureFileMetadata, the parsed certificate
+// metadata GitLab extracts from a secure file when it is a recognized
+// certificate format.
+type SecureFileMetadata struct {
+	ID        string            `json:"id"`
+	Issuer    SecureFileIssuer  `json:"issuer"`
+	Subject   SecureFileSubject `json:"subject"`
+	ExpiresAt *time.Time        `json:"expires_at"`
+}
+
+// SecureFileItem represents a single secure file. It mirrors gl.SecureFile.
 type SecureFileItem struct {
 	toolutil.HintableOutput
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	Checksum          string `json:"checksum"`
-	ChecksumAlgorithm string `json:"checksum_algorithm"`
+	ID                int64               `json:"id"`
+	Name              string              `json:"name"`
+	Checksum          string              `json:"checksum"`
+	ChecksumAlgorithm string              `json:"checksum_algorithm"`
+	CreatedAt         *time.Time          `json:"created_at"`
+	ExpiresAt         *time.Time          `json:"expires_at"`
+	Metadata          *SecureFileMetadata `json:"metadata"`
+}
+
+// newSecureFileItem maps a gl.SecureFile into the output mirror, copying every
+// SDK field including the nested certificate metadata.
+func newSecureFileItem(f *gl.SecureFile) SecureFileItem {
+	item := SecureFileItem{
+		ID:                f.ID,
+		Name:              f.Name,
+		Checksum:          f.Checksum,
+		ChecksumAlgorithm: f.ChecksumAlgorithm,
+		CreatedAt:         f.CreatedAt,
+		ExpiresAt:         f.ExpiresAt,
+	}
+	if f.Metadata != nil {
+		item.Metadata = &SecureFileMetadata{
+			ID: f.Metadata.ID,
+			Issuer: SecureFileIssuer{
+				C:  f.Metadata.Issuer.C,
+				O:  f.Metadata.Issuer.O,
+				CN: f.Metadata.Issuer.CN,
+				OU: f.Metadata.Issuer.OU,
+			},
+			Subject: SecureFileSubject{
+				C:   f.Metadata.Subject.C,
+				O:   f.Metadata.Subject.O,
+				CN:  f.Metadata.Subject.CN,
+				OU:  f.Metadata.Subject.OU,
+				UID: f.Metadata.Subject.UID,
+			},
+			ExpiresAt: f.Metadata.ExpiresAt,
+		}
+	}
+	return item
 }
 
 // ListOutput contains a list of secure files.
@@ -43,8 +112,12 @@ type ListOutput struct {
 // List retrieves secure files for a project.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListProjectSecureFilesOptions{}
-	if input.Page > 0 || input.PerPage > 0 {
-		opts.ListOptions = gl.ListOptions{Page: input.Page, PerPage: input.PerPage}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	files, resp, err := client.GL().SecureFiles.ListProjectSecureFiles(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -52,12 +125,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	items := make([]SecureFileItem, 0, len(files))
 	for _, f := range files {
-		items = append(items, SecureFileItem{
-			ID:                f.ID,
-			Name:              f.Name,
-			Checksum:          f.Checksum,
-			ChecksumAlgorithm: f.ChecksumAlgorithm,
-		})
+		items = append(items, newSecureFileItem(f))
 	}
 	return ListOutput{
 		Files:      items,
@@ -82,12 +150,7 @@ func Show(ctx context.Context, client *gitlabclient.Client, input ShowInput) (Se
 	if err != nil {
 		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_show_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
 	}
-	return SecureFileItem{
-		ID:                f.ID,
-		Name:              f.Name,
-		Checksum:          f.Checksum,
-		ChecksumAlgorithm: f.ChecksumAlgorithm,
-	}, nil
+	return newSecureFileItem(f), nil
 }
 
 // Create.
@@ -143,12 +206,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_secure_file", err, http.StatusBadRequest, "check file content is valid base64 and name is unique within the project")
 	}
-	return SecureFileItem{
-		ID:                f.ID,
-		Name:              f.Name,
-		Checksum:          f.Checksum,
-		ChecksumAlgorithm: f.ChecksumAlgorithm,
-	}, nil
+	return newSecureFileItem(f), nil
 }
 
 // Remove.
