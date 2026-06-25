@@ -61,7 +61,7 @@ func uploadDeleteSpec(name string, route toolutil.ActionRoute, individualTool, u
 }
 
 func uploadOptions(individualTool, usage, description string, related []string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: usage, Tags: []string{"project", "upload"},
 		RelatedActions: related,
 		OpenWorld:      true,
@@ -72,4 +72,39 @@ func uploadOptions(individualTool, usage, description string, related []string) 
 			Description: description,
 		},
 	}
+	decorateUploadMeta(&options, individualTool)
+	return options
+}
+
+// decorateUploadMeta appends distinctive natural-language aliases to the project
+// upload action identified by individualTool, mirroring the per-tool meta map
+// pattern used by the issues domain (1:1 audit metadata). The aliases use
+// project Markdown attachment phrasing kept deliberately distinct from the
+// group-level gitlab_group_markdown_upload* tools to avoid discovery collisions.
+func decorateUploadMeta(options *toolutil.ActionSpecOptions, individualTool string) {
+	aliases, ok := uploadActionAliases[individualTool]
+	if !ok {
+		return
+	}
+	options.Aliases = append(options.Aliases, aliases...)
+}
+
+// uploadActionAliases maps each individual project-upload tool to its
+// distinctive natural-language aliases beyond the canonical tool name.
+var uploadActionAliases = map[string][]string{
+	"gitlab_project_upload": {
+		"attach file to project markdown",
+		"upload project attachment",
+		"add markdown image to project",
+	},
+	"gitlab_project_upload_list": {
+		"list project markdown attachments",
+		"show project uploaded files",
+		"browse project upload area",
+	},
+	"gitlab_project_upload_delete": {
+		"delete project markdown attachment",
+		"remove project uploaded file",
+		"purge project upload by id",
+	},
 }

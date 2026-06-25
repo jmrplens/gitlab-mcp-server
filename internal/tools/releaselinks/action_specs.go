@@ -43,6 +43,16 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	}
 	if actionName == "link_get" {
 		options.Usage = "Get one release asset link by link_id. Use when the task references a specific release asset link."
+		options.Aliases = []string{"get release link", "show release asset link", "fetch release download link"}
+	}
+	if actionName == "link_list" {
+		options.Usage = "List asset links attached to a release tag. Use to enumerate downloadable assets for a release before getting, updating, or deleting a specific link."
+		options.Aliases = []string{"list release links", "show release asset links", "list release downloads", "enumerate release attachments"}
+	}
+	if actionName == "link_delete" {
+		options.Usage = "Delete a release asset link by link_id. Use to detach a downloadable asset from a release; the underlying file or package is not removed."
+		options.Aliases = []string{"delete release link", "remove release asset link", "detach release download"}
+		options.RelatedActions = []string{"release.link_get", "release.link_list", "release.get"}
 	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {

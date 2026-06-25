@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -125,6 +126,44 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestActionSpecs_DistinctiveAliases verifies every project-upload spec carries
+// distinctive natural-language aliases beyond its canonical tool name, satisfying
+// the 1:1 audit metadata norm (no aliases_only_toolname findings).
+func TestActionSpecs_DistinctiveAliases(t *testing.T) {
+	byTool := uploadSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, uploadsActionHandler())))
+
+	for tool, want := range uploadActionAliases {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("missing spec for %q", tool)
+		}
+		extra := 0
+		for _, alias := range spec.Aliases {
+			if strings.TrimSpace(alias) != tool {
+				extra++
+			}
+		}
+		if extra < 2 || extra > 4 {
+			t.Fatalf("%s: want 2-4 natural-language aliases, got %d (%v)", tool, extra, spec.Aliases)
+		}
+		for _, w := range want {
+			if !slices.Contains(spec.Aliases, w) {
+				t.Fatalf("%s: missing alias %q in %v", tool, w, spec.Aliases)
+			}
+		}
+	}
+}
+
+// TestDecorateUploadMeta_UnknownToolNoOp verifies the decorator leaves options
+// untouched for a tool name absent from the alias map.
+func TestDecorateUploadMeta_UnknownToolNoOp(t *testing.T) {
+	options := toolutil.ActionSpecOptions{Aliases: []string{"gitlab_unknown_tool"}}
+	decorateUploadMeta(&options, "gitlab_unknown_tool")
+	if len(options.Aliases) != 1 {
+		t.Fatalf("expected no-op for unknown tool, got aliases %v", options.Aliases)
 	}
 }
 
