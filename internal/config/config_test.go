@@ -1039,6 +1039,7 @@ func TestLoad_TierResolution(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 			t.Setenv("GITLAB_TOKEN", "test")
+			t.Setenv("GITLAB_ENTERPRISE", "")
 			if tc.set {
 				t.Setenv("GITLAB_TIER", tc.value)
 			} else {
@@ -1058,6 +1059,45 @@ func TestLoad_TierResolution(t *testing.T) {
 				t.Errorf("Enterprise() = %v, want %v", cfg.Enterprise(), tc.wantEnt)
 			}
 		})
+	}
+}
+
+// TestLoad_DeprecatedEnterpriseEnv verifies the deprecated GITLAB_ENTERPRISE env
+// var is honored for back-compat when GITLAB_TIER is unset (true→ultimate,
+// false→free, both explicit), and that GITLAB_TIER takes precedence over it.
+func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
+	tests := []struct {
+		name         string
+		tier         string
+		enterprise   string
+		wantTier     edition.Tier
+		wantExplicit bool
+	}{
+		{name: "enterprise true maps to ultimate", enterprise: "true", wantTier: edition.Ultimate, wantExplicit: true},
+		{name: "enterprise false maps to free", enterprise: "false", wantTier: edition.Free, wantExplicit: true},
+		{name: "GITLAB_TIER wins over enterprise", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
+		{name: "both unset detects", wantTier: edition.Free, wantExplicit: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+			t.Setenv("GITLAB_TOKEN", "test")
+			t.Setenv("GITLAB_TIER", tc.tier)
+			t.Setenv("GITLAB_ENTERPRISE", tc.enterprise)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.Tier != tc.wantTier || cfg.TierExplicit != tc.wantExplicit {
+				t.Errorf("Tier=%v Explicit=%v, want %v %v", cfg.Tier, cfg.TierExplicit, tc.wantTier, tc.wantExplicit)
+			}
+		})
+	}
+	if !LegacyEnterpriseEnvInUse("", "true") {
+		t.Error("LegacyEnterpriseEnvInUse(unset tier, enterprise set) should be true")
+	}
+	if LegacyEnterpriseEnvInUse("premium", "true") {
+		t.Error("LegacyEnterpriseEnvInUse should be false when GITLAB_TIER is set")
 	}
 }
 

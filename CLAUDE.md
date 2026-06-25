@@ -290,6 +290,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
 | `AUTO_UPDATE_TIMEOUT`    | No       | Startup/background update timeout (`60s` default, range 5s–10m) |
 | `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
+| `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |

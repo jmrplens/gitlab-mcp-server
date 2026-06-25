@@ -253,7 +253,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	tier, tierExplicit, err := parseTierEnv(os.Getenv("GITLAB_TIER"))
+	tier, tierExplicit, err := resolveTierEnv(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 	if err != nil {
 		return nil, err
 	}
@@ -395,6 +395,37 @@ func parseTierEnv(value string) (tier edition.Tier, explicit bool, err error) {
 			"invalid GITLAB_TIER value: expected free, ce, premium, or ultimate, got %q", value)
 	}
 	return parsed, true, nil
+}
+
+// resolveTierEnv resolves the effective tier from GITLAB_TIER and the DEPRECATED
+// GITLAB_ENTERPRISE env vars. GITLAB_TIER wins. When GITLAB_TIER is unset, the
+// deprecated GITLAB_ENTERPRISE is honored for back-compat with existing configs:
+// true → ultimate, false → free (both explicit, so no license check). When neither
+// is set, returns (edition.Free, false) so the caller detects from the license.
+func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, explicit bool, err error) {
+	tier, explicit, err = parseTierEnv(tierValue)
+	if err != nil || explicit {
+		return tier, explicit, err
+	}
+	if raw := strings.TrimSpace(enterpriseValue); raw != "" {
+		enabled, perr := strconv.ParseBool(raw)
+		if perr != nil {
+			return edition.Free, false, fmt.Errorf(
+				"invalid GITLAB_ENTERPRISE value: expected true or false, got %q", raw)
+		}
+		if enabled {
+			return edition.Ultimate, true, nil
+		}
+		return edition.Free, true, nil
+	}
+	return edition.Free, false, nil
+}
+
+// LegacyEnterpriseEnvInUse reports whether the DEPRECATED GITLAB_ENTERPRISE env
+// var is the active tier source (GITLAB_TIER unset, GITLAB_ENTERPRISE set), so the
+// caller can emit a one-time deprecation warning pointing users to GITLAB_TIER.
+func LegacyEnterpriseEnvInUse(tierValue, enterpriseValue string) bool {
+	return strings.TrimSpace(tierValue) == "" && strings.TrimSpace(enterpriseValue) != ""
 }
 
 // ParseTierFlag resolves a CLI --tier flag value into a tier and an "explicit"

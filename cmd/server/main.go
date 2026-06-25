@@ -613,6 +613,7 @@ func runStdio(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	logLegacyMetaToolsDeprecation(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	logLegacyEnterpriseEnvDeprecation(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
@@ -1154,6 +1155,20 @@ func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
 		"META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
 		"legacy_selector", "META_TOOLS",
 		"replacement", "TOOL_SURFACE="+replacement,
+	)
+}
+
+// logLegacyEnterpriseEnvDeprecation warns when the deprecated GITLAB_ENTERPRISE
+// env var is the active tier source (GITLAB_TIER unset), pointing users to
+// GITLAB_TIER. GITLAB_ENTERPRISE=true maps to GITLAB_TIER=ultimate, false to free.
+func logLegacyEnterpriseEnvDeprecation(tierValue, enterpriseValue string) {
+	if !config.LegacyEnterpriseEnvInUse(tierValue, enterpriseValue) {
+		return
+	}
+	slog.Warn(
+		"GITLAB_ENTERPRISE is deprecated; use GITLAB_TIER (free/premium/ultimate) instead",
+		"legacy_selector", "GITLAB_ENTERPRISE",
+		"replacement", "GITLAB_TIER=ultimate (was true) or GITLAB_TIER=free (was false)",
 	)
 }
 
