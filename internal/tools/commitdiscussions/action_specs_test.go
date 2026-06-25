@@ -28,3 +28,18 @@ func TestActionSpecs_DeleteNoteError(t *testing.T) {
 		t.Fatal("expected error from delete with failing backend")
 	}
 }
+
+// TestDecorateCommitDiscussionMeta_Default verifies the fallback metadata arm
+// used for any individual tool name without a dedicated switch case.
+func TestDecorateCommitDiscussionMeta_Default(t *testing.T) {
+	opts := commitDiscussionOptions("gitlab_unknown_commit_discussion_tool")
+	if opts.Usage == "" {
+		t.Error("expected fallback usage to be set")
+	}
+	if len(opts.RelatedActions) == 0 {
+		t.Error("expected fallback related actions")
+	}
+	if opts.ParameterGuidance["commit_sha"].SemanticRole == "" {
+		t.Error("expected fallback commit_sha guidance")
+	}
+}
