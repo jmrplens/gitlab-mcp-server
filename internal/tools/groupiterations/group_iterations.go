@@ -12,12 +12,17 @@ import (
 )
 
 // ListInput defines parameters for listing group iterations.
+// It mirrors gl.ListGroupIterationsOptions and supports offset and keyset
+// pagination via order_by/sort/page_token.
 type ListInput struct {
 	GroupID          toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	State            string               `json:"state,omitempty" jsonschema:"Filter by state: opened, upcoming, current, closed, all"`
 	Search           string               `json:"search,omitempty" jsonschema:"Search by title"`
 	IncludeAncestors bool                 `json:"include_ancestors,omitempty" jsonschema:"Include ancestor iterations"`
+	OrderBy          string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort             string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a group iteration.
@@ -40,6 +45,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := iterationdata.NewGroupListOptions(input.Page, input.PerPage, input.State, input.Search, input.IncludeAncestors)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	items, resp, err := client.GL().GroupIterations.ListGroupIterations(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_iterations", err, http.StatusNotFound, "verify group_id with gitlab_group_get \u2014 iterations require Premium license")
