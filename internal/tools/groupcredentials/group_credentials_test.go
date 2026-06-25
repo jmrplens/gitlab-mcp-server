@@ -44,8 +44,8 @@ func TestListPATs_Success(t *testing.T) {
 	if out.Tokens[0].UserID != 10 {
 		t.Errorf("expected user_id 10, got %d", out.Tokens[0].UserID)
 	}
-	if out.Tokens[0].State != "active" {
-		t.Errorf("expected state active, got %s", out.Tokens[0].State)
+	if !out.Tokens[0].Active {
+		t.Errorf("expected token to be active, got Active=%t", out.Tokens[0].Active)
 	}
 }
 
@@ -122,7 +122,7 @@ func TestGroupCredential404Hints(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestToPATOutput_Nil(t *testing.T) {
 	out := toPATOutput(nil)
-	if out.ID != 0 || out.Name != "" || len(out.Scopes) != 0 || out.State != "" {
+	if out.ID != 0 || out.Name != "" || len(out.Scopes) != 0 || out.Active || out.Revoked {
 		t.Fatalf("toPATOutput(nil) = %+v, want zero output", out)
 	}
 }
@@ -518,8 +518,8 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListPATs_RevokedTokenState verifies that toPATOutput assigns state "revoked"
-// when the token has revoked=true, and that the LastUsedAt date is populated.
+// TestListPATs_RevokedTokenState verifies that toPATOutput surfaces the SDK
+// Revoked flag when the token has revoked=true, and that the LastUsedAt date is populated.
 func TestListPATs_RevokedTokenState(t *testing.T) {
 	revokedJSON := `[{"id":2,"name":"revoked-token","revoked":true,"active":false,"created_at":"2026-01-01T00:00:00Z","scopes":["read_api"],"user_id":20,"last_used_at":"2026-03-01T12:00:00Z","expires_at":"2026-01-01"}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -540,19 +540,19 @@ func TestListPATs_RevokedTokenState(t *testing.T) {
 		t.Fatalf("expected 1 token, got %d", len(out.Tokens))
 	}
 	tok := out.Tokens[0]
-	if tok.State != "revoked" {
-		t.Errorf("expected state revoked, got %s", tok.State)
-	}
 	if !tok.Revoked {
 		t.Error("expected Revoked to be true")
+	}
+	if tok.Active {
+		t.Error("expected Active to be false for a revoked token")
 	}
 	if tok.LastUsedAt == "" {
 		t.Error("expected LastUsedAt to be set")
 	}
 }
 
-// TestListPATs_InactiveTokenState verifies that toPATOutput assigns state "inactive"
-// when the token is neither revoked nor active, and omits unset optional dates.
+// TestListPATs_InactiveTokenState verifies that toPATOutput reports a token that
+// is neither revoked nor active, and omits unset optional dates.
 func TestListPATs_InactiveTokenState(t *testing.T) {
 	inactiveJSON := `[{"id":3,"name":"inactive-token","revoked":false,"active":false,"created_at":"2026-01-01T00:00:00Z","scopes":["read_user"],"user_id":30}]`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -573,8 +573,8 @@ func TestListPATs_InactiveTokenState(t *testing.T) {
 		t.Fatalf("expected 1 token, got %d", len(out.Tokens))
 	}
 	tok := out.Tokens[0]
-	if tok.State != "inactive" {
-		t.Errorf("expected state inactive, got %s", tok.State)
+	if tok.Revoked || tok.Active {
+		t.Errorf("expected inactive token, got Revoked=%t Active=%t", tok.Revoked, tok.Active)
 	}
 	if tok.ExpiresAt != "" {
 		t.Errorf("expected ExpiresAt to be empty, got %s", tok.ExpiresAt)
@@ -631,5 +631,123 @@ func TestListPATs_WithRevokedFilter(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("ListPATs() error: %v", err)
+	}
+}
+
+// TestListPATs_WithDateAndKeysetFilters verifies that ListPATs forwards the
+// created/last-used date filters, order_by, sort, and keyset pagination
+// (pagination + page_token) query parameters to the GitLab API.
+func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
+			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01")
+			testutil.AssertQueryParam(t, r, "created_before", "2026-12-31")
+			testutil.AssertQueryParam(t, r, "last_used_after", "2026-02-01")
+			testutil.AssertQueryParam(t, r, "last_used_before", "2026-11-30")
+			testutil.AssertQueryParam(t, r, "order_by", "created_at")
+			testutil.AssertQueryParam(t, r, "sort", "desc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "abc123")
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListPATs(context.Background(), client, ListPATsInput{
+		GroupID:        toolutil.StringOrInt("mygroup"),
+		CreatedAfter:   "2026-01-01",
+		CreatedBefore:  "2026-12-31",
+		LastUsedAfter:  "2026-02-01",
+		LastUsedBefore: "2026-11-30",
+		OrderBy:        "created_at",
+		Sort:           "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "abc123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ListPATs() error: %v", err)
+	}
+}
+
+// TestListPATs_InvalidDateIgnored verifies that an unparseable date filter is
+// dropped (parseISODate returns nil) rather than rejected, so the request still
+// reaches the API without the offending query parameter.
+func TestListPATs_InvalidDateIgnored(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/manage/personal_access_tokens" {
+			if r.URL.Query().Has("created_after") {
+				t.Errorf("expected created_after to be omitted for invalid date, got %q", r.URL.Query().Get("created_after"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListPATs(context.Background(), client, ListPATsInput{
+		GroupID:      toolutil.StringOrInt("mygroup"),
+		CreatedAfter: "not-a-date",
+	})
+	if err != nil {
+		t.Fatalf("ListPATs() error: %v", err)
+	}
+}
+
+// TestListSSHKeys_WithDateAndKeysetFilters verifies that ListSSHKeys forwards the
+// created/expires date filters, order_by, sort, and keyset pagination query
+// parameters to the GitLab API.
+func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/manage/ssh_keys" {
+			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01")
+			testutil.AssertQueryParam(t, r, "created_before", "2026-12-31")
+			testutil.AssertQueryParam(t, r, "expires_after", "2026-03-01")
+			testutil.AssertQueryParam(t, r, "expires_before", "2026-10-31")
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "asc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "xyz789")
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{
+		GroupID:       toolutil.StringOrInt("mygroup"),
+		CreatedAfter:  "2026-01-01",
+		CreatedBefore: "2026-12-31",
+		ExpiresAfter:  "2026-03-01",
+		ExpiresBefore: "2026-10-31",
+		OrderBy:       "id",
+		Sort:          "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "xyz789",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ListSSHKeys() error: %v", err)
+	}
+}
+
+// TestParseISODate verifies parseISODate parses valid YYYY-MM-DD input into a
+// non-nil *gl.ISOTime and returns nil for empty or malformed input.
+func TestParseISODate(t *testing.T) {
+	if got := parseISODate(""); got != nil {
+		t.Errorf("parseISODate(\"\") = %v, want nil", got)
+	}
+	if got := parseISODate("nope"); got != nil {
+		t.Errorf("parseISODate(\"nope\") = %v, want nil", got)
+	}
+	got := parseISODate("2026-01-02")
+	if got == nil {
+		t.Fatal("parseISODate(\"2026-01-02\") = nil, want non-nil")
+	}
+	if s := got.String(); s != "2026-01-02" {
+		t.Errorf("parseISODate(\"2026-01-02\").String() = %q, want %q", s, "2026-01-02")
 	}
 }
