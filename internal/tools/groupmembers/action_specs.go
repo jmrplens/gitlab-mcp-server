@@ -8,6 +8,14 @@ import (
 const (
 	actionGroupGet     = "group.get"
 	actionGroupMembers = "group.members"
+
+	actionBillableMembers           = "group_billable_members_list"
+	actionBillableMemberMemberships = "group_billable_member_memberships_list"
+	actionBillableMemberRemove      = "group_billable_member_remove"
+
+	toolBillableMembers           = "gitlab_list_billable_group_members"
+	toolBillableMemberMemberships = "gitlab_list_billable_member_memberships"
+	toolBillableMemberRemove      = "gitlab_remove_billable_group_member"
 )
 
 // ActionSpecs returns canonical specs for group member actions. The get,
@@ -25,7 +33,38 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupMemberDeleteSpec("group_member_remove", toolutil.DestructiveAction(client, removeMemberOutput), "gitlab_group_member_remove"),
 		groupMemberCreateSpec("group_member_share", toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
 		groupMemberDeleteSpec("group_member_unshare", toolutil.DestructiveAction(client, unshareGroupOutput), "gitlab_group_unshare"),
+		billableMemberReadSpec(actionBillableMembers, toolutil.RouteAction(client, ListBillableMembers), toolBillableMembers),
+		billableMemberReadSpec(actionBillableMemberMemberships, toolutil.RouteAction(client, ListBillableMemberMemberships), toolBillableMemberMemberships),
+		billableMemberDeleteSpec(actionBillableMemberRemove, toolutil.DestructiveAction(client, removeBillableMemberOutput), toolBillableMemberRemove),
 	}
+}
+
+// billableMemberReadSpec builds a read-only, Premium/Ultimate-gated canonical
+// spec for a billable-member action.
+func billableMemberReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, billableMemberOptions(individualTool))
+}
+
+// billableMemberDeleteSpec builds a destructive, Premium/Ultimate-gated
+// canonical spec for a billable-member action.
+func billableMemberDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewDeleteActionSpec(name, route, billableMemberOptions(individualTool))
+}
+
+// billableMemberOptions returns the base options for a billable-member action,
+// gated to Enterprise Premium/Ultimate (Edition "premium") and decorated with
+// the action-specific discovery metadata from groupMemberActionMeta.
+func billableMemberOptions(individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: "Use to execute groupmembers domain action.", Tags: []string{"group", "member", "billable"},
+		RelatedActions: []string{actionGroupGet, actionGroupMembers},
+		OpenWorld:      true,
+		Edition:        "premium",
+		OwnerPackage:   "groupmembers",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+	decorateGroupMemberMeta(&options, individualTool)
+	return options
 }
 
 func groupMemberReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -233,5 +272,46 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 			"share_group_id": shareGroupIDGuidance("Numeric ID of the group whose share should be revoked."),
 		},
 		description: "Revoke an existing group-to-group share (destructive, requires confirmation). Returns: a delete confirmation. See also: gitlab_group_share, gitlab_group_get, gitlab_group_members_list.",
+	},
+	"gitlab_list_billable_group_members": {
+		usage:   "List the billable members of a group — the users who count toward the group's seat usage, including members inherited from subgroups and shared projects. Use this to audit license/seat consumption (Premium/Ultimate). Filter with search and order with sort.",
+		aliases: []string{"list billable group members", "show seats used in group", "audit billable members", "list licensed users in group"},
+		related: []string{actionBillableMemberMemberships, actionBillableMemberRemove, actionGroupMembers},
+		guidance: map[string]toolutil.ParameterGuidance{
+			"group_id": groupIDGuidance(),
+			"search": {
+				SemanticRole:     "search_query",
+				ValueSource:      "Substring of a member's name or username to filter the billable list.",
+				ExampleBinding:   `params.search:"jane"`,
+				CommonConfusions: []string{"search filters by name/username, not by email or user ID."},
+			},
+			"sort": {
+				SemanticRole:     "sort_order",
+				ValueSource:      "Sort key for the billable list (e.g. name_asc, last_activity_on_desc).",
+				ExampleBinding:   `params.sort:"last_activity_on_desc"`,
+				CommonConfusions: []string{"sort is a combined field_direction token, not a separate order_by/direction pair."},
+			},
+		},
+		description: "List the billable members of a group (Premium/Ultimate). Returns: each member's id, username, name, state, email, membership type, removable flag, is_last_owner, last activity, and last login, plus pagination. See also: gitlab_list_billable_member_memberships, gitlab_remove_billable_group_member, gitlab_group_members_list.",
+	},
+	"gitlab_list_billable_member_memberships": {
+		usage:   "List the memberships through which a single billable member counts toward a group's seats — the source groups/projects and their access levels. Use this to understand why a user is billable before removing them (Premium/Ultimate). Supply group_id plus the billable member's user_id.",
+		aliases: []string{"list billable member memberships", "why is user billable", "show member seat sources", "list user memberships in group"},
+		related: []string{actionBillableMembers, actionBillableMemberRemove, actionGroupMembers},
+		guidance: map[string]toolutil.ParameterGuidance{
+			"group_id": groupIDGuidance(),
+			"user_id":  userIDGuidance("Numeric user ID of the billable member whose memberships to list; from gitlab_list_billable_group_members."),
+		},
+		description: "List the memberships of a billable group member (Premium/Ultimate). Returns: each membership's source id, source full name, source members URL, access level (numeric + string), created/expiry dates, plus pagination. See also: gitlab_list_billable_group_members, gitlab_remove_billable_group_member, gitlab_group_members_list.",
+	},
+	"gitlab_remove_billable_group_member": {
+		usage:   "Remove a billable member from a group to free a seat (Premium/Ultimate). Destructive: requires confirmation. Only members whose 'removable' flag is true can be removed here; the last owner cannot be removed. Supply group_id plus the billable member's user_id.",
+		aliases: []string{"remove billable group member", "free a group seat", "revoke billable member", "remove licensed user from group"},
+		related: []string{actionBillableMembers, actionBillableMemberMemberships, actionGroupMembers},
+		guidance: map[string]toolutil.ParameterGuidance{
+			"group_id": groupIDGuidance(),
+			"user_id":  userIDGuidance("Numeric user ID of the removable billable member; check the 'removable' flag from gitlab_list_billable_group_members first."),
+		},
+		description: "Remove a billable member from a group, freeing a seat (Premium/Ultimate, destructive, requires confirmation). Returns: a removal confirmation. See also: gitlab_list_billable_group_members, gitlab_list_billable_member_memberships, gitlab_group_members_list.",
 	},
 }

@@ -349,6 +349,7 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	specs = append(specs, groupserviceaccounts.ActionSpecs(client)...)
 	specs = append(specs, epicdiscussions.ActionSpecs(client)...)
 	specs = append(specs, epics.ActionSpecs(client)...)
+	specs = append(specs, resourceevents.EpicActionSpecs(client)...)
 	specs = append(specs, epicissues.ActionSpecs(client)...)
 	specs = append(specs, epicnotes.ActionSpecs(client)...)
 	specs = append(specs, groupepicboards.ActionSpecs(client)...)

@@ -46,6 +46,9 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 		OwnerPackage:   "groupserviceaccounts",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if individualTool == "gitlab_group_service_account_pat_rotate" {
+		options.IndividualTool.Description = "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (Premium/Ultimate, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value — capture it immediately, it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list."
+	}
 	if individualTool == "gitlab_group_service_account_create" || individualTool == "gitlab_group_service_account_update" {
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
 	}

@@ -1255,3 +1255,113 @@ func TestToWeightEventOutput_Nil(t *testing.T) {
 		t.Errorf("expected zero ID, got %d", out.ID)
 	}
 }
+
+// ======================== Group Epic Label Events ========================.
+
+// covGID returns the group identifier used by the epic label-event tests.
+func covGID() toolutil.StringOrInt { return toolutil.StringOrInt("acme") }
+
+// TestListGroupEpicLabelEvents_Validation verifies ListGroupEpicLabelEvents
+// rejects input missing the required group_id and epic_iid fields without
+// reaching the API.
+func TestListGroupEpicLabelEvents_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{}); err == nil {
+		t.Fatal(errExpectedValidation)
+	}
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID()}); err == nil {
+		t.Fatal(errExpectedValidation)
+	}
+}
+
+// TestListGroupEpicLabelEvents_APIError verifies ListGroupEpicLabelEvents
+// surfaces an error when the GitLab API responds non-2xx.
+func TestListGroupEpicLabelEvents_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, covBadHandler())
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID(), EpicIID: 1}); err == nil {
+		t.Fatal("expected API error")
+	}
+}
+
+// TestListGroupEpicLabelEvents_Success verifies ListGroupEpicLabelEvents hits
+// the group epic resource_label_events endpoint and maps the label event,
+// nested label, acting user, and pagination metadata.
+func TestListGroupEpicLabelEvents_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/acme/epics/7/resource_label_events" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			{"id":50,"action":"add","created_at":"2026-05-01T09:00:00Z","resource_type":"Epic","resource_id":7,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}
+		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+	out, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID(), EpicIID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Events) != 1 {
+		t.Fatalf(fmtWantOneEvent, len(out.Events))
+	}
+	e := out.Events[0]
+	if e.ID != 50 || e.Action != "add" || e.ResourceType != "Epic" {
+		t.Errorf("unexpected event: %+v", e)
+	}
+	if e.Label == nil || e.Label.Name != "bug" {
+		t.Errorf("got label %v, want name %q", e.Label, "bug")
+	}
+	if e.User == nil || e.User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", e.User, "alice")
+	}
+	if out.Pagination.TotalItems != 1 {
+		t.Errorf("got total %d, want 1", out.Pagination.TotalItems)
+	}
+}
+
+// TestGetGroupEpicLabelEvent_Validation verifies GetGroupEpicLabelEvent rejects
+// input missing any required field without reaching the API.
+func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+	cases := []GetGroupEpicLabelEventInput{
+		{},
+		{GroupID: covGID()},
+		{GroupID: covGID(), EpicIID: 7},
+	}
+	for _, in := range cases {
+		if _, err := GetGroupEpicLabelEvent(t.Context(), client, in); err == nil {
+			t.Fatalf("expected validation error for %+v", in)
+		}
+	}
+}
+
+// TestGetGroupEpicLabelEvent_APIError verifies GetGroupEpicLabelEvent surfaces
+// an error when the GitLab API responds non-2xx.
+func TestGetGroupEpicLabelEvent_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, covBadHandler())
+	if _, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50}); err == nil {
+		t.Fatal("expected API error")
+	}
+}
+
+// TestGetGroupEpicLabelEvent_Success verifies GetGroupEpicLabelEvent hits the
+// single group epic label event endpoint and maps the event fields.
+func TestGetGroupEpicLabelEvent_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/acme/epics/7/resource_label_events/50" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":50,"action":"add","created_at":"2026-05-01T09:00:00Z","resource_type":"Epic","resource_id":7,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}`)
+	}))
+	out, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 50 || out.Label == nil || out.Label.Name != "bug" {
+		t.Errorf("unexpected output: %+v", out)
+	}
+}

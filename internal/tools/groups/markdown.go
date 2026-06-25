@@ -235,6 +235,43 @@ func FormatTransferLocationsListMarkdown(out TransferLocationsListOutput) string
 	return b.String()
 }
 
+// FormatProvisionedUsersListMarkdown renders a paginated list of users
+// provisioned for a group through SAML/SCIM as a Markdown table.
+func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Provisioned Users (%d)\n\n", out.Pagination.TotalItems)
+	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
+	if len(out.Users) == 0 {
+		b.WriteString("No provisioned users found.\n")
+		toolutil.WritePagination(&b, out.Pagination)
+		return b.String()
+	}
+	b.WriteString("| ID | Username | Name | State | Email |\n")
+	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	for _, u := range out.Users {
+		username := toolutil.EscapeMdTableCell(u.Username)
+		if u.WebURL != "" {
+			username = toolutil.MdTitleLink(username, u.WebURL)
+		}
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %s |\n",
+			u.ID,
+			username,
+			toolutil.EscapeMdTableCell(u.Name),
+			u.State,
+			toolutil.EscapeMdTableCell(u.Email),
+		)
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"Use `gitlab_group_members_list` to see the group's members and access levels",
+		"Provisioned users are managed through the group's SAML/SCIM identity provider",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatGroupNotFound)
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
@@ -244,4 +281,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatHookMarkdown)
 	toolutil.RegisterMarkdown(FormatHookListMarkdown)
 	toolutil.RegisterMarkdown(FormatTransferLocationsListMarkdown)
+	toolutil.RegisterMarkdown(FormatProvisionedUsersListMarkdown)
 }

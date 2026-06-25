@@ -26,9 +26,10 @@ const (
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+	specs = append(specs, EpicActionSpecs(client)...)
 
-	if len(specs) != 15 {
-		t.Fatalf("len(ActionSpecs) = %d, want 15", len(specs))
+	if len(specs) != 17 {
+		t.Fatalf("len(ActionSpecs) = %d, want 17", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "resourceevents" {
@@ -43,6 +44,30 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestEpicActionSpecs_PremiumEdition verifies the group epic label-event specs
+// are gated to the premium edition and carry non-generic discovery metadata.
+func TestEpicActionSpecs_PremiumEdition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specs := EpicActionSpecs(client)
+	if len(specs) != 2 {
+		t.Fatalf("len(EpicActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.Edition != "premium" {
+			t.Errorf("Edition for %s = %q, want premium", spec.Name, spec.Edition)
+		}
+		if len(spec.Aliases) < 2 {
+			t.Errorf("Aliases for %s too generic: %v", spec.Name, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("RelatedActions for %s is empty", spec.Name)
+		}
+		if spec.Destructive {
+			t.Errorf("%s should not be destructive", spec.Name)
+		}
+	}
+}
+
 // TestActionSpecs_CallThroughRoutes covers every resource event route.
 func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 	mux := http.NewServeMux()
@@ -53,7 +78,9 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 		}
 	})
 	client := testutil.NewTestClient(t, mux)
-	byTool := resourceEventSpecsByTool(t, append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...))
+	allSpecs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+	allSpecs = append(allSpecs, EpicActionSpecs(client)...)
+	byTool := resourceEventSpecsByTool(t, allSpecs)
 
 	tools := []struct {
 		name string
@@ -74,6 +101,8 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 		{"gitlab_issue_iteration_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
 		{"gitlab_issue_iteration_event_get", map[string]any{"project_id": "42", "issue_iid": int64(1), "iteration_event_id": int64(1)}},
 		{"gitlab_issue_weight_event_list", map[string]any{"project_id": "42", "issue_iid": int64(1)}},
+		{"gitlab_list_group_epic_label_events", map[string]any{"group_id": "acme", "epic_iid": int64(1)}},
+		{"gitlab_get_group_epic_label_event", map[string]any{"group_id": "acme", "epic_iid": int64(1), "label_event_id": int64(1)}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

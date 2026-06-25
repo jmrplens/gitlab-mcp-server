@@ -2271,8 +2271,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client)
 	byTool := groupSpecsByTool(t, specs)
 
-	if len(specs) != 35 {
-		t.Fatalf("len(ActionSpecs) = %d, want 35", len(specs))
+	if len(specs) != 37 {
+		t.Fatalf("len(ActionSpecs) = %d, want 37", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
@@ -2334,6 +2334,8 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"push_rule_add", "gitlab_group_add_push_rule", map[string]any{"group_id": "99", "commit_message_regex": "^JIRA-"}},
 		{"push_rule_edit", "gitlab_group_edit_push_rule", map[string]any{"group_id": "99", "prevent_secrets": true}},
 		{"push_rule_delete", "gitlab_group_delete_push_rule", map[string]any{"group_id": "99"}},
+		{"upload_avatar", "gitlab_group_upload_avatar", map[string]any{"group_id": "99", "filename": "avatar.png", "content_base64": "YXZhdGFy"}},
+		{"list_provisioned_users", "gitlab_group_list_provisioned_users", map[string]any{"group_id": "99"}},
 	}
 
 	for _, tt := range tools {
@@ -2526,6 +2528,14 @@ func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	})
 	handler.HandleFunc("DELETE /api/v4/groups/99/push_rule", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Upload group avatar uses PUT /api/v4/groups/99 (shared with Update), so no
+	// extra handler is required here.
+
+	// List provisioned users
+	handler.HandleFunc("GET /api/v4/groups/99/provisioned_users", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":7,"username":"scim-user","name":"SCIM User","state":"active","web_url":"https://gitlab.example.com/scim-user"}]`)
 	})
 
 	client := testutil.NewTestClient(t, handler)

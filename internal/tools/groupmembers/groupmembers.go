@@ -101,6 +101,61 @@ type ShareOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
+// BillableMemberOutput mirrors gl.BillableGroupMember 1:1 (Enterprise
+// Premium/Ultimate). A billable member is a user who counts toward the group's
+// seat usage, including members inherited from subgroups and shared projects.
+type BillableMemberOutput struct {
+	ID             int64  `json:"id"`
+	Username       string `json:"username"`
+	Name           string `json:"name"`
+	State          string `json:"state"`
+	AvatarURL      string `json:"avatar_url,omitempty"`
+	WebURL         string `json:"web_url"`
+	Email          string `json:"email,omitempty"`
+	LastActivityOn string `json:"last_activity_on,omitempty"`
+	MembershipType string `json:"membership_type,omitempty"`
+	Removable      bool   `json:"removable"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	IsLastOwner    bool   `json:"is_last_owner"`
+	LastLoginAt    string `json:"last_login_at,omitempty"`
+}
+
+// BillableMembersOutput holds a paginated list of billable group members.
+type BillableMembersOutput struct {
+	toolutil.HintableOutput
+	Members    []BillableMemberOutput    `json:"members"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// BillableMembershipOutput mirrors gl.BillableUserMembership 1:1: one of the
+// group/project memberships through which a billable member counts toward the
+// group's seat usage. The access_level sub-object surfaces both the numeric
+// and string forms of the role.
+type BillableMembershipOutput struct {
+	ID               int64                     `json:"id"`
+	SourceID         int64                     `json:"source_id"`
+	SourceFullName   string                    `json:"source_full_name"`
+	SourceMembersURL string                    `json:"source_members_url,omitempty"`
+	CreatedAt        string                    `json:"created_at,omitempty"`
+	ExpiresAt        string                    `json:"expires_at,omitempty"`
+	AccessLevel      *AccessLevelDetailsOutput `json:"access_level,omitempty"`
+}
+
+// AccessLevelDetailsOutput mirrors gl.AccessLevelDetails (the access_level
+// object on a billable membership).
+type AccessLevelDetailsOutput struct {
+	IntegerValue int    `json:"integer_value"`
+	StringValue  string `json:"string_value"`
+}
+
+// BillableMembershipsOutput holds a paginated list of a billable member's
+// memberships.
+type BillableMembershipsOutput struct {
+	toolutil.HintableOutput
+	Memberships []BillableMembershipOutput `json:"memberships"`
+	Pagination  toolutil.PaginationOutput  `json:"pagination"`
+}
+
 // ──────────────────────────────────────────────
 // Input types
 // ──────────────────────────────────────────────.
@@ -150,6 +205,35 @@ type ShareInput struct {
 type UnshareInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	ShareGroupID int64                `json:"share_group_id" jsonschema:"Group ID to stop sharing with,required"`
+}
+
+// ListBillableMembersInput contains parameters for listing billable group
+// members (Enterprise Premium/Ultimate).
+type ListBillableMembersInput struct {
+	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	Search  string               `json:"search,omitempty" jsonschema:"Filter billable members by name or username"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order billable members by (e.g. id, name, username, last_activity_on)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// ListBillableMemberMembershipsInput contains parameters for listing the
+// memberships of a single billable group member (Enterprise Premium/Ultimate).
+type ListBillableMemberMembershipsInput struct {
+	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	UserID  int64                `json:"user_id" jsonschema:"User ID of the billable member,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order memberships by (e.g. id, name)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// RemoveBillableMemberInput contains parameters for removing a billable member
+// from a group (Enterprise Premium/Ultimate).
+type RemoveBillableMemberInput struct {
+	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	UserID  int64                `json:"user_id" jsonschema:"User ID of the billable member to remove,required"`
 }
 
 // ──────────────────────────────────────────────
@@ -386,6 +470,111 @@ func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input 
 	return toolutil.DeleteOutput{Status: "success", Message: "Successfully deleted group share."}, nil
 }
 
+// ListBillableMembers lists the billable members of a group (Enterprise
+// Premium/Ultimate). The list includes members inherited from subgroups and
+// shared projects.
+func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input ListBillableMembersInput) (BillableMembersOutput, error) {
+	if input.GroupID == "" {
+		return BillableMembersOutput{}, toolutil.WrapErrWithMessage("group_billable_members_list", toolutil.ErrFieldRequired("group_id"))
+	}
+	opts := &gl.ListBillableGroupMembersOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.Search != "" {
+		opts.Search = new(input.Search)
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = new(input.Sort)
+	}
+	members, resp, err := client.GL().Groups.ListBillableGroupMembers(
+		string(input.GroupID), opts, gl.WithContext(ctx),
+	)
+	if err != nil {
+		return BillableMembersOutput{}, toolutil.WrapErrWithStatusHint("group_billable_members_list", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get — billable members are a Premium/Ultimate feature and require Owner access on the group")
+	}
+	out := BillableMembersOutput{
+		Members:    make([]BillableMemberOutput, len(members)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, m := range members {
+		out.Members[i] = convertBillableMember(m)
+	}
+	return out, nil
+}
+
+// ListBillableMemberMemberships lists the memberships of a single billable
+// member of a group (Enterprise Premium/Ultimate).
+func ListBillableMemberMemberships(ctx context.Context, client *gitlabclient.Client, input ListBillableMemberMembershipsInput) (BillableMembershipsOutput, error) {
+	if input.GroupID == "" {
+		return BillableMembershipsOutput{}, toolutil.WrapErrWithMessage("group_billable_member_memberships_list", toolutil.ErrFieldRequired("group_id"))
+	}
+	if input.UserID == 0 {
+		return BillableMembershipsOutput{}, toolutil.WrapErrWithMessage("group_billable_member_memberships_list", toolutil.ErrFieldRequired("user_id"))
+	}
+	opts := &gl.ListMembershipsForBillableGroupMemberOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	memberships, resp, err := client.GL().Groups.ListMembershipsForBillableGroupMember(
+		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
+	)
+	if err != nil {
+		return BillableMembershipsOutput{}, toolutil.WrapErrWithStatusHint("group_billable_member_memberships_list", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members — the user must be a billable member of the group (Premium/Ultimate)")
+	}
+	out := BillableMembershipsOutput{
+		Memberships: make([]BillableMembershipOutput, len(memberships)),
+		Pagination:  toolutil.PaginationFromResponse(resp),
+	}
+	for i, m := range memberships {
+		out.Memberships[i] = convertBillableMembership(m)
+	}
+	return out, nil
+}
+
+// RemoveBillableMember removes a billable member from a group (Enterprise
+// Premium/Ultimate).
+func RemoveBillableMember(ctx context.Context, client *gitlabclient.Client, input RemoveBillableMemberInput) error {
+	if input.GroupID == "" {
+		return toolutil.WrapErrWithMessage("group_billable_member_remove", toolutil.ErrFieldRequired("group_id"))
+	}
+	if input.UserID == 0 {
+		return toolutil.WrapErrWithMessage("group_billable_member_remove", toolutil.ErrFieldRequired("user_id"))
+	}
+	_, err := client.GL().Groups.RemoveBillableGroupMember(
+		string(input.GroupID), input.UserID, gl.WithContext(ctx),
+	)
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return toolutil.WrapErrWithHint("group_billable_member_remove", err,
+				"removing billable members requires Owner role on the group; the last owner cannot be removed (is_last_owner)")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return toolutil.WrapErrWithHint("group_billable_member_remove", err,
+				"only directly removable billable members can be removed here; check the 'removable' flag from gitlab_list_billable_group_members — inherited members must be removed from their source group")
+		}
+		return toolutil.WrapErrWithStatusHint("group_billable_member_remove", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members")
+	}
+	return nil
+}
+
+// removeBillableMemberOutput removes a billable member and returns a
+// [toolutil.DeleteOutput].
+func removeBillableMemberOutput(ctx context.Context, client *gitlabclient.Client, input RemoveBillableMemberInput) (toolutil.DeleteOutput, error) {
+	if err := RemoveBillableMember(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	return toolutil.DeleteOutput{Status: "success", Message: "Successfully removed billable group member."}, nil
+}
+
 // ──────────────────────────────────────────────
 // Converters
 // ──────────────────────────────────────────────.
@@ -476,6 +665,57 @@ func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
 		RemoveGroup:                r.RemoveGroup,
 		RemoveProject:              r.RemoveProject,
 	}
+}
+
+// convertBillableMember maps a gl.BillableGroupMember into the MCP output
+// shape (1:1 field fidelity).
+func convertBillableMember(m *gl.BillableGroupMember) BillableMemberOutput {
+	out := BillableMemberOutput{
+		ID:             m.ID,
+		Username:       m.Username,
+		Name:           m.Name,
+		State:          m.State,
+		AvatarURL:      m.AvatarURL,
+		WebURL:         m.WebURL,
+		Email:          m.Email,
+		MembershipType: m.MembershipType,
+		Removable:      m.Removable,
+		IsLastOwner:    m.IsLastOwner,
+	}
+	if m.LastActivityOn != nil {
+		out.LastActivityOn = m.LastActivityOn.String()
+	}
+	if m.CreatedAt != nil {
+		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
+	}
+	if m.LastLoginAt != nil {
+		out.LastLoginAt = m.LastLoginAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// convertBillableMembership maps a gl.BillableUserMembership into the MCP
+// output shape (1:1 field fidelity).
+func convertBillableMembership(m *gl.BillableUserMembership) BillableMembershipOutput {
+	out := BillableMembershipOutput{
+		ID:               m.ID,
+		SourceID:         m.SourceID,
+		SourceFullName:   m.SourceFullName,
+		SourceMembersURL: m.SourceMembersURL,
+	}
+	if m.CreatedAt != nil {
+		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
+	}
+	if m.ExpiresAt != nil {
+		out.ExpiresAt = m.ExpiresAt.String()
+	}
+	if m.AccessLevel != nil {
+		out.AccessLevel = &AccessLevelDetailsOutput{
+			IntegerValue: int(m.AccessLevel.IntegerValue),
+			StringValue:  m.AccessLevel.StringValue,
+		}
+	}
+	return out
 }
 
 // ──────────────────────────────────────────────

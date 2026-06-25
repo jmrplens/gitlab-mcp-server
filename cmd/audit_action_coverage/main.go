@@ -296,6 +296,7 @@ var acceptedMissingMethods = map[string]string{ //nolint:gosec // G101 false pos
 	"SecureFiles.DownloadSecureFile":                                          "INTENTIONAL_SKIP_BINARY — secure file bytes",
 	"TerraformStates.Download":                                                "INTENTIONAL_SKIP_BINARY — tfstate bytes",
 	"TerraformStates.DownloadLatest":                                          "INTENTIONAL_SKIP_BINARY — tfstate bytes",
+	"Groups.DownloadAvatar":                                                   "INTENTIONAL_SKIP_BINARY — group avatar image bytes (*bytes.Reader); upload IS exposed",
 
 	// INTENTIONAL_SKIP_OTHER
 	"Jobs.GetJobTokensJob":       "INTENTIONAL_SKIP_OTHER — CI-job-token self-lookup; not usable with a PAT",

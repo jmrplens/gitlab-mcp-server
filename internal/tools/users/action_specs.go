@@ -83,6 +83,8 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		userDeleteSpec("delete_identity", toolutil.DestructiveAction(client, DeleteUserIdentity), "gitlab_delete_user_identity"),
 		// gitlab_create_current_user_pat — create a personal access token for the authenticated user.
 		userCreateSpec("create_current_user_pat", toolutil.RouteAction(client, CreateCurrentUserPAT), "gitlab_create_current_user_pat"),
+		// gitlab_upload_user_avatar — set the current authenticated user's avatar image (non-destructive replace).
+		userUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadCurrentUserAvatar), "gitlab_upload_user_avatar"),
 	}
 	if enterprise {
 		specs = append(
@@ -286,6 +288,12 @@ var userToolMetadata = map[string]userToolMeta{
 		aliases:        []string{"create personal access token", "create pat", "new access token"},
 		relatedActions: []string{"user.current", "user.create_runner"},
 		description:    "Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
+	},
+	"gitlab_upload_user_avatar": {
+		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user; there is no user_id parameter.",
+		aliases:        []string{"upload my avatar", "set current user avatar", "change my profile picture", "update user avatar"},
+		relatedActions: []string{"user.current", "user.modify", "user.current_user_status"},
+		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_delete_user_identity": {
 		usage:          "Delete a user's external authentication identity by user_id and provider name (admin only). Use when the prompt asks to unlink an SSO/LDAP identity from a user.",

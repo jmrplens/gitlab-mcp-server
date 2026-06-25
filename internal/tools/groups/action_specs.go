@@ -76,6 +76,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupReadSpec("shared_projects", toolutil.RouteAction(client, ListSharedProjects), "gitlab_group_shared_projects_list"),
 		// gitlab_group_transfer — move a group under a new parent group or to top level.
 		groupUpdateSpec("transfer", toolutil.RouteAction(client, TransferSubGroup), "gitlab_group_transfer"),
+		// gitlab_group_upload_avatar — upload or replace a group's avatar image.
+		groupUpdateSpec("upload_avatar", toolutil.RouteAction(client, UploadAvatar), "gitlab_group_upload_avatar"),
+		// gitlab_group_list_provisioned_users — list users provisioned via SAML/SCIM (Premium/Ultimate).
+		groupPremiumSpec(groupReadSpec("list_provisioned_users", toolutil.RouteAction(client, ListProvisionedUsers), "gitlab_group_list_provisioned_users")),
 		// gitlab_group_get_push_rules — get a group's push-rule configuration (Premium/Ultimate).
 		groupPremiumSpec(groupReadSpec("push_rule_get", toolutil.RouteAction(client, GetPushRules), "gitlab_group_get_push_rules")),
 		// gitlab_group_add_push_rule — add push rules to a group (Premium/Ultimate).
@@ -346,6 +350,46 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 		options.IndividualTool.Description = "Unarchive a GitLab group (restore write access). Returns: a success confirmation. See also: gitlab_group_archive, gitlab_group_get, gitlab_group_update."
+	case "gitlab_group_upload_avatar":
+		options.Tags = []string{"group", "avatar"}
+		options.Usage = "Upload or replace a group's avatar image. Send group_id, filename, and exactly one of file_path (a local image the MCP server reads) or content_base64 (inline base64-encoded image). Image must be JPG/PNG/GIF under 200 KB. Requires Owner role."
+		options.Aliases = []string{"upload group avatar", "set group avatar", "change group logo", "replace group picture"}
+		options.RelatedActions = []string{actionGroupGet, "group.update", "group.create"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:   "scope_group",
+				ValueSource:    "Group numeric ID or full path whose avatar is set.",
+				ExampleBinding: `params.group_id:"my-org/platform"`,
+			},
+			"file_path": {
+				ValueSource:      "Absolute path to a local image file on the MCP server filesystem.",
+				ExampleBinding:   `params.file_path:"/tmp/logo.png"`,
+				CommonConfusions: []string{"Provide exactly one of file_path or content_base64, not both; filename is always required."},
+			},
+			"content_base64": {
+				ValueSource:    "Base64-encoded image bytes when no local file path is available.",
+				ExampleBinding: `params.content_base64:"iVBORw0KGgo..."`,
+			},
+		}
+		options.IndividualTool.Description = "Upload or replace a GitLab group's avatar image. Returns: the updated group metadata. See also: gitlab_group_update, gitlab_group_get, gitlab_group_create."
+	case "gitlab_group_list_provisioned_users":
+		options.Tags = []string{"group", "scim", "saml"}
+		options.Usage = "List the users provisioned for a group through SAML/SCIM (Premium/Ultimate). Use username, search, active, blocked, created_after, created_before, and pagination to filter. Requires Owner role on a SAML/SCIM-enabled group."
+		options.Aliases = []string{"list provisioned users", "show scim provisioned users", "saml provisioned group users", "list group enterprise users"}
+		options.RelatedActions = []string{actionGroupGet, "group.members", "group.list"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path whose provisioned users are listed.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Lists users provisioned via the group's SAML/SCIM provider, not all members; use gitlab_group_members_list for membership."},
+			},
+			"search": {
+				ValueSource:    "Name, username, or email keywords to filter provisioned users.",
+				ExampleBinding: `params.search:"jane"`,
+			},
+		}
+		options.IndividualTool.Description = "List the users provisioned for a GitLab group via SAML/SCIM (Premium/Ultimate). Returns: provisioned users with username, name, state, and identity metadata. See also: gitlab_group_members_list, gitlab_group_get, gitlab_group_list."
 	default:
 		if !applyGroupShareTransferMetadata(individualTool, &options) {
 			applyGroupRelationMetadata(individualTool, &options)

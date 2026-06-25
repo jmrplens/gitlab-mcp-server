@@ -62,6 +62,31 @@ func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions 
 	}
 }
 
+// EpicActionSpecs returns canonical specs for group epic resource event actions.
+// Epic label events are a GitLab Premium/Ultimate (Edition: "premium") feature.
+func EpicActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		epicEventReadSpec("event_epic_label_list", toolutil.RouteAction(client, ListGroupEpicLabelEvents), "gitlab_list_group_epic_label_events"),
+		epicEventReadSpec("event_epic_label_get", toolutil.RouteAction(client, GetGroupEpicLabelEvent), "gitlab_get_group_epic_label_event"),
+	}
+}
+
+func epicEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := epicEventOptions(individualTool)
+	decorateEventMeta(&options, individualTool)
+	return toolutil.NewReadActionSpec(name, route, options)
+}
+
+func epicEventOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"group", "epic", "resource_event"},
+		Edition:        "premium",
+		OpenWorld:      true,
+		OwnerPackage:   "resourceevents",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
 // eventActionMetaEntry is the discovery metadata for one resource-event action.
 type eventActionMetaEntry struct {
 	usage       string
@@ -122,6 +147,18 @@ var eventActionMeta = map[string]eventActionMetaEntry{
 		aliases:     []string{"get mr label event", "show merge request label change"},
 		description: "Get a single label event for a merge request. Returns: the event with action, the label object, and the acting user. See also: gitlab_mr_label_event_list.",
 		related:     []string{"merge_request.event_mr_label_list", "merge_request.event_mr_milestone_get", "merge_request.event_mr_state_get", "merge_request.get"},
+	},
+	"gitlab_list_group_epic_label_events": {
+		usage:       "List the label-change audit events for one group epic (when each label was added or removed and by whom). Requires GitLab Premium/Ultimate.",
+		aliases:     []string{"list epic label events", "epic label history", "label changes on epic", "group epic label events"},
+		description: "List label events for a group epic (Premium/Ultimate). Returns: label events with action, the label object, the acting user, and pagination metadata. See also: gitlab_get_group_epic_label_event, gitlab_epic_get.",
+		related:     []string{"epic.event_epic_label_get", "epic.get", "epic.list", "group.get"},
+	},
+	"gitlab_get_group_epic_label_event": {
+		usage:       "Fetch one group epic label-change event by id (a single add/remove of a label). Requires GitLab Premium/Ultimate.",
+		aliases:     []string{"get epic label event", "show epic label change", "group epic label event"},
+		description: "Get a single label event for a group epic (Premium/Ultimate). Returns: the event with action, the label object, and the acting user. See also: gitlab_list_group_epic_label_events, gitlab_epic_get.",
+		related:     []string{"epic.event_epic_label_list", "epic.get", "epic.list", "group.get"},
 	},
 	"gitlab_issue_milestone_event_list": {
 		usage:       "List the milestone-change audit events for one issue (when the milestone was assigned or removed and by whom).",

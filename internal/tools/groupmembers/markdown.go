@@ -57,7 +57,80 @@ func FormatShareMarkdown(out ShareOutput) string {
 	return b.String()
 }
 
+// FormatBillableMembersMarkdown formats a list of billable group members as
+// markdown.
+func FormatBillableMembersMarkdown(out BillableMembersOutput) string {
+	var b strings.Builder
+	if len(out.Members) == 0 {
+		b.WriteString("No billable members found.\n")
+		return b.String()
+	}
+	b.WriteString("## Billable Group Members\n\n")
+	b.WriteString("| Username | Name | State | Membership Type | Removable | Last Activity |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	for _, m := range out.Members {
+		username := toolutil.EscapeMdTableCell(m.Username)
+		if m.WebURL != "" {
+			username = toolutil.MdTitleLink(m.Username, m.WebURL)
+		}
+		fmt.Fprintf(
+			&b, "| %s | %s | %s | %s | %t | %s |\n",
+			username,
+			toolutil.EscapeMdTableCell(m.Name),
+			m.State,
+			toolutil.EscapeMdTableCell(m.MembershipType),
+			m.Removable,
+			toolutil.EscapeMdTableCell(m.LastActivityOn),
+		)
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"Use action 'group_billable_member_memberships_list' with user_id to see why a member is billable",
+		"Use action 'group_billable_member_remove' to remove a removable billable member",
+	)
+	return b.String()
+}
+
+// FormatBillableMembershipsMarkdown formats a billable member's memberships as
+// markdown.
+func FormatBillableMembershipsMarkdown(out BillableMembershipsOutput) string {
+	var b strings.Builder
+	if len(out.Memberships) == 0 {
+		b.WriteString("No memberships found for this billable member.\n")
+		return b.String()
+	}
+	b.WriteString("## Billable Member Memberships\n\n")
+	b.WriteString("| Source | Access Level | Expires |\n")
+	b.WriteString("| --- | --- | --- |\n")
+	for _, m := range out.Memberships {
+		source := toolutil.EscapeMdTableCell(m.SourceFullName)
+		if m.SourceMembersURL != "" {
+			source = toolutil.MdTitleLink(m.SourceFullName, m.SourceMembersURL)
+		}
+		access := ""
+		if m.AccessLevel != nil {
+			access = fmt.Sprintf("%s (%d)", toolutil.EscapeMdTableCell(m.AccessLevel.StringValue), m.AccessLevel.IntegerValue)
+		}
+		expires := ""
+		if m.ExpiresAt != "" {
+			expires = toolutil.FormatTime(m.ExpiresAt)
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", source, access, expires)
+	}
+	toolutil.WritePagination(&b, out.Pagination)
+	toolutil.WriteHints(
+		&b,
+		toolutil.HintPreserveLinks,
+		"Use action 'members' on the source group/project to inspect that membership",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatMemberMarkdown)
 	toolutil.RegisterMarkdown(FormatShareMarkdown)
+	toolutil.RegisterMarkdown(FormatBillableMembersMarkdown)
+	toolutil.RegisterMarkdown(FormatBillableMembershipsMarkdown)
 }

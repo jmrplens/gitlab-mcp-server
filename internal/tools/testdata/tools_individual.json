@@ -33196,6 +33196,145 @@
     }
   },
   {
+    "name": "gitlab_get_group_epic_label_event",
+    "description": "Get a single label event for a group epic (Premium/Ultimate). Returns: the event with action, the label object, and the acting user. See also: gitlab_list_group_epic_label_events, gitlab_epic_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "epic_iid": {
+          "description": "Epic internal ID (IID) within the group",
+          "type": "integer"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "label_event_id": {
+          "description": "Label event ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_id",
+        "epic_iid",
+        "label_event_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "label": {
+          "additionalProperties": false,
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "text_color": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "color",
+            "text_color",
+            "description"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
+        },
+        "user": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state",
+            "avatar_url",
+            "web_url"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "created_at",
+        "resource_type",
+        "resource_id"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_get_group_integration",
     "description": "Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration",
     "inputSchema": {
@@ -50605,6 +50744,390 @@
     }
   },
   {
+    "name": "gitlab_group_list_provisioned_users",
+    "description": "List the users provisioned for a GitLab group via SAML/SCIM (Premium/Ultimate). Returns: provisioned users with username, name, state, and identity metadata. See also: gitlab_group_members_list, gitlab_group_get, gitlab_group_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "description": "Filter to active (true) or inactive (false) users",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "blocked": {
+          "description": "Filter to blocked (true) or unblocked (false) users",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "created_after": {
+          "description": "Return users created after this RFC3339 timestamp (e.g. 2024-01-02T15:04:05Z)",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Return users created before this RFC3339 timestamp (e.g. 2024-12-31T23:59:59Z)",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Column to order provisioned users by (e.g. id, name, username, created_at, updated_at)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Search provisioned users by name, username, or email",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
+        "username": {
+          "description": "Filter provisioned users by exact username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        },
+        "users": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "bio": {
+                "type": "string"
+              },
+              "bot": {
+                "type": "boolean"
+              },
+              "can_create_group": {
+                "type": "boolean"
+              },
+              "can_create_organization": {
+                "type": "boolean"
+              },
+              "can_create_project": {
+                "type": "boolean"
+              },
+              "color_scheme_id": {
+                "type": "integer"
+              },
+              "confirmed_at": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "current_sign_in_at": {
+                "type": "string"
+              },
+              "current_sign_in_ip": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "email": {
+                "type": "string"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "external": {
+                "type": "boolean"
+              },
+              "extra_shared_runners_minutes_limit": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "extern_uid"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "is_admin": {
+                "type": "boolean"
+              },
+              "is_auditor": {
+                "type": "boolean"
+              },
+              "job_title": {
+                "type": "string"
+              },
+              "last_activity_on": {
+                "type": "string"
+              },
+              "last_sign_in_at": {
+                "type": "string"
+              },
+              "last_sign_in_ip": {
+                "type": "string"
+              },
+              "linkedin": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "namespace_id": {
+                "type": "integer"
+              },
+              "note": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "private_profile": {
+                "type": "boolean"
+              },
+              "projects_limit": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "public_email": {
+                "type": "string"
+              },
+              "scim_identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "extern_uid",
+                    "group_id",
+                    "active"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "shared_runners_minutes_limit": {
+                "type": "integer"
+              },
+              "skype": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "theme_id": {
+                "type": "integer"
+              },
+              "twitter": {
+                "type": "string"
+              },
+              "two_factor_enabled": {
+                "type": "boolean"
+              },
+              "username": {
+                "type": "string"
+              },
+              "using_license_seat": {
+                "type": "boolean"
+              },
+              "web_url": {
+                "type": "string"
+              },
+              "website_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "state"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "users",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_group_member_add",
     "description": "Add a user as a direct member of a group. Returns: the created membership with access level, custom member role, expiry, and seat usage. See also: gitlab_group_members_list, gitlab_group_member_edit, gitlab_group_member_get.",
     "inputSchema": {
@@ -58196,7 +58719,7 @@
   },
   {
     "name": "gitlab_group_service_account_pat_rotate",
-    "description": "Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Requires GitLab Premium/Ultimate and Owner permissions. Rotating revokes the supplied token_id and returns a brand-new token value; capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.",
+    "description": "Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (Premium/Ultimate, Owner role).\nReturns: the new personal access token object (id, name, scopes, active, revoked, created_at, expires_at, and the one-time token value — capture it immediately, it is not retrievable later).\nSee also: gitlab_group_service_account_pat_create, gitlab_group_service_account_pat_revoke, gitlab_group_service_account_pat_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61093,6 +61616,555 @@
       },
       "required": [
         "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_merge_on_skipped_pipeline": {
+          "type": "boolean"
+        },
+        "allowed_email_domains_list": {
+          "type": "string"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "auto_devops_enabled": {
+          "type": "boolean"
+        },
+        "avatar_url": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "custom_attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "default_branch": {
+          "type": "string"
+        },
+        "default_branch_protection": {
+          "type": "integer"
+        },
+        "default_branch_protection_defaults": {
+          "additionalProperties": false,
+          "properties": {
+            "allow_force_push": {
+              "type": "boolean"
+            },
+            "allowed_to_merge": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "access_level": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "allowed_to_push": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "access_level": {
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "code_owner_approval_required": {
+              "type": "boolean"
+            },
+            "developer_can_initial_push": {
+              "type": "boolean"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "duo_availability": {
+          "type": "string"
+        },
+        "duo_features_enabled": {
+          "type": "boolean"
+        },
+        "emails_disabled": {
+          "type": "boolean"
+        },
+        "emails_enabled": {
+          "type": "boolean"
+        },
+        "enabled_git_access_protocol": {
+          "type": "string"
+        },
+        "experiment_features_enabled": {
+          "type": "boolean"
+        },
+        "extra_shared_runners_minutes_limit": {
+          "type": "integer"
+        },
+        "file_template_project_id": {
+          "type": "integer"
+        },
+        "full_name": {
+          "type": "string"
+        },
+        "full_path": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "ip_restriction_ranges": {
+          "type": "string"
+        },
+        "ldap_access": {
+          "type": "integer"
+        },
+        "ldap_cn": {
+          "type": "string"
+        },
+        "ldap_group_links": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cn": {
+                "type": "string"
+              },
+              "filter": {
+                "type": "string"
+              },
+              "group_access": {
+                "type": "integer"
+              },
+              "member_role_id": {
+                "type": "integer"
+              },
+              "provider": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "cn",
+              "group_access",
+              "provider"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "lfs_enabled": {
+          "type": "boolean"
+        },
+        "lock_duo_features_enabled": {
+          "type": "boolean"
+        },
+        "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "marked_for_deletion_on": {
+          "type": "string"
+        },
+        "math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "max_artifacts_size": {
+          "type": "integer"
+        },
+        "membership_lock": {
+          "type": "boolean"
+        },
+        "mentions_disabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "only_allow_merge_if_all_discussions_are_resolved": {
+          "type": "boolean"
+        },
+        "only_allow_merge_if_pipeline_succeeds": {
+          "type": "boolean"
+        },
+        "organization_id": {
+          "type": "integer"
+        },
+        "parent_id": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "prevent_forking_outside_group": {
+          "type": "boolean"
+        },
+        "prevent_sharing_groups_outside_hierarchy": {
+          "type": "boolean"
+        },
+        "project_creation_level": {
+          "type": "string"
+        },
+        "projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace",
+              "visibility",
+              "web_url",
+              "archived"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "repository_storage": {
+          "type": "string"
+        },
+        "request_access_enabled": {
+          "type": "boolean"
+        },
+        "require_two_factor_authentication": {
+          "type": "boolean"
+        },
+        "runners_token": {
+          "type": "string"
+        },
+        "saml_group_links": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "type": "integer"
+              },
+              "member_role_id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "access_level"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "share_with_group_lock": {
+          "type": "boolean"
+        },
+        "shared_projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace",
+              "visibility",
+              "web_url",
+              "archived"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "shared_runners_minutes_limit": {
+          "type": "integer"
+        },
+        "shared_runners_setting": {
+          "type": "string"
+        },
+        "shared_with_groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "expires_at": {
+                "type": "string"
+              },
+              "group_access_level": {
+                "type": "integer"
+              },
+              "group_full_path": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "group_name": {
+                "type": "string"
+              },
+              "member_role_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "group_id",
+              "group_name",
+              "group_full_path",
+              "group_access_level"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "commit_count": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "job_artifacts_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "commit_count",
+            "storage_size",
+            "repository_size",
+            "wiki_size",
+            "lfs_objects_size",
+            "job_artifacts_size",
+            "pipeline_artifacts_size",
+            "packages_size",
+            "snippets_size",
+            "uploads_size",
+            "container_registry_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "subgroup_creation_level": {
+          "type": "string"
+        },
+        "two_factor_grace_period": {
+          "type": "integer"
+        },
+        "visibility": {
+          "type": "string"
+        },
+        "web_url": {
+          "type": "string"
+        },
+        "wiki_access_level": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "full_path",
+        "visibility",
+        "web_url",
+        "request_access_enabled",
+        "lfs_enabled",
+        "archived",
+        "prevent_sharing_groups_outside_hierarchy",
+        "math_rendering_limits_enabled",
+        "lock_math_rendering_limits_enabled",
+        "duo_features_enabled",
+        "lock_duo_features_enabled",
+        "experiment_features_enabled",
+        "membership_lock",
+        "share_with_group_lock",
+        "require_two_factor_authentication",
+        "auto_devops_enabled",
+        "emails_enabled",
+        "emails_disabled",
+        "mentions_disabled",
+        "prevent_forking_outside_group",
+        "only_allow_merge_if_pipeline_succeeds",
+        "allow_merge_on_skipped_pipeline",
+        "only_allow_merge_if_all_discussions_are_resolved"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_group_upload_avatar",
+    "description": "Upload or replace a GitLab group's avatar image. Returns: the updated group metadata. See also: gitlab_group_update, gitlab_group_get, gitlab_group_create.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content_base64": {
+          "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Avatar filename (e.g. avatar.png)",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id",
+        "filename"
       ],
       "type": "object"
     },
@@ -89851,6 +90923,333 @@
     }
   },
   {
+    "name": "gitlab_list_billable_group_members",
+    "description": "List the billable members of a group (Premium/Ultimate). Returns: each member's id, username, name, state, email, membership type, removable flag, is_last_owner, last activity, and last login, plus pagination. See also: gitlab_list_billable_member_memberships, gitlab_remove_billable_group_member, gitlab_group_members_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Column to order billable members by (e.g. id, name, username, last_activity_on)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "search": {
+          "description": "Filter billable members by name or username",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "members": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "is_last_owner": {
+                "type": "boolean"
+              },
+              "last_activity_on": {
+                "type": "string"
+              },
+              "last_login_at": {
+                "type": "string"
+              },
+              "membership_type": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "removable": {
+                "type": "boolean"
+              },
+              "state": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "state",
+              "web_url",
+              "removable",
+              "is_last_owner"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "members",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_billable_member_memberships",
+    "description": "List the memberships of a billable group member (Premium/Ultimate). Returns: each membership's source id, source full name, source members URL, access level (numeric + string), created/expiry dates, plus pagination. See also: gitlab_list_billable_group_members, gitlab_remove_billable_group_member, gitlab_group_members_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Column to order memberships by (e.g. id, name)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction: asc or desc",
+          "type": "string"
+        },
+        "user_id": {
+          "description": "User ID of the billable member",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_id",
+        "user_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "memberships": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access_level": {
+                "additionalProperties": false,
+                "properties": {
+                  "integer_value": {
+                    "type": "integer"
+                  },
+                  "string_value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "integer_value",
+                  "string_value"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "source_full_name": {
+                "type": "string"
+              },
+              "source_id": {
+                "type": "integer"
+              },
+              "source_members_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "source_id",
+              "source_full_name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "memberships",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_list_branch_rules",
     "description": "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_get_project.",
     "inputSchema": {
@@ -95208,6 +96607,225 @@
       },
       "required": [
         "badges",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_group_epic_label_events",
+    "description": "List label events for a group epic (Premium/Ultimate). Returns: label events with action, the label object, the acting user, and pagination metadata. See also: gitlab_get_group_epic_label_event, gitlab_epic_get.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "epic_iid": {
+          "description": "Epic internal ID (IID) within the group",
+          "type": "integer"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "order_by": {
+          "description": "Column to order keyset-paginated results by (e.g. id)",
+          "type": "string"
+        },
+        "page": {
+          "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "type": "integer"
+        },
+        "page_token": {
+          "description": "Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.",
+          "type": "string"
+        },
+        "pagination": {
+          "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
+          "type": "string"
+        },
+        "per_page": {
+          "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "type": "integer"
+        },
+        "sort": {
+          "description": "Sort direction for keyset pagination: asc or desc",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id",
+        "epic_iid"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "label": {
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "text_color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "color",
+                  "text_color",
+                  "description"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "resource_id": {
+                "type": "integer"
+              },
+              "resource_type": {
+                "type": "string"
+              },
+              "user": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "action",
+              "created_at",
+              "resource_type",
+              "resource_id"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "events",
         "pagination"
       ],
       "type": "object"
@@ -175851,6 +177469,63 @@
     }
   },
   {
+    "name": "gitlab_remove_billable_group_member",
+    "description": "Remove a billable member from a group, freeing a seat (Premium/Ultimate, destructive, requires confirmation). Returns: a removal confirmation. See also: gitlab_list_billable_group_members, gitlab_list_billable_member_memberships, gitlab_group_members_list.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "user_id": {
+          "description": "User ID of the billable member to remove",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_id",
+        "user_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_remove_group_job_token_allowlist",
     "description": "Remove a group from a project's CI/CD job token allowlist. Returns: a success confirmation naming the removed group. See also: gitlab_list_job_token_group_allowlist, gitlab_add_group_job_token_allowlist, gitlab_remove_project_job_token_allowlist.",
     "inputSchema": {
@@ -198226,6 +199901,307 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_upload_user_avatar",
+    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "content_base64": {
+          "description": "Base64-encoded image content. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided.",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Avatar filename (e.g. avatar.png)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "avatar_url": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "bot": {
+          "type": "boolean"
+        },
+        "can_create_group": {
+          "type": "boolean"
+        },
+        "can_create_organization": {
+          "type": "boolean"
+        },
+        "can_create_project": {
+          "type": "boolean"
+        },
+        "color_scheme_id": {
+          "type": "integer"
+        },
+        "confirmed_at": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "current_sign_in_at": {
+          "type": "string"
+        },
+        "current_sign_in_ip": {
+          "type": "string"
+        },
+        "custom_attributes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "email": {
+          "type": "string"
+        },
+        "extern_uid": {
+          "type": "string"
+        },
+        "external": {
+          "type": "boolean"
+        },
+        "extra_shared_runners_minutes_limit": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "extern_uid": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "extern_uid"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "is_admin": {
+          "type": "boolean"
+        },
+        "is_auditor": {
+          "type": "boolean"
+        },
+        "job_title": {
+          "type": "string"
+        },
+        "last_activity_on": {
+          "type": "string"
+        },
+        "last_sign_in_at": {
+          "type": "string"
+        },
+        "last_sign_in_ip": {
+          "type": "string"
+        },
+        "linkedin": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace_id": {
+          "type": "integer"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "note": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "private_profile": {
+          "type": "boolean"
+        },
+        "projects_limit": {
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "public_email": {
+          "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "shared_runners_minutes_limit": {
+          "type": "integer"
+        },
+        "skype": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "theme_id": {
+          "type": "integer"
+        },
+        "twitter": {
+          "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": "boolean"
+        },
+        "username": {
+          "type": "string"
+        },
+        "using_license_seat": {
+          "type": "boolean"
+        },
+        "web_url": {
+          "type": "string"
+        },
+        "website_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email",
+        "name",
+        "state",
+        "web_url",
+        "avatar_url",
+        "is_admin",
+        "is_auditor",
+        "bot",
+        "two_factor_enabled",
+        "external",
+        "locked",
+        "private_profile",
+        "projects_limit",
+        "can_create_project",
+        "can_create_group",
+        "can_create_organization",
+        "using_license_seat"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
       "openWorldHint": true
     }
   },

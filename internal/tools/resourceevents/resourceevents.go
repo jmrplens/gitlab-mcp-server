@@ -57,6 +57,23 @@ type GetMRLabelEventInput struct {
 	LabelEventID int64                `json:"label_event_id" jsonschema:"Label event ID,required"`
 }
 
+// ListGroupEpicLabelEventsInput defines parameters for listing group epic label events.
+type ListGroupEpicLabelEventsInput struct {
+	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	EpicIID int64                `json:"epic_iid" jsonschema:"Epic internal ID (IID) within the group,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// GetGroupEpicLabelEventInput defines parameters for getting a single group epic label event.
+type GetGroupEpicLabelEventInput struct {
+	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	EpicIID      int64                `json:"epic_iid" jsonschema:"Epic internal ID (IID) within the group,required"`
+	LabelEventID int64                `json:"label_event_id" jsonschema:"Label event ID,required"`
+}
+
 // ListIssueMilestoneEventsInput defines parameters for listing issue milestone events.
 type ListIssueMilestoneEventsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -259,6 +276,43 @@ func GetMRLabelEvent(ctx context.Context, client *gitlabclient.Client, input Get
 	if err != nil {
 		return LabelEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_label_event_get", err, http.StatusNotFound,
 			"verify label_event_id with gitlab_mr_label_event_list")
+	}
+	return toLabelEventOutput(event), nil
+}
+
+// ListGroupEpicLabelEvents lists label events for a group epic (Premium/Ultimate).
+func ListGroupEpicLabelEvents(ctx context.Context, client *gitlabclient.Client, input ListGroupEpicLabelEventsInput) (ListLabelEventsOutput, error) {
+	if input.GroupID == "" {
+		return ListLabelEventsOutput{}, toolutil.ErrFieldRequired("group_id")
+	}
+	if input.EpicIID <= 0 {
+		return ListLabelEventsOutput{}, toolutil.ErrRequiredInt64("gitlab_list_group_epic_label_events", "epic_iid")
+	}
+	opts := &gl.ListLabelEventsOptions{}
+	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	events, resp, err := client.GL().ResourceLabelEvents.ListGroupEpicLabelEvents(string(input.GroupID), input.EpicIID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_epic_label_events", err, http.StatusNotFound,
+			"epic label events require GitLab Premium/Ultimate — verify group_id and epic_iid (the per-group epic number) with gitlab_epic_get")
+	}
+	return toLabelEventsOutput(events, resp), nil
+}
+
+// GetGroupEpicLabelEvent gets a single label event for a group epic (Premium/Ultimate).
+func GetGroupEpicLabelEvent(ctx context.Context, client *gitlabclient.Client, input GetGroupEpicLabelEventInput) (LabelEventOutput, error) {
+	if input.GroupID == "" {
+		return LabelEventOutput{}, toolutil.ErrFieldRequired("group_id")
+	}
+	if input.EpicIID <= 0 {
+		return LabelEventOutput{}, toolutil.ErrRequiredInt64("gitlab_get_group_epic_label_event", "epic_iid")
+	}
+	if input.LabelEventID <= 0 {
+		return LabelEventOutput{}, toolutil.ErrRequiredInt64("gitlab_get_group_epic_label_event", "label_event_id")
+	}
+	event, _, err := client.GL().ResourceLabelEvents.GetGroupEpicLabelEvent(string(input.GroupID), input.EpicIID, input.LabelEventID, gl.WithContext(ctx))
+	if err != nil {
+		return LabelEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_epic_label_event", err, http.StatusNotFound,
+			"epic label events require GitLab Premium/Ultimate — verify label_event_id with gitlab_list_group_epic_label_events")
 	}
 	return toLabelEventOutput(event), nil
 }

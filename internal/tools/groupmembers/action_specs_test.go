@@ -41,6 +41,15 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler.HandleFunc("DELETE /api/v4/groups/5/share/10", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	handler.HandleFunc("GET /api/v4/groups/5/billable_members", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"username":"dev","name":"Developer","state":"active"}]`)
+	})
+	handler.HandleFunc("GET /api/v4/groups/5/billable_members/10/memberships", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"source_id":7,"source_full_name":"Org / Team"}]`)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/5/billable_members/10", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	byTool := groupMemberSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 
 	tests := []struct {
@@ -55,6 +64,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"remove", "gitlab_group_member_remove", map[string]any{"group_id": "5", "user_id": 10}},
 		{"share", "gitlab_group_share", map[string]any{"group_id": "5", "share_group_id": 10, "group_access": 30}},
 		{"unshare", "gitlab_group_unshare", map[string]any{"group_id": "5", "share_group_id": 10}},
+		{"billable_members", "gitlab_list_billable_group_members", map[string]any{"group_id": "5"}},
+		{"billable_memberships", "gitlab_list_billable_member_memberships", map[string]any{"group_id": "5", "user_id": 10}},
+		{"billable_remove", "gitlab_remove_billable_group_member", map[string]any{"group_id": "5", "user_id": 10}},
 	}
 
 	for _, tt := range tests {

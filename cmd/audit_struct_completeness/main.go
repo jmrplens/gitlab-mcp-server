@@ -1044,7 +1044,27 @@ func normalizeSDKTag(tag string) string {
 	tag = strings.TrimSuffix(tag, "[]")
 	tag = strings.ReplaceAll(tag, "[", "_")
 	tag = strings.ReplaceAll(tag, "]", "")
-	return tag
+	// GraphQL-backed SDK structs tag fields in camelCase (createdAt, targetBranch)
+	// where the MCP output uses the project's snake_case convention. This runs only
+	// in the fallback path (after an exact-tag match fails), so it can only ADD a
+	// match (camelCase SDK tag <-> snake_case MCP tag), never break an exact one.
+	return camelToSnake(tag)
+}
+
+// camelToSnake lowercases a camelCase identifier with underscore separators
+// (createdAt -> created_at). A snake_case input is returned unchanged (no uppercase).
+func camelToSnake(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func tagValue(raw reflect.StructTag, keys []string) string {
