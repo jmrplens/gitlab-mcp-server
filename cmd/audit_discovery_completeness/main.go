@@ -485,6 +485,13 @@ func weakAliases(spec toolutil.ActionSpec, minAliases int) bool {
 // RelatedActions (or CommonConfusions) AND a Usage signal that distinguishes
 // it from siblings. When there are no siblings (single-member or empty
 // cluster membership), disambiguation is vacuous and the function returns true.
+//
+// RelatedActions commonly use cross-package prefixed names
+// (e.g. "release.link_create" or "package.registry_tag_delete") while sibling
+// cluster members use the bare action name ("link_create"). The match below
+// accepts both forms: a related action counts as a sibling reference if
+// either the full string or its tail after the last "." equals a sibling
+// name, so gold-standard fixes in either naming convention pass.
 func hasDisambiguation(spec toolutil.ActionSpec, clusterMembers []string) bool {
 	siblings := siblingSet(clusterMembers, spec.Name)
 	if len(siblings) == 0 {
@@ -506,10 +513,17 @@ func hasDisambiguation(spec toolutil.ActionSpec, clusterMembers []string) bool {
 	if !hasSignal {
 		return false
 	}
-	// (a) A sibling in RelatedActions.
+	// (a) A sibling in RelatedActions (accept prefixed or bare form).
 	for _, related := range spec.RelatedActions {
-		if _, ok := siblings[strings.ToLower(strings.TrimSpace(related))]; ok {
+		lc := strings.ToLower(strings.TrimSpace(related))
+		if _, ok := siblings[lc]; ok {
 			return true
+		}
+		// Tail match: "release.link_create" -> "link_create".
+		if idx := strings.LastIndex(lc, "."); idx >= 0 {
+			if _, ok := siblings[lc[idx+1:]]; ok {
+				return true
+			}
 		}
 	}
 	// (a') A sibling mentioned in any CommonConfusions entry of any param.
