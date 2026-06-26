@@ -164,7 +164,7 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"list draft notes", "show pending mr review comments", "list unpublished mr notes"},
 		related: []string{actionDraftNoteGet, "mrdraftnotes.draft_note_create", actionDraftNotePublishAll},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 		},
 		description: "List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_create, gitlab_mr_draft_note_publish_all.",
@@ -174,9 +174,9 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"get draft note", "show draft note details", "fetch pending mr comment"},
 		related: []string{actionDraftNoteList, "mrdraftnotes.draft_note_update", actionDraftNotePublish},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
-			paramNoteID:           noteIDGuidance,
+			paramNoteID:          noteIDGuidance,
 		},
 		description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
@@ -185,7 +185,7 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
 		related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			"note": {
 				SemanticRole:   "comment_body",
@@ -205,9 +205,9 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"edit draft note", "update pending mr comment", "modify draft review note"},
 		related: []string{actionDraftNoteGet, actionDraftNoteList, actionDraftNotePublish},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
-			paramNoteID:           noteIDGuidance,
+			paramNoteID:          noteIDGuidance,
 			"note": {
 				SemanticRole:   "comment_body",
 				ValueSource:    "The revised Markdown body for the draft note.",
@@ -221,9 +221,9 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"delete draft note", "discard pending mr comment", "remove draft review note"},
 		related: []string{actionDraftNoteList, actionDraftNoteGet},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
-			paramNoteID:           noteIDGuidance,
+			paramNoteID:          noteIDGuidance,
 		},
 		description: "Delete a pending draft note permanently. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_get.",
 	},
@@ -232,9 +232,9 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"publish draft note", "post draft mr comment", "submit single review comment"},
 		related: []string{actionDraftNoteList, actionDraftNotePublishAll, actionDraftNoteGet},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
-			paramNoteID:           noteIDGuidance,
+			paramNoteID:          noteIDGuidance,
 		},
 		description: "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
 	},
@@ -243,7 +243,7 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 		aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review"},
 		related: []string{actionDraftNoteList, actionDraftNotePublish},
 		guidance: map[string]toolutil.ParameterGuidance{
-			paramProjectID:        projectGuidance,
+			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 		},
 		description: "Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",

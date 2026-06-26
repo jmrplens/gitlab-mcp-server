@@ -6,24 +6,24 @@ import (
 )
 
 const (
-	actionIssueGet                 = "issue.get"
-	actionMRGet                    = "merge_request.get"
-	actionIssueLabelList           = "issue.event_issue_label_list"
-	actionIssueStatList            = "issue.event_issue_state_list"
-	actionIssueLabelGet            = "issue.event_issue_label_get"
-	actionIssueStateGet            = "issue.event_issue_state_get"
-	actionIssueMilestoneList       = "issue.event_issue_milestone_list"
-	actionIssueMilestoneGet        = "issue.event_issue_milestone_get"
-	actionMRStatList               = "merge_request.event_mr_state_list"
-	actionMRStatGet                = "merge_request.event_mr_state_get"
-	actionMRMilestoneList          = "merge_request.event_mr_milestone_list"
-	actionMRMilestoneGet           = "merge_request.event_mr_milestone_get"
-	actionMRLabelList              = "merge_request.event_mr_label_list"
-	actionMRLabelGet               = "merge_request.event_mr_label_get"
-	domainResourceEvents           = "resourceevents"
-	tagResourceEvent               = "resource_event"
-	usageDefault                   = "Use to execute resourceevents domain action."
-	editionPremium                 = "premium"
+	actionIssueGet           = "issue.get"
+	actionMRGet              = "merge_request.get"
+	actionIssueLabelList     = "issue.event_issue_label_list"
+	actionIssueStatList      = "issue.event_issue_state_list"
+	actionIssueLabelGet      = "issue.event_issue_label_get"
+	actionIssueStateGet      = "issue.event_issue_state_get"
+	actionIssueMilestoneList = "issue.event_issue_milestone_list"
+	actionIssueMilestoneGet  = "issue.event_issue_milestone_get"
+	actionMRStatList         = "merge_request.event_mr_state_list"
+	actionMRStatGet          = "merge_request.event_mr_state_get"
+	actionMRMilestoneList    = "merge_request.event_mr_milestone_list"
+	actionMRMilestoneGet     = "merge_request.event_mr_milestone_get"
+	actionMRLabelList        = "merge_request.event_mr_label_list"
+	actionMRLabelGet         = "merge_request.event_mr_label_get"
+	domainResourceEvents     = "resourceevents"
+	tagResourceEvent         = "resource_event"
+	usageDefault             = "Use to execute resourceevents domain action."
+	editionPremium           = "premium"
 )
 
 // IssueActionSpecs returns canonical specs for issue resource event actions.
@@ -60,7 +60,7 @@ func issueEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"issue", tagResourceEvent},
 		OpenWorld:      true,
-		OwnerPackage: domainResourceEvents,
+		OwnerPackage:   domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -87,7 +87,7 @@ func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions 
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"merge_request", tagResourceEvent},
 		OpenWorld:      true,
-		OwnerPackage: domainResourceEvents,
+		OwnerPackage:   domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -110,9 +110,9 @@ func epicEventReadSpec(name string, route toolutil.ActionRoute, individualTool s
 func epicEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"group", "epic", tagResourceEvent},
-		Edition: editionPremium,
+		Edition:        editionPremium,
 		OpenWorld:      true,
-		OwnerPackage: domainResourceEvents,
+		OwnerPackage:   domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

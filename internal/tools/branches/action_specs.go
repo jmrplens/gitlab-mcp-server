@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	actionBranchList          = "branch.list"
-	actionBranchUnprotect     = "branch.unprotect"
-	actionBranchProtect       = "branch.protect"
-	actionBranchGetProtected  = "branch.get_protected"
+	actionBranchList            = "branch.list"
+	actionBranchUnprotect       = "branch.unprotect"
+	actionBranchProtect         = "branch.protect"
+	actionBranchGetProtected    = "branch.get_protected"
 	actionBranchUpdateProtected = "branch.update_protected"
-	paramBranchName           = "branch_name"
+	paramBranchName             = "branch_name"
 )
 
 // ActionSpecs returns canonical specs for branch and protected branch actions.

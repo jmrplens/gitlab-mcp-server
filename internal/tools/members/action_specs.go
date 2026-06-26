@@ -8,14 +8,14 @@ import (
 )
 
 const (
-	actionMembersList  = "members.list"
-	actionMemberGet    = "member.get"
-	actionMemberEdit   = "member.edit"
-	actionUserGet      = "user.get"
-	actionProjectGet   = "project.get"
-	paramUserID        = "user_id"
-	paramProjectID     = "project_id"
-	paramAccessLevel   = "access_level"
+	actionMembersList = "members.list"
+	actionMemberGet   = "member.get"
+	actionMemberEdit  = "member.edit"
+	actionUserGet     = "user.get"
+	actionProjectGet  = "project.get"
+	paramUserID       = "user_id"
+	paramProjectID    = "project_id"
+	paramAccessLevel  = "access_level"
 )
 
 // ActionSpecs returns canonical specs for project member actions exposed

@@ -9,18 +9,18 @@ import (
 )
 
 const (
-	actionIssueList          = "issue.list"
-	actionSearchIssues       = "search.issues"
-	actionIssueGet           = "issue.get"
-	actionIssueUpdate        = "issue.update"
-	actionIssueTimeStatsGet  = "issue.time_stats_get"
-	actionIssueTimeEstSet    = "issue.time_estimate_set"
-	actionIssueSpentTimeAdd  = "issue.spent_time_add"
-	toolIssueListGroup       = "gitlab_issue_list_group"
-	paramStateEvent          = "state_event"
-	roleScopeProject         = "scope_project"
-	paramProjectID           = "project_id"
-	domainIssues             = "issues"
+	actionIssueList         = "issue.list"
+	actionSearchIssues      = "search.issues"
+	actionIssueGet          = "issue.get"
+	actionIssueUpdate       = "issue.update"
+	actionIssueTimeStatsGet = "issue.time_stats_get"
+	actionIssueTimeEstSet   = "issue.time_estimate_set"
+	actionIssueSpentTimeAdd = "issue.spent_time_add"
+	toolIssueListGroup      = "gitlab_issue_list_group"
+	paramStateEvent         = "state_event"
+	roleScopeProject        = "scope_project"
+	paramProjectID          = "project_id"
+	domainIssues            = "issues"
 )
 
 // ActionSpecs returns canonical specs for issue lifecycle actions exposed
@@ -390,7 +390,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"issue"},
 		OpenWorld:      true,
-		OwnerPackage: domainIssues,
+		OwnerPackage:   domainIssues,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -424,7 +424,7 @@ func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"group", "issue"},
 		OpenWorld:      true,
-		OwnerPackage: domainIssues,
+		OwnerPackage:   domainIssues,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

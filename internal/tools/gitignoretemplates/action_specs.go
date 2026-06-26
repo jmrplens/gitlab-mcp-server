@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	actionProjectCreate      = "project.create"
+	actionProjectCreate        = "project.create"
 	actionRepositoryFileCreate = "repository.file_create"
 )
 

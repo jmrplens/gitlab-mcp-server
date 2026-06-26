@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	actionPackageList      = "package.list"
-	actionPackageFileList  = "package.file_list"
-	actionPackagePublish   = "package.publish"
-	actionPackageDelete    = "package.delete"
-	actionNameList         = "list"
-	actionNameGroupList    = "group_list"
-	actionNamePublishDir   = "publish_directory"
-	schemaEnum             = "enum"
-	schemaDescription      = "description"
-	paramOrderBy           = "order_by"
+	actionPackageList     = "package.list"
+	actionPackageFileList = "package.file_list"
+	actionPackagePublish  = "package.publish"
+	actionPackageDelete   = "package.delete"
+	actionNameList        = "list"
+	actionNameGroupList   = "group_list"
+	actionNamePublishDir  = "publish_directory"
+	schemaEnum            = "enum"
+	schemaDescription     = "description"
+	paramOrderBy          = "order_by"
 )
 
 // ActionSpecs returns canonical specs for Generic Package Registry

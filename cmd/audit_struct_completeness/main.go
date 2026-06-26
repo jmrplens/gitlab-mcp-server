@@ -54,19 +54,19 @@ const (
 	// element converter, never paired against the wrapper. See nonResultSDKStruct.
 	responseStructName = "Response"
 
-	docJobsSingle        = "jobs.md#get-a-single-job"
-	docGroupEpicBoards   = "group_epic_boards.md"
-	docGroupBoards       = "group_boards.md"
-	docEnvRetrieve       = "environments.md#retrieve-an-environment"
-	docDeployments       = "deployments.md"
-	docBoards            = "boards.md"
-	docPipelineSched     = "pipeline_schedules.md"
-	docCommitSignature   = "commits.md#get-the-signature-of-a-commit"
-	docPipelineTriggers  = "pipeline_triggers.md"
-	docMRApprovals       = "merge_request_approvals.md"
-	tagKeyJSON           = "json"
-	typNameString        = "string"
-	typNameInt64         = "int64"
+	docJobsSingle       = "jobs.md#get-a-single-job"
+	docGroupEpicBoards  = "group_epic_boards.md"
+	docGroupBoards      = "group_boards.md"
+	docEnvRetrieve      = "environments.md#retrieve-an-environment"
+	docDeployments      = "deployments.md"
+	docBoards           = "boards.md"
+	docPipelineSched    = "pipeline_schedules.md"
+	docCommitSignature  = "commits.md#get-the-signature-of-a-commit"
+	docPipelineTriggers = "pipeline_triggers.md"
+	docMRApprovals      = "merge_request_approvals.md"
+	tagKeyJSON          = "json"
+	typNameString       = "string"
+	typNameInt64        = "int64"
 )
 
 // acceptedOutputRenames suppresses specific MCP output json tags from

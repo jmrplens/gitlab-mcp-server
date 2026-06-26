@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	actionReleaseGet     = "release.get"
-	actionReleaseList    = "release.list"
+	actionReleaseGet      = "release.get"
+	actionReleaseList     = "release.list"
 	actionReleaseLinkList = "release_link.list"
-	paramTagName         = "tag_name"
-	roleGitTag           = "git_tag"
+	paramTagName          = "tag_name"
+	roleGitTag            = "git_tag"
 )
 
 // ActionSpecs returns canonical specs for release actions.

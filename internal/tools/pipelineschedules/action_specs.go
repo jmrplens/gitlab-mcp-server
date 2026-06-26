@@ -11,13 +11,13 @@ import (
 
 // Canonical related-action IDs referenced across schedule discovery metadata.
 const (
-	actionScheduleList      = "pipeline_schedule.schedule_list"
-	actionScheduleGet       = "pipeline_schedule.schedule_get"
-	actionScheduleUpdate    = "pipeline_schedule.schedule_update"
-	actionScheduleRun       = "pipeline_schedule.schedule_run"
-	actionPipelineList      = "pipeline.list"
-	paramScheduleID         = "schedule_id"
-	rolePipelineScheduleID  = "pipeline_schedule_id"
+	actionScheduleList     = "pipeline_schedule.schedule_list"
+	actionScheduleGet      = "pipeline_schedule.schedule_get"
+	actionScheduleUpdate   = "pipeline_schedule.schedule_update"
+	actionScheduleRun      = "pipeline_schedule.schedule_run"
+	actionPipelineList     = "pipeline.list"
+	paramScheduleID        = "schedule_id"
+	rolePipelineScheduleID = "pipeline_schedule_id"
 )
 
 // ActionSpecs returns canonical specs for pipeline schedule actions.
