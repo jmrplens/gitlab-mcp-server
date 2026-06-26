@@ -37,8 +37,8 @@ type Output struct {
 	ExpiresAt         string              `json:"expires_at,omitempty"`
 	Email             string              `json:"email,omitempty"`
 	PublicEmail       string              `json:"public_email,omitempty"`
-	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty"`
-	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty"`
+	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty" tier:"premium"`
+	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty" tier:"ultimate"`
 	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
 }
 

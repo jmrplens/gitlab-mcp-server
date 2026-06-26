@@ -38,7 +38,7 @@ type Output struct {
 	CreatedBy   *CreatedByOutput  `json:"created_by,omitempty"`
 	ExpiresAt   string            `json:"expires_at,omitempty"`
 	Email       string            `json:"email,omitempty"`
-	MemberRole  *MemberRoleOutput `json:"member_role,omitempty"`
+	MemberRole  *MemberRoleOutput `json:"member_role,omitempty" tier:"ultimate"`
 	IsUsingSeat bool              `json:"is_using_seat,omitempty"`
 }
 

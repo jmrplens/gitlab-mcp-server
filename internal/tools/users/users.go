@@ -57,7 +57,7 @@ type Output struct {
 	CanCreateGroup                 bool                    `json:"can_create_group"`
 	CanCreateOrganization          bool                    `json:"can_create_organization"`
 	Note                           string                  `json:"note,omitempty"`
-	UsingLicenseSeat               bool                    `json:"using_license_seat"`
+	UsingLicenseSeat               bool                    `json:"using_license_seat" tier:"premium"`
 	ThemeID                        int64                   `json:"theme_id,omitempty"`
 	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
 	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`

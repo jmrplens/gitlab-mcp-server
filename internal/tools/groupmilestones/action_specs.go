@@ -15,13 +15,23 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupMilestoneDeleteSpec("group_milestone_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_milestone_delete"),
 		groupMilestoneReadSpec("group_milestone_issues", toolutil.RouteAction(client, GetIssues), "gitlab_group_milestone_issues"),
 		groupMilestoneReadSpec("group_milestone_merge_requests", toolutil.RouteAction(client, GetMergeRequests), "gitlab_group_milestone_merge_requests"),
-		groupMilestoneReadSpec("group_milestone_burndown", toolutil.RouteAction(client, GetBurndownChartEvents), "gitlab_group_milestone_burndown_events"),
+		groupMilestoneBurndownSpec("group_milestone_burndown", toolutil.RouteAction(client, GetBurndownChartEvents), "gitlab_group_milestone_burndown_events"),
 	}
 }
 
 func groupMilestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := groupMilestoneOptions(individualTool)
 	decorateGroupMilestoneMeta(&options, individualTool)
+	return toolutil.NewReadActionSpec(name, route, options)
+}
+
+// groupMilestoneBurndownSpec builds the burndown-chart-events read spec. The
+// burndown_events endpoint is Premium/Ultimate (group_milestones.md "Tier:
+// Premium, Ultimate"), so the whole action is tier-gated.
+func groupMilestoneBurndownSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := groupMilestoneOptions(individualTool)
+	decorateGroupMilestoneMeta(&options, individualTool)
+	options.Edition = "premium"
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 

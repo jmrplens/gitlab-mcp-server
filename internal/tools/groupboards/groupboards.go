@@ -29,9 +29,9 @@ type GroupBoardOutput struct {
 	ID              int64                 `json:"id"`
 	Name            string                `json:"name"`
 	Group           *GroupRefOutput       `json:"group,omitempty"`
-	Milestone       *MilestoneOutput      `json:"milestone,omitempty"`
-	Assignee        *BasicUserOutput      `json:"assignee,omitempty"`
-	Weight          int64                 `json:"weight,omitempty"`
+	Milestone       *MilestoneOutput      `json:"milestone,omitempty" tier:"premium"`
+	Assignee        *BasicUserOutput      `json:"assignee,omitempty" tier:"premium"`
+	Weight          int64                 `json:"weight,omitempty" tier:"premium"`
 	Labels          []*LabelDetailsOutput `json:"labels,omitempty"`
 	HideBacklogList bool                  `json:"hide_backlog_list"`
 	HideClosedList  bool                  `json:"hide_closed_list"`
@@ -44,12 +44,12 @@ type GroupBoardOutput struct {
 type BoardListOutput struct {
 	toolutil.HintableOutput
 	ID             int64                    `json:"id"`
-	Assignee       *BoardListAssigneeOutput `json:"assignee,omitempty"`
-	Iteration      *IterationOutput         `json:"iteration,omitempty"`
+	Assignee       *BoardListAssigneeOutput `json:"assignee,omitempty" tier:"premium"`
+	Iteration      *IterationOutput         `json:"iteration,omitempty" tier:"premium"`
 	Label          *LabelOutput             `json:"label,omitempty"`
 	MaxIssueCount  int64                    `json:"max_issue_count,omitempty"`
 	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty"`
-	Milestone      *MilestoneOutput         `json:"milestone,omitempty"`
+	Milestone      *MilestoneOutput         `json:"milestone,omitempty" tier:"premium"`
 	Position       int64                    `json:"position"`
 }
 
