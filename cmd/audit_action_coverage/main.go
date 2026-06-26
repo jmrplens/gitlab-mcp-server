@@ -205,7 +205,7 @@ func usageFor(usage map[string]*serviceUsage, named *types.Named) *serviceUsage 
 // file transfer, CI-job-token self-lookup). Each entry carries a category+rationale.
 // Key = "<Service>.<Method>" (service name without the ServiceInterface suffix).
 // Methods NOT listed here and still uncovered are the genuine new-tool backlog.
-var acceptedMissingMethods = map[string]string{ //nolint:gosec // G101 false positive: keys are SDK method names (e.g. ...Token...), not credentials.
+var acceptedMissingMethods = map[string]string{
 	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
 	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC — method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
 	"AwardEmoji.CreateIssuesAwardEmojiOnNote":       "COVERED_GENERIC — method-value -> createNoteAwardEmoji",
