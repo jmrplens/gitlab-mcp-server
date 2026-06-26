@@ -65,7 +65,7 @@ type Output struct {
 	ProjectID         int64                `json:"project_id,omitempty"`
 	WebURL            string               `json:"web_url"`
 	RawURL            string               `json:"raw_url"`
-	RepositoryStorage string               `json:"repository_storage,omitempty"`
+	RepositoryStorage string               `json:"repository_storage,omitempty" tier:"premium"`
 	Files             []FileOutput         `json:"files,omitempty"`
 	CreatedAt         *time.Time           `json:"created_at,omitempty"`
 	UpdatedAt         *time.Time           `json:"updated_at,omitempty"`
@@ -308,7 +308,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 type ListAllInput struct {
 	CreatedAfter      string `json:"created_after,omitempty"      jsonschema:"Filter snippets created after (ISO 8601)"`
 	CreatedBefore     string `json:"created_before,omitempty"     jsonschema:"Filter snippets created before (ISO 8601)"`
-	RepositoryStorage string `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage name (admin only)"`
+	RepositoryStorage string `json:"repository_storage,omitempty" tier:"premium" jsonschema:"Filter by repository storage name (admin only)"`
 	OrderBy           string `json:"order_by,omitempty"           jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
 	Sort              string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
