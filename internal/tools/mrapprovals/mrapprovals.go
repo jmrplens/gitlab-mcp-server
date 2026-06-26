@@ -126,8 +126,8 @@ type ConfigOutput struct {
 	UpdatedAt                      string                             `json:"updated_at,omitempty"`
 	MergeStatus                    string                             `json:"merge_status,omitempty"`
 	Approved                       bool                               `json:"approved"`
-	ApprovalsRequired              int64                              `json:"approvals_required"`
-	ApprovalsLeft                  int64                              `json:"approvals_left"`
+	ApprovalsRequired              int64                              `json:"approvals_required" tier:"premium"`
+	ApprovalsLeft                  int64                              `json:"approvals_left" tier:"premium"`
 	ApprovalsBeforeMerge           int64                              `json:"approvals_before_merge" tier:"premium"`
 	RequirePasswordToApprove       bool                               `json:"require_password_to_approve" tier:"premium"`
 	HasApprovalRules               bool                               `json:"has_approval_rules" tier:"premium"`
