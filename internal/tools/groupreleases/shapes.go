@@ -16,7 +16,6 @@ import (
 // (author, commit, assets, _links, milestones, evidences) returned by the group
 // releases endpoint, which returns the same gl.Release type as project releases.
 
-// formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD,
 // AuthorOutput is the documented reference subset of the release author object
 // per doc/api/group_releases.md (the documented JSON shows id, name, username,
 // state, avatar_url, web_url; created_at is not part of the release author

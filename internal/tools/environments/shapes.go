@@ -1,9 +1,3 @@
-// shapes.go defines the nested output sub-objects surfaced on an environment
-// (cluster_agent, last_deployment and its deployable job) and their converters
-// from the client-go SDK shapes. Each mirror reproduces exactly the field set
-// the official environments API documents for that nested object
-// (doc/api/environments.md), trimming SDK fields the API never returns for an
-// environment and shaping nested references to their documented subsets.
 package environments
 
 import (

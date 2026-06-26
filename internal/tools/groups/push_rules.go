@@ -1,6 +1,3 @@
-// push_rules.go implements the group push-rule MCP tools: get, add, edit, and
-// delete the singleton push-rule configuration of a group. Group push rules are
-// a GitLab Premium/Ultimate feature and mirror the project push-rule shape.
 package groups
 
 import (

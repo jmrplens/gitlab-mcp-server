@@ -1,4 +1,3 @@
-// avatar.go contains the group avatar upload tool.
 package groups
 
 import (

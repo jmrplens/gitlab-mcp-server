@@ -46,7 +46,9 @@ gitlab-mcp-server/
 │   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
 │   ├── audit_action_coverage/   # Audits client-go SDK endpoints with no MCP action (R-ACTION; 1:1 audit)
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
+│   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster) — META-001
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
+│   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_meta_schema/       # Audits meta-tool schema generation
 │   ├── audit_metadata_completeness/ # Audits ActionSpec discovery-metadata gaps (R-META; 1:1 audit)
