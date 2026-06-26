@@ -2,6 +2,11 @@
 package toolutil
 
 import (
+	"bufio"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,5 +121,119 @@ func TestFormatISOTimePtr_Valid(t *testing.T) {
 	want := "2026-03-20"
 	if got != want {
 		t.Errorf("FormatISOTimePtr() = %q, want %q", got, want)
+	}
+}
+
+// formatTimePtrFuncDef matches a top-level Go function definition of
+// formatTimePtr (with any return type). Used by the uniqueness guardrail.
+var formatTimePtrFuncDef = regexp.MustCompile(`^func\s+formatTimePtr\b`)
+
+// formatISOTimePtrFuncDef matches a top-level Go function definition of
+// formatISOTimePtr (with any return type). Used by the uniqueness guardrail.
+var formatISOTimePtrFuncDef = regexp.MustCompile(`^func\s+formatISOTimePtr\b`)
+
+// findDuplicateTimeHelper walks the repository looking for top-level Go function
+// definitions matching re, excluding the canonical home (this package's source
+// directory) and the test runtime cache. Returns the list of offending
+// "path:lineno" locations.
+func findDuplicateTimeHelper(t *testing.T, re *regexp.Regexp, skipDir string) []string {
+	t.Helper()
+	repoRoot := findRepoRoot(t)
+	var hits []string
+	err := filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if filepath.Dir(path) == skipDir {
+			return nil
+		}
+		f, err := os.Open(path) // #nosec G304,G122 -- test guardrail reads repo files via filepath.Walk
+		if err != nil {
+			return nil
+		}
+		defer func() { _ = f.Close() }()
+		scanner := bufio.NewScanner(f)
+		lineNo := 0
+		for scanner.Scan() {
+			lineNo++
+			if re.MatchString(scanner.Text()) {
+				rel, _ := filepath.Rel(repoRoot, path)
+				hits = append(hits, rel+":"+itoa(lineNo))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk repo: %v", err)
+	}
+	return hits
+}
+
+// findRepoRoot returns the absolute path to the repository root (the directory
+// containing go.mod) by walking up from the test's working directory.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for {
+		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("go.mod not found above %s", dir)
+		}
+		dir = parent
+	}
+}
+
+// itoa is a small allocation-free integer-to-string helper used by the
+// guardrail to format line numbers without pulling strconv into the test.
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for n > 0 {
+		pos--
+		buf[pos] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(buf[pos:])
+}
+
+// TestFormatTimePtr_UniqueAcrossRepo is the DEDUP-003 guardrail: the canonical
+// formatTimePtr lives in this package as FormatTimePtr (exported). Any other
+// package that defines an unexported `formatTimePtr` re-introduces duplication
+// and confuses readers — call sites should use toolutil.FormatTimePtr or a
+// distinctively-named helper (e.g. formatAuditDate).
+func TestFormatTimePtr_UniqueAcrossRepo(t *testing.T) {
+	canonicalDir, _ := filepath.Abs(".")
+	hits := findDuplicateTimeHelper(t, formatTimePtrFuncDef, canonicalDir)
+	if len(hits) > 0 {
+		t.Fatalf("found %d duplicate formatTimePtr definition(s) outside %s:\n  %s\n"+
+			"Use toolutil.FormatTimePtr or rename the helper to a purpose-specific name.",
+			len(hits), canonicalDir, strings.Join(hits, "\n  "))
+	}
+}
+
+// TestFormatISOTimePtr_UniqueAcrossRepo is the DEDUP-003 guardrail for the
+// ISO-time variant — see TestFormatTimePtr_UniqueAcrossRepo.
+func TestFormatISOTimePtr_UniqueAcrossRepo(t *testing.T) {
+	canonicalDir, _ := filepath.Abs(".")
+	hits := findDuplicateTimeHelper(t, formatISOTimePtrFuncDef, canonicalDir)
+	if len(hits) > 0 {
+		t.Fatalf("found %d duplicate formatISOTimePtr definition(s) outside %s:\n  %s\n"+
+			"Use toolutil.FormatISOTimePtr or rename the helper to a purpose-specific name.",
+			len(hits), canonicalDir, strings.Join(hits, "\n  "))
 	}
 }
