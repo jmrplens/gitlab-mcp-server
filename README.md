@@ -297,16 +297,16 @@ The published model-evaluation set covers 560 task attempts and 1096 expected MC
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker CE dynamic 20260606**.
+Current published result: **Docker CE dynamic 20260626-103054**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |      Recovery | Docker live status          |
 | --------- | --------------------------- | ------------- | ------------: | ------------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (6/6) | 100.0% final across 573 ops |
-| Google    | `gemini-flash-latest`       | Review        |        100.0% |   80.0% (4/5) | 99.3% final across 573 ops  |
-| OpenAI    | `gpt-5.4-nano`              | Review        |         99.4% | 95.8% (23/24) | 97.4% final across 573 ops  |
-| Qwen      | `qwen3.6-flash`             | Review        |        100.0% | 90.9% (10/11) | 99.3% final across 573 ops  |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (4/4) | 100.0% final across 555 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% |  100.0% (2/2) | 100.0% final across 555 ops |
+| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% | 93.8% (15/16) | 98.6% final across 555 ops  |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |  100.0% (5/5) | 100.0% final across 555 ops |
 
-The published model-evaluation set covers 620 task attempts and 2292 expected MCP operations. Across the selected reports, models emitted 2367 tool calls over 2369 model requests, with 99.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2263 tool calls over 2264 model requests, with 99.7% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
@@ -323,16 +323,16 @@ The published model-evaluation set covers 92 task attempts and 336 expected MCP 
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
-Current published result: **Docker Enterprise dynamic 20260605 (Enterprise)**.
+Current published result: **Docker Enterprise dynamic 20260626-122829**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status          |
 | --------- | --------------------------- | ------------- | ------------: | -----------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
 | OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 202 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
 
-The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 819 tool calls over 819 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 ## Documentation
