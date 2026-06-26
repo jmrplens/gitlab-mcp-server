@@ -587,7 +587,7 @@ func openAIToolUseBlocks(message openAIMessage) ([]modelContentBlock, error) {
 		}
 		input, err := parseOpenAIToolArguments(arguments)
 		if err != nil {
-			return nil, fmt.Errorf("%s tool call %s returned invalid JSON arguments: %w", call.Function.Name, call.ID, err)
+			return nil, fmt.Errorf("%s tool call %s returned invalid JSON arguments: %w; raw=%s", call.Function.Name, call.ID, err, truncateForDiagnostics(arguments, 300))
 		}
 		blocks = append(blocks, modelContentBlock{Type: "tool_use", ID: call.ID, Name: call.Function.Name, Input: input})
 	}
@@ -605,6 +605,13 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 		return parsedInput, nil
 	}
 	if parsedInput, ok := parseOpenAIJSONObjectFragment(candidate); ok {
+		return parsedInput, nil
+	}
+	// Recover a JSON object wrapped in XML/text (e.g. Hermes-style
+	// "<tool_call>{...}</tool_call>" or a "<think>...</think>{...}" reasoning
+	// prefix that some models such as qwen intermittently emit). Unlike
+	// parsePrefixedOpenAIJSONObject this tolerates ':' or '"' in the wrapper.
+	if parsedInput, ok := parseFirstBalancedJSONObject(candidate); ok {
 		return parsedInput, nil
 	}
 	candidate = strings.Trim(candidate, " \t\r\n,")
@@ -721,6 +728,45 @@ func parsePrefixedOpenAIJSONObject(candidate string) (map[string]any, bool) {
 		return nil, false
 	}
 	return input, true
+}
+
+// parseFirstBalancedJSONObject extracts and parses the first brace-balanced JSON
+// object embedded anywhere in candidate, ignoring surrounding XML tags or prose
+// (e.g. "<tool_call>{...}</tool_call>"). Brace counting is string- and
+// escape-aware so braces inside JSON string values do not break balancing.
+func parseFirstBalancedJSONObject(candidate string) (map[string]any, bool) {
+	start := strings.IndexByte(candidate, '{')
+	if start < 0 {
+		return nil, false
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(candidate); i++ {
+		c := candidate[i]
+		switch {
+		case escaped:
+			escaped = false
+		case c == '\\' && inString:
+			escaped = true
+		case c == '"':
+			inString = !inString
+		case inString:
+			// skip structural characters inside strings
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				input := map[string]any{}
+				if err := json.Unmarshal([]byte(candidate[start:i+1]), &input); err != nil {
+					return nil, false
+				}
+				return input, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // googleProvider models the Google Gemini Google provider payload.
@@ -1138,4 +1184,14 @@ func withProviderTrace(err error, trace *modelProviderTrace) error {
 		return err
 	}
 	return &modelProviderCallError{err: err, Trace: trace}
+}
+
+// truncateForDiagnostics returns s clipped to max runes with an ellipsis marker,
+// for safe inclusion of raw model output in error messages.
+func truncateForDiagnostics(s string, limit int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "...(truncated)"
 }

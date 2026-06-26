@@ -920,3 +920,30 @@ func (errorReadCloser) Read([]byte) (int, error) { return 0, errors.New("read fa
 
 // Close handles close for errorReadCloser.
 func (errorReadCloser) Close() error { return nil }
+
+// TestParseOpenAIToolArguments_RecoversXMLWrappedJSON verifies that tool-call
+// arguments wrapped in Hermes-style <tool_call> tags or prefixed by a <think>
+// reasoning block (as qwen3.6-flash intermittently emits) are recovered into the
+// embedded JSON object, including when the wrapper contains ':' or '"'.
+func TestParseOpenAIToolArguments_RecoversXMLWrappedJSON(t *testing.T) {
+	cases := map[string]string{
+		"tool_call wrapper":         `<tool_call>{"action":"merge_request.list","params":{"state":"merged","per_page":5}}</tool_call>`,
+		"named tool_call wrapper":   `<tool_call name="merge_request.list">{"action":"merge_request.list","params":{"state":"merged"}}</tool_call>`,
+		"think prefix with colon":   `<think>The user wants state: merged</think>{"action":"merge_request.list","params":{"state":"merged"}}`,
+		"brace inside string value": `<tool_call>{"action":"merge_request.list","params":{"q":"a{b}c"}}</tool_call>`,
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := parseOpenAIToolArguments(raw)
+			if err != nil {
+				t.Fatalf("parseOpenAIToolArguments(%q) error = %v", raw, err)
+			}
+			if got["action"] != "merge_request.list" {
+				t.Fatalf("action = %v, want merge_request.list (input=%v)", got["action"], got)
+			}
+			if _, ok := got["params"].(map[string]any); !ok {
+				t.Fatalf("params not recovered as object: %#v", got["params"])
+			}
+		})
+	}
+}
