@@ -129,8 +129,14 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 // produced only when at least one field must be dropped, so a Free instance
 // never advertises Premium/Ultimate-only parameters or result fields.
 func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil.ActionSpec {
-	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier)
-	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier)
+	// Input pruning stays strict (lenientExtra=false): a lower-tier client must
+	// not send Premium/Ultimate parameters. Output pruning is lenient
+	// (lenientExtra=true): the model-facing output schema omits the higher-tier
+	// fields, but the GitLab instance may still return them (some CE/Free
+	// responses include Premium/Ultimate keys with default values), and the MCP
+	// server must not reject its own tool output over those extra properties.
+	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier, false)
+	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier, true)
 	return spec
 }
 
@@ -138,7 +144,7 @@ func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil
 // per-field tier (from rt's `tier:` struct tags) exceeds the instance tier. The
 // input schema is returned unchanged when nothing must be dropped, avoiding an
 // allocation and preserving the cached shared map.
-func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier edition.Tier) map[string]any {
+func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier edition.Tier, lenientExtra bool) map[string]any {
 	if schema == nil {
 		return nil
 	}
@@ -155,15 +161,20 @@ func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier editio
 	if len(drop) == 0 {
 		return schema
 	}
-	return pruneSchemaProperties(schema, drop)
+	return pruneSchemaProperties(schema, drop, lenientExtra)
 }
 
 // pruneSchemaProperties returns a shallow clone of a JSON Schema object with the
 // named properties removed from "properties" and "required". The input map is
-// not mutated.
-func pruneSchemaProperties(schema map[string]any, drop map[string]bool) map[string]any {
+// not mutated. When lenientExtra is true the clone sets additionalProperties to
+// true so a payload that still contains the removed (higher-tier) keys validates
+// — used for output schemas, where the instance may return those keys.
+func pruneSchemaProperties(schema map[string]any, drop map[string]bool, lenientExtra bool) map[string]any {
 	cloned := make(map[string]any, len(schema))
 	maps.Copy(cloned, schema)
+	if lenientExtra {
+		cloned["additionalProperties"] = true
+	}
 	if props, ok := schema["properties"].(map[string]any); ok {
 		newProps := make(map[string]any, len(props))
 		for name, value := range props {
