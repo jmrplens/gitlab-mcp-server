@@ -22,16 +22,88 @@ type CreateInput struct {
 	Message   string               `json:"message,omitempty" jsonschema:"Creates an annotated tag with this message"`
 }
 
-// Output represents a Git tag.
+// Output represents a Git tag. It mirrors the full gl.Tag payload (C-IMPORTS),
+// surfacing the associated commit object and release note as nested objects.
 type Output struct {
 	toolutil.HintableOutput
-	Name          string `json:"name"`
-	Target        string `json:"target"`
-	Message       string `json:"message"`
-	Protected     bool   `json:"protected"`
-	CommitSHA     string `json:"commit_sha,omitempty"`
-	CommitMessage string `json:"commit_message,omitempty"`
-	CreatedAt     string `json:"created_at,omitempty"`
+	Name      string             `json:"name"`
+	Target    string             `json:"target"`
+	Message   string             `json:"message"`
+	Protected bool               `json:"protected"`
+	Commit    *CommitOutput      `json:"commit,omitempty"`
+	Release   *ReleaseNoteOutput `json:"release,omitempty"`
+	CreatedAt string             `json:"created_at,omitempty"`
+}
+
+// CommitOutput is the documented reference subset of the gl.Commit payload that
+// the GitLab tags API embeds in a tag as its `commit` object. The tags endpoint
+// documents only an identity subset of the commit (id/short_id/title/message,
+// author/committer name+email+date, parent_ids, created_at), not the full commit
+// resource, so deeper gl.Commit fields (web_url, status, project_id, trailers,
+// stats, last_pipeline, ...) are intentionally omitted here.
+//
+// Documented reference subset per doc/api/tags.md
+type CommitOutput struct {
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id,omitempty"`
+	Title          string   `json:"title,omitempty"`
+	Message        string   `json:"message,omitempty"`
+	AuthorName     string   `json:"author_name,omitempty"`
+	AuthorEmail    string   `json:"author_email,omitempty"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name,omitempty"`
+	CommitterEmail string   `json:"committer_email,omitempty"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
+}
+
+// ReleaseNoteOutput mirrors gl.ReleaseNote, the release summary embedded in a
+// tag payload as its release object (C-IMPORTS).
+type ReleaseNoteOutput struct {
+	TagName     string `json:"tag_name"`
+	Description string `json:"description"`
+}
+
+// commitToOutput maps a gl.Commit into the nested CommitOutput, or nil when the
+// tag carries no commit object.
+func commitToOutput(c *gl.Commit) *CommitOutput {
+	if c == nil {
+		return nil
+	}
+	out := &CommitOutput{
+		ID:             c.ID,
+		ShortID:        c.ShortID,
+		Title:          c.Title,
+		Message:        c.Message,
+		AuthorName:     c.AuthorName,
+		AuthorEmail:    c.AuthorEmail,
+		CommitterName:  c.CommitterName,
+		CommitterEmail: c.CommitterEmail,
+		ParentIDs:      c.ParentIDs,
+	}
+	if c.AuthoredDate != nil {
+		out.AuthoredDate = c.AuthoredDate.Format(time.RFC3339)
+	}
+	if c.CommittedDate != nil {
+		out.CommittedDate = c.CommittedDate.Format(time.RFC3339)
+	}
+	if c.CreatedAt != nil {
+		out.CreatedAt = c.CreatedAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// releaseNoteToOutput maps a gl.ReleaseNote into the nested ReleaseNoteOutput,
+// or nil when the tag has no associated release.
+func releaseNoteToOutput(r *gl.ReleaseNote) *ReleaseNoteOutput {
+	if r == nil {
+		return nil
+	}
+	return &ReleaseNoteOutput{
+		TagName:     r.TagName,
+		Description: r.Description,
+	}
 }
 
 // DeleteInput defines parameters for deleting a tag.
@@ -40,13 +112,15 @@ type DeleteInput struct {
 	TagName   string               `json:"tag_name"   jsonschema:"Name of the tag to delete,required"`
 }
 
-// ListInput defines parameters for listing tags.
+// ListInput defines parameters for listing tags. It mirrors gl.ListTagsOptions
+// (C-IMPORTS) and supports offset and keyset pagination via page_token.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search    string               `json:"search,omitempty" jsonschema:"Search query to filter tags by name"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order tags by field (name, updated)"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of tags.
@@ -63,10 +137,8 @@ func toOutput(t *gl.Tag) Output {
 		Target:    t.Target,
 		Message:   t.Message,
 		Protected: t.Protected,
-	}
-	if t.Commit != nil {
-		out.CommitSHA = t.Commit.ID
-		out.CommitMessage = t.Commit.Message
+		Commit:    commitToOutput(t.Commit),
+		Release:   releaseNoteToOutput(t.Release),
 	}
 	if t.CreatedAt != nil {
 		out.CreatedAt = t.CreatedAt.Format(time.RFC3339)
@@ -137,12 +209,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	tags, resp, err := client.GL().Tags.ListTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("tagList", err, http.StatusNotFound,
@@ -275,10 +342,15 @@ type ProtectedTagOutput struct {
 	CreateAccessLevels []TagAccessLevelOutput `json:"create_access_levels"`
 }
 
-// ListProtectedTagsInput defines parameters for listing protected tags.
+// ListProtectedTagsInput defines parameters for listing protected tags. It
+// mirrors gl.ListProtectedTagsOptions (C-IMPORTS), which embeds gl.ListOptions,
+// and supports offset and keyset pagination via order_by/sort/page_token.
 type ListProtectedTagsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProtectedTagsOutput holds a list of protected tags.
@@ -341,11 +413,12 @@ func ListProtectedTags(ctx context.Context, client *gitlabclient.Client, input L
 		return ListProtectedTagsOutput{}, errors.New("tagListProtected: project_id is required")
 	}
 	opts := &gl.ListProtectedTagsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	tags, resp, err := client.GL().ProtectedTags.ListProtectedTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

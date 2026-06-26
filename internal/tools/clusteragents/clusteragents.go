@@ -10,21 +10,60 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// ConfigProjectOutput mirrors gl.ConfigProject (a cluster agent's configuration
+// project reference) field-for-field.
+type ConfigProjectOutput struct {
+	ID                int64  `json:"id"`
+	Description       string `json:"description,omitempty"`
+	Name              string `json:"name"`
+	NameWithNamespace string `json:"name_with_namespace,omitempty"`
+	Path              string `json:"path,omitempty"`
+	PathWithNamespace string `json:"path_with_namespace,omitempty"`
+	CreatedAt         string `json:"created_at,omitempty"`
+}
+
+func configProjectOutput(cp gl.ConfigProject) ConfigProjectOutput {
+	return ConfigProjectOutput{
+		ID:                cp.ID,
+		Description:       cp.Description,
+		Name:              cp.Name,
+		NameWithNamespace: cp.NameWithNamespace,
+		Path:              cp.Path,
+		PathWithNamespace: cp.PathWithNamespace,
+		CreatedAt:         toolutil.FormatTimePtr(cp.CreatedAt),
+	}
+}
+
 // ListAgents.
 
 // ListAgentsInput defines parameters for the list agents operation.
 type ListAgentsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'."`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc."`
 }
 
-// AgentItem holds agent item data for the clusteragents package.
+// AgentItem holds agent item data for the clusteragents package. It mirrors
+// gl.Agent field-for-field, including the nested config_project reference.
 type AgentItem struct {
 	toolutil.HintableOutput
-	ID              int64  `json:"id"`
-	Name            string `json:"name"`
-	CreatedByUserID int64  `json:"created_by_user_id,omitempty"`
+	ID              int64               `json:"id"`
+	Name            string              `json:"name"`
+	CreatedAt       string              `json:"created_at,omitempty"`
+	CreatedByUserID int64               `json:"created_by_user_id,omitempty"`
+	ConfigProject   ConfigProjectOutput `json:"config_project"`
+}
+
+func agentItem(a *gl.Agent) AgentItem {
+	return AgentItem{
+		ID:              a.ID,
+		Name:            a.Name,
+		CreatedAt:       toolutil.FormatTimePtr(a.CreatedAt),
+		CreatedByUserID: a.CreatedByUserID,
+		ConfigProject:   configProjectOutput(a.ConfigProject),
+	}
 }
 
 // ListAgentsOutput represents the response from the list agents operation.
@@ -37,8 +76,12 @@ type ListAgentsOutput struct {
 // ListAgents lists agents for the clusteragents package.
 func ListAgents(ctx context.Context, client *gitlabclient.Client, input ListAgentsInput) (ListAgentsOutput, error) {
 	opts := &gl.ListAgentsOptions{}
-	if input.Page > 0 || input.PerPage > 0 {
-		opts.ListOptions = gl.ListOptions{Page: input.Page, PerPage: input.PerPage}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	agents, resp, err := client.GL().ClusterAgents.ListAgents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -47,7 +90,7 @@ func ListAgents(ctx context.Context, client *gitlabclient.Client, input ListAgen
 	}
 	items := make([]AgentItem, 0, len(agents))
 	for _, a := range agents {
-		items = append(items, AgentItem{ID: a.ID, Name: a.Name, CreatedByUserID: a.CreatedByUserID})
+		items = append(items, agentItem(a))
 	}
 	return ListAgentsOutput{Agents: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -70,7 +113,7 @@ func GetAgent(ctx context.Context, client *gitlabclient.Client, input GetAgentIn
 		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent", err, http.StatusNotFound,
 			"verify agent_id with gitlab_list_cluster_agents; the agent may have been deleted")
 	}
-	return AgentItem{ID: a.ID, Name: a.Name, CreatedByUserID: a.CreatedByUserID}, nil
+	return agentItem(a), nil
 }
 
 // RegisterAgent.
@@ -89,7 +132,7 @@ func RegisterAgent(ctx context.Context, client *gitlabclient.Client, input Regis
 		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_register_cluster_agent", err, http.StatusBadRequest,
 			"name must match DNS-1123 label format (lowercase alphanumeric + dashes, max 63 chars) and be unique within the project; requires Maintainer role")
 	}
-	return AgentItem{ID: a.ID, Name: a.Name, CreatedByUserID: a.CreatedByUserID}, nil
+	return agentItem(a), nil
 }
 
 // DeleteAgent.
@@ -119,19 +162,39 @@ func DeleteAgent(ctx context.Context, client *gitlabclient.Client, input DeleteA
 type ListAgentTokensInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	AgentID   int64                `json:"agent_id" jsonschema:"Agent ID,required"`
-	Page      int64                `json:"page" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only used with pagination='keyset'."`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset pagination: asc or desc."`
 }
 
-// AgentTokenItem holds agent token item data for the clusteragents package.
+// AgentTokenItem holds agent token item data for the clusteragents package. It
+// mirrors gl.AgentToken field-for-field.
 type AgentTokenItem struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	AgentID     int64  `json:"agent_id"`
-	Status      string `json:"status"`
-	Token       string `json:"token,omitempty"`
+	ID              int64  `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description,omitempty"`
+	AgentID         int64  `json:"agent_id"`
+	Status          string `json:"status"`
+	CreatedAt       string `json:"created_at,omitempty"`
+	CreatedByUserID int64  `json:"created_by_user_id,omitempty"`
+	LastUsedAt      string `json:"last_used_at,omitempty"`
+	Token           string `json:"token,omitempty"`
+}
+
+func agentTokenItem(t *gl.AgentToken) AgentTokenItem {
+	return AgentTokenItem{
+		ID:              t.ID,
+		Name:            t.Name,
+		Description:     t.Description,
+		AgentID:         t.AgentID,
+		Status:          t.Status,
+		CreatedAt:       toolutil.FormatTimePtr(t.CreatedAt),
+		CreatedByUserID: t.CreatedByUserID,
+		LastUsedAt:      toolutil.FormatTimePtr(t.LastUsedAt),
+		Token:           t.Token,
+	}
 }
 
 // ListAgentTokensOutput represents the response from the list agent tokens operation.
@@ -147,8 +210,12 @@ func ListAgentTokens(ctx context.Context, client *gitlabclient.Client, input Lis
 		return ListAgentTokensOutput{}, toolutil.ErrRequiredInt64("gitlab_list_cluster_agent_tokens", "agent_id")
 	}
 	opts := &gl.ListAgentTokensOptions{}
-	if input.Page > 0 || input.PerPage > 0 {
-		opts.ListOptions = gl.ListOptions{Page: input.Page, PerPage: input.PerPage}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	tokens, resp, err := client.GL().ClusterAgents.ListAgentTokens(string(input.ProjectID), input.AgentID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -157,10 +224,7 @@ func ListAgentTokens(ctx context.Context, client *gitlabclient.Client, input Lis
 	}
 	items := make([]AgentTokenItem, 0, len(tokens))
 	for _, t := range tokens {
-		items = append(items, AgentTokenItem{
-			ID: t.ID, Name: t.Name, Description: t.Description,
-			AgentID: t.AgentID, Status: t.Status, Token: t.Token,
-		})
+		items = append(items, agentTokenItem(t))
 	}
 	return ListAgentTokensOutput{Tokens: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -187,10 +251,7 @@ func GetAgentToken(ctx context.Context, client *gitlabclient.Client, input GetAg
 		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent_token", err, http.StatusNotFound,
 			"verify token_id with gitlab_list_cluster_agent_tokens; the token value is only returned at creation \u2014 stored tokens show metadata only")
 	}
-	return AgentTokenItem{
-		ID: t.ID, Name: t.Name, Description: t.Description,
-		AgentID: t.AgentID, Status: t.Status, Token: t.Token,
-	}, nil
+	return agentTokenItem(t), nil
 }
 
 // CreateAgentToken.
@@ -219,10 +280,7 @@ func CreateAgentToken(ctx context.Context, client *gitlabclient.Client, input Cr
 		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_cluster_agent_token", err, http.StatusBadRequest,
 			"name must be unique within the agent; max 2 active tokens per agent (revoke an existing token first); save the returned token value \u2014 it cannot be retrieved later")
 	}
-	return AgentTokenItem{
-		ID: t.ID, Name: t.Name, Description: t.Description,
-		AgentID: t.AgentID, Status: t.Status, Token: t.Token,
-	}, nil
+	return agentTokenItem(t), nil
 }
 
 // RevokeAgentToken.

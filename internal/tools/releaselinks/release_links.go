@@ -15,11 +15,13 @@ import (
 
 // CreateInput defines parameters for adding a release asset link.
 type CreateInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	TagName   string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
-	Name      string               `json:"name"       jsonschema:"Name of the link,required"`
-	URL       string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually,required"`
-	LinkType  string               `json:"link_type,omitempty" jsonschema:"Type of the link (runbook, package, image, other)"`
+	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	TagName         string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
+	Name            string               `json:"name"       jsonschema:"Name of the link,required"`
+	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually,required"`
+	DirectAssetPath string               `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
+	FilePath        string               `json:"filepath,omitempty" jsonschema:"Deprecated alias of direct_asset_path; prefer direct_asset_path."`
+	LinkType        string               `json:"link_type,omitempty" jsonschema:"Type of the link (runbook, package, image, other)"`
 }
 
 // Output represents a release asset link.
@@ -63,7 +65,12 @@ type UpdateInput struct {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName   string               `json:"tag_name" jsonschema:"Tag name of the release,required"`
+	// OrderBy names the column used to order keyset-paginated results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, updated_at)"`
+	// Sort selects the sort direction for ordered results.
+	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of release asset links.
@@ -73,11 +80,14 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// LinkEntry describes a single link to create in a batch operation.
+// LinkEntry describes a single link to create in a batch operation. It mirrors
+// the full per-link option set of [gl.CreateReleaseLinkOptions].
 type LinkEntry struct {
-	Name     string `json:"name"                jsonschema:"Name of the link,required"`
-	URL      string `json:"url"                 jsonschema:"Absolute URL of the link target. For package assets use the URL returned by package publish actions; do not construct URLs manually,required"`
-	LinkType string `json:"link_type,omitempty"  jsonschema:"Type of the link (runbook, package, image, other)"`
+	Name            string `json:"name"                jsonschema:"Name of the link,required"`
+	URL             string `json:"url"                 jsonschema:"Absolute URL of the link target. For package assets use the URL returned by package publish actions; do not construct URLs manually,required"`
+	DirectAssetPath string `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
+	FilePath        string `json:"filepath,omitempty"  jsonschema:"Deprecated alias of direct_asset_path; prefer direct_asset_path."`
+	LinkType        string `json:"link_type,omitempty"  jsonschema:"Type of the link (runbook, package, image, other)"`
 }
 
 // CreateBatchInput defines parameters for creating multiple release asset
@@ -85,7 +95,7 @@ type LinkEntry struct {
 type CreateBatchInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName   string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
-	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create. Each item supports only name, url, and link_type; do not include filepath or direct_asset_path; each item requires name and url,required"`
+	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create. Each item requires name and url and optionally accepts direct_asset_path, filepath (deprecated), and link_type,required"`
 }
 
 // CreateBatchOutput holds the results of a batch link creation.
@@ -120,6 +130,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts := &gl.CreateReleaseLinkOptions{
 		Name: new(input.Name),
 		URL:  new(input.URL),
+	}
+	if input.DirectAssetPath != "" {
+		opts.DirectAssetPath = new(input.DirectAssetPath)
+	}
+	if input.FilePath != "" {
+		opts.FilePath = new(input.FilePath)
 	}
 	if linkType := releaseLinkType(input.URL, input.LinkType); linkType != "" {
 		opts.LinkType = new(linkType)
@@ -161,6 +177,12 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 		opts := &gl.CreateReleaseLinkOptions{
 			Name: new(entry.Name),
 			URL:  new(entry.URL),
+		}
+		if entry.DirectAssetPath != "" {
+			opts.DirectAssetPath = new(entry.DirectAssetPath)
+		}
+		if entry.FilePath != "" {
+			opts.FilePath = new(entry.FilePath)
 		}
 		if linkType := releaseLinkType(entry.URL, entry.LinkType); linkType != "" {
 			opts.LinkType = new(linkType)
@@ -268,13 +290,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.ProjectID == "" {
 		return ListOutput{}, errors.New("List: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
-	opts := &gl.ListReleaseLinksOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	opts := &gl.ListReleaseLinksOptions{
+		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	links, resp, err := client.GL().ReleaseLinks.ListReleaseLinks(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusNotFound,

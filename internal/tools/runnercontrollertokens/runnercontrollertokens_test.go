@@ -80,6 +80,54 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
+// TestList_WithKeyset verifies List forwards keyset pagination parameters.
+func TestList_WithKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %q", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "abc123" {
+			t.Errorf("expected page_token=abc123, got %q", q.Get("page_token"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ControllerID:          1,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc123"},
+	})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+}
+
+// TestList_WithOrderBySort verifies that List forwards the order_by and sort
+// query parameters (R-INPUT: gl.ListOptions.OrderBy/Sort).
+func TestList_WithOrderBySort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" {
+			t.Errorf("expected order_by=id, got %q", q.Get("order_by"))
+		}
+		if q.Get("sort") != "asc" {
+			t.Errorf("expected sort=asc, got %q", q.Get("sort"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ControllerID: 1,
+		OrderBy:      "id",
+		Sort:         "asc",
+	})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+}
+
 // TestList_MissingControllerID verifies that List rejects missing controller_id.
 func TestList_MissingControllerID(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())

@@ -42,6 +42,36 @@ func TestLDAPSyncMetadata_Discoverability(t *testing.T) {
 	}
 }
 
+// TestLDAPMetadata_IndividualToolDescriptions locks in the "Returns: … See also: …"
+// discovery descriptions for every group LDAP individual tool (1:1 audit R-META),
+// guarding against generic or missing descriptions on the mutating link actions.
+func TestLDAPMetadata_IndividualToolDescriptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupLDAPSpecsByTool(t, ActionSpecs(client))
+
+	for _, name := range []string{
+		"gitlab_group_ldap_link_list",
+		"gitlab_group_ldap_link_add",
+		"gitlab_group_ldap_sync",
+		"gitlab_group_ldap_link_delete",
+		"gitlab_group_ldap_link_delete_for_provider",
+	} {
+		desc := byTool[name].IndividualTool.Description
+		if desc == "" {
+			t.Errorf("%s: IndividualTool.Description is empty", name)
+			continue
+		}
+		if !strings.Contains(desc, "Returns:") {
+			t.Errorf("%s: description missing 'Returns:': %q", name, desc)
+		}
+		if !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing 'See also:': %q", name, desc)
+		}
+	}
+}
+
 func aliasHas(aliases []string, sub string) bool {
 	for _, a := range aliases {
 		if strings.Contains(a, sub) {

@@ -7,19 +7,46 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// labelNames extracts the label names from the board scope labels.
+func labelNames(labels []*LabelDetailsOutput) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(labels))
+	for _, l := range labels {
+		if l == nil {
+			continue
+		}
+		names = append(names, l.Name)
+	}
+	return names
+}
+
+// listLabelName returns the label column name for a board list, or "" when the
+// list has no label scope.
+func listLabelName(l BoardListOutput) string {
+	if l.Label == nil {
+		return ""
+	}
+	return l.Label.Name
+}
+
 // FormatOutputMarkdown renders a single group epic board as a Markdown summary.
 func FormatOutputMarkdown(b Output) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Epic Board #%d — %s\n\n", b.ID, toolutil.EscapeMdTableCell(b.Name))
-	if len(b.Labels) > 0 {
-		fmt.Fprintf(&sb, "- **Labels**: %s\n", strings.Join(b.Labels, ", "))
+	if b.Group != nil {
+		fmt.Fprintf(&sb, "- **Group**: %s (#%d)\n", toolutil.EscapeMdTableCell(b.Group.Name), b.Group.ID)
+	}
+	if names := labelNames(b.Labels); len(names) > 0 {
+		fmt.Fprintf(&sb, "- **Labels**: %s\n", strings.Join(names, ", "))
 	}
 	if len(b.Lists) > 0 {
 		sb.WriteString("\n### Board Lists\n\n")
 		sb.WriteString("| ID | Label | Position |\n")
 		sb.WriteString(toolutil.TblSep3Col)
 		for _, l := range b.Lists {
-			fmt.Fprintf(&sb, "| %d | %s | %d |\n", l.ID, toolutil.EscapeMdTableCell(l.Label), l.Position)
+			fmt.Fprintf(&sb, "| %d | %s | %d |\n", l.ID, toolutil.EscapeMdTableCell(listLabelName(l)), l.Position)
 		}
 	}
 	toolutil.WriteHints(
@@ -41,10 +68,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Name | Labels | Lists |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, board := range out.Boards {
-		labels := ""
-		if len(board.Labels) > 0 {
-			labels = strings.Join(board.Labels, ", ")
-		}
+		labels := strings.Join(labelNames(board.Labels), ", ")
 		fmt.Fprintf(
 			&b, "| %d | %s | %s | %d |\n",
 			board.ID,

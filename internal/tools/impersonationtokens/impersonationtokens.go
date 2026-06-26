@@ -62,12 +62,16 @@ type RevokeOutput struct {
 
 // --- Input types ---.
 
-// ListInput holds parameters for listing impersonation tokens.
+// ListInput holds parameters for listing impersonation tokens. It mirrors
+// v2.GetAllImpersonationTokensOptions (the embedded ListOptions plus the state
+// filter), exposing both offset and keyset pagination.
 type ListInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"GitLab user ID,required"`
 	State   string `json:"state,omitempty" jsonschema:"Filter by state: all/active/inactive"`
-	Page    int    `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int    `json:"per_page,omitempty" jsonschema:"Items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput identifies a specific impersonation token.
@@ -156,11 +160,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.State != "" {
 		opts.State = new(input.State)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	tokens, _, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {

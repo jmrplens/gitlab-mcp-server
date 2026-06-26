@@ -83,6 +83,29 @@ func TestListDeps(t *testing.T) {
 			},
 		},
 		{
+			name: "sends order_by, sort, and keyset pagination parameters to API",
+			input: ListInput{
+				ProjectID:             "42",
+				OrderBy:               "name",
+				Sort:                  "asc",
+				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+			},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "order_by", "name")
+				testutil.AssertQueryParam(t, r, "sort", "asc")
+				testutil.AssertQueryParam(t, r, "pagination", "keyset")
+				testutil.AssertQueryParam(t, r, "page_token", "tok123")
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+			}),
+			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Dependencies) != 0 {
+					t.Errorf("got %d deps, want 0", len(out.Dependencies))
+				}
+			},
+		},
+		{
 			name:  "returns empty list when no dependencies found",
 			input: ListInput{ProjectID: "42"},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

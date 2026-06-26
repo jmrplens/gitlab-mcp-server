@@ -122,6 +122,35 @@ func TestList_QueryParams(t *testing.T) {
 	}
 }
 
+// TestList_KeysetParams verifies that List forwards keyset pagination and
+// sort parameters (pagination, page_token, order_by, sort) to the GitLab API.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the keyset and ordering query parameters are present on the request.
+func TestList_KeysetParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/7/iterations")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "cursor-1")
+		testutil.AssertQueryParam(t, r, "order_by", "due_date")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		GroupID: "7",
+		OrderBy: "due_date",
+		Sort:    "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "cursor-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
 // TestList_EmptyResult verifies the List_EmptyResult handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

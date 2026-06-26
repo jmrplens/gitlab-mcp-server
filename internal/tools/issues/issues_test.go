@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -33,7 +34,7 @@ const (
 	fmtIssueGetErr         = "Get() unexpected error: %v"
 	fmtIssueUpdateErr      = "Update() unexpected error: %v"
 	msgConfidentialWant    = "out.Confidential = false, want true"
-	fmtTaskTotalWant       = "out.TaskCompletionTotal = %d, want 5"
+	fmtTaskTotalWant       = "out.TaskCompletionStatus.Count = %d, want 5"
 	testIssueTitle         = "Test issue"
 	fmtCreateErr           = "Create() unexpected error: %v"
 	fmtIIDWant10           = "out.IID = %d, want 10"
@@ -93,6 +94,24 @@ const (
 	}`
 )
 
+// taskTotal returns the issue's task completion total (Count) from the
+// task_completion_status object, or 0 when the object is absent.
+func taskTotal(o Output) int64 {
+	if o.TaskCompletionStatus == nil {
+		return 0
+	}
+	return o.TaskCompletionStatus.Count
+}
+
+// taskCompleted returns the issue's completed task count from the
+// task_completion_status object, or 0 when the object is absent.
+func taskCompleted(o Output) int64 {
+	if o.TaskCompletionStatus == nil {
+		return 0
+	}
+	return o.TaskCompletionStatus.CompletedCount
+}
+
 // TestCreate_Success verifies that Create correctly creates an issue
 // with all optional fields (labels, assignees, due date, milestone). The mock
 // returns a full issue JSON and the test asserts all output fields match.
@@ -109,7 +128,7 @@ func TestCreate_Success(t *testing.T) {
 		ProjectID:   testProjectID,
 		Title:       "Bug: login fails",
 		Description: "Login page returns an error",
-		Labels:      "bug,critical",
+		Labels:      []string{"bug", "critical"},
 		AssigneeIDs: []int64{1, 2},
 		DueDate:     testDueDate,
 	})
@@ -128,8 +147,8 @@ func TestCreate_Success(t *testing.T) {
 	if len(out.Assignees) != 2 {
 		t.Errorf("len(out.Assignees) = %d, want 2", len(out.Assignees))
 	}
-	if out.Milestone != "v1.0" {
-		t.Errorf("out.Milestone = %q, want %q", out.Milestone, "v1.0")
+	if out.Milestone == nil || out.Milestone.Title != "v1.0" {
+		t.Errorf("out.Milestone.Title = %v, want %q", out.Milestone, "v1.0")
 	}
 	if out.DueDate != testDueDate {
 		t.Errorf("out.DueDate = %q, want %q", out.DueDate, testDueDate)
@@ -207,8 +226,8 @@ func TestGet_Success(t *testing.T) {
 	if out.IID != 10 {
 		t.Errorf(fmtIIDWant10, out.IID)
 	}
-	if out.Author != "charlie" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "charlie")
+	if out.Author == nil || out.Author.Username != "charlie" {
+		t.Errorf("out.Author.Username = %v, want %q", out.Author, "charlie")
 	}
 	if out.WebURL != "https://gitlab.example.com/project/issues/10" {
 		t.Errorf("out.WebURL = %q, want expected URL", out.WebURL)
@@ -297,7 +316,7 @@ func TestList_ByLabels(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: testProjectID,
-		Labels:    "bug,critical",
+		Labels:    []string{"bug", "critical"},
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueListErr, err)
@@ -403,7 +422,7 @@ func TestUpdate_Labels(t *testing.T) {
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID,
 		IssueIID:  10,
-		AddLabels: "urgent",
+		AddLabels: []string{"urgent"},
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueUpdateErr, err)
@@ -569,11 +588,11 @@ func TestGet_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
-	if out.TaskCompletionCount != 3 {
-		t.Errorf("out.TaskCompletionCount = %d, want 3", out.TaskCompletionCount)
+	if taskCompleted(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 3", taskCompleted(out))
 	}
 	if out.UserNotesCount != 8 {
 		t.Errorf("out.UserNotesCount = %d, want 8", out.UserNotesCount)
@@ -584,8 +603,8 @@ func TestGet_EnrichedFields(t *testing.T) {
 	if len(out.Assignees) != 2 {
 		t.Errorf("len(out.Assignees) = %d, want 2", len(out.Assignees))
 	}
-	if out.Milestone != "v2.0" {
-		t.Errorf("out.Milestone = %q, want %q", out.Milestone, "v2.0")
+	if out.Milestone == nil || out.Milestone.Title != "v2.0" {
+		t.Errorf("out.Milestone.Title = %v, want %q", out.Milestone, "v2.0")
 	}
 	if out.DueDate != "2026-03-01" {
 		t.Errorf("out.DueDate = %q, want %q", out.DueDate, "2026-03-01")
@@ -610,11 +629,11 @@ func TestGet_NoTaskCompletion(t *testing.T) {
 	if out.Confidential {
 		t.Error("out.Confidential = true, want false")
 	}
-	if out.TaskCompletionTotal != 0 {
-		t.Errorf("out.TaskCompletionTotal = %d, want 0", out.TaskCompletionTotal)
+	if taskTotal(out) != 0 {
+		t.Errorf("out.TaskCompletionStatus.Count = %d, want 0", taskTotal(out))
 	}
-	if out.TaskCompletionCount != 0 {
-		t.Errorf("out.TaskCompletionCount = %d, want 0", out.TaskCompletionCount)
+	if taskCompleted(out) != 0 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 0", taskCompleted(out))
 	}
 	if out.UserNotesCount != 0 {
 		t.Errorf("out.UserNotesCount = %d, want 0", out.UserNotesCount)
@@ -642,11 +661,11 @@ func TestGet_ClosedWithTasks(t *testing.T) {
 	if out.ClosedAt == "" {
 		t.Error("out.ClosedAt should not be empty for closed issue")
 	}
-	if out.TaskCompletionTotal != 3 {
-		t.Errorf("out.TaskCompletionTotal = %d, want 3", out.TaskCompletionTotal)
+	if taskTotal(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.Count = %d, want 3", taskTotal(out))
 	}
-	if out.TaskCompletionCount != 3 {
-		t.Errorf("out.TaskCompletionCount = %d, want 3 (all completed)", out.TaskCompletionCount)
+	if taskCompleted(out) != 3 {
+		t.Errorf("out.TaskCompletionStatus.CompletedCount = %d, want 3 (all completed)", taskCompleted(out))
 	}
 	if out.UserNotesCount != 15 {
 		t.Errorf("out.UserNotesCount = %d, want 15", out.UserNotesCount)
@@ -676,11 +695,11 @@ func TestCreate_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.Author != "charlie" {
-		t.Errorf("out.Author = %q, want %q", out.Author, "charlie")
+	if out.Author == nil || out.Author.Username != "charlie" {
+		t.Errorf("out.Author.Username = %v, want %q", out.Author, "charlie")
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
 	if out.UserNotesCount != 8 {
 		t.Errorf("out.UserNotesCount = %d, want 8", out.UserNotesCount)
@@ -709,22 +728,22 @@ func TestList_EnrichedFields(t *testing.T) {
 	if !out.Issues[0].Confidential {
 		t.Error("Issues[0].Confidential = false, want true")
 	}
-	if out.Issues[0].TaskCompletionTotal != 5 {
-		t.Errorf("Issues[0].TaskCompletionTotal = %d, want 5", out.Issues[0].TaskCompletionTotal)
+	if taskTotal(out.Issues[0]) != 5 {
+		t.Errorf("Issues[0].TaskCompletionStatus.Count = %d, want 5", taskTotal(out.Issues[0]))
 	}
 
 	if out.Issues[1].Confidential {
 		t.Error("Issues[1].Confidential = true, want false")
 	}
-	if out.Issues[1].TaskCompletionTotal != 0 {
-		t.Errorf("Issues[1].TaskCompletionTotal = %d, want 0", out.Issues[1].TaskCompletionTotal)
+	if taskTotal(out.Issues[1]) != 0 {
+		t.Errorf("Issues[1].TaskCompletionStatus.Count = %d, want 0", taskTotal(out.Issues[1]))
 	}
 
 	if out.Issues[2].State != "closed" {
 		t.Errorf("Issues[2].State = %q, want %q", out.Issues[2].State, "closed")
 	}
-	if out.Issues[2].TaskCompletionCount != 3 {
-		t.Errorf("Issues[2].TaskCompletionCount = %d, want 3", out.Issues[2].TaskCompletionCount)
+	if taskCompleted(out.Issues[2]) != 3 {
+		t.Errorf("Issues[2].TaskCompletionStatus.CompletedCount = %d, want 3", taskCompleted(out.Issues[2]))
 	}
 	if out.Issues[2].UserNotesCount != 15 {
 		t.Errorf("Issues[2].UserNotesCount = %d, want 15", out.Issues[2].UserNotesCount)
@@ -753,8 +772,8 @@ func TestUpdate_EnrichedFields(t *testing.T) {
 	if !out.Confidential {
 		t.Error(msgConfidentialWant)
 	}
-	if out.TaskCompletionTotal != 5 {
-		t.Errorf(fmtTaskTotalWant, out.TaskCompletionTotal)
+	if taskTotal(out) != 5 {
+		t.Errorf(fmtTaskTotalWant, taskTotal(out))
 	}
 }
 
@@ -1518,13 +1537,14 @@ const (
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 10, Title: "Big Bug", State: "opened",
-		Author: "alice", Assignees: []string{"bob", "carol"},
-		Labels: []string{"bug", "critical"}, Milestone: "v1.0",
+		Author:    &IssueAuthorOutput{Username: "alice"},
+		Assignees: []*IssueAssigneeOutput{{Username: "bob"}, {Username: "carol"}},
+		Labels:    []string{"bug", "critical"}, Milestone: &MilestoneOutput{Title: "v1.0"},
 		DueDate: testDueDateCov, Confidential: true,
 		CreatedAt: testCreatedAtCov, Description: "Details here",
-		WebURL:              "https://gitlab.example.com/issue/10",
-		TaskCompletionCount: 3, TaskCompletionTotal: 5,
-		UserNotesCount: 7,
+		WebURL:               "https://gitlab.example.com/issue/10",
+		TaskCompletionStatus: &TaskCompletionStatusOutput{CompletedCount: 3, Count: 5},
+		UserNotesCount:       7,
 	})
 	for _, want := range []string{
 		"Big Bug", "opened", "@alice", "@bob", "@carol",
@@ -1558,8 +1578,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 1, Title: "Issue1", State: "opened", Author: "alice", Labels: []string{"bug"}},
-			{IID: 2, Title: "Issue2", State: "closed", Author: "bob", Labels: []string{}},
+			{IID: 1, Title: "Issue1", State: "opened", Author: &IssueAuthorOutput{Username: "alice"}, Labels: []string{"bug"}},
+			{IID: 2, Title: "Issue2", State: "closed", Author: &IssueAuthorOutput{Username: "bob"}, Labels: []string{}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
@@ -1576,7 +1596,7 @@ func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 42, Title: "Bug", State: "opened", Author: "alice",
+				IID: 42, Title: "Bug", State: "opened", Author: &IssueAuthorOutput{Username: "alice"},
 				WebURL: "https://gitlab.example.com/issues/42",
 			},
 		},
@@ -1599,7 +1619,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
-			{IID: 5, Title: "GroupIssue", State: "opened", Author: "carol", Labels: []string{"feat"}},
+			{IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"}, Labels: []string{"feat"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1616,7 +1636,7 @@ func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
 			{
-				IID: 5, Title: "GroupIssue", State: "opened", Author: "carol",
+				IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"},
 				WebURL: "https://gitlab.example.com/issues/5",
 			},
 		},
@@ -1639,7 +1659,7 @@ func TestFormatListGroupMarkdown_Empty(t *testing.T) {
 func TestFormatListAllMarkdown_Populated(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 100, Title: "AllIssue", State: "closed", Author: "dave", Labels: []string{"doc"}},
+			{IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"}, Labels: []string{"doc"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1664,7 +1684,7 @@ func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 100, Title: "AllIssue", State: "closed", Author: "dave",
+				IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"},
 				WebURL: "https://gitlab.example.com/issues/100",
 			},
 		},
@@ -1747,7 +1767,7 @@ func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
 		MergeRequests: []RelatedMROutput{
-			{IID: 3, Title: "Fix MR", State: "merged", Author: "carol", SourceBranch: "fix", TargetBranch: "main"},
+			{IID: 3, Title: "Fix MR", State: "merged", Author: &BasicUserOutput{Username: "carol"}, SourceBranch: "fix", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}, "Related MRs")
@@ -1859,9 +1879,9 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Description:      "New Description",
 		StateEvent:       "close",
 		AssigneeIDs:      []int64{1, 2},
-		Labels:           "a",
-		AddLabels:        "b",
-		RemoveLabels:     "c",
+		Labels:           []string{"a"},
+		AddLabels:        []string{"b"},
+		RemoveLabels:     []string{"c"},
 		MilestoneID:      &milestoneID,
 		DueDate:          "2026-12-31",
 		Confidential:     &conf,
@@ -1962,14 +1982,51 @@ func TestBuildUpdateOpts_Empty(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestToOutput_Populated verifies ToOutput when populated.
+// assertPopulatedObjects verifies the strict object fields and their additive
+// convenience scalars produced by [ToOutput] for a fully-populated issue. It is
+// extracted from TestToOutput_Populated to keep that test below the cognitive
+// complexity threshold.
+func assertPopulatedObjects(t *testing.T, out Output) {
+	t.Helper()
+	assertPopulatedPeople(t, out)
+	if out.References == nil || out.References.Full != "proj#10" || out.References.Short != "#10" {
+		t.Errorf("References = %v, want full proj#10 short #10", out.References)
+	}
+	if out.Epic == nil || out.Epic.Title != "Big Epic" || out.Epic.Author == nil || out.Epic.Author.Username != "eve" {
+		t.Errorf("Epic = %v, want title Big Epic author eve", out.Epic)
+	}
+	if out.Milestone == nil || out.Milestone.Title != "v1" {
+		t.Errorf("Milestone = %v, want title v1", out.Milestone)
+	}
+}
+
+// assertPopulatedPeople verifies the author/assignee/closer object fields and
+// their convenience scalars produced by [ToOutput].
+func assertPopulatedPeople(t *testing.T, out Output) {
+	t.Helper()
+	if out.Author == nil || out.Author.Username != "alice" {
+		t.Errorf("Author = %v, want username alice", out.Author)
+	}
+	if len(out.Assignees) != 2 || out.Assignees[0].Username != "bob" || out.Assignees[1].Username != "carol" {
+		t.Errorf("Assignees = %v, want bob, carol", out.Assignees)
+	}
+	if out.Assignee == nil || out.Assignee.Username != "bob" {
+		t.Errorf("Assignee = %v, want username bob", out.Assignee)
+	}
+	if out.ClosedBy == nil || out.ClosedBy.Username != "dave" {
+		t.Errorf("ClosedBy = %v, want username dave", out.ClosedBy)
+	}
+}
+
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{
 		ID: 1, IID: 10, Title: "Test", Description: "Desc", State: "opened",
 		Labels:               gl.Labels{"a", "b"},
-		Author:               &gl.IssueAuthor{Username: "alice"},
-		Milestone:            &gl.Milestone{Title: "v1"},
+		Author:               &gl.IssueAuthor{ID: 1, Username: "alice", Name: "Alice"},
+		Milestone:            &gl.Milestone{ID: 7, Title: "v1"},
 		Assignees:            []*gl.IssueAssignee{{Username: "bob"}, {Username: "carol"}},
+		Assignee:             &gl.IssueAssignee{Username: "bob"},
 		WebURL:               "https://example.com",
 		Confidential:         true,
 		DiscussionLocked:     true,
@@ -1984,35 +2041,22 @@ func TestToOutput_Populated(t *testing.T) {
 		EpicIssueID:          7,
 		DueDate:              now,
 		ClosedBy:             &gl.IssueCloser{Username: "dave"},
-		References:           &gl.IssueReferences{Full: "proj#10"},
+		References:           &gl.IssueReferences{Short: "#10", Relative: "proj#10", Full: "proj#10"},
+		Epic:                 &gl.Epic{ID: 3, Title: "Big Epic", Author: &gl.EpicAuthor{Username: "eve"}, Labels: []string{"x"}},
 		TaskCompletionStatus: &gl.TasksCompletionStatus{CompletedCount: 2, Count: 5},
 		Subscribed:           true,
 		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800},
 	}
 	out := ToOutput(issue)
-	if out.Author != "alice" {
-		t.Errorf("Author = %q, want alice", out.Author)
-	}
-	if out.Milestone != "v1" {
-		t.Errorf("Milestone = %q, want v1", out.Milestone)
-	}
-	if len(out.Assignees) != 2 {
-		t.Errorf("Assignees len = %d, want 2", len(out.Assignees))
-	}
-	if out.ClosedBy != "dave" {
-		t.Errorf("ClosedBy = %q, want dave", out.ClosedBy)
-	}
-	if out.References != "proj#10" {
-		t.Errorf("References = %q, want proj#10", out.References)
-	}
-	if out.TaskCompletionCount != 2 || out.TaskCompletionTotal != 5 {
-		t.Errorf("TaskCompletion = %d/%d, want 2/5", out.TaskCompletionCount, out.TaskCompletionTotal)
+	assertPopulatedObjects(t, out)
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.CompletedCount != 2 || out.TaskCompletionStatus.Count != 5 {
+		t.Errorf("TaskCompletionStatus = %+v, want 2/5", out.TaskCompletionStatus)
 	}
 	if !out.Subscribed {
 		t.Error("Subscribed = false, want true")
 	}
-	if out.TimeEstimate != 3600 || out.TotalTimeSpent != 1800 {
-		t.Errorf("TimeStats = %d/%d, want 3600/1800", out.TimeEstimate, out.TotalTimeSpent)
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 || out.TimeStats.TotalTimeSpent != 1800 {
+		t.Errorf("TimeStats = %+v, want 3600/1800", out.TimeStats)
 	}
 	if out.EpicIssueID != 7 {
 		t.Errorf("EpicIssueID = %d, want 7", out.EpicIssueID)
@@ -2034,23 +2078,100 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 		ID: 2, IID: 20, Title: "Minimal", State: "opened",
 	}
 	out := ToOutput(issue)
-	if out.Author != "" {
-		t.Errorf("Author = %q, want empty for nil author", out.Author)
+	if out.Author != nil {
+		t.Errorf("Author = %v, want nil for nil author", out.Author)
 	}
-	if out.Milestone != "" {
-		t.Errorf("Milestone = %q, want empty for nil milestone", out.Milestone)
+	if out.Milestone != nil {
+		t.Errorf("Milestone = %v, want nil for nil milestone", out.Milestone)
 	}
-	if out.ClosedBy != "" {
-		t.Errorf("ClosedBy = %q, want empty for nil ClosedBy", out.ClosedBy)
+	if out.ClosedBy != nil {
+		t.Errorf("ClosedBy = %v, want nil for nil ClosedBy", out.ClosedBy)
 	}
-	if out.References != "" {
-		t.Errorf("References = %q, want empty for nil references", out.References)
+	if out.References != nil {
+		t.Errorf("References = %v, want nil for nil references", out.References)
+	}
+	if out.Epic != nil {
+		t.Errorf("Epic = %v, want nil for nil epic", out.Epic)
+	}
+	if out.Assignee != nil {
+		t.Errorf("Assignee = %v, want nil for nil assignee", out.Assignee)
 	}
 	if len(out.Labels) != 0 {
 		t.Errorf("Labels = %v, want empty slice", out.Labels)
 	}
-	if len(out.Assignees) != 0 {
-		t.Errorf("Assignees = %v, want empty slice", out.Assignees)
+	if out.Assignees == nil || len(out.Assignees) != 0 {
+		t.Errorf("Assignees = %v, want empty (non-nil) slice", out.Assignees)
+	}
+}
+
+// TestToOutput_ConverterBranches exercises the nil-element and full-field
+// branches of the strict object converters added in the 1:1 object migration:
+// an assignees slice containing a nil element, a full milestone object, and an
+// epic whose own author is nil.
+func TestToOutput_ConverterBranches(t *testing.T) {
+	now := new(gl.ISOTime)
+	ts := time.Now()
+	issue := &gl.Issue{
+		ID: 9, IID: 90, Title: "Branches", State: "opened",
+		// Slice carrying a nil element: the converter must skip it but keep the
+		// real assignee, and the convenience-scalar list must do the same.
+		Assignees: []*gl.IssueAssignee{nil, {Username: "real"}},
+		// LabelDetails slice with a nil element exercises that skip branch.
+		LabelDetails: []*gl.LabelDetails{nil, {ID: 1, Name: "bug"}},
+		Milestone: &gl.Milestone{
+			ID: 1, IID: 2, GroupID: 3, ProjectID: 4, Title: "M", Description: "D",
+			State: "active", WebURL: "https://example.com/m",
+			StartDate: now, DueDate: now, Expired: new(true),
+			// Non-nil time pointers exercise the formatTimePtr format branch.
+			CreatedAt: &ts, UpdatedAt: &ts,
+		},
+		// Epic with a nil author exercises the epicAuthorOutput nil branch.
+		Epic: &gl.Epic{ID: 5, Title: "E", StartDate: now, DueDate: now},
+	}
+	out := ToOutput(issue)
+	if len(out.Assignees) != 1 || out.Assignees[0].Username != "real" {
+		t.Fatalf("Assignees = %v, want one entry 'real' (nil skipped)", out.Assignees)
+	}
+	if out.Milestone == nil || out.Milestone.WebURL != "https://example.com/m" || out.Milestone.Expired == nil || !*out.Milestone.Expired {
+		t.Fatalf("Milestone = %v, want full object with expired=true", out.Milestone)
+	}
+	if out.Milestone.Title != "M" {
+		t.Fatalf("Milestone.Title = %q, want M", out.Milestone.Title)
+	}
+	if out.Epic == nil || out.Epic.Author != nil {
+		t.Fatalf("Epic = %v, want non-nil epic with nil author", out.Epic)
+	}
+	if out.Milestone.CreatedAt == "" {
+		t.Fatalf("Milestone.CreatedAt = empty, want formatted timestamp")
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" {
+		t.Fatalf("LabelDetails = %v, want one entry 'bug' (nil skipped)", out.LabelDetails)
+	}
+}
+
+// TestFormatMarkdown_ObjectDerivedFields verifies the Markdown helpers derive
+// author, assignee, and closer names from the full SDK objects.
+func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
+	md := FormatMarkdown(Output{
+		IID: 7, Title: "Objects", State: "closed",
+		Author:    &IssueAuthorOutput{Username: "obj-author"},
+		Assignees: []*IssueAssigneeOutput{{Username: "obj-assignee"}},
+		ClosedBy:  &IssueCloserOutput{Username: "obj-closer"},
+		WebURL:    "https://example.com/7",
+	})
+	for _, want := range []string{"obj-author", "@obj-assignee", "@obj-closer"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatMarkdown_ClosedNoCloser verifies a closed issue with a nil ClosedBy
+// object renders without a "Closed By" line (closerName nil branch).
+func TestFormatMarkdown_ClosedNoCloser(t *testing.T) {
+	md := FormatMarkdown(Output{IID: 8, Title: "Closed", State: "closed", WebURL: "https://example.com/8"})
+	if strings.Contains(md, "Closed By") {
+		t.Errorf("FormatMarkdown should omit Closed By for nil ClosedBy:\n%s", md)
 	}
 }
 
@@ -2096,29 +2217,175 @@ func TestTimeStatsToOutput_Populated(t *testing.T) {
 // basicMRToOutput
 // ---------------------------------------------------------------------------.
 
-// TestBasicMRToOutput verifies BasicMRToOutput.
+// TestBasicMRToOutput verifies basicMRToOutput surfaces the full
+// BasicMergeRequest fidelity: nested user objects, milestone, references,
+// time-stats, task-completion, label details, labels, scalar flags, and
+// timestamps.
 func TestBasicMRToOutput(t *testing.T) {
+	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	merged := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
 	mr := &gl.BasicMergeRequest{
-		ID: 1, IID: 2, Title: "MR1", State: "merged",
+		ID: 1, IID: 2, ProjectID: 7, Title: "MR1", State: "merged",
+		Description:  "body",
 		SourceBranch: "feat", TargetBranch: "main",
-		Author: &gl.BasicUser{Username: "alice"},
+		SourceProjectID: 7, TargetProjectID: 8,
+		Author:    &gl.BasicUser{ID: 11, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "u", CreatedAt: &created},
+		Assignee:  &gl.BasicUser{Username: "bob"},
+		Assignees: []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
+		Reviewers: []*gl.BasicUser{{Username: "dave"}},
+		MergeUser: &gl.BasicUser{Username: "merger"},
+		MergedBy:  &gl.BasicUser{Username: "mergedby"},
+		ClosedBy:  &gl.BasicUser{Username: "closer"},
+		Milestone: &gl.Milestone{ID: 5, Title: "v1"},
+		Labels:    gl.Labels{"l1", "l2"},
+		LabelDetails: []*gl.LabelDetails{
+			{ID: 3, Name: "bug", Color: "#fff"}, nil,
+		},
+		References:                  &gl.IssueReferences{Short: "!2", Relative: "p!2", Full: "g/p!2"},
+		TimeStats:                   &gl.TimeStats{TimeEstimate: 3600},
+		TaskCompletionStatus:        &gl.TasksCompletionStatus{Count: 4, CompletedCount: 1},
+		Draft:                       true,
+		Imported:                    true,
+		ImportedFrom:                "github",
+		DetailedMergeStatus:         "mergeable",
+		MergeWhenPipelineSucceeds:   true,
+		SHA:                         "abc",
+		MergeCommitSHA:              "def",
+		SquashCommitSHA:             "ghi",
+		Squash:                      true,
+		SquashOnMerge:               true,
+		ShouldRemoveSourceBranch:    true,
+		ForceRemoveSourceBranch:     true,
+		AllowCollaboration:          true,
+		AllowMaintainerToPush:       true,
+		DiscussionLocked:            true,
+		HasConflicts:                true,
+		BlockingDiscussionsResolved: true,
+		Upvotes:                     9, Downvotes: 2, UserNotesCount: 3,
+		CreatedAt: &created, UpdatedAt: &created, MergedAt: &merged,
+		MergeAfter: &merged, PreparedAt: &created, ClosedAt: &merged,
 		WebURL: "https://gitlab.example.com/mr/1",
 	}
 	out := basicMRToOutput(mr)
-	if out.Author != "alice" {
-		t.Errorf("Author = %q, want alice", out.Author)
+
+	if out.Author == nil || out.Author.Username != "alice" || out.Author.ID != 11 || out.Author.CreatedAt == "" {
+		t.Errorf("Author = %+v, want full alice user with created_at", out.Author)
 	}
+	if out.IID != 2 {
+		t.Errorf("IID = %d, want 2", out.IID)
+	}
+	if out.ProjectID != 7 || out.SourceProjectID != 7 || out.TargetProjectID != 8 {
+		t.Errorf("project ids = %d/%d/%d", out.ProjectID, out.SourceProjectID, out.TargetProjectID)
+	}
+	assertRelatedMRNested(t, out)
+	assertRelatedMRFlags(t, out)
+	if out.ImportedFrom != "github" || out.DetailedMergeStatus != "mergeable" {
+		t.Errorf("ImportedFrom/DetailedMergeStatus = %q/%q", out.ImportedFrom, out.DetailedMergeStatus)
+	}
+	if out.SHA != "abc" || out.MergeCommitSHA != "def" || out.SquashCommitSHA != "ghi" {
+		t.Errorf("shas = %q/%q/%q", out.SHA, out.MergeCommitSHA, out.SquashCommitSHA)
+	}
+	if out.Upvotes != 9 || out.Downvotes != 2 || out.UserNotesCount != 3 {
+		t.Errorf("counts = %d/%d/%d", out.Upvotes, out.Downvotes, out.UserNotesCount)
+	}
+	assertRelatedMRTimestamps(t, out)
 	if out.WebURL != "https://gitlab.example.com/mr/1" {
 		t.Errorf("WebURL = %q, want correct URL", out.WebURL)
 	}
 }
 
-// TestBasicMRToOutput_NilAuthor verifies BasicMRToOutput when nil author.
+// assertRelatedMRNested asserts the nested user, milestone, label, reference,
+// time-stats, and task-completion objects produced from the populated fixture,
+// including the nil-element-skipping behavior of the slice converters.
+func assertRelatedMRNested(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	if out.Assignee == nil || out.Assignee.Username != "bob" {
+		t.Errorf("Assignee = %+v, want bob", out.Assignee)
+	}
+	if len(out.Assignees) != 2 { // nil element skipped
+		t.Errorf("len(Assignees) = %d, want 2 (nil skipped)", len(out.Assignees))
+	}
+	if len(out.Reviewers) != 1 || out.Reviewers[0].Username != "dave" {
+		t.Errorf("Reviewers = %+v", out.Reviewers)
+	}
+	if out.MergeUser == nil || out.MergedBy == nil || out.ClosedBy == nil {
+		t.Errorf("merge/merged/closed user objects must be present")
+	}
+	if out.Milestone == nil || out.Milestone.Title != "v1" {
+		t.Errorf("Milestone = %+v, want v1", out.Milestone)
+	}
+	if len(out.Labels) != 2 {
+		t.Errorf("Labels = %v, want 2", out.Labels)
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" { // nil skipped
+		t.Errorf("LabelDetails = %+v, want [bug]", out.LabelDetails)
+	}
+	if out.References == nil || out.References.Full != "g/p!2" {
+		t.Errorf("References = %+v", out.References)
+	}
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 {
+		t.Errorf("TimeStats = %+v", out.TimeStats)
+	}
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.Count != 4 {
+		t.Errorf("TaskCompletionStatus = %+v", out.TaskCompletionStatus)
+	}
+}
+
+// assertRelatedMRFlags asserts that every boolean flag on the converted MR is
+// true, mirroring the all-true fixture used by TestBasicMRToOutput.
+func assertRelatedMRFlags(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	for name, got := range map[string]bool{
+		"Draft": out.Draft, "Imported": out.Imported, "Squash": out.Squash,
+		"SquashOnMerge": out.SquashOnMerge, "DiscussionLocked": out.DiscussionLocked,
+		"HasConflicts": out.HasConflicts, "BlockingDiscussionsResolved": out.BlockingDiscussionsResolved,
+		"AllowCollaboration": out.AllowCollaboration, "AllowMaintainerToPush": out.AllowMaintainerToPush,
+		"ShouldRemoveSourceBranch": out.ShouldRemoveSourceBranch, "ForceRemoveSourceBranch": out.ForceRemoveSourceBranch,
+		"MergeWhenPipelineSucceeds": out.MergeWhenPipelineSucceeds,
+	} {
+		if !got {
+			t.Errorf("flag %s = false, want true", name)
+		}
+	}
+}
+
+// assertRelatedMRTimestamps asserts that every timestamp field rendered into a
+// non-empty RFC 3339 string from the all-populated fixture.
+func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	for name, ts := range map[string]string{
+		"CreatedAt": out.CreatedAt, "UpdatedAt": out.UpdatedAt, "MergedAt": out.MergedAt,
+		"MergeAfter": out.MergeAfter, "PreparedAt": out.PreparedAt, "ClosedAt": out.ClosedAt,
+	} {
+		if ts == "" {
+			t.Errorf("timestamp %s empty, want RFC3339", name)
+		}
+	}
+}
+
+// TestBasicMRToOutput_NilAuthor verifies basicMRToOutput leaves every optional
+// nested object nil when the SDK MR has no author, users, milestone,
+// references, time-stats, or task status.
 func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ID: 1, IID: 2}
 	out := basicMRToOutput(mr)
-	if out.Author != "" {
-		t.Errorf("Author = %q, want empty for nil author", out.Author)
+	if out.Author != nil {
+		t.Errorf("Author = %+v, want nil for nil author", out.Author)
+	}
+	if out.Assignee != nil || out.Assignees != nil || out.Reviewers != nil {
+		t.Errorf("user objects must be nil when absent")
+	}
+	if out.MergeUser != nil || out.MergedBy != nil || out.ClosedBy != nil {
+		t.Errorf("merge/merged/closed users must be nil when absent")
+	}
+	if out.Milestone != nil || out.References != nil || out.TimeStats != nil {
+		t.Errorf("milestone/references/time_stats must be nil when absent")
+	}
+	if out.TaskCompletionStatus != nil || out.LabelDetails != nil || out.Labels != nil {
+		t.Errorf("task status/label details/labels must be nil when absent")
+	}
+	if out.CreatedAt != "" || out.MergedAt != "" {
+		t.Errorf("timestamps must be empty when absent")
 	}
 }
 
@@ -2511,7 +2778,7 @@ func TestCreate_SuccessCov(t *testing.T) {
 	conf := true
 	out, err := Create(context.Background(), client, CreateInput{
 		ProjectID: testProjectID, Title: "Test Issue",
-		Description: "desc", Labels: "bug",
+		Description: "desc", Labels: []string{"bug"},
 		AssigneeIDs: []int64{1}, MilestoneID: 5,
 		DueDate: testDueDateCov, Confidential: &conf,
 		IssueType: "issue", Weight: 3, EpicID: 10,
@@ -2816,8 +3083,8 @@ func TestListMRsClosing_SuccessCov(t *testing.T) {
 	if len(out.MergeRequests) != 1 {
 		t.Fatalf("ListMRsClosing len = %d, want 1", len(out.MergeRequests))
 	}
-	if out.MergeRequests[0].Author != "bob" {
-		t.Errorf("MR author = %q, want bob", out.MergeRequests[0].Author)
+	if a := out.MergeRequests[0].Author; a == nil || a.Username != "bob" {
+		t.Errorf("MR author = %+v, want bob", out.MergeRequests[0].Author)
 	}
 }
 
@@ -2842,7 +3109,7 @@ func TestListAll_FilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	conf := true
 	out, err := ListAll(context.Background(), client, ListAllInput{
-		State: "opened", Labels: "bug,feat", Milestone: "v1",
+		State: "opened", Labels: []string{"bug", "feat"}, Milestone: "v1",
 		Scope: "assigned_to_me", Search: "test",
 		AssigneeUsername: "alice", AuthorUsername: "bob",
 		OrderBy: "created_at", Sort: "desc",
@@ -2876,7 +3143,7 @@ func TestListAll_WithPagination(t *testing.T) {
 func TestListGroup_AllFilterFieldsCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID: "99", State: "opened", Labels: "bug",
+		GroupID: "99", State: "opened", Labels: []string{"bug"},
 		Milestone: "v1", Search: "test", Scope: "all",
 		AuthorUsername: "bob",
 		CreatedAfter:   testCreatedAfterCov, CreatedBefore: testCreatedBeforeCov,
@@ -2932,6 +3199,72 @@ func TestListMRsRelated_WithPagination(t *testing.T) {
 	}
 	if len(out.MergeRequests) != 1 {
 		t.Errorf("len = %d, want 1", len(out.MergeRequests))
+	}
+}
+
+// TestListMRsClosing_KeysetOrderSort verifies that the keyset pagination,
+// order_by, and sort inputs are forwarded to the GitLab query string.
+func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssue10+"/closed_by" {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, closingMRsResponse)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		OrderBy:               "created_at",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf("ListMRsClosing keyset: %v", err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=asc", "pagination=keyset", "page_token=42"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestListMRsRelated_KeysetOrderSort verifies keyset/order_by/sort forwarding
+// for the related-MR list endpoint.
+func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssue10+"/related_merge_requests" {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, relatedMRsResponse)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		OrderBy:               "updated_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+	})
+	if err != nil {
+		t.Fatalf("ListMRsRelated keyset: %v", err)
+	}
+	for _, want := range []string{"order_by=updated_at", "sort=desc", "pagination=keyset", "page_token=7"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestMRListOptionsApplyTo_EmptyKeepsZero verifies that applyTo leaves OrderBy
+// and Sort untouched when the inputs are empty, exercising the false branches.
+func TestMRListOptionsApplyTo_EmptyKeepsZero(t *testing.T) {
+	var opts gl.ListOptions
+	mrListOptions{}.applyTo(&opts)
+	if opts.OrderBy != "" || opts.Sort != "" || opts.Pagination != "" || opts.PageToken != "" {
+		t.Errorf("applyTo(zero) mutated opts = %+v", opts)
 	}
 }
 
@@ -3287,8 +3620,8 @@ func TestUnsubscribe_APIError(t *testing.T) {
 func TestFormatGetMarkdown_EdgeCases(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Test", State: "closed",
-		References: "test/project#1", IssueType: "incident",
-		ClosedBy: "admin", ClosedAt: "2025-01-01T00:00:00Z",
+		References: &ReferencesOutput{Full: "test/project#1"}, IssueType: "incident",
+		ClosedBy: &IssueCloserOutput{Username: "admin"}, ClosedAt: "2025-01-01T00:00:00Z",
 	}
 	md := FormatMarkdown(out)
 	if !strings.Contains(md, "test/project#1") {
@@ -3567,7 +3900,7 @@ func TestUpdate_ExtraBranches(t *testing.T) {
 	locked := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		AddLabels: "new-label", RemoveLabels: "old-label",
+		AddLabels: []string{"new-label"}, RemoveLabels: []string{"old-label"},
 		Confidential: &conf, IssueType: "incident", Weight: 5,
 		EpicID: 42, DiscussionLocked: &locked,
 	})
@@ -3589,5 +3922,261 @@ func TestDelete_Forbidden(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestList_AdvancedFilters verifies that List forwards the full filter set
+// (negation filters, assignee/author IDs, iteration, reaction, search scope,
+// keyset pagination) to the GitLab project issues query.
+func TestList_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathIssues {
+			q := r.URL.Query()
+			checks := map[string]string{
+				"not[labels]":            "wontfix",
+				"with_labels_details":    "true",
+				"not[milestone]":         "v2",
+				"in":                     "title",
+				"not[in]":                "description",
+				"assignee_id":            "5",
+				"not[assignee_id]":       "6",
+				"not[assignee_username]": "mallory",
+				"author_id":              "7",
+				"not[author_id]":         "8",
+				"not[author_username]":   "carol",
+				"my_reaction_emoji":      "thumbsup",
+				"not[my_reaction_emoji]": "thumbsdown",
+				"issue_type":             "incident",
+				"iteration_id":           "3",
+				"due_date":               "week",
+				"order_by":               "due_date",
+				"sort":                   "asc",
+				"pagination":             "keyset",
+				"page_token":             "tok123",
+			}
+			for k, want := range checks {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %q = %q, want %q", k, got, want)
+				}
+			}
+			if got := q["iids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "11" {
+				t.Errorf("iids[] = %v, want [10 11]", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	five, six, seven, eight, iter := int64(5), int64(6), int64(7), int64(8), int64(3)
+	yes := true
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		NotLabels:             []string{"wontfix"},
+		WithLabelsDetails:     &yes,
+		NotMilestone:          "v2",
+		In:                    "title",
+		NotIn:                 "description",
+		AssigneeID:            &five,
+		NotAssigneeID:         &six,
+		NotAssigneeUsername:   "mallory",
+		AuthorID:              &seven,
+		NotAuthorID:           &eight,
+		NotAuthorUsername:     "carol",
+		MyReactionEmoji:       "thumbsup",
+		NotMyReactionEmoji:    "thumbsdown",
+		IssueType:             "incident",
+		IterationID:           &iter,
+		DueDate:               "week",
+		IIDs:                  []int64{10, 11},
+		OrderBy:               "due_date",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueListErr, err)
+	}
+}
+
+// TestListGroup_AdvancedFilters verifies the group issue list forwards the
+// negated search and assignee filters unique to the group endpoint.
+func TestListGroup_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/10/issues" {
+			q := r.URL.Query()
+			if q.Get("not[search]") != "spam" {
+				t.Errorf("not[search] = %q, want spam", q.Get("not[search]"))
+			}
+			if q.Get("assignee_username") != "alice" {
+				t.Errorf("assignee_username = %q, want alice", q.Get("assignee_username"))
+			}
+			if q.Get("iteration_id") != "4" {
+				t.Errorf("iteration_id = %q, want 4", q.Get("iteration_id"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	iter := int64(4)
+	_, err := ListGroup(context.Background(), client, ListGroupInput{
+		GroupID:          "10",
+		NotSearch:        "spam",
+		AssigneeUsername: "alice",
+		IterationID:      &iter,
+	})
+	if err != nil {
+		t.Fatalf("ListGroup() unexpected error: %v", err)
+	}
+}
+
+// TestListAll_AdvancedFilters verifies the global issue list forwards the
+// slice-typed negation filters (not[assignee_id], not[author_id],
+// not[my_reaction_emoji]) that are unique to the global endpoint.
+func TestListAll_AdvancedFilters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGlobalIssues {
+			q := r.URL.Query()
+			if got := q["not[assignee_id]"]; len(got) != 2 {
+				t.Errorf("not[assignee_id] = %v, want 2 values", got)
+			}
+			if got := q["not[author_id]"]; len(got) != 1 || got[0] != "9" {
+				t.Errorf("not[author_id] = %v, want [9]", got)
+			}
+			if got := q["not[my_reaction_emoji]"]; len(got) != 1 || got[0] != "thumbsdown" {
+				t.Errorf("not[my_reaction_emoji] = %v, want [thumbsdown]", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListAll(context.Background(), client, ListAllInput{
+		NotAssigneeID:      []int64{1, 2},
+		NotAuthorID:        []int64{9},
+		NotMyReactionEmoji: []string{"thumbsdown"},
+		NotLabels:          []string{"spam"},
+	})
+	if err != nil {
+		t.Fatalf("ListAll() unexpected error: %v", err)
+	}
+}
+
+// TestCreate_WithIID verifies that an explicit issue IID is sent in the create
+// request body.
+func TestCreate_WithIID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body["iid"] != float64(900) {
+				t.Errorf("body iid = %v, want 900", body["iid"])
+			}
+			testutil.RespondJSON(w, http.StatusCreated, issueJSONMinimal)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, Title: "X", IID: 900})
+	if err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+}
+
+// TestUpdate_WithUpdatedAt verifies the updated_at override is sent in the
+// update request body.
+func TestUpdate_WithUpdatedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if _, ok := body["updated_at"]; !ok {
+				t.Error("expected updated_at in update body")
+			}
+			testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10, UpdatedAt: "2026-03-01T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+}
+
+// TestUpdate_InvalidUpdatedAt verifies a malformed updated_at is rejected before
+// any API call.
+func TestUpdate_InvalidUpdatedAt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("API should not be called when updated_at is invalid")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10, UpdatedAt: "not-a-timestamp",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid updated_at, got nil")
+	}
+}
+
+// TestToOutput_AdditiveSubObjects verifies that ToOutput surfaces the additive
+// 1:1 sub-objects (label_details, iteration, _links, time_stats,
+// task_completion_status) and scalars (external_id, issue_link_id,
+// service_desk_reply_to) from the SDK issue.
+func TestToOutput_AdditiveSubObjects(t *testing.T) {
+	issue := &gl.Issue{
+		ID:                   1,
+		IID:                  10,
+		ExternalID:           "EXT-7",
+		IssueLinkID:          55,
+		ServiceDeskReplyTo:   "sd@example.com",
+		LabelDetails:         []*gl.LabelDetails{{ID: 3, Name: "bug", Color: "#ff0000", TextColor: "#ffffff"}},
+		Iteration:            &gl.GroupIteration{ID: 8, IID: 2, Title: "Sprint 1", State: 1, WebURL: "https://gl/iter/2"},
+		Links:                &gl.IssueLinks{Self: "https://gl/self", Notes: "https://gl/notes", AwardEmoji: "https://gl/awards", Project: "https://gl/project"},
+		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800, HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m"},
+		TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 5, CompletedCount: 2},
+	}
+
+	out := ToOutput(issue)
+	if out.ExternalID != "EXT-7" || out.IssueLinkID != 55 || out.ServiceDeskReplyTo != "sd@example.com" {
+		t.Errorf("scalars = %q/%d/%q", out.ExternalID, out.IssueLinkID, out.ServiceDeskReplyTo)
+	}
+	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" || out.LabelDetails[0].Color != "#ff0000" {
+		t.Errorf("label_details = %+v", out.LabelDetails)
+	}
+	if out.Iteration == nil || out.Iteration.Title != "Sprint 1" || out.Iteration.WebURL != "https://gl/iter/2" {
+		t.Errorf("iteration = %+v", out.Iteration)
+	}
+	if out.Links == nil || out.Links.Self != "https://gl/self" || out.Links.AwardEmoji != "https://gl/awards" {
+		t.Errorf("_links = %+v", out.Links)
+	}
+	if out.TimeStats == nil || out.TimeStats.TimeEstimate != 3600 || out.TimeStats.HumanTotalTimeSpent != "30m" {
+		t.Errorf("time_stats = %+v", out.TimeStats)
+	}
+	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.Count != 5 || out.TaskCompletionStatus.CompletedCount != 2 {
+		t.Errorf("task_completion_status = %+v", out.TaskCompletionStatus)
+	}
+}
+
+// TestToOutput_AdditiveSubObjects_NilSafe verifies the additive sub-objects are
+// nil/empty when absent on the SDK issue.
+func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
+	out := ToOutput(&gl.Issue{ID: 1, IID: 10})
+	if out.LabelDetails != nil || out.Iteration != nil || out.Links != nil || out.TimeStats != nil || out.TaskCompletionStatus != nil {
+		t.Errorf("expected nil additive sub-objects, got %+v", out)
+	}
+	if out.ExternalID != "" || out.IssueLinkID != 0 || out.ServiceDeskReplyTo != "" {
+		t.Errorf("expected zero additive scalars")
 	}
 }

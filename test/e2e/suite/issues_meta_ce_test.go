@@ -287,7 +287,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{},
 		})
 		requireNoError(t, err, "statistics_get")
-		t.Logf("Issue statistics: open=%d, closed=%d", out.Opened, out.Closed)
+		t.Logf("Issue statistics: open=%d, closed=%d", out.Statistics.Counts.Opened, out.Statistics.Counts.Closed)
 	})
 
 	t.Run("StatisticsGetProject", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "statistics_get_project")
-		t.Logf("Project issue statistics: open=%d", out.Opened)
+		t.Logf("Project issue statistics: open=%d", out.Statistics.Counts.Opened)
 	})
 
 	t.Run("StatisticsGetGroup", func(t *testing.T) {

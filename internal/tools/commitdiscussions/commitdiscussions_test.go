@@ -72,8 +72,8 @@ func TestList_Success(t *testing.T) {
 	if out.Discussions[0].ID != testDiscussionID {
 		t.Errorf("got ID=%q, want d1", out.Discussions[0].ID)
 	}
-	if out.Discussions[0].Notes[0].Author != testAuthorAlice {
-		t.Errorf("got author=%q, want alice", out.Discussions[0].Notes[0].Author)
+	if noteAuthorUsername(*out.Discussions[0].Notes[0]) != testAuthorAlice {
+		t.Errorf("got author=%q, want alice", noteAuthorUsername(*out.Discussions[0].Notes[0]))
 	}
 }
 
@@ -184,8 +184,8 @@ func TestAddNote_Success(t *testing.T) {
 	if out.ID != 40 {
 		t.Errorf("got ID=%d, want 40", out.ID)
 	}
-	if out.Author != "eve" {
-		t.Errorf("got author=%q, want eve", out.Author)
+	if noteAuthorUsername(out) != "eve" {
+		t.Errorf("got author=%q, want eve", noteAuthorUsername(out))
 	}
 }
 
@@ -439,8 +439,8 @@ func TestUpdateNote_APIError(t *testing.T) {
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: testDiscussionID, Notes: []NoteOutput{{Author: testAuthorAlice, CreatedAt: testDate20260101, Body: "comment"}}},
-			{ID: "d2", Notes: []NoteOutput{{Author: "bob", CreatedAt: "2026-01-02", Body: "reply"}}},
+			{ID: testDiscussionID, Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
+			{ID: "d2", Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
 		},
 	}
 	md := FormatListMarkdownString(out)
@@ -472,7 +472,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	out := Output{
 		ID:    testDiscussionID,
-		Notes: []NoteOutput{{Author: "dev", CreatedAt: testDate20260101, Body: "LGTM"}},
+		Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
 	}
 	md := FormatMarkdownString(out)
 	if !strings.Contains(md, "Discussion "+testDiscussionID) {
@@ -498,7 +498,7 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString(t *testing.T) {
-	n := NoteOutput{ID: 10, Author: "dev", Body: "Nice!", CreatedAt: testDate20260101}
+	n := NoteOutput{ID: 10, Author: &NoteUserOutput{Username: "dev"}, Body: "Nice!", CreatedAt: testDate20260101}
 	md := FormatNoteMarkdownString(n)
 	if !strings.Contains(md, "Note") {
 		t.Error("expected header")
@@ -518,7 +518,7 @@ func TestFormatNoteMarkdownString(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
-	n := NoteOutput{ID: 11, Author: "bot", Body: "OK"}
+	n := NoteOutput{ID: 11, Author: &NoteUserOutput{Username: "bot"}, Body: "OK"}
 	md := FormatNoteMarkdownString(n)
 	if strings.Contains(md, "Created") {
 		t.Error("should not show Created when empty")

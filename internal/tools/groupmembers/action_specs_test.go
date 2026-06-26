@@ -4,6 +4,7 @@ package groupmembers
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,6 +41,15 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler.HandleFunc("DELETE /api/v4/groups/5/share/10", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	handler.HandleFunc("GET /api/v4/groups/5/billable_members", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"username":"dev","name":"Developer","state":"active"}]`)
+	})
+	handler.HandleFunc("GET /api/v4/groups/5/billable_members/10/memberships", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"source_id":7,"source_full_name":"Org / Team"}]`)
+	})
+	handler.HandleFunc("DELETE /api/v4/groups/5/billable_members/10", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	byTool := groupMemberSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
 
 	tests := []struct {
@@ -54,6 +64,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"remove", "gitlab_group_member_remove", map[string]any{"group_id": "5", "user_id": 10}},
 		{"share", "gitlab_group_share", map[string]any{"group_id": "5", "share_group_id": 10, "group_access": 30}},
 		{"unshare", "gitlab_group_unshare", map[string]any{"group_id": "5", "share_group_id": 10}},
+		{"billable_members", "gitlab_list_billable_group_members", map[string]any{"group_id": "5"}},
+		{"billable_memberships", "gitlab_list_billable_member_memberships", map[string]any{"group_id": "5", "user_id": 10}},
+		{"billable_remove", "gitlab_remove_billable_group_member", map[string]any{"group_id": "5", "user_id": 10}},
 	}
 
 	for _, tt := range tests {
@@ -187,6 +200,61 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 				t.Fatal("expected non-nil result when confirmation is declined")
 			}
 		})
+	}
+}
+
+// TestActionSpecs_Metadata verifies that every group-member action carries
+// non-generic discovery metadata (Usage, natural-language aliases, canonical
+// related actions, parameter guidance, and an individual-tool description) per
+// the 1:1 audit R-META requirement.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := groupMemberSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	for tool := range groupMemberActionMeta {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("metadata declared for %q but no spec projects it", tool)
+		}
+		t.Run(tool, func(t *testing.T) {
+			assertGroupMemberMeta(t, tool, spec)
+		})
+	}
+}
+
+// assertGroupMemberMeta checks that one projected spec carries the required
+// R-META discovery metadata.
+func assertGroupMemberMeta(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || spec.Usage == "Use to execute groupmembers domain action." {
+		t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+	}
+	if spec.IndividualTool.Description == "" {
+		t.Errorf("%s: missing individual-tool Description", tool)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: missing RelatedActions", tool)
+	}
+	if _, ok := spec.ParameterGuidance["group_id"]; !ok {
+		t.Errorf("%s: ParameterGuidance missing group_id", tool)
+	}
+	// The canonical individual-tool alias must remain present alongside the
+	// natural-language aliases.
+	if !slices.Contains(spec.Aliases, tool) {
+		t.Errorf("%s: canonical alias %q dropped from aliases %v", tool, tool, spec.Aliases)
+	}
+}
+
+// TestDecorateGroupMemberMeta_UnknownTool verifies the no-op path of
+// decorateGroupMemberMeta for a tool name absent from the metadata map.
+func TestDecorateGroupMemberMeta_UnknownTool(t *testing.T) {
+	options := groupMemberOptions("gitlab_unknown_tool")
+	before := options.Usage
+	decorateGroupMemberMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before {
+		t.Errorf("expected Usage unchanged for unknown tool, got %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("expected empty Description for unknown tool, got %q", options.IndividualTool.Description)
 	}
 }
 

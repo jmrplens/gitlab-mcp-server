@@ -31,11 +31,10 @@ func TestFormatPATMarkdown(t *testing.T) {
 				LastUsedAt: "2026-06-15T10:30:00Z",
 				Active:     true,
 				ExpiresAt:  "2026-01-01",
-				State:      "active",
 			},
 			contains: []string{
 				"deploy-token", "ID: 1",
-				"10", "active",
+				"10", "true",
 				"api, read_user",
 				"2026-01-01",
 				"2026-01-01T00:00:00Z",
@@ -49,9 +48,8 @@ func TestFormatPATMarkdown(t *testing.T) {
 				Name:      "basic-token",
 				CreatedAt: "2026-01-01T00:00:00Z",
 				UserID:    20,
-				State:     "inactive",
 			},
-			contains: []string{"basic-token", "ID: 2", "inactive"},
+			contains: []string{"basic-token", "ID: 2", "Active", "Revoked"},
 			excludes: []string{"Expires At", "Last Used At"},
 		},
 	}
@@ -91,15 +89,15 @@ func TestFormatPATListMarkdown(t *testing.T) {
 			name: "with tokens",
 			input: PATListOutput{
 				Tokens: []PATOutput{
-					{ID: 1, Name: "tok1", UserID: 10, State: "active", Scopes: []string{"api"}, ExpiresAt: "2026-01-01"},
-					{ID: 2, Name: "tok2", UserID: 20, State: "revoked", Revoked: true},
+					{ID: 1, Name: "tok1", UserID: 10, Active: true, Scopes: []string{"api"}, ExpiresAt: "2026-01-01"},
+					{ID: 2, Name: "tok2", UserID: 20, Revoked: true},
 				},
 				Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
 			},
 			contains: []string{
 				"Personal Access Tokens (2)",
 				"tok1", "tok2",
-				"active", "revoked",
+				"Active", "Revoked",
 				"api",
 			},
 		},
@@ -117,8 +115,8 @@ func TestFormatPATListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyMarkdown verifies single SSH key markdown rendering
-// with both short keys (displayed in full) and long keys (truncated to 57 chars).
+// TestFormatSSHKeyMarkdown verifies single SSH key markdown rendering, including
+// the optional usage-type, expiry, and last-used fields.
 func TestFormatSSHKeyMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -127,28 +125,28 @@ func TestFormatSSHKeyMarkdown(t *testing.T) {
 		excludes []string
 	}{
 		{
-			name: "short key with expires_at",
+			name: "all optional fields present",
 			input: SSHKeyOutput{
-				ID:        5,
-				Title:     "my-key",
-				Key:       "ssh-rsa AAAA",
-				CreatedAt: "2026-01-01T00:00:00Z",
-				ExpiresAt: "2026-06-01T00:00:00Z",
-				UserID:    10,
+				ID:         5,
+				Title:      "my-key",
+				UsageType:  "auth",
+				CreatedAt:  "2026-01-01T00:00:00Z",
+				ExpiresAt:  "2026-06-01T00:00:00Z",
+				LastUsedAt: "2026-05-01T00:00:00Z",
+				UserID:     10,
 			},
-			contains: []string{"my-key", "ID: 5", "ssh-rsa AAAA", "Expires At"},
+			contains: []string{"my-key", "ID: 5", "auth", "Expires At", "Last Used At"},
 		},
 		{
-			name: "long key truncated",
+			name: "no optional fields",
 			input: SSHKeyOutput{
 				ID:        6,
-				Title:     "long-key",
-				Key:       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7n+ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdef",
+				Title:     "basic-key",
 				CreatedAt: "2026-01-01T00:00:00Z",
 				UserID:    11,
 			},
-			contains: []string{"long-key", "..."},
-			excludes: []string{"Expires At"},
+			contains: []string{"basic-key", "ID: 6", "Created At"},
+			excludes: []string{"Expires At", "Last Used At", "Usage Type"},
 		},
 	}
 

@@ -120,6 +120,37 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
+// TestList_KeysetAndOrdering verifies List forwards keyset pagination
+// (pagination, page_token), order_by, and sort query parameters to the
+// GitLab API.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" {
+			t.Errorf("order_by = %q, want id", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort = %q, want desc", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "tok42" {
+			t.Errorf("page_token = %q, want tok42", q.Get("page_token"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, "[]")
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+}
+
 // Create tests.
 
 // TestCreate_Success verifies Create returns the new rule when

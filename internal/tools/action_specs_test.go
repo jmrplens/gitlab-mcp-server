@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -37,7 +38,10 @@ func TestCollectedActionSpecs_ProjectIntoActionCatalog(t *testing.T) {
 				t.Fatalf("BuildActionCatalog() error = %v", catalogErr)
 			}
 
-			for _, specGroup := range CollectActionSpecs(tc.client, tc.enterprise) {
+			// The catalog applies the central tier filter; align the raw collected
+			// specs to the same effective tier so route parity is comparable.
+			tier := edition.TierForEnterprise(tc.enterprise)
+			for _, specGroup := range filterActionSpecGroupsByTier(CollectActionSpecs(tc.client, tc.enterprise), tier) {
 				t.Run(specGroup.ToolName, func(t *testing.T) {
 					catalogGroup, ok := catalog.Group(specGroup.ToolName)
 					if !ok {
@@ -68,7 +72,7 @@ func TestCollectedActionSpecs_KnownGuidancePreserved(t *testing.T) {
 		keys     []string
 	}{
 		{toolName: "gitlab_merge_request", action: "create", keys: []string{"source_branch", "target_branch"}},
-		{toolName: "gitlab_issue", action: "link_create", keys: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
+		{toolName: "gitlab_issue", action: "link_create", keys: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid", "link_type"}},
 		{toolName: "gitlab_group", action: "epic_issue_assign", keys: []string{"full_path", "child_project_path", "child_iid"}},
 		{toolName: "gitlab_job", action: "token_scope_remove_project", keys: []string{"project_id", "target_project_id"}},
 		{toolName: "gitlab_access", action: "deploy_token_delete_project", keys: []string{"project_id", "deploy_token_id"}},

@@ -9,7 +9,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionDeploymentList = "deployment.list"
+const (
+	actionDeploymentList  = "deployment.list"
+	actionEnvironmentStop = "environment.stop"
+	actionEnvironmentList = "environment.list"
+	actionEnvironmentGet  = "environment.get"
+	actionNameStop        = "stop"
+	paramEnvironmentID    = "environment_id"
+)
 
 // ActionSpecs returns canonical specs for environment actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
@@ -29,7 +36,7 @@ func environmentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
 		result, err := baseHandler(ctx, input)
 		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input["environment_id"], input["project_id"])}, nil
+			return environmentNotFoundOutput{Identifier: fmt.Sprintf("ID %v in project %v", input[paramEnvironmentID], input["project_id"])}, nil
 		}
 		return result, err
 	}
@@ -54,9 +61,9 @@ func environmentDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
-	options := environmentOptionsForAction("stop", "gitlab_environment_stop")
+	options := environmentOptionsForAction(actionNameStop, "gitlab_environment_stop")
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewDeleteActionSpec("stop", toolutil.DestructiveAction(client, Stop), options)
+	return toolutil.NewDeleteActionSpec(actionNameStop, toolutil.DestructiveAction(client, Stop), options)
 }
 
 func environmentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -72,14 +79,14 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 	case "list":
 		options.Usage = "List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations."
 		options.Aliases = []string{"list environments", "show environments", "find environments"}
-		options.RelatedActions = []string{"environment.get", "environment.stop", actionDeploymentList}
+		options.RelatedActions = []string{actionEnvironmentGet, actionEnvironmentStop, actionDeploymentList}
 	case "get":
 		options.Usage = "Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment."
 		options.Aliases = []string{"get environment", "show environment details", "lookup environment"}
-		options.RelatedActions = []string{"environment.list", "environment.update", "environment.stop"}
+		options.RelatedActions = []string{actionEnvironmentList, "environment.update", actionEnvironmentStop}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"environment_id": {
-				SemanticRole:   "environment_id",
+			paramEnvironmentID: {
+				SemanticRole:   paramEnvironmentID,
 				ValueSource:    "Environment numeric ID from environment list output.",
 				ExampleBinding: "params.environment_id:7",
 			},
@@ -87,11 +94,21 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 	case "create":
 		options.Usage = "Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments."
 		options.Aliases = []string{"create environment", "new environment", "add environment"}
-		options.RelatedActions = []string{"environment.list", "environment.update", "deployment.create"}
-	case "stop":
+		options.RelatedActions = []string{actionEnvironmentList, "environment.update", "deployment.create"}
+	case "update":
+		options.Usage = "Update an existing environment by environment_id. Use to change its name, description, external URL, tier, cluster agent, Kubernetes namespace, Flux resource path, or auto-stop setting."
+		options.Aliases = []string{"update environment", "edit environment", "modify environment"}
+		options.RelatedActions = []string{actionEnvironmentGet, actionEnvironmentList, actionEnvironmentStop}
+		options.IndividualTool.Description = "Update an existing environment in a project. Returns: the updated environment with state, tier, external URL, cluster agent, Kubernetes namespace, Flux resource path, and auto-stop settings. See also: gitlab_environment_get, gitlab_environment_list, gitlab_environment_stop."
+	case "delete":
+		options.Usage = "Delete an environment by environment_id. The environment must be stopped first. Use to permanently remove a runtime target that is no longer used."
+		options.Aliases = []string{"delete environment", "remove environment", "destroy environment"}
+		options.RelatedActions = []string{actionEnvironmentStop, actionEnvironmentList, actionEnvironmentGet}
+		options.IndividualTool.Description = "Delete a stopped environment from a project. Returns: a success confirmation naming the deleted environment. See also: gitlab_environment_stop, gitlab_environment_list, gitlab_environment_get."
+	case actionNameStop:
 		options.Usage = "Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource."
 		options.Aliases = []string{"stop environment", "pause environment", "halt environment"}
-		options.RelatedActions = []string{"environment.get", actionDeploymentList}
+		options.RelatedActions = []string{actionEnvironmentGet, actionDeploymentList}
 	}
 
 	return options

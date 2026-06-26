@@ -76,8 +76,8 @@ func FormatDetailMarkdown(p DetailOutput) string {
 	if p.YamlErrors != "" {
 		fmt.Fprintf(&b, "- **YAML Errors**: %s\n", p.YamlErrors)
 	}
-	if p.UserUsername != "" {
-		fmt.Fprintf(&b, "- **User**: %s\n", p.UserUsername)
+	if p.User != nil && p.User.Username != "" {
+		fmt.Fprintf(&b, "- **User**: %s\n", p.User.Username)
 	}
 	if p.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(p.CreatedAt))

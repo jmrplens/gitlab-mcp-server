@@ -19,17 +19,26 @@ type UpdateInput struct {
 	CommitMessage string               `json:"commit_message,omitempty" jsonschema:"Custom commit message (optional)"`
 }
 
-// UpdateOutput is the output for a submodule update.
+// UpdateOutput is the output for a submodule update. The GitLab
+// "update submodule" endpoint returns a gitlab.SubmoduleCommit, so the fields
+// mirror that type one-to-one (1:1 audit): identity, author and committer
+// attribution, authored/committed/created dates, parents, message, and build
+// status. SubmoduleCommit does not carry a web URL.
 type UpdateOutput struct {
 	toolutil.HintableOutput
-	ID            string `json:"id"`
-	ShortID       string `json:"short_id"`
-	Title         string `json:"title"`
-	AuthorName    string `json:"author_name"`
-	AuthorEmail   string `json:"author_email"`
-	Message       string `json:"message"`
-	CreatedAt     string `json:"created_at,omitempty"`
-	CommittedDate string `json:"committed_date,omitempty"`
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id"`
+	Title          string   `json:"title"`
+	AuthorName     string   `json:"author_name"`
+	AuthorEmail    string   `json:"author_email"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name,omitempty"`
+	CommitterEmail string   `json:"committer_email,omitempty"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	Message        string   `json:"message"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
+	Status         string   `json:"status,omitempty"`
 }
 
 // Update updates a submodule reference in a repository.
@@ -48,12 +57,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 
 	out := UpdateOutput{
-		ID:          commit.ID,
-		ShortID:     commit.ShortID,
-		Title:       commit.Title,
-		AuthorName:  commit.AuthorName,
-		AuthorEmail: commit.AuthorEmail,
-		Message:     commit.Message,
+		ID:             commit.ID,
+		ShortID:        commit.ShortID,
+		Title:          commit.Title,
+		AuthorName:     commit.AuthorName,
+		AuthorEmail:    commit.AuthorEmail,
+		CommitterName:  commit.CommitterName,
+		CommitterEmail: commit.CommitterEmail,
+		Message:        commit.Message,
+		ParentIDs:      commit.ParentIDs,
+	}
+	if commit.Status != nil {
+		out.Status = string(*commit.Status)
+	}
+	if commit.AuthoredDate != nil {
+		out.AuthoredDate = commit.AuthoredDate.String()
 	}
 	if commit.CreatedAt != nil {
 		out.CreatedAt = commit.CreatedAt.String()

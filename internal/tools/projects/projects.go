@@ -36,7 +36,59 @@ func accessLevelEnabled(v gl.AccessControlValue) bool {
 	return v != "" && v != gl.DisabledAccessControl
 }
 
-// CreateInput defines parameters for creating a GitLab project.
+// ContainerExpirationPolicyInput mirrors the GitLab
+// [gl.ContainerExpirationPolicyAttributes] options for configuring the
+// container registry cleanup policy when creating or updating a project.
+type ContainerExpirationPolicyInput struct {
+	Cadence         string `json:"cadence,omitempty" jsonschema:"Cleanup cadence (1d, 7d, 14d, 1month, 3month)"`
+	KeepN           *int64 `json:"keep_n,omitempty" jsonschema:"Number of most recent tags to always keep per image name"`
+	OlderThan       string `json:"older_than,omitempty" jsonschema:"Only tags older than this duration are eligible for deletion (7d, 14d, 30d, 90d)"`
+	NameRegexDelete string `json:"name_regex_delete,omitempty" jsonschema:"Regex matching tag names to delete"`
+	NameRegexKeep   string `json:"name_regex_keep,omitempty" jsonschema:"Regex matching tag names to always keep"`
+	Enabled         *bool  `json:"enabled,omitempty" jsonschema:"Enable the container expiration policy"`
+}
+
+// toGL converts the input into the GitLab
+// [gl.ContainerExpirationPolicyAttributes] options, returning nil when no
+// field is set.
+func (c *ContainerExpirationPolicyInput) toGL() *gl.ContainerExpirationPolicyAttributes {
+	if c == nil {
+		return nil
+	}
+	out := &gl.ContainerExpirationPolicyAttributes{}
+	set := false
+	if c.Cadence != "" {
+		out.Cadence = new(c.Cadence)
+		set = true
+	}
+	if c.KeepN != nil {
+		out.KeepN = c.KeepN
+		set = true
+	}
+	if c.OlderThan != "" {
+		out.OlderThan = new(c.OlderThan)
+		set = true
+	}
+	if c.NameRegexDelete != "" {
+		out.NameRegexDelete = new(c.NameRegexDelete)
+		set = true
+	}
+	if c.NameRegexKeep != "" {
+		out.NameRegexKeep = new(c.NameRegexKeep)
+		set = true
+	}
+	if c.Enabled != nil {
+		out.Enabled = c.Enabled
+		set = true
+	}
+	if !set {
+		return nil
+	}
+	return out
+}
+
+// CreateInput defines parameters for creating a GitLab project. Fields mirror
+// the GitLab [gl.CreateProjectOptions] options 1:1.
 type CreateInput struct {
 	// Basic metadata
 	Name                 string   `json:"name" jsonschema:"Project name,required"`
@@ -48,42 +100,114 @@ type CreateInput struct {
 	DefaultBranch        string   `json:"default_branch,omitempty" jsonschema:"Default branch name"`
 	Topics               []string `json:"topics,omitempty" jsonschema:"Topic tags for the project"`
 	ImportURL            string   `json:"import_url,omitempty" jsonschema:"URL to import repository from"`
+	RepositoryStorage    string   `json:"repository_storage,omitempty" jsonschema:"Repository storage shard name (admin only)"`
+
+	// Template provisioning
+	TemplateName                string `json:"template_name,omitempty" jsonschema:"Built-in project template name to use"`
+	TemplateProjectID           int64  `json:"template_project_id,omitempty" jsonschema:"Custom project template ID to use"`
+	UseCustomTemplate           *bool  `json:"use_custom_template,omitempty" jsonschema:"Use a custom group/instance project template"`
+	GroupWithProjectTemplatesID int64  `json:"group_with_project_templates_id,omitempty" jsonschema:"Group ID that provides the custom project templates"`
 
 	// Merge settings
 	MergeMethod                               string `json:"merge_method,omitempty" jsonschema:"Merge method (merge, rebase_merge, ff)"`
 	SquashOption                              string `json:"squash_option,omitempty" jsonschema:"Squash option (never, always, default_on, default_off)"`
 	OnlyAllowMergeIfPipelineSucceeds          bool   `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Only allow merge when pipeline succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merge when all discussions are resolved"`
+	OnlyAllowMergeIfAllStatusChecksPassed     *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
 	AllowMergeOnSkippedPipeline               *bool  `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Allow merge when pipeline is skipped"`
 	ProtectMergeRequestPipelines              *bool  `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	RemoveSourceBranchAfterMerge              *bool  `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Remove source branch after merge by default"`
 	AutocloseReferencedIssues                 *bool  `json:"autoclose_referenced_issues,omitempty" jsonschema:"Auto-close referenced issues on merge"`
+	ResolveOutdatedDiffDiscussions            *bool  `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
+	PrintingMergeRequestLinkEnabled           *bool  `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
+	MergePipelinesEnabled                     *bool  `json:"merge_pipelines_enabled,omitempty" jsonschema:"Enable merged results pipelines"`
+	MergeTrainsEnabled                        *bool  `json:"merge_trains_enabled,omitempty" jsonschema:"Enable merge trains"`
+	MergeTrainsSkipTrainAllowed               *bool  `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
+	MergeCommitTemplate                       string `json:"merge_commit_template,omitempty" jsonschema:"Template for merge commit messages"`
+	SquashCommitTemplate                      string `json:"squash_commit_template,omitempty" jsonschema:"Template for squash commit messages"`
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
+	IssueBranchTemplate                       string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues"`
+	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
+	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
+	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
 
 	// Feature toggles
-	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature"`
-	MergeRequestsEnabled       *bool  `json:"merge_requests_enabled,omitempty" jsonschema:"Enable merge requests feature"`
-	WikiEnabled                *bool  `json:"wiki_enabled,omitempty" jsonschema:"Enable wiki feature"`
-	JobsEnabled                *bool  `json:"jobs_enabled,omitempty" jsonschema:"Enable CI/CD jobs"`
+	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature (deprecated: use issues_access_level)"`
+	MergeRequestsEnabled       *bool  `json:"merge_requests_enabled,omitempty" jsonschema:"Enable merge requests feature (deprecated: use merge_requests_access_level)"`
+	WikiEnabled                *bool  `json:"wiki_enabled,omitempty" jsonschema:"Enable wiki feature (deprecated: use wiki_access_level)"`
+	JobsEnabled                *bool  `json:"jobs_enabled,omitempty" jsonschema:"Enable CI/CD jobs (deprecated: use builds_access_level)"`
+	SnippetsEnabled            *bool  `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
+	ContainerRegistryEnabled   *bool  `json:"container_registry_enabled,omitempty" jsonschema:"Enable container registry (deprecated: use container_registry_access_level)"`
 	LFSEnabled                 *bool  `json:"lfs_enabled,omitempty" jsonschema:"Enable Git LFS"`
+	ServiceDeskEnabled         *bool  `json:"service_desk_enabled,omitempty" jsonschema:"Enable Service Desk"`
+	EmailsEnabled              *bool  `json:"emails_enabled,omitempty" jsonschema:"Enable email notifications"`
+	EmailsDisabled             *bool  `json:"emails_disabled,omitempty" jsonschema:"Disable email notifications (deprecated: use emails_enabled)"`
+	ShowDefaultAwardEmojis     *bool  `json:"show_default_award_emojis,omitempty" jsonschema:"Show default award emojis on issues/MRs"`
 	PackagesEnabled            *bool  `json:"packages_enabled,omitempty" jsonschema:"Enable packages feature (deprecated: use package_registry_access_level)"`
 	PackageRegistryAccessLevel string `json:"package_registry_access_level,omitempty" jsonschema:"Package registry access level (disabled, private, enabled)"`
 
+	// Auto DevOps
+	AutoDevopsEnabled        *bool  `json:"auto_devops_enabled,omitempty" jsonschema:"Enable Auto DevOps for the project"`
+	AutoDevopsDeployStrategy string `json:"auto_devops_deploy_strategy,omitempty" jsonschema:"Auto DevOps deploy strategy (continuous, manual, timed_incremental)"`
+
 	// CI/CD settings
-	CIConfigPath               string `json:"ci_config_path,omitempty" jsonschema:"Custom CI/CD configuration file path"`
-	BuildTimeout               int64  `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
-	CIForwardDeploymentEnabled *bool  `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment"`
-	SharedRunnersEnabled       *bool  `json:"shared_runners_enabled,omitempty" jsonschema:"Enable shared runners"`
-	PublicBuilds               *bool  `json:"public_builds,omitempty" jsonschema:"Enable public access to pipelines"`
+	CIConfigPath                    string `json:"ci_config_path,omitempty" jsonschema:"Custom CI/CD configuration file path"`
+	BuildTimeout                    int64  `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
+	BuildGitStrategy                string `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
+	BuildCoverageRegex              string `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
+	AutoCancelPendingPipelines      string `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
+	CIForwardDeploymentEnabled      *bool  `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)"`
+	ResourceGroupDefaultProcessMode string `json:"resource_group_default_process_mode,omitempty" jsonschema:"Default resource group process mode (unordered, oldest_first, newest_first)"`
+	SharedRunnersEnabled            *bool  `json:"shared_runners_enabled,omitempty" jsonschema:"Enable shared runners"`
+	GroupRunnersEnabled             *bool  `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
+	PublicBuilds                    *bool  `json:"public_builds,omitempty" jsonschema:"Enable public access to pipelines (deprecated: use public_jobs)"`
+	PublicJobs                      *bool  `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
+
+	// Mirroring
+	Mirror              *bool `json:"mirror,omitempty" jsonschema:"Enable pull mirroring from import_url"`
+	MirrorTriggerBuilds *bool `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger pipelines for mirror updates"`
+
+	// Container registry cleanup
+	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
+
+	// Compliance and security
+	EnforceAuthChecksOnUploads               *bool  `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label"`
 
 	// Access control
-	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
-	PagesAccessLevel             string `json:"pages_access_level,omitempty" jsonschema:"Pages access level (disabled, private, enabled, public)"`
-	ContainerRegistryAccessLevel string `json:"container_registry_access_level,omitempty" jsonschema:"Container registry access level (disabled, private, enabled)"`
-	SnippetsAccessLevel          string `json:"snippets_access_level,omitempty" jsonschema:"Snippets access level (disabled, private, enabled)"`
+	RequestAccessEnabled             *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
+	PagesAccessLevel                 string `json:"pages_access_level,omitempty" jsonschema:"Pages access level (disabled, private, enabled, public)"`
+	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty" jsonschema:"Container registry access level (disabled, private, enabled)"`
+	SnippetsAccessLevel              string `json:"snippets_access_level,omitempty" jsonschema:"Snippets access level (disabled, private, enabled)"`
+	IssuesAccessLevel                string `json:"issues_access_level,omitempty" jsonschema:"Issues access level (disabled, private, enabled)"`
+	MergeRequestsAccessLevel         string `json:"merge_requests_access_level,omitempty" jsonschema:"Merge requests access level (disabled, private, enabled)"`
+	WikiAccessLevel                  string `json:"wiki_access_level,omitempty" jsonschema:"Wiki access level (disabled, private, enabled)"`
+	BuildsAccessLevel                string `json:"builds_access_level,omitempty" jsonschema:"CI/CD builds access level (disabled, private, enabled)"`
+	RepositoryAccessLevel            string `json:"repository_access_level,omitempty" jsonschema:"Repository access level (disabled, private, enabled)"`
+	ForkingAccessLevel               string `json:"forking_access_level,omitempty" jsonschema:"Forking access level (disabled, private, enabled)"`
+	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty" jsonschema:"Analytics access level (disabled, private, enabled)"`
+	OperationsAccessLevel            string `json:"operations_access_level,omitempty" jsonschema:"Operations access level (disabled, private, enabled)"`
+	ReleasesAccessLevel              string `json:"releases_access_level,omitempty" jsonschema:"Releases access level (disabled, private, enabled)"`
+	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty" jsonschema:"Environments access level (disabled, private, enabled)"`
+	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty" jsonschema:"Feature flags access level (disabled, private, enabled)"`
+	InfrastructureAccessLevel        string `json:"infrastructure_access_level,omitempty" jsonschema:"Infrastructure access level (disabled, private, enabled)"`
+	MonitorAccessLevel               string `json:"monitor_access_level,omitempty" jsonschema:"Monitor access level (disabled, private, enabled)"`
+	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty" jsonschema:"Requirements access level (disabled, private, enabled)"`
+	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty" jsonschema:"Security and compliance access level (disabled, private, enabled)"`
+	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty" jsonschema:"Model experiments access level (disabled, private, enabled)"`
+	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
+
+	// Deprecated template fields surfaced for 1:1 SDK parity
+	IssuesTemplate        string   `json:"issues_template,omitempty" jsonschema:"Default issue description template (deprecated: no longer supported in recent versions)"`
+	MergeRequestsTemplate string   `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template (deprecated: no longer supported in recent versions)"`
+	TagList               []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
 }
 
-// Output is the common output for project operations.
+// Output is the common output for project operations. It mirrors gl.Project
+// field-for-field (1:1 audit policy), surfacing every scalar plus full nested
+// objects on their canonical keys (namespace, owner, permissions,
+// forked_from_project, _links, statistics, shared_with_groups, license,
+// container_expiration_policy, custom_attributes).
 type Output struct {
 	toolutil.HintableOutput
 	ID                                        int64    `json:"id"`
@@ -102,14 +226,12 @@ type Output struct {
 	OpenIssuesCount                           int64    `json:"open_issues_count,omitempty"`
 	HTTPURLToRepo                             string   `json:"http_url_to_repo,omitempty"`
 	SSHURLToRepo                              string   `json:"ssh_url_to_repo,omitempty"`
-	Namespace                                 string   `json:"namespace,omitempty"`
 	Topics                                    []string `json:"topics"`
 	MergeMethod                               string   `json:"merge_method,omitempty"`
 	SquashOption                              string   `json:"squash_option,omitempty"`
 	OnlyAllowMergeIfPipelineSucceeds          bool     `json:"only_allow_merge_if_pipeline_succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool     `json:"only_allow_merge_if_all_discussions_are_resolved"`
 	RemoveSourceBranchAfterMerge              bool     `json:"remove_source_branch_after_merge"`
-	ForkedFromProject                         string   `json:"forked_from_project,omitempty"`
 	MarkedForDeletionOn                       string   `json:"marked_for_deletion_on,omitempty"`
 	CreatedAt                                 string   `json:"created_at"`
 	UpdatedAt                                 string   `json:"updated_at,omitempty"`
@@ -118,33 +240,141 @@ type Output struct {
 	AvatarURL                                 string   `json:"avatar_url,omitempty"`
 	CreatorID                                 int64    `json:"creator_id,omitempty"`
 	RequestAccessEnabled                      bool     `json:"request_access_enabled"`
-	IssuesEnabled                             bool     `json:"issues_enabled"`
-	MergeRequestsEnabled                      bool     `json:"merge_requests_enabled"`
-	WikiEnabled                               bool     `json:"wiki_enabled"`
-	JobsEnabled                               bool     `json:"jobs_enabled"`
 	LFSEnabled                                bool     `json:"lfs_enabled"`
 	CIConfigPath                              string   `json:"ci_config_path,omitempty"`
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
-	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled"`
-	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled"`
+	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled" tier:"premium"`
+	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled" tier:"premium"`
 	ProtectMergeRequestPipelines              *bool    `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
-	ApprovalsBeforeMerge                      int64    `json:"approvals_before_merge,omitempty"`
 	ResolveOutdatedDiffDiscussions            bool     `json:"resolve_outdated_diff_discussions"`
-	ContainerRegistryEnabled                  bool     `json:"container_registry_enabled,omitempty"`
 	SharedRunnersEnabled                      bool     `json:"shared_runners_enabled,omitempty"`
-	PublicBuilds                              bool     `json:"public_builds,omitempty"`
-	SnippetsEnabled                           bool     `json:"snippets_enabled,omitempty"`
-	PackagesEnabled                           bool     `json:"packages_enabled,omitempty"`
 	PackageRegistryAccessLevel                string   `json:"package_registry_access_level,omitempty"`
 	BuildTimeout                              int64    `json:"build_timeout,omitempty"`
 	SuggestionCommitMessage                   string   `json:"suggestion_commit_message,omitempty"`
-	ComplianceFrameworks                      []string `json:"compliance_frameworks,omitempty"`
+	ComplianceFrameworks                      []string `json:"compliance_frameworks,omitempty" tier:"premium"`
 	ImportURL                                 string   `json:"import_url,omitempty"`
-	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty"`
-	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty"`
+	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty" tier:"premium"`
+	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty" tier:"premium"`
+
+	// Access-level enums (1:1 SDK parity).
+	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty"`
+	IssuesAccessLevel                string `json:"issues_access_level,omitempty"`
+	ReleasesAccessLevel              string `json:"releases_access_level,omitempty"`
+	RepositoryAccessLevel            string `json:"repository_access_level,omitempty"`
+	MergeRequestsAccessLevel         string `json:"merge_requests_access_level,omitempty"`
+	ForkingAccessLevel               string `json:"forking_access_level,omitempty"`
+	WikiAccessLevel                  string `json:"wiki_access_level,omitempty"`
+	BuildsAccessLevel                string `json:"builds_access_level,omitempty"`
+	SnippetsAccessLevel              string `json:"snippets_access_level,omitempty"`
+	PagesAccessLevel                 string `json:"pages_access_level,omitempty"`
+	OperationsAccessLevel            string `json:"operations_access_level,omitempty"`
+	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty"`
+	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty"`
+	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty"`
+	InfrastructureAccessLevel        string `json:"infrastructure_access_level,omitempty"`
+	MonitorAccessLevel               string `json:"monitor_access_level,omitempty"`
+	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty" tier:"ultimate"`
+	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty"`
+	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty"`
+	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty"`
+
+	// CI/CD settings (1:1 SDK parity).
+	CIDisplayPipelineVariables               bool     `json:"ci_display_pipeline_variables"`
+	AllowPipelineTriggerApproveDeployment    bool     `json:"allow_pipeline_trigger_approve_deployment" tier:"premium"`
+	PreventMergeWithoutJiraIssue             bool     `json:"prevent_merge_without_jira_issue" tier:"ultimate"`
+	PrintingMergeRequestLinkEnabled          bool     `json:"printing_merge_request_link_enabled"`
+	CIDefaultGitDepth                        int64    `json:"ci_default_git_depth,omitempty"`
+	CIDeletePipelinesInSeconds               int64    `json:"ci_delete_pipelines_in_seconds,omitempty"`
+	CIForwardDeploymentEnabled               bool     `json:"ci_forward_deployment_enabled"`
+	CIForwardDeploymentRollbackAllowed       bool     `json:"ci_forward_deployment_rollback_allowed"`
+	CIPushRepositoryForJobTokenAllowed       bool     `json:"ci_push_repository_for_job_token_allowed"`
+	CIIDTokenSubClaimComponents              []string `json:"ci_id_token_sub_claim_components,omitempty"`
+	CISeparatedCaches                        bool     `json:"ci_separated_caches"`
+	CIJobTokenScopeEnabled                   bool     `json:"ci_job_token_scope_enabled"`
+	CIOptInJWT                               bool     `json:"ci_opt_in_jwt"`
+	CIAllowForkPipelinesToRunInParentProject bool     `json:"ci_allow_fork_pipelines_to_run_in_parent_project"`
+	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" tier:"premium"`
+	CIPipelineVariablesMinimumOverrideRole   string   `json:"ci_pipeline_variables_minimum_override_role,omitempty"`
+	BuildCoverageRegex                       string   `json:"build_coverage_regex,omitempty"`
+	BuildGitStrategy                         string   `json:"build_git_strategy,omitempty"`
+	AutoCancelPendingPipelines               string   `json:"auto_cancel_pending_pipelines,omitempty"`
+	AutoDevopsDeployStrategy                 string   `json:"auto_devops_deploy_strategy,omitempty"`
+	AutoDevopsEnabled                        bool     `json:"auto_devops_enabled"`
+	KeepLatestArtifact                       bool     `json:"keep_latest_artifact"`
+	MergeTrainsSkipTrainAllowed              bool     `json:"merge_trains_skip_train_allowed" tier:"premium"`
+	PublicJobs                               bool     `json:"public_jobs"`
+	MaxArtifactsSize                         int64    `json:"max_artifacts_size,omitempty"`
+
+	// Mirror settings (1:1 SDK parity).
+	Mirror                           bool  `json:"mirror" tier:"premium"`
+	MirrorUserID                     int64 `json:"mirror_user_id,omitempty" tier:"premium"`
+	MirrorTriggerBuilds              bool  `json:"mirror_trigger_builds" tier:"premium"`
+	OnlyMirrorProtectedBranches      bool  `json:"only_mirror_protected_branches" tier:"premium"`
+	MirrorOverwritesDivergedBranches bool  `json:"mirror_overwrites_diverged_branches" tier:"premium"`
+
+	// Import status (1:1 SDK parity).
+	ImportType   string `json:"import_type,omitempty"`
+	ImportStatus string `json:"import_status,omitempty"`
+	ImportError  string `json:"import_error,omitempty"`
+
+	// Container registry (1:1 SDK parity).
+	ContainerRegistryImagePrefix string `json:"container_registry_image_prefix,omitempty"`
+
+	// Security and compliance (1:1 SDK parity).
+	SecurityAndComplianceEnabled     bool `json:"security_and_compliance_enabled" tier:"ultimate"`
+	EnforceAuthChecksOnUploads       bool `json:"enforce_auth_checks_on_uploads,omitempty"`
+	PreReceiveSecretDetectionEnabled bool `json:"pre_receive_secret_detection_enabled" tier:"ultimate"`
+	AutoDuoCodeReviewEnabled         bool `json:"auto_duo_code_review_enabled"`
+
+	// Service desk (1:1 SDK parity).
+	ServiceDeskEnabled bool   `json:"service_desk_enabled"`
+	ServiceDeskAddress string `json:"service_desk_address,omitempty"`
+
+	// Templates and misc (1:1 SDK parity).
+	IssuesTemplate                           string `json:"issues_template,omitempty" tier:"premium"`
+	MergeRequestsTemplate                    string `json:"merge_requests_template,omitempty" tier:"premium"`
+	IssueBranchTemplate                      string `json:"issue_branch_template,omitempty"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" tier:"premium"`
+	RequirementsEnabled                      bool   `json:"requirements_enabled" tier:"ultimate"`
+	EmailsEnabled                            bool   `json:"emails_enabled"`
+	GroupRunnersEnabled                      bool   `json:"group_runners_enabled"`
+	ResourceGroupDefaultProcessMode          string `json:"resource_group_default_process_mode,omitempty"`
+	RunnerTokenExpirationInterval            int64  `json:"runner_token_expiration_interval,omitempty"`
+	RunnersToken                             string `json:"runners_token,omitempty"`
+	RepositoryStorage                        string `json:"repository_storage,omitempty"`
+	CanCreateMergeRequestIn                  bool   `json:"can_create_merge_request_in"`
+	LicenseURL                               string `json:"license_url,omitempty"`
+	MergeRequestDefaultTargetSelf            bool   `json:"mr_default_target_self"`
+
+	// Nested objects (1:1 SDK parity, full mirrors).
+	Namespace                 *NamespaceOutput                 `json:"namespace,omitempty"`
+	Owner                     *OwnerOutput                     `json:"owner,omitempty"`
+	Permissions               *PermissionsOutput               `json:"permissions,omitempty"`
+	ForkedFromProject         *ForkParentOutput                `json:"forked_from_project,omitempty"`
+	Links                     *LinksOutput                     `json:"_links,omitempty"`
+	Statistics                *StatisticsOutput                `json:"statistics,omitempty"`
+	SharedWithGroups          []SharedWithGroupOutput          `json:"shared_with_groups,omitempty"`
+	License                   *LicenseOutput                   `json:"license,omitempty"`
+	ContainerExpirationPolicy *ContainerExpirationPolicyOutput `json:"container_expiration_policy,omitempty"`
+	CustomAttributes          []CustomAttributeOutput          `json:"custom_attributes,omitempty"`
+
+	// Deprecated SDK fields, surfaced additively for 1:1 parity.
+	IssuesEnabled                bool     `json:"issues_enabled"`
+	MergeRequestsEnabled         bool     `json:"merge_requests_enabled"`
+	WikiEnabled                  bool     `json:"wiki_enabled"`
+	JobsEnabled                  bool     `json:"jobs_enabled"`
+	SnippetsEnabled              bool     `json:"snippets_enabled,omitempty"`
+	ContainerRegistryEnabled     bool     `json:"container_registry_enabled,omitempty"`
+	PackagesEnabled              bool     `json:"packages_enabled,omitempty"`
+	PublicBuilds                 bool     `json:"public_builds,omitempty"`
+	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty" tier:"premium"`
+	TagList                      []string `json:"tag_list,omitempty"`
+	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty"`
+	RestrictUserDefinedVariables bool     `json:"restrict_user_defined_variables"`
+	EmailsDisabled               bool     `json:"emails_disabled"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -179,7 +409,17 @@ type ListInput struct {
 	IncludeHidden            *bool  `json:"include_hidden,omitempty"            jsonschema:"Include hidden projects in results"`
 	IDAfter                  int64  `json:"id_after,omitempty"                  jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
 	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value (keyset pagination)"`
+
+	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
+	Active                   *bool  `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
+	Imported                 *bool  `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty" jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"       jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string `json:"repository_storage,omitempty"         jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response (admin only)"`
+
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of projects.
@@ -245,13 +485,102 @@ type UpdateInput struct {
 	MergeTrainsEnabled                        *bool                `json:"merge_trains_enabled,omitempty"     jsonschema:"Enable merge trains"`
 	ProtectMergeRequestPipelines              *bool                `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	ResolveOutdatedDiffDiscussions            *bool                `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
-	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   jsonschema:"Number of approvals required before merge"`
+	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+
+	// Basic metadata (additive 1:1 SDK parity)
+	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
+	ImportURL         string   `json:"import_url,omitempty" jsonschema:"URL to import/mirror repository from"`
+	RepositoryStorage string   `json:"repository_storage,omitempty" jsonschema:"Repository storage shard name (admin only)"`
+	TagList           []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
+
+	// Merge settings (additive)
+	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
+	AllowPipelineTriggerApproveDeployment *bool  `json:"allow_pipeline_trigger_approve_deployment,omitempty" jsonschema:"Allow pipeline triggerer to approve deployment"`
+	PreventMergeWithoutJiraIssue          *bool  `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
+	MergeRequestDefaultTargetSelf         *bool  `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`
+	MergeTrainsSkipTrainAllowed           *bool  `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
+	PrintingMergeRequestLinkEnabled       *bool  `json:"printing_merge_request_link_enabled,omitempty" jsonschema:"Show the create-merge-request link after pushing"`
+	SuggestionCommitMessage               string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
+	IssueBranchTemplate                   string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues"`
+	IssuesTemplate                        string `json:"issues_template,omitempty" jsonschema:"Default issue description template"`
+	MergeRequestsTemplate                 string `json:"merge_requests_template,omitempty" jsonschema:"Default merge request description template"`
+
+	// Feature toggles (additive)
+	SnippetsEnabled          *bool `json:"snippets_enabled,omitempty" jsonschema:"Enable snippets feature (deprecated: use snippets_access_level)"`
+	ContainerRegistryEnabled *bool `json:"container_registry_enabled,omitempty" jsonschema:"Enable container registry (deprecated: use container_registry_access_level)"`
+	ServiceDeskEnabled       *bool `json:"service_desk_enabled,omitempty" jsonschema:"Enable Service Desk"`
+	EmailsEnabled            *bool `json:"emails_enabled,omitempty" jsonschema:"Enable email notifications"`
+	EmailsDisabled           *bool `json:"emails_disabled,omitempty" jsonschema:"Disable email notifications (deprecated: use emails_enabled)"`
+	ShowDefaultAwardEmojis   *bool `json:"show_default_award_emojis,omitempty" jsonschema:"Show default award emojis on issues/MRs"`
+	GroupRunnersEnabled      *bool `json:"group_runners_enabled,omitempty" jsonschema:"Enable group runners"`
+	KeepLatestArtifact       *bool `json:"keep_latest_artifact,omitempty" jsonschema:"Keep the latest artifact for each pipeline"`
+	BuildTimeout             int64 `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
+	MaxArtifactsSize         int64 `json:"max_artifacts_size,omitempty" jsonschema:"Maximum artifacts size in MB"`
+
+	// Auto DevOps (additive)
+	AutoDevopsEnabled        *bool  `json:"auto_devops_enabled,omitempty" jsonschema:"Enable Auto DevOps for the project"`
+	AutoDevopsDeployStrategy string `json:"auto_devops_deploy_strategy,omitempty" jsonschema:"Auto DevOps deploy strategy (continuous, manual, timed_incremental)"`
+	AutoDuoCodeReviewEnabled *bool  `json:"auto_duo_code_review_enabled,omitempty" jsonschema:"Enable automatic GitLab Duo code review"`
+
+	// CI/CD settings (additive)
+	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
+	BuildCoverageRegex                     string   `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
+	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
+	CIDefaultGitDepth                      int64    `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD"`
+	CIDeletePipelinesInSeconds             int64    `json:"ci_delete_pipelines_in_seconds,omitempty" jsonschema:"Auto-delete pipelines older than this many seconds"`
+	CIDisplayPipelineVariables             *bool    `json:"ci_display_pipeline_variables,omitempty" jsonschema:"Display pipeline variables in the UI"`
+	CIForwardDeploymentEnabled             *bool    `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (skip outdated jobs)"`
+	CIForwardDeploymentRollbackAllowed     *bool    `json:"ci_forward_deployment_rollback_allowed,omitempty" jsonschema:"Allow job retries even for outdated deployment jobs"`
+	CIPushRepositoryForJobTokenAllowed     *bool    `json:"ci_push_repository_for_job_token_allowed,omitempty" jsonschema:"Allow CI job tokens to push to the repository"`
+	CIIDTokenSubClaimComponents            []string `json:"ci_id_token_sub_claim_components,omitempty" jsonschema:"Components used to build the CI ID token sub claim"`
+	CISeparatedCaches                      *bool    `json:"ci_separated_caches,omitempty" jsonschema:"Use separate caches for protected branches"`
+	CIRestrictPipelineCancellationRole     string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" jsonschema:"Role required to cancel pipelines/jobs (developer, maintainer, no_one)"`
+	CIPipelineVariablesMinimumOverrideRole string   `json:"ci_pipeline_variables_minimum_override_role,omitempty" jsonschema:"Minimum role allowed to override pipeline variables (developer, maintainer, owner, no_one_allowed)"`
+	RestrictUserDefinedVariables           *bool    `json:"restrict_user_defined_variables,omitempty" jsonschema:"Restrict user-defined pipeline variables (deprecated: use ci_pipeline_variables_minimum_override_role)"`
+	ResourceGroupDefaultProcessMode        string   `json:"resource_group_default_process_mode,omitempty" jsonschema:"Default resource group process mode (unordered, oldest_first, newest_first)"`
+	PublicJobs                             *bool    `json:"public_jobs,omitempty" jsonschema:"Enable public access to pipelines"`
+
+	// Mirroring (additive)
+	Mirror                           *bool  `json:"mirror,omitempty" jsonschema:"Enable pull mirroring from import_url"`
+	MirrorTriggerBuilds              *bool  `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger pipelines for mirror updates"`
+	MirrorBranchRegex                string `json:"mirror_branch_regex,omitempty" jsonschema:"Only mirror branches matching this regex"`
+	MirrorOverwritesDivergedBranches *bool  `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Overwrite diverged branches when mirroring"`
+	MirrorUserID                     int64  `json:"mirror_user_id,omitempty" jsonschema:"User ID used to run mirror updates (admin only)"`
+	OnlyMirrorProtectedBranches      *bool  `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
+
+	// Container registry cleanup (additive)
+	ContainerExpirationPolicyAttributes *ContainerExpirationPolicyInput `json:"container_expiration_policy_attributes,omitempty" jsonschema:"Container registry cleanup policy attributes"`
+
+	// Compliance and security (additive)
+	EnforceAuthChecksOnUploads               *bool  `json:"enforce_auth_checks_on_uploads,omitempty" jsonschema:"Enforce authorization checks on uploads"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" jsonschema:"External authorization classification label"`
+
+	// Access control (additive)
+	IssuesAccessLevel                string `json:"issues_access_level,omitempty" jsonschema:"Issues access level (disabled, private, enabled)"`
+	MergeRequestsAccessLevel         string `json:"merge_requests_access_level,omitempty" jsonschema:"Merge requests access level (disabled, private, enabled)"`
+	WikiAccessLevel                  string `json:"wiki_access_level,omitempty" jsonschema:"Wiki access level (disabled, private, enabled)"`
+	BuildsAccessLevel                string `json:"builds_access_level,omitempty" jsonschema:"CI/CD builds access level (disabled, private, enabled)"`
+	RepositoryAccessLevel            string `json:"repository_access_level,omitempty" jsonschema:"Repository access level (disabled, private, enabled)"`
+	ForkingAccessLevel               string `json:"forking_access_level,omitempty" jsonschema:"Forking access level (disabled, private, enabled)"`
+	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty" jsonschema:"Analytics access level (disabled, private, enabled)"`
+	OperationsAccessLevel            string `json:"operations_access_level,omitempty" jsonschema:"Operations access level (disabled, private, enabled)"`
+	ReleasesAccessLevel              string `json:"releases_access_level,omitempty" jsonschema:"Releases access level (disabled, private, enabled)"`
+	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty" jsonschema:"Environments access level (disabled, private, enabled)"`
+	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty" jsonschema:"Feature flags access level (disabled, private, enabled)"`
+	InfrastructureAccessLevel        string `json:"infrastructure_access_level,omitempty" jsonschema:"Infrastructure access level (disabled, private, enabled)"`
+	MonitorAccessLevel               string `json:"monitor_access_level,omitempty" jsonschema:"Monitor access level (disabled, private, enabled)"`
+	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty" jsonschema:"Requirements access level (disabled, private, enabled)"`
+	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty" jsonschema:"Security and compliance access level (disabled, private, enabled)"`
+	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty" jsonschema:"Model experiments access level (disabled, private, enabled)"`
+	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
 }
 
-// ToOutput converts a GitLab API [gl.Project] to the MCP tool output
-// format, mapping visibility to its string representation.
+// ToOutput converts a GitLab API [gl.Project] to the MCP tool output format,
+// mapping every SDK field 1:1 including full nested objects on their canonical
+// keys (namespace, owner, permissions, forked_from_project, _links, statistics,
+// shared_with_groups, license, container_expiration_policy, custom_attributes).
 func ToOutput(p *gl.Project) Output {
 	out := Output{
 		ID:                               p.ID,
@@ -280,10 +609,6 @@ func ToOutput(p *gl.Project) Output {
 		AvatarURL:                                 p.AvatarURL,
 		CreatorID:                                 p.CreatorID,
 		RequestAccessEnabled:                      p.RequestAccessEnabled,
-		IssuesEnabled:                             accessLevelEnabled(p.IssuesAccessLevel),
-		MergeRequestsEnabled:                      accessLevelEnabled(p.MergeRequestsAccessLevel),
-		WikiEnabled:                               accessLevelEnabled(p.WikiAccessLevel),
-		JobsEnabled:                               accessLevelEnabled(p.BuildsAccessLevel),
 		LFSEnabled:                                p.LFSEnabled,
 		CIConfigPath:                              p.CIConfigPath,
 		AllowMergeOnSkippedPipeline:               p.AllowMergeOnSkippedPipeline,
@@ -293,13 +618,8 @@ func ToOutput(p *gl.Project) Output {
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
-		ApprovalsBeforeMerge:                      p.ApprovalsBeforeMerge, //nolint:staticcheck // No replacement field on Project struct.
 		ResolveOutdatedDiffDiscussions:            p.ResolveOutdatedDiffDiscussions,
-		ContainerRegistryEnabled:                  accessLevelEnabled(p.ContainerRegistryAccessLevel),
 		SharedRunnersEnabled:                      p.SharedRunnersEnabled,
-		PublicBuilds:                              p.PublicJobs,
-		SnippetsEnabled:                           accessLevelEnabled(p.SnippetsAccessLevel),
-		PackagesEnabled:                           p.PackagesEnabled, //nolint:staticcheck // Preserve backward-compatible field in output.
 		PackageRegistryAccessLevel:                string(p.PackageRegistryAccessLevel),
 		BuildTimeout:                              p.BuildTimeout,
 		SuggestionCommitMessage:                   p.SuggestionCommitMessage,
@@ -307,18 +627,121 @@ func ToOutput(p *gl.Project) Output {
 		ImportURL:                                 p.ImportURL,
 		MergeRequestTitleRegex:                    p.MergeRequestTitleRegex,
 		MergeRequestTitleRegexDescription:         p.MergeRequestTitleRegexDescription,
+
+		ContainerRegistryAccessLevel:     string(p.ContainerRegistryAccessLevel),
+		IssuesAccessLevel:                string(p.IssuesAccessLevel),
+		ReleasesAccessLevel:              string(p.ReleasesAccessLevel),
+		RepositoryAccessLevel:            string(p.RepositoryAccessLevel),
+		MergeRequestsAccessLevel:         string(p.MergeRequestsAccessLevel),
+		ForkingAccessLevel:               string(p.ForkingAccessLevel),
+		WikiAccessLevel:                  string(p.WikiAccessLevel),
+		BuildsAccessLevel:                string(p.BuildsAccessLevel),
+		SnippetsAccessLevel:              string(p.SnippetsAccessLevel),
+		PagesAccessLevel:                 string(p.PagesAccessLevel),
+		OperationsAccessLevel:            string(p.OperationsAccessLevel),
+		AnalyticsAccessLevel:             string(p.AnalyticsAccessLevel),
+		EnvironmentsAccessLevel:          string(p.EnvironmentsAccessLevel),
+		FeatureFlagsAccessLevel:          string(p.FeatureFlagsAccessLevel),
+		InfrastructureAccessLevel:        string(p.InfrastructureAccessLevel),
+		MonitorAccessLevel:               string(p.MonitorAccessLevel),
+		RequirementsAccessLevel:          string(p.RequirementsAccessLevel),
+		SecurityAndComplianceAccessLevel: string(p.SecurityAndComplianceAccessLevel),
+		ModelExperimentsAccessLevel:      string(p.ModelExperimentsAccessLevel),
+		ModelRegistryAccessLevel:         string(p.ModelRegistryAccessLevel),
+
+		CIDisplayPipelineVariables:               p.CIDisplayPipelineVariables,
+		AllowPipelineTriggerApproveDeployment:    p.AllowPipelineTriggerApproveDeployment,
+		PreventMergeWithoutJiraIssue:             p.PreventMergeWithoutJiraIssue,
+		PrintingMergeRequestLinkEnabled:          p.PrintingMergeRequestLinkEnabled,
+		CIDefaultGitDepth:                        p.CIDefaultGitDepth,
+		CIDeletePipelinesInSeconds:               p.CIDeletePipelinesInSeconds,
+		CIForwardDeploymentEnabled:               p.CIForwardDeploymentEnabled,
+		CIForwardDeploymentRollbackAllowed:       p.CIForwardDeploymentRollbackAllowed,
+		CIPushRepositoryForJobTokenAllowed:       p.CIPushRepositoryForJobTokenAllowed,
+		CIIDTokenSubClaimComponents:              p.CIIdTokenSubClaimComponents,
+		CISeparatedCaches:                        p.CISeparatedCaches,
+		CIJobTokenScopeEnabled:                   p.CIJobTokenScopeEnabled,
+		CIOptInJWT:                               p.CIOptInJWT,
+		CIAllowForkPipelinesToRunInParentProject: p.CIAllowForkPipelinesToRunInParentProject,
+		CIRestrictPipelineCancellationRole:       string(p.CIRestrictPipelineCancellationRole),
+		CIPipelineVariablesMinimumOverrideRole:   p.CIPipelineVariablesMinimumOverrideRole,
+		BuildCoverageRegex:                       p.BuildCoverageRegex,
+		BuildGitStrategy:                         p.BuildGitStrategy,
+		AutoCancelPendingPipelines:               p.AutoCancelPendingPipelines,
+		AutoDevopsDeployStrategy:                 p.AutoDevopsDeployStrategy,
+		AutoDevopsEnabled:                        p.AutoDevopsEnabled,
+		KeepLatestArtifact:                       p.KeepLatestArtifact,
+		MergeTrainsSkipTrainAllowed:              p.MergeTrainsSkipTrainAllowed,
+		PublicJobs:                               p.PublicJobs,
+		MaxArtifactsSize:                         p.MaxArtifactsSize,
+
+		Mirror:                           p.Mirror,
+		MirrorUserID:                     p.MirrorUserID,
+		MirrorTriggerBuilds:              p.MirrorTriggerBuilds,
+		OnlyMirrorProtectedBranches:      p.OnlyMirrorProtectedBranches,
+		MirrorOverwritesDivergedBranches: p.MirrorOverwritesDivergedBranches,
+
+		ImportType:   p.ImportType,
+		ImportStatus: p.ImportStatus,
+		ImportError:  p.ImportError,
+
+		ContainerRegistryImagePrefix: p.ContainerRegistryImagePrefix,
+
+		SecurityAndComplianceEnabled:     p.SecurityAndComplianceEnabled,
+		EnforceAuthChecksOnUploads:       p.EnforceAuthChecksOnUploads,
+		PreReceiveSecretDetectionEnabled: p.PreReceiveSecretDetectionEnabled,
+		AutoDuoCodeReviewEnabled:         p.AutoDuoCodeReviewEnabled,
+
+		ServiceDeskEnabled: p.ServiceDeskEnabled,
+		ServiceDeskAddress: p.ServiceDeskAddress,
+
+		IssuesTemplate:                           p.IssuesTemplate,
+		MergeRequestsTemplate:                    p.MergeRequestsTemplate,
+		IssueBranchTemplate:                      p.IssueBranchTemplate,
+		ExternalAuthorizationClassificationLabel: p.ExternalAuthorizationClassificationLabel,
+		RequirementsEnabled:                      p.RequirementsEnabled,
+		EmailsEnabled:                            p.EmailsEnabled,
+		GroupRunnersEnabled:                      p.GroupRunnersEnabled,
+		ResourceGroupDefaultProcessMode:          string(p.ResourceGroupDefaultProcessMode),
+		RunnerTokenExpirationInterval:            p.RunnerTokenExpirationInterval,
+		RunnersToken:                             p.RunnersToken,
+		RepositoryStorage:                        p.RepositoryStorage,
+		CanCreateMergeRequestIn:                  p.CanCreateMergeRequestIn,
+		LicenseURL:                               p.LicenseURL,
+		MergeRequestDefaultTargetSelf:            p.MergeRequestDefaultTargetSelf,
+
+		Namespace:                 namespaceOutput(p.Namespace),
+		Owner:                     ownerOutput(p.Owner),
+		Permissions:               permissionsOutput(p.Permissions),
+		ForkedFromProject:         forkParentOutput(p.ForkedFromProject),
+		Links:                     linksOutput(p.Links),
+		Statistics:                statisticsOutput(p.Statistics),
+		SharedWithGroups:          sharedWithGroupsOutput(p.SharedWithGroups),
+		License:                   licenseOutput(p.License),
+		ContainerExpirationPolicy: containerExpirationPolicyOutput(p.ContainerExpirationPolicy),
+		CustomAttributes:          customAttributesOutput(p.CustomAttributes),
+
+		IssuesEnabled:                accessLevelEnabled(p.IssuesAccessLevel),
+		MergeRequestsEnabled:         accessLevelEnabled(p.MergeRequestsAccessLevel),
+		WikiEnabled:                  accessLevelEnabled(p.WikiAccessLevel),
+		JobsEnabled:                  accessLevelEnabled(p.BuildsAccessLevel),
+		ContainerRegistryEnabled:     accessLevelEnabled(p.ContainerRegistryAccessLevel),
+		PublicBuilds:                 p.PublicJobs,
+		SnippetsEnabled:              accessLevelEnabled(p.SnippetsAccessLevel),
+		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // Preserve backward-compatible field in output.
+		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // No replacement field on Project struct.
+		TagList:                      p.TagList,                      //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		RestrictUserDefinedVariables: p.RestrictUserDefinedVariables, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		EmailsDisabled:               p.EmailsDisabled,               //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 	}
 	if out.Topics == nil {
 		out.Topics = []string{}
 	}
-	if p.Namespace != nil {
-		out.Namespace = p.Namespace.FullPath
-	}
-	if p.ForkedFromProject != nil {
-		out.ForkedFromProject = p.ForkedFromProject.PathWithNamespace
-	}
 	if p.MarkedForDeletionOn != nil {
-		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format("2006-01-02")
+		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
+	}
+	if p.MarkedForDeletionAt != nil { //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		out.MarkedForDeletionAt = time.Time(*p.MarkedForDeletionAt).Format(time.DateOnly) //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
 	}
 	if p.CreatedAt != nil {
 		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
@@ -330,6 +753,15 @@ func ToOutput(p *gl.Project) Output {
 		out.LastActivityAt = p.LastActivityAt.Format(time.RFC3339)
 	}
 	return out
+}
+
+// accessLevelPtr converts a non-empty string into an [gl.AccessControlValue]
+// pointer, returning nil for the empty string so omitted inputs stay unset.
+func accessLevelPtr(s string) *gl.AccessControlValue {
+	if s == "" {
+		return nil
+	}
+	return new(gl.AccessControlValue(s))
 }
 
 // buildCreateOpts maps CreateInput fields to the GitLab API create options.
@@ -377,30 +809,132 @@ func applyCreateFeatureOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	applyCreateFeatureToggles(opts, input)
 	applyCreateBuildOpts(opts, input)
 	applyCreateAccessLevels(opts, input)
+	applyCreateTemplateOpts(opts, input)
+	applyCreateMergeOpts(opts, input)
+	applyCreatePipelineOpts(opts, input)
+	applyCreateMirrorOpts(opts, input)
+	applyCreateComplianceOpts(opts, input)
 }
 
 // applyCreateFeatureToggles applies create feature toggles transformations.
+// The issues/merge-requests/wiki/jobs booleans are bridged to their modern
+// access-level fields in applyCreateAccessLevels, so they are not re-applied to
+// the deprecated boolean options here.
 func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput) {
-	if input.IssuesEnabled != nil {
-		opts.IssuesAccessLevel = boolToAccessLevel(input.IssuesEnabled)
+	if input.SnippetsEnabled != nil {
+		opts.SnippetsEnabled = input.SnippetsEnabled //nolint:staticcheck // 1:1 SDK parity; prefer snippets_access_level.
 	}
-	if input.MergeRequestsEnabled != nil {
-		opts.MergeRequestsAccessLevel = boolToAccessLevel(input.MergeRequestsEnabled)
-	}
-	if input.WikiEnabled != nil {
-		opts.WikiAccessLevel = boolToAccessLevel(input.WikiEnabled)
-	}
-	if input.JobsEnabled != nil {
-		opts.BuildsAccessLevel = boolToAccessLevel(input.JobsEnabled)
+	if input.ContainerRegistryEnabled != nil {
+		opts.ContainerRegistryEnabled = input.ContainerRegistryEnabled //nolint:staticcheck // 1:1 SDK parity; prefer container_registry_access_level.
 	}
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
 	}
+	if input.ServiceDeskEnabled != nil {
+		opts.ServiceDeskEnabled = input.ServiceDeskEnabled //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+	}
+	if input.EmailsEnabled != nil {
+		opts.EmailsEnabled = input.EmailsEnabled
+	}
+	if input.EmailsDisabled != nil {
+		opts.EmailsDisabled = input.EmailsDisabled //nolint:staticcheck // 1:1 SDK parity; prefer emails_enabled.
+	}
+	if input.ShowDefaultAwardEmojis != nil {
+		opts.ShowDefaultAwardEmojis = input.ShowDefaultAwardEmojis
+	}
 	if input.RequestAccessEnabled != nil {
 		opts.RequestAccessEnabled = input.RequestAccessEnabled
 	}
+}
+
+// applyCreateBuildOpts applies create build and CI/CD transformations.
+func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.ImportURL != "" {
+		opts.ImportURL = new(input.ImportURL)
+	}
+	if input.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(input.RepositoryStorage)
+	}
 	if input.CIConfigPath != "" {
 		opts.CIConfigPath = new(input.CIConfigPath)
+	}
+	if input.BuildTimeout > 0 {
+		opts.BuildTimeout = new(input.BuildTimeout)
+	}
+	if input.BuildGitStrategy != "" {
+		opts.BuildGitStrategy = new(input.BuildGitStrategy)
+	}
+	if input.BuildCoverageRegex != "" {
+		opts.BuildCoverageRegex = new(input.BuildCoverageRegex)
+	}
+	if input.PackagesEnabled != nil {
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
+	}
+	if input.PackageRegistryAccessLevel != "" {
+		opts.PackageRegistryAccessLevel = accessLevelPtr(input.PackageRegistryAccessLevel)
+	}
+}
+
+// applyCreatePipelineOpts applies CI/CD pipeline and runner transformations.
+func applyCreatePipelineOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.AutoDevopsEnabled != nil {
+		opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	}
+	if input.AutoDevopsDeployStrategy != "" {
+		opts.AutoDevopsDeployStrategy = new(input.AutoDevopsDeployStrategy)
+	}
+	if input.AutoCancelPendingPipelines != "" {
+		opts.AutoCancelPendingPipelines = new(input.AutoCancelPendingPipelines)
+	}
+	if input.CIForwardDeploymentEnabled != nil {
+		opts.CIForwardDeploymentEnabled = input.CIForwardDeploymentEnabled //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+	}
+	if input.ResourceGroupDefaultProcessMode != "" {
+		opts.ResourceGroupDefaultProcessMode = new(gl.ResourceGroupProcessMode(input.ResourceGroupDefaultProcessMode))
+	}
+	if input.SharedRunnersEnabled != nil {
+		opts.SharedRunnersEnabled = input.SharedRunnersEnabled
+	}
+	if input.GroupRunnersEnabled != nil {
+		opts.GroupRunnersEnabled = input.GroupRunnersEnabled
+	}
+	if input.PublicBuilds != nil {
+		opts.PublicJobs = input.PublicBuilds
+	}
+	if input.PublicJobs != nil {
+		opts.PublicJobs = input.PublicJobs
+	}
+}
+
+// applyCreateTemplateOpts applies template provisioning transformations.
+func applyCreateTemplateOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.TemplateName != "" {
+		opts.TemplateName = new(input.TemplateName)
+	}
+	if input.TemplateProjectID != 0 {
+		opts.TemplateProjectID = new(input.TemplateProjectID)
+	}
+	if input.UseCustomTemplate != nil {
+		opts.UseCustomTemplate = input.UseCustomTemplate
+	}
+	if input.GroupWithProjectTemplatesID != 0 {
+		opts.GroupWithProjectTemplatesID = new(input.GroupWithProjectTemplatesID)
+	}
+	if input.IssuesTemplate != "" {
+		opts.IssuesTemplate = new(input.IssuesTemplate) //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+	}
+	if input.MergeRequestsTemplate != "" {
+		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate) //nolint:staticcheck // 1:1 SDK parity; no longer supported in recent versions.
+	}
+	if len(input.TagList) > 0 {
+		opts.TagList = &input.TagList //nolint:staticcheck // 1:1 SDK parity; prefer topics.
+	}
+}
+
+// applyCreateMergeOpts applies merge-related transformations.
+func applyCreateMergeOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.OnlyAllowMergeIfAllStatusChecksPassed != nil {
+		opts.OnlyAllowMergeIfAllStatusChecksPassed = input.OnlyAllowMergeIfAllStatusChecksPassed
 	}
 	if input.AllowMergeOnSkippedPipeline != nil {
 		opts.AllowMergeOnSkippedPipeline = input.AllowMergeOnSkippedPipeline
@@ -414,44 +948,102 @@ func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput)
 	if input.AutocloseReferencedIssues != nil {
 		opts.AutocloseReferencedIssues = input.AutocloseReferencedIssues
 	}
+	if input.ResolveOutdatedDiffDiscussions != nil {
+		opts.ResolveOutdatedDiffDiscussions = input.ResolveOutdatedDiffDiscussions
+	}
+	if input.PrintingMergeRequestLinkEnabled != nil {
+		opts.PrintingMergeRequestLinkEnabled = input.PrintingMergeRequestLinkEnabled
+	}
+	if input.MergePipelinesEnabled != nil {
+		opts.MergePipelinesEnabled = input.MergePipelinesEnabled
+	}
+	if input.MergeTrainsEnabled != nil {
+		opts.MergeTrainsEnabled = input.MergeTrainsEnabled
+	}
+	if input.MergeTrainsSkipTrainAllowed != nil {
+		opts.MergeTrainsSkipTrainAllowed = input.MergeTrainsSkipTrainAllowed
+	}
+	applyCreateMergeTemplateOpts(opts, input)
 }
 
-// applyCreateBuildOpts applies create build opts transformations.
-func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
-	if input.ImportURL != "" {
-		opts.ImportURL = new(input.ImportURL)
+// applyCreateMergeTemplateOpts applies merge commit template and regex fields.
+func applyCreateMergeTemplateOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.MergeCommitTemplate != "" {
+		opts.MergeCommitTemplate = new(input.MergeCommitTemplate)
 	}
-	if input.BuildTimeout > 0 {
-		opts.BuildTimeout = new(input.BuildTimeout)
-	}
-	if input.SharedRunnersEnabled != nil {
-		opts.SharedRunnersEnabled = input.SharedRunnersEnabled
-	}
-	if input.PublicBuilds != nil {
-		opts.PublicJobs = input.PublicBuilds
-	}
-	if input.PackagesEnabled != nil {
-		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
-	}
-	if input.PackageRegistryAccessLevel != "" {
-		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
+	if input.SquashCommitTemplate != "" {
+		opts.SquashCommitTemplate = new(input.SquashCommitTemplate)
 	}
 	if input.SuggestionCommitMessage != "" {
 		opts.SuggestionCommitMessage = new(input.SuggestionCommitMessage)
 	}
+	if input.IssueBranchTemplate != "" {
+		opts.IssueBranchTemplate = new(input.IssueBranchTemplate)
+	}
+	if input.ApprovalsBeforeMerge > 0 {
+		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // 1:1 SDK parity; prefer Merge Request Approvals API.
+	}
+	if input.MergeRequestTitleRegex != "" {
+		opts.MergeRequestTitleRegex = new(input.MergeRequestTitleRegex)
+	}
+	if input.MergeRequestTitleRegexDescription != "" {
+		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
+	}
 }
 
-// applyCreateAccessLevels applies create access levels transformations.
+// applyCreateMirrorOpts applies pull mirroring transformations.
+func applyCreateMirrorOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.Mirror != nil {
+		opts.Mirror = input.Mirror
+	}
+	if input.MirrorTriggerBuilds != nil {
+		opts.MirrorTriggerBuilds = input.MirrorTriggerBuilds
+	}
+}
+
+// applyCreateComplianceOpts applies compliance, security, and container policy
+// transformations.
+func applyCreateComplianceOpts(opts *gl.CreateProjectOptions, input CreateInput) {
+	if input.EnforceAuthChecksOnUploads != nil {
+		opts.EnforceAuthChecksOnUploads = input.EnforceAuthChecksOnUploads
+	}
+	if input.ExternalAuthorizationClassificationLabel != "" {
+		opts.ExternalAuthorizationClassificationLabel = new(input.ExternalAuthorizationClassificationLabel)
+	}
+	opts.ContainerExpirationPolicyAttributes = input.ContainerExpirationPolicyAttributes.toGL()
+}
+
+// applyCreateAccessLevels applies access-level transformations.
 func applyCreateAccessLevels(opts *gl.CreateProjectOptions, input CreateInput) {
-	if input.PagesAccessLevel != "" {
-		opts.PagesAccessLevel = new(gl.AccessControlValue(input.PagesAccessLevel))
+	opts.PagesAccessLevel = accessLevelPtr(input.PagesAccessLevel)
+	opts.ContainerRegistryAccessLevel = accessLevelPtr(input.ContainerRegistryAccessLevel)
+	opts.SnippetsAccessLevel = accessLevelPtr(input.SnippetsAccessLevel)
+	opts.IssuesAccessLevel = createAccessLevel(input.IssuesAccessLevel, input.IssuesEnabled)
+	opts.MergeRequestsAccessLevel = createAccessLevel(input.MergeRequestsAccessLevel, input.MergeRequestsEnabled)
+	opts.WikiAccessLevel = createAccessLevel(input.WikiAccessLevel, input.WikiEnabled)
+	opts.BuildsAccessLevel = createAccessLevel(input.BuildsAccessLevel, input.JobsEnabled)
+	opts.RepositoryAccessLevel = accessLevelPtr(input.RepositoryAccessLevel)
+	opts.ForkingAccessLevel = accessLevelPtr(input.ForkingAccessLevel)
+	opts.AnalyticsAccessLevel = accessLevelPtr(input.AnalyticsAccessLevel)
+	opts.OperationsAccessLevel = accessLevelPtr(input.OperationsAccessLevel)
+	opts.ReleasesAccessLevel = accessLevelPtr(input.ReleasesAccessLevel)
+	opts.EnvironmentsAccessLevel = accessLevelPtr(input.EnvironmentsAccessLevel)
+	opts.FeatureFlagsAccessLevel = accessLevelPtr(input.FeatureFlagsAccessLevel)
+	opts.InfrastructureAccessLevel = accessLevelPtr(input.InfrastructureAccessLevel)
+	opts.MonitorAccessLevel = accessLevelPtr(input.MonitorAccessLevel)
+	opts.RequirementsAccessLevel = accessLevelPtr(input.RequirementsAccessLevel)
+	opts.SecurityAndComplianceAccessLevel = accessLevelPtr(input.SecurityAndComplianceAccessLevel)
+	opts.ModelExperimentsAccessLevel = accessLevelPtr(input.ModelExperimentsAccessLevel)
+	opts.ModelRegistryAccessLevel = accessLevelPtr(input.ModelRegistryAccessLevel)
+}
+
+// createAccessLevel resolves an access level from its string form, falling back
+// to the deprecated boolean toggle when the explicit access level is unset.
+func createAccessLevel(level string, toggle *bool) *gl.AccessControlValue {
+	if level != "" {
+		return new(gl.AccessControlValue(level))
 	}
-	if input.ContainerRegistryAccessLevel != "" {
-		opts.ContainerRegistryAccessLevel = new(gl.AccessControlValue(input.ContainerRegistryAccessLevel))
-	}
-	if input.SnippetsAccessLevel != "" {
-		opts.SnippetsAccessLevel = new(gl.AccessControlValue(input.SnippetsAccessLevel))
-	}
+	return boolToAccessLevel(toggle)
 }
 
 // Create creates a new GitLab project with the specified settings.
@@ -503,82 +1095,44 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return ToOutput(p), nil
 }
 
-// buildListOpts maps ListInput fields to the GitLab API list options.
+// buildListOpts maps ListInput fields to the GitLab API list options. ListInput,
+// ListForksInput, and the user-scoped filters all target the same
+// ListProjectsOptions filter surface, so option building is centralized in
+// buildUserProjectOpts and each input only contributes a userProjectFilter.
 func buildListOpts(input ListInput) *gl.ListProjectsOptions {
-	opts := &gl.ListProjectsOptions{}
-	if input.Owned {
-		opts.Owned = new(true)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.Visibility != "" {
-		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
-	}
-	if input.Archived != nil {
-		opts.Archived = input.Archived
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Topic != "" {
-		opts.Topic = new(input.Topic)
-	}
-	if input.Simple {
-		opts.Simple = new(true)
-	}
-	if input.MinAccessLevel > 0 {
-		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
-	}
-	opts.LastActivityAfter = toolutil.ParseOptionalTime(input.LastActivityAfter)
-	opts.LastActivityBefore = toolutil.ParseOptionalTime(input.LastActivityBefore)
-	applyListFilterOpts(opts, input)
-	return opts
+	return buildUserProjectOpts(input.toFilter())
 }
 
-// applyListFilterOpts sets optional boolean-pointer filters and pagination.
-func applyListFilterOpts(opts *gl.ListProjectsOptions, input ListInput) {
-	if input.Starred != nil {
-		opts.Starred = input.Starred
+// toFilter copies a ListInput into the shared userProjectFilter.
+//
+//nolint:dupl // Field-by-field copy into the shared filter; structurally parallel to the ListForksInput/userProjectFilterInput copies by design (distinct top-level MCP input structs, no shared embeddable without flattening JSON schemas).
+func (input ListInput) toFilter() userProjectFilter {
+	return userProjectFilter{
+		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple, Owned: input.Owned,
+		Topic: input.Topic, MinAccessLevel: input.MinAccessLevel, Starred: input.Starred,
+		Membership: input.Membership, WithIssuesEnabled: input.WithIssuesEnabled,
+		WithMergeRequestsEnabled: input.WithMergeRequestsEnabled, SearchNamespaces: input.SearchNamespaces,
+		Statistics: input.Statistics, WithProgrammingLanguage: input.WithProgrammingLanguage,
+		LastActivityAfter: input.LastActivityAfter, LastActivityBefore: input.LastActivityBefore,
+		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
+		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
+		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
+		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
-	if input.Membership != nil {
-		opts.Membership = input.Membership
+}
+
+// applyKeysetOrder sets the keyset ordering column and direction on a
+// gl.ListOptions, leaving unset values untouched. GitLab uses order_by/sort
+// from the embedded ListOptions to drive keyset pagination on small list
+// endpoints (users, groups, starrers, invited groups, hooks).
+func applyKeysetOrder(opts *gl.ListOptions, orderBy, sort string) {
+	if orderBy != "" {
+		opts.OrderBy = orderBy
 	}
-	if input.WithIssuesEnabled != nil {
-		opts.WithIssuesEnabled = input.WithIssuesEnabled
-	}
-	if input.WithMergeRequestsEnabled != nil {
-		opts.WithMergeRequestsEnabled = input.WithMergeRequestsEnabled
-	}
-	if input.SearchNamespaces != nil {
-		opts.SearchNamespaces = input.SearchNamespaces
-	}
-	if input.Statistics != nil {
-		opts.Statistics = input.Statistics
-	}
-	if input.WithProgrammingLanguage != "" {
-		opts.WithProgrammingLanguage = new(input.WithProgrammingLanguage)
-	}
-	if input.IncludePendingDelete != nil {
-		opts.IncludePendingDelete = input.IncludePendingDelete
-	}
-	if input.IncludeHidden != nil {
-		opts.IncludeHidden = input.IncludeHidden
-	}
-	if input.IDAfter > 0 {
-		opts.IDAfter = new(input.IDAfter)
-	}
-	if input.IDBefore > 0 {
-		opts.IDBefore = new(input.IDBefore)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if sort != "" {
+		opts.Sort = sort
 	}
 }
 
@@ -649,7 +1203,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	// Check if the project still exists (marked for delayed deletion)
 	p, _, getErr := client.GL().Projects.GetProject(string(input.ProjectID), &gl.GetProjectOptions{}, gl.WithContext(ctx))
 	if getErr == nil && p.MarkedForDeletionOn != nil {
-		deletionDate := time.Time(*p.MarkedForDeletionOn).Format("2006-01-02")
+		deletionDate := time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
 		return DeleteOutput{
 			Status:              "scheduled",
 			Message:             fmt.Sprintf("Project %s is marked for deletion on %s. Use gitlab_project_delete with permanently_remove=true and full_path to delete immediately, or use gitlab_project_restore to cancel the deletion.", input.ProjectID, deletionDate),
@@ -774,6 +1328,235 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	applyUpdateMergeOpts(opts, input)
 	applyUpdateAccessOpts(opts, input)
+	applyUpdateMetadataOpts(opts, input)
+	applyUpdateToggleOpts(opts, input)
+	applyUpdatePipelineOpts(opts, input)
+	applyUpdateCIOpts(opts, input)
+	applyUpdateMirrorOpts(opts, input)
+	applyUpdateComplianceOpts(opts, input)
+	applyUpdateAccessLevelOpts(opts, input)
+}
+
+// applyUpdateMetadataOpts applies basic metadata and template transformations.
+func applyUpdateMetadataOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.Path != "" {
+		opts.Path = new(input.Path)
+	}
+	if input.ImportURL != "" {
+		opts.ImportURL = new(input.ImportURL)
+	}
+	if input.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(input.RepositoryStorage)
+	}
+	if len(input.TagList) > 0 {
+		opts.TagList = &input.TagList //nolint:staticcheck // 1:1 SDK parity; prefer topics.
+	}
+	if input.SuggestionCommitMessage != "" {
+		opts.SuggestionCommitMessage = new(input.SuggestionCommitMessage)
+	}
+	if input.IssueBranchTemplate != "" {
+		opts.IssueBranchTemplate = new(input.IssueBranchTemplate)
+	}
+	if input.IssuesTemplate != "" {
+		opts.IssuesTemplate = new(input.IssuesTemplate)
+	}
+	if input.MergeRequestsTemplate != "" {
+		opts.MergeRequestsTemplate = new(input.MergeRequestsTemplate)
+	}
+}
+
+// applyUpdateToggleOpts applies feature-toggle transformations.
+func applyUpdateToggleOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.SnippetsEnabled != nil {
+		opts.SnippetsEnabled = input.SnippetsEnabled //nolint:staticcheck // 1:1 SDK parity; prefer snippets_access_level.
+	}
+	if input.ContainerRegistryEnabled != nil {
+		opts.ContainerRegistryEnabled = input.ContainerRegistryEnabled //nolint:staticcheck // 1:1 SDK parity; prefer container_registry_access_level.
+	}
+	if input.ServiceDeskEnabled != nil {
+		opts.ServiceDeskEnabled = input.ServiceDeskEnabled
+	}
+	if input.EmailsEnabled != nil {
+		opts.EmailsEnabled = input.EmailsEnabled
+	}
+	if input.EmailsDisabled != nil {
+		opts.EmailsDisabled = input.EmailsDisabled //nolint:staticcheck // 1:1 SDK parity; prefer emails_enabled.
+	}
+	if input.ShowDefaultAwardEmojis != nil {
+		opts.ShowDefaultAwardEmojis = input.ShowDefaultAwardEmojis
+	}
+	if input.GroupRunnersEnabled != nil {
+		opts.GroupRunnersEnabled = input.GroupRunnersEnabled
+	}
+	if input.KeepLatestArtifact != nil {
+		opts.KeepLatestArtifact = input.KeepLatestArtifact
+	}
+	if input.BuildTimeout > 0 {
+		opts.BuildTimeout = new(input.BuildTimeout)
+	}
+	if input.MaxArtifactsSize > 0 {
+		opts.MaxArtifactsSize = new(input.MaxArtifactsSize)
+	}
+}
+
+// applyUpdatePipelineOpts applies Auto DevOps and pipeline transformations.
+func applyUpdatePipelineOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.AutoDevopsEnabled != nil {
+		opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	}
+	if input.AutoDevopsDeployStrategy != "" {
+		opts.AutoDevopsDeployStrategy = new(input.AutoDevopsDeployStrategy)
+	}
+	if input.AutoDuoCodeReviewEnabled != nil {
+		opts.AutoDuoCodeReviewEnabled = input.AutoDuoCodeReviewEnabled
+	}
+	if input.BuildGitStrategy != "" {
+		opts.BuildGitStrategy = new(input.BuildGitStrategy)
+	}
+	if input.BuildCoverageRegex != "" {
+		opts.BuildCoverageRegex = new(input.BuildCoverageRegex)
+	}
+	if input.AutoCancelPendingPipelines != "" {
+		opts.AutoCancelPendingPipelines = new(input.AutoCancelPendingPipelines)
+	}
+	if input.ResourceGroupDefaultProcessMode != "" {
+		opts.ResourceGroupDefaultProcessMode = new(gl.ResourceGroupProcessMode(input.ResourceGroupDefaultProcessMode))
+	}
+	if input.PublicJobs != nil {
+		opts.PublicJobs = input.PublicJobs
+	}
+}
+
+// applyUpdateCIOpts applies advanced CI/CD transformations.
+func applyUpdateCIOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.CIDefaultGitDepth > 0 {
+		opts.CIDefaultGitDepth = new(input.CIDefaultGitDepth)
+	}
+	if input.CIDeletePipelinesInSeconds > 0 {
+		opts.CIDeletePipelinesInSeconds = new(input.CIDeletePipelinesInSeconds)
+	}
+	if input.CIDisplayPipelineVariables != nil {
+		opts.CIDisplayPipelineVariables = input.CIDisplayPipelineVariables
+	}
+	if input.CIForwardDeploymentEnabled != nil {
+		opts.CIForwardDeploymentEnabled = input.CIForwardDeploymentEnabled
+	}
+	if input.CIForwardDeploymentRollbackAllowed != nil {
+		opts.CIForwardDeploymentRollbackAllowed = input.CIForwardDeploymentRollbackAllowed
+	}
+	if input.CIPushRepositoryForJobTokenAllowed != nil {
+		opts.CIPushRepositoryForJobTokenAllowed = input.CIPushRepositoryForJobTokenAllowed
+	}
+	if len(input.CIIDTokenSubClaimComponents) > 0 {
+		opts.CIIdTokenSubClaimComponents = &input.CIIDTokenSubClaimComponents
+	}
+	if input.CISeparatedCaches != nil {
+		opts.CISeparatedCaches = input.CISeparatedCaches
+	}
+	if input.CIRestrictPipelineCancellationRole != "" {
+		opts.CIRestrictPipelineCancellationRole = new(gl.AccessControlValue(input.CIRestrictPipelineCancellationRole))
+	}
+	if input.CIPipelineVariablesMinimumOverrideRole != "" {
+		opts.CIPipelineVariablesMinimumOverrideRole = new(input.CIPipelineVariablesMinimumOverrideRole)
+	}
+	if input.RestrictUserDefinedVariables != nil {
+		opts.RestrictUserDefinedVariables = input.RestrictUserDefinedVariables //nolint:staticcheck // 1:1 SDK parity; prefer ci_pipeline_variables_minimum_override_role.
+	}
+}
+
+// applyUpdateMirrorOpts applies pull-mirroring transformations.
+func applyUpdateMirrorOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.Mirror != nil {
+		opts.Mirror = input.Mirror
+	}
+	if input.MirrorTriggerBuilds != nil {
+		opts.MirrorTriggerBuilds = input.MirrorTriggerBuilds
+	}
+	if input.MirrorBranchRegex != "" {
+		opts.MirrorBranchRegex = new(input.MirrorBranchRegex)
+	}
+	if input.MirrorOverwritesDivergedBranches != nil {
+		opts.MirrorOverwritesDivergedBranches = input.MirrorOverwritesDivergedBranches
+	}
+	if input.MirrorUserID > 0 {
+		opts.MirrorUserID = new(input.MirrorUserID)
+	}
+	if input.OnlyMirrorProtectedBranches != nil {
+		opts.OnlyMirrorProtectedBranches = input.OnlyMirrorProtectedBranches
+	}
+}
+
+// applyUpdateComplianceOpts applies compliance, security, and additive merge
+// transformations.
+func applyUpdateComplianceOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	if input.EnforceAuthChecksOnUploads != nil {
+		opts.EnforceAuthChecksOnUploads = input.EnforceAuthChecksOnUploads
+	}
+	if input.ExternalAuthorizationClassificationLabel != "" {
+		opts.ExternalAuthorizationClassificationLabel = new(input.ExternalAuthorizationClassificationLabel)
+	}
+	opts.ContainerExpirationPolicyAttributes = input.ContainerExpirationPolicyAttributes.toGL()
+	if input.OnlyAllowMergeIfAllStatusChecksPassed != nil {
+		opts.OnlyAllowMergeIfAllStatusChecksPassed = input.OnlyAllowMergeIfAllStatusChecksPassed
+	}
+	if input.AllowPipelineTriggerApproveDeployment != nil {
+		opts.AllowPipelineTriggerApproveDeployment = input.AllowPipelineTriggerApproveDeployment
+	}
+	if input.PreventMergeWithoutJiraIssue != nil {
+		opts.PreventMergeWithoutJiraIssue = input.PreventMergeWithoutJiraIssue
+	}
+	if input.MergeRequestDefaultTargetSelf != nil {
+		opts.MergeRequestDefaultTargetSelf = input.MergeRequestDefaultTargetSelf
+	}
+	if input.MergeTrainsSkipTrainAllowed != nil {
+		opts.MergeTrainsSkipTrainAllowed = input.MergeTrainsSkipTrainAllowed
+	}
+	if input.PrintingMergeRequestLinkEnabled != nil {
+		opts.PrintingMergeRequestLinkEnabled = input.PrintingMergeRequestLinkEnabled
+	}
+}
+
+// applyUpdateAccessLevelOpts applies the additive string-based access-level
+// transformations.
+func applyUpdateAccessLevelOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	opts.IssuesAccessLevel = updateAccessLevel(input.IssuesAccessLevel, input.IssuesEnabled, opts.IssuesAccessLevel)
+	opts.MergeRequestsAccessLevel = updateAccessLevel(input.MergeRequestsAccessLevel, input.MergeRequestsEnabled, opts.MergeRequestsAccessLevel)
+	opts.WikiAccessLevel = updateAccessLevel(input.WikiAccessLevel, input.WikiEnabled, opts.WikiAccessLevel)
+	opts.BuildsAccessLevel = updateAccessLevel(input.BuildsAccessLevel, input.JobsEnabled, opts.BuildsAccessLevel)
+	setAccessLevel(&opts.RepositoryAccessLevel, input.RepositoryAccessLevel)
+	setAccessLevel(&opts.ForkingAccessLevel, input.ForkingAccessLevel)
+	setAccessLevel(&opts.AnalyticsAccessLevel, input.AnalyticsAccessLevel)
+	setAccessLevel(&opts.OperationsAccessLevel, input.OperationsAccessLevel)
+	setAccessLevel(&opts.ReleasesAccessLevel, input.ReleasesAccessLevel)
+	setAccessLevel(&opts.EnvironmentsAccessLevel, input.EnvironmentsAccessLevel)
+	setAccessLevel(&opts.FeatureFlagsAccessLevel, input.FeatureFlagsAccessLevel)
+	setAccessLevel(&opts.InfrastructureAccessLevel, input.InfrastructureAccessLevel)
+	setAccessLevel(&opts.MonitorAccessLevel, input.MonitorAccessLevel)
+	setAccessLevel(&opts.RequirementsAccessLevel, input.RequirementsAccessLevel)
+	setAccessLevel(&opts.SecurityAndComplianceAccessLevel, input.SecurityAndComplianceAccessLevel)
+	setAccessLevel(&opts.ModelExperimentsAccessLevel, input.ModelExperimentsAccessLevel)
+	setAccessLevel(&opts.ModelRegistryAccessLevel, input.ModelRegistryAccessLevel)
+}
+
+// setAccessLevel sets the target access-level pointer from a string when the
+// string is non-empty, leaving the existing value untouched otherwise.
+func setAccessLevel(target **gl.AccessControlValue, level string) {
+	if level != "" {
+		*target = new(gl.AccessControlValue(level))
+	}
+}
+
+// updateAccessLevel resolves the access level for a feature, preferring the
+// explicit string, then the existing value (set by the deprecated bool bridge),
+// and falling back to the bool toggle.
+func updateAccessLevel(level string, toggle *bool, existing *gl.AccessControlValue) *gl.AccessControlValue {
+	if level != "" {
+		return new(gl.AccessControlValue(level))
+	}
+	if existing != nil {
+		return existing
+	}
+	return boolToAccessLevel(toggle)
 }
 
 func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
@@ -882,6 +1665,7 @@ type ForkInput struct {
 	Path                          string               `json:"path,omitempty" jsonschema:"Path slug for the forked project"`
 	NamespaceID                   int64                `json:"namespace_id,omitempty" jsonschema:"Namespace ID to fork into"`
 	NamespacePath                 string               `json:"namespace_path,omitempty" jsonschema:"Namespace path to fork into"`
+	Namespace                     string               `json:"namespace,omitempty" jsonschema:"Namespace ID or path to fork into (deprecated: use namespace_id or namespace_path)"`
 	Description                   string               `json:"description,omitempty" jsonschema:"Description for the forked project"`
 	Visibility                    string               `json:"visibility,omitempty" jsonschema:"Visibility level (private, internal, public)"`
 	Branches                      string               `json:"branches,omitempty" jsonschema:"Branches to fork (empty=all)"`
@@ -908,6 +1692,9 @@ func Fork(ctx context.Context, client *gitlabclient.Client, input ForkInput) (Ou
 	}
 	if input.NamespacePath != "" {
 		opts.NamespacePath = new(input.NamespacePath)
+	}
+	if input.Namespace != "" {
+		opts.Namespace = new(input.Namespace) //nolint:staticcheck // 1:1 SDK parity; prefer namespace_id or namespace_path.
 	}
 	if input.Description != "" {
 		opts.Description = new(input.Description)
@@ -1078,7 +1865,9 @@ func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferIn
 // List Forks
 // ---------------------------------------------------------------------------.
 
-// ListForksInput defines parameters for listing project forks.
+// ListForksInput defines parameters for listing project forks. The forks
+// endpoint accepts the same filter set as the project list endpoint
+// (ListProjectsOptions), so every filter is surfaced here for 1:1 SDK parity.
 type ListForksInput struct {
 	ProjectID  toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Owned      bool                 `json:"owned,omitempty" jsonschema:"Limit to forks owned by the current user"`
@@ -1086,7 +1875,34 @@ type ListForksInput struct {
 	Visibility string               `json:"visibility,omitempty" jsonschema:"Filter by visibility (private, internal, public)"`
 	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
 	Sort       string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
+
+	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
+	Archived                 *bool  `json:"archived,omitempty"                    jsonschema:"Filter by archived status (true=only archived, false=only active)"`
+	Topic                    string `json:"topic,omitempty"                       jsonschema:"Filter by topic name"`
+	Simple                   bool   `json:"simple,omitempty"                      jsonschema:"Return only limited fields (faster for large result sets)"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty"            jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	LastActivityAfter        string `json:"last_activity_after,omitempty"         jsonschema:"Return forks with last activity after date (ISO 8601 format)"`
+	LastActivityBefore       string `json:"last_activity_before,omitempty"        jsonschema:"Return forks with last activity before date (ISO 8601 format)"`
+	Starred                  *bool  `json:"starred,omitempty"                     jsonschema:"Limit to forks starred by the current user"`
+	Membership               *bool  `json:"membership,omitempty"                  jsonschema:"Limit to forks where the current user is a member"`
+	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by forks with issues feature enabled"`
+	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by forks with merge requests enabled"`
+	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"           jsonschema:"Include namespace in search"`
+	Statistics               *bool  `json:"statistics,omitempty"                  jsonschema:"Include project statistics in response"`
+	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
+	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"      jsonschema:"Include forks marked/scheduled for deletion. Default false."`
+	IncludeHidden            *bool  `json:"include_hidden,omitempty"              jsonschema:"Include hidden forks in results"`
+	IDAfter                  int64  `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value (keyset pagination)"`
+	IDBefore                 int64  `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value (keyset pagination)"`
+	Active                   *bool  `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
+	Imported                 *bool  `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to forks where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to forks where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListForksOutput holds a paginated list of project forks.
@@ -1094,6 +1910,33 @@ type ListForksOutput struct {
 	toolutil.HintableOutput
 	Forks      []Output                  `json:"forks"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// buildForkListOpts maps ListForksInput filters onto the shared
+// ListProjectsOptions used by the project forks endpoint, delegating to the
+// centralized buildUserProjectOpts.
+func buildForkListOpts(input ListForksInput) *gl.ListProjectsOptions {
+	return buildUserProjectOpts(input.toFilter())
+}
+
+// toFilter copies a ListForksInput into the shared userProjectFilter.
+//
+//nolint:dupl // Field-by-field copy into the shared filter; structurally parallel to the ListInput/userProjectFilterInput copies by design (distinct top-level MCP input structs, no shared embeddable without flattening JSON schemas).
+func (input ListForksInput) toFilter() userProjectFilter {
+	return userProjectFilter{
+		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple, Owned: input.Owned,
+		Topic: input.Topic, MinAccessLevel: input.MinAccessLevel, Starred: input.Starred,
+		Membership: input.Membership, WithIssuesEnabled: input.WithIssuesEnabled,
+		WithMergeRequestsEnabled: input.WithMergeRequestsEnabled, SearchNamespaces: input.SearchNamespaces,
+		Statistics: input.Statistics, WithProgrammingLanguage: input.WithProgrammingLanguage,
+		LastActivityAfter: input.LastActivityAfter, LastActivityBefore: input.LastActivityBefore,
+		IDAfter: input.IDAfter, IDBefore: input.IDBefore, IncludePendingDelete: input.IncludePendingDelete,
+		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
+		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
+		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
+		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+	}
 }
 
 // ListForks retrieves a paginated list of forks for a project.
@@ -1104,28 +1947,7 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 	if input.ProjectID == "" {
 		return ListForksOutput{}, errors.New("projectListForks: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
-	opts := &gl.ListProjectsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
-	if input.Owned {
-		opts.Owned = new(input.Owned)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.Visibility != "" {
-		v := gl.VisibilityValue(input.Visibility)
-		opts.Visibility = &v
-	}
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
+	opts := buildForkListOpts(input)
 	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListForksOutput{}, toolutil.WrapErrWithStatusHint("projectListForks", err, http.StatusNotFound,
@@ -1226,14 +2048,19 @@ type HookOutput struct {
 	CreatedAt                 time.Time          `json:"created_at"`
 }
 
-// HookURLVariable represents a masked webhook URL variable.
+// HookURLVariable mirrors gl.HookURLVariable, a webhook URL variable. The value
+// is masked by the API on read (returned empty) and surfaced for 1:1 parity.
 type HookURLVariable struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
-// HookCustomHeader represents a webhook custom header.
+// HookCustomHeader mirrors gl.HookCustomHeader, a webhook custom header. The
+// value is masked by the API on read (returned empty) and surfaced for 1:1
+// parity.
 type HookCustomHeader struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
 // hookOutputFromGL maps hook output from gl between API and evaluator models.
@@ -1287,6 +2114,9 @@ func projectHookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVa
 	}
 	out := make([]HookURLVariable, len(variables))
 	for i, variable := range variables {
+		// Value is intentionally masked: webhook URL-variable values are
+		// secret-bearing and never surfaced. The field exists for 1:1 SDK
+		// shape parity but is left empty.
 		out[i] = HookURLVariable{Key: variable.Key}
 	}
 	return out
@@ -1301,6 +2131,9 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 		if header == nil {
 			continue
 		}
+		// Value is intentionally masked: custom-header values are
+		// secret-bearing and never surfaced. The field exists for 1:1 SDK
+		// shape parity but is left empty.
 		out = append(out, HookCustomHeader{Key: header.Key})
 	}
 	if len(out) == 0 {
@@ -1341,7 +2174,10 @@ func hookOutputFromAPI(h *projectHookAPI) HookOutput {
 // ListHooksInput defines parameters for listing project webhooks.
 type ListHooksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListHooksOutput holds a paginated list of project webhooks.
@@ -1359,9 +2195,9 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	if input.ProjectID == "" {
 		return ListHooksOutput{}, errors.New("projectListHooks: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
-	opts := &gl.ListProjectHooksOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-	}
+	opts := &gl.ListProjectHooksOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	hooks, resp, err := doProjectHookRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -1431,6 +2267,14 @@ type HookOptionsInput struct {
 	ResourceDeployTokenEvents *bool  `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
 	VulnerabilityEvents       *bool  `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
 	EnableSSLVerification     *bool  `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
+
+	CustomHeaders []HookCustomHeaderInput `json:"custom_headers,omitempty" jsonschema:"Custom HTTP headers sent with each webhook request (key/value pairs)"`
+}
+
+// HookCustomHeaderInput represents a single custom HTTP header for a webhook.
+type HookCustomHeaderInput struct {
+	Key   string `json:"key"   jsonschema:"Header name,required"`
+	Value string `json:"value" jsonschema:"Header value (write-only; not returned by the API),required"`
 }
 
 // AddHookInput defines parameters for adding a webhook to a project.
@@ -1488,6 +2332,13 @@ func applyProjectHookOptions(url string, input HookOptionsInput, opts *gl.AddPro
 	}
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
+	}
+	if len(input.CustomHeaders) > 0 {
+		headers := make([]*gl.HookCustomHeader, 0, len(input.CustomHeaders))
+		for _, h := range input.CustomHeaders {
+			headers = append(headers, &gl.HookCustomHeader{Key: h.Key, Value: h.Value})
+		}
+		opts.CustomHeaders = &headers
 	}
 	applyProjectHookEventOptions(input, opts)
 }
@@ -1666,30 +2517,53 @@ func boolIcon(v bool) string {
 	return toolutil.BoolEmoji(v)
 }
 
+// userNames extracts usernames from approval-rule user objects for compact
+// Markdown rendering, skipping nil entries.
+func userNames(users []*BasicUserOutput) []string {
+	if len(users) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		names = append(names, u.Username)
+	}
+	return names
+}
+
+// groupNames extracts group names from approval-rule group objects for compact
+// Markdown rendering, skipping nil entries.
+func groupNames(groups []*ApprovalGroupOutput) []string {
+	if len(groups) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g == nil {
+			continue
+		}
+		names = append(names, g.Name)
+	}
+	return names
+}
+
 // ---------------------------------------------------------------------------
 // ListUserProjects — list projects owned by a user
 // ---------------------------------------------------------------------------.
 
 // ListUserProjectsInput defines parameters for listing projects owned by a specific user.
 type ListUserProjectsInput struct {
-	UserID     toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	Search     string               `json:"search,omitempty"     jsonschema:"Search query for project name"`
-	Visibility string               `json:"visibility,omitempty" jsonschema:"Filter by visibility (private, internal, public)"`
-	Archived   *bool                `json:"archived,omitempty"   jsonschema:"Filter by archived status"`
-	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
-	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort direction (asc, desc)"`
-	Simple     bool                 `json:"simple,omitempty"     jsonschema:"Return only limited fields (faster)"`
-	toolutil.PaginationInput
+	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
+	userProjectFilterInput
 }
 
 // ListUserProjects lists projects owned by the given user.
 func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input ListUserProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserProjects", "projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id (numeric ID or exact username)", userProjectFilter{
-			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-			Page: input.Page, PerPage: input.PerPage,
-		}, client.GL().Projects.ListUserProjects)
+		"user not found - use gitlab_get_user to verify user_id (numeric ID or exact username)", input.toFilter(),
+		client.GL().Projects.ListUserProjects)
 }
 
 func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, operation, missingUserMsg, notFoundHint string, filters userProjectFilter, list func(any, *gl.ListProjectsOptions, ...gl.RequestOptionFunc) ([]*gl.Project, *gl.Response, error)) (ListOutput, error) {
@@ -1736,8 +2610,11 @@ func projectUserOutputFromGL(u *gl.ProjectUser) ProjectUserOutput {
 // ListProjectUsersInput defines parameters for listing users of a project.
 type ListProjectUsersInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Search    string               `json:"search,omitempty" jsonschema:"Search by name or username"`
+	Search    string               `json:"search,omitempty"   jsonschema:"Search by name or username"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProjectUsersOutput holds a paginated list of project users.
@@ -1756,12 +2633,8 @@ func ListProjectUsers(ctx context.Context, client *gitlabclient.Client, input Li
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	users, resp, err := client.GL().Projects.ListProjectsUsers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectUsersOutput{}, toolutil.WrapErrWithStatusHint("projectListUsers", err, http.StatusNotFound,
@@ -1811,7 +2684,10 @@ type ListProjectGroupsInput struct {
 	SharedVisibleOnly    *bool                `json:"shared_visible_only,omitempty" jsonschema:"Only show shared groups visible to the current user"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"         jsonschema:"Array of group IDs to exclude"`
 	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	OrderBy              string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort                 string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProjectGroupsOutput holds a paginated list of project groups.
@@ -1842,12 +2718,8 @@ func ListProjectGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.SharedMinAccessLevel > 0 {
 		opts.SharedMinAccessLevel = new(gl.AccessLevelValue(input.SharedMinAccessLevel))
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListGroups", err, http.StatusNotFound,
@@ -1876,8 +2748,11 @@ type StarrerOutput struct {
 // ListProjectStarrersInput defines parameters for listing project starrers.
 type ListProjectStarrersInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Search    string               `json:"search,omitempty" jsonschema:"Search by name or username"`
+	Search    string               `json:"search,omitempty"   jsonschema:"Search by name or username"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProjectStarrersOutput holds a paginated list of project starrers.
@@ -1896,12 +2771,8 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	starrers, resp, err := client.GL().Projects.ListProjectStarrers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectStarrersOutput{}, toolutil.WrapErrWithStatusHint("projectListStarrers", err, http.StatusNotFound,
@@ -2025,10 +2896,15 @@ func DeleteSharedProjectFromGroup(ctx context.Context, client *gitlabclient.Clie
 
 // ListInvitedGroupsInput defines parameters for listing groups invited to a project.
 type ListInvitedGroupsInput struct {
-	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Search         string               `json:"search,omitempty"          jsonschema:"Search by group name"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	ProjectID            toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"          jsonschema:"Search by group name"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	Relation             []string             `json:"relation,omitempty"            jsonschema:"Filter by group relation to the project (e.g. direct, inherited)"`
+	WithCustomAttributes *bool                `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
+	OrderBy              string               `json:"order_by,omitempty"            jsonschema:"Keyset ordering column (for keyset pagination)"`
+	Sort                 string               `json:"sort,omitempty"                jsonschema:"Keyset sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListInvitedGroups lists groups that have been invited to the given project.
@@ -2043,12 +2919,14 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 	if input.MinAccessLevel > 0 {
 		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if len(input.Relation) > 0 {
+		opts.Relation = &input.Relation
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.WithCustomAttributes != nil {
+		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
 	groups, resp, err := client.GL().Projects.ListProjectsInvitedGroups(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectGroupsOutput{}, toolutil.WrapErrWithStatusHint("projectListInvitedGroups", err, http.StatusNotFound,
@@ -2070,24 +2948,15 @@ func ListInvitedGroups(ctx context.Context, client *gitlabclient.Client, input L
 
 // ListUserContributedProjectsInput defines parameters for listing contributed projects.
 type ListUserContributedProjectsInput struct {
-	UserID     toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	Search     string               `json:"search,omitempty"     jsonschema:"Search query for project name"`
-	Visibility string               `json:"visibility,omitempty" jsonschema:"Filter by visibility (private, internal, public)"`
-	Archived   *bool                `json:"archived,omitempty"   jsonschema:"Filter by archived status"`
-	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
-	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort direction (asc, desc)"`
-	Simple     bool                 `json:"simple,omitempty"     jsonschema:"Return only limited fields (faster)"`
-	toolutil.PaginationInput
+	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
+	userProjectFilterInput
 }
 
 // ListUserContributedProjects lists projects a specific user has contributed to.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
-			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-			Page: input.Page, PerPage: input.PerPage,
-		}, client.GL().Projects.ListUserContributedProjects)
+		"user not found - use gitlab_get_user to verify user_id", input.toFilter(),
+		client.GL().Projects.ListUserContributedProjects)
 }
 
 // ---------------------------------------------------------------------------
@@ -2096,36 +2965,106 @@ func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Clien
 
 // ListUserStarredProjectsInput defines parameters for listing starred projects.
 type ListUserStarredProjectsInput struct {
-	UserID     toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
-	Search     string               `json:"search,omitempty"     jsonschema:"Search query for project name"`
-	Visibility string               `json:"visibility,omitempty" jsonschema:"Filter by visibility (private, internal, public)"`
-	Archived   *bool                `json:"archived,omitempty"   jsonschema:"Filter by archived status"`
-	OrderBy    string               `json:"order_by,omitempty"   jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
-	Sort       string               `json:"sort,omitempty"       jsonschema:"Sort direction (asc, desc)"`
-	Simple     bool                 `json:"simple,omitempty"     jsonschema:"Return only limited fields (faster)"`
-	toolutil.PaginationInput
+	UserID toolutil.StringOrInt `json:"user_id" jsonschema:"User ID or username,required"`
+	userProjectFilterInput
 }
 
 // ListUserStarredProjects lists projects starred by a specific user.
 func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, input ListUserStarredProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserStarred", "projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
-			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-			Page: input.Page, PerPage: input.PerPage,
-		}, client.GL().Projects.ListUserStarredProjects)
+		"user not found - use gitlab_get_user to verify user_id", input.toFilter(),
+		client.GL().Projects.ListUserStarredProjects)
 }
 
-// userProjectFilter holds the filter parameters for user-scoped project listings.
+// userProjectFilterInput is the embeddable, JSON-schema-bearing filter set
+// shared by the user-scoped project list tools (owned, contributed, starred).
+// All three endpoints accept the full ListProjectsOptions filter set, so they
+// surface the complete filter surface for 1:1 SDK parity.
+type userProjectFilterInput struct {
+	Search                   string `json:"search,omitempty"             jsonschema:"Search query for project name"`
+	Visibility               string `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
+	Archived                 *bool  `json:"archived,omitempty"           jsonschema:"Filter by archived status (true=only archived, false=only active)"`
+	OrderBy                  string `json:"order_by,omitempty"           jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
+	Sort                     string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
+	Simple                   bool   `json:"simple,omitempty"             jsonschema:"Return only limited fields (faster)"`
+	Owned                    bool   `json:"owned,omitempty"              jsonschema:"Limit to projects explicitly owned by the current user"`
+	Topic                    string `json:"topic,omitempty"              jsonschema:"Filter by topic name"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty"   jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	Starred                  *bool  `json:"starred,omitempty"            jsonschema:"Limit to projects starred by the current user"`
+	Membership               *bool  `json:"membership,omitempty"         jsonschema:"Limit to projects where the current user is a member"`
+	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by projects with issues feature enabled"`
+	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by projects with merge requests enabled"`
+	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"  jsonschema:"Include namespace in search"`
+	Statistics               *bool  `json:"statistics,omitempty"         jsonschema:"Include project statistics in response"`
+	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
+	LastActivityAfter        string `json:"last_activity_after,omitempty"         jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
+	LastActivityBefore       string `json:"last_activity_before,omitempty"        jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
+	IDAfter                  int64  `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
+	IDBefore                 int64  `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value (keyset pagination)"`
+	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"      jsonschema:"Include projects marked/scheduled for deletion. Default false."`
+	IncludeHidden            *bool  `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
+	Active                   *bool  `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
+	Imported                 *bool  `json:"imported,omitempty"           jsonschema:"Limit to projects imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string `json:"repository_storage,omitempty"          jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// toFilter converts the embeddable input into the internal userProjectFilter
+// consumed by buildUserProjectOpts. The two structs are field-identical (same
+// names, types, and json tags) so a direct conversion suffices.
+func (f userProjectFilterInput) toFilter() userProjectFilter {
+	return userProjectFilter(f)
+}
+
+// userProjectFilter holds the resolved filter parameters for user-scoped
+// project listings, mirroring the full ListProjectsOptions filter set.
+//
+// The json tags mirror the SDK url tags on gl.ListProjectsOptions so the
+// struct-completeness auditor (R-INPUT) can confirm 1:1 parity against the SDK
+// options this struct is translated into by buildUserProjectOpts. This struct is
+// internal plumbing — the model-facing schema is carried by userProjectFilterInput
+// (and ListInput / ListForksInput) — so the tags are documentation/audit metadata
+// only and never affect serialization.
 type userProjectFilter struct {
-	Search     string
-	Visibility string
-	Archived   *bool
-	OrderBy    string
-	Sort       string
-	Simple     bool
-	Page       int
-	PerPage    int
+	Search                   string `json:"search,omitempty"`
+	Visibility               string `json:"visibility,omitempty"`
+	Archived                 *bool  `json:"archived,omitempty"`
+	OrderBy                  string `json:"order_by,omitempty"`
+	Sort                     string `json:"sort,omitempty"`
+	Simple                   bool   `json:"simple,omitempty"`
+	Owned                    bool   `json:"owned,omitempty"`
+	Topic                    string `json:"topic,omitempty"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty"`
+	Starred                  *bool  `json:"starred,omitempty"`
+	Membership               *bool  `json:"membership,omitempty"`
+	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"`
+	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty"`
+	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"`
+	Statistics               *bool  `json:"statistics,omitempty"`
+	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"`
+	LastActivityAfter        string `json:"last_activity_after,omitempty"`
+	LastActivityBefore       string `json:"last_activity_before,omitempty"`
+	IDAfter                  int64  `json:"id_after,omitempty"`
+	IDBefore                 int64  `json:"id_before,omitempty"`
+	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"`
+	IncludeHidden            *bool  `json:"include_hidden,omitempty"`
+	Active                   *bool  `json:"active,omitempty"`
+	Imported                 *bool  `json:"imported,omitempty"`
+	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"`
+	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"`
+	RepositoryStorage        string `json:"repository_storage,omitempty"`
+	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"`
+
+	// Pagination and Keyset are embedded (not named) so their page/per_page/
+	// page_token/pagination json tags are promoted, matching the embedded
+	// ListOptions on gl.ListProjectsOptions for the R-INPUT tag diff.
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // buildUserProjectOpts centralizes option building for user-scoped project listings.
@@ -2137,9 +3076,6 @@ func buildUserProjectOpts(f userProjectFilter) *gl.ListProjectsOptions {
 	if f.Visibility != "" {
 		opts.Visibility = new(gl.VisibilityValue(f.Visibility))
 	}
-	if f.Archived != nil {
-		opts.Archived = f.Archived
-	}
 	if f.OrderBy != "" {
 		opts.OrderBy = new(f.OrderBy)
 	}
@@ -2149,13 +3085,79 @@ func buildUserProjectOpts(f userProjectFilter) *gl.ListProjectsOptions {
 	if f.Simple {
 		opts.Simple = new(true)
 	}
-	if f.Page > 0 {
-		opts.Page = int64(f.Page)
+	if f.Owned {
+		opts.Owned = new(true)
 	}
-	if f.PerPage > 0 {
-		opts.PerPage = int64(f.PerPage)
+	if f.Topic != "" {
+		opts.Topic = new(f.Topic)
 	}
+	if f.MinAccessLevel > 0 {
+		opts.MinAccessLevel = new(gl.AccessLevelValue(f.MinAccessLevel))
+	}
+	if f.WithProgrammingLanguage != "" {
+		opts.WithProgrammingLanguage = new(f.WithProgrammingLanguage)
+	}
+	opts.LastActivityAfter = toolutil.ParseOptionalTime(f.LastActivityAfter)
+	opts.LastActivityBefore = toolutil.ParseOptionalTime(f.LastActivityBefore)
+	applyUserProjectFilterPtrs(opts, f)
+	toolutil.ApplyListOptions(&opts.ListOptions, f.PaginationInput, f.KeysetPaginationInput)
 	return opts
+}
+
+// applyUserProjectFilterPtrs sets the optional boolean-pointer and keyset-bound
+// filters shared with the project list endpoint.
+func applyUserProjectFilterPtrs(opts *gl.ListProjectsOptions, f userProjectFilter) {
+	if f.Archived != nil {
+		opts.Archived = f.Archived
+	}
+	if f.Starred != nil {
+		opts.Starred = f.Starred
+	}
+	if f.Membership != nil {
+		opts.Membership = f.Membership
+	}
+	if f.WithIssuesEnabled != nil {
+		opts.WithIssuesEnabled = f.WithIssuesEnabled
+	}
+	if f.WithMergeRequestsEnabled != nil {
+		opts.WithMergeRequestsEnabled = f.WithMergeRequestsEnabled
+	}
+	if f.SearchNamespaces != nil {
+		opts.SearchNamespaces = f.SearchNamespaces
+	}
+	if f.Statistics != nil {
+		opts.Statistics = f.Statistics
+	}
+	if f.IncludePendingDelete != nil {
+		opts.IncludePendingDelete = f.IncludePendingDelete
+	}
+	if f.IncludeHidden != nil {
+		opts.IncludeHidden = f.IncludeHidden
+	}
+	if f.IDAfter > 0 {
+		opts.IDAfter = new(f.IDAfter)
+	}
+	if f.IDBefore > 0 {
+		opts.IDBefore = new(f.IDBefore)
+	}
+	if f.Active != nil {
+		opts.Active = f.Active
+	}
+	if f.Imported != nil {
+		opts.Imported = f.Imported
+	}
+	if f.RepositoryChecksumFailed != nil {
+		opts.RepositoryChecksumFailed = f.RepositoryChecksumFailed
+	}
+	if f.WikiChecksumFailed != nil {
+		opts.WikiChecksumFailed = f.WikiChecksumFailed
+	}
+	if f.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(f.RepositoryStorage)
+	}
+	if f.WithCustomAttributes != nil {
+		opts.WithCustomAttributes = f.WithCustomAttributes
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -2781,21 +3783,13 @@ func GetRepositoryStorage(ctx context.Context, client *gitlabclient.Client, inpu
 	return out, nil
 }
 
-// CreateForUserInput defines parameters for creating a project on behalf of a user.
+// CreateForUserInput defines parameters for creating a project on behalf of a
+// user. Besides UserID, it carries the full GitLab
+// [gl.CreateProjectForUserOptions] (an alias of [gl.CreateProjectOptions])
+// settings via an embedded [CreateInput].
 type CreateForUserInput struct {
-	UserID               int64    `json:"user_id" jsonschema:"Target user ID who will own the project,required"`
-	Name                 string   `json:"name" jsonschema:"Project name,required"`
-	Path                 string   `json:"path,omitempty" jsonschema:"Project path slug (defaults from name)"`
-	NamespaceID          int      `json:"namespace_id,omitempty" jsonschema:"Namespace ID (defaults to user personal namespace)"`
-	Description          string   `json:"description,omitempty" jsonschema:"Project description"`
-	Visibility           string   `json:"visibility,omitempty" jsonschema:"Visibility level (private, internal, public)"`
-	InitializeWithReadme bool     `json:"initialize_with_readme,omitempty" jsonschema:"Initialize with a README"`
-	DefaultBranch        string   `json:"default_branch,omitempty" jsonschema:"Default branch name"`
-	Topics               []string `json:"topics,omitempty" jsonschema:"Topic tags for the project"`
-	IssuesEnabled        *bool    `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature"`
-	MergeRequestsEnabled *bool    `json:"merge_requests_enabled,omitempty" jsonschema:"Enable merge requests feature"`
-	WikiEnabled          *bool    `json:"wiki_enabled,omitempty" jsonschema:"Enable wiki feature"`
-	JobsEnabled          *bool    `json:"jobs_enabled,omitempty" jsonschema:"Enable CI/CD jobs"`
+	UserID int64 `json:"user_id" jsonschema:"Target user ID who will own the project,required"`
+	CreateInput
 }
 
 // CreateForUser creates a new project owned by the specified user (admin operation).
@@ -2809,42 +3803,8 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 	if input.Name == "" {
 		return Output{}, errors.New("projectCreateForUser: name is required")
 	}
-	opts := &gl.CreateProjectForUserOptions{Name: &input.Name}
-	if input.Path != "" {
-		opts.Path = &input.Path
-	}
-	if input.NamespaceID != 0 {
-		opts.NamespaceID = new(int64(input.NamespaceID))
-	}
-	if input.Description != "" {
-		d := toolutil.NormalizeText(input.Description)
-		opts.Description = &d
-	}
-	if input.Visibility != "" {
-		v := gl.VisibilityValue(input.Visibility)
-		opts.Visibility = &v
-	}
-	if input.InitializeWithReadme {
-		opts.InitializeWithReadme = new(true)
-	}
-	if input.DefaultBranch != "" {
-		opts.DefaultBranch = &input.DefaultBranch
-	}
-	if len(input.Topics) > 0 {
-		opts.Topics = &input.Topics
-	}
-	if input.IssuesEnabled != nil {
-		opts.IssuesAccessLevel = boolToAccessLevel(input.IssuesEnabled)
-	}
-	if input.MergeRequestsEnabled != nil {
-		opts.MergeRequestsAccessLevel = boolToAccessLevel(input.MergeRequestsEnabled)
-	}
-	if input.WikiEnabled != nil {
-		opts.WikiAccessLevel = boolToAccessLevel(input.WikiEnabled)
-	}
-	if input.JobsEnabled != nil {
-		opts.BuildsAccessLevel = boolToAccessLevel(input.JobsEnabled)
-	}
+	createOpts := buildCreateOpts(input.CreateInput)
+	opts := (*gl.CreateProjectForUserOptions)(createOpts)
 	p, _, err := client.GL().Projects.CreateProjectForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {

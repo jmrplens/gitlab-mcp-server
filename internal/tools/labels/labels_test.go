@@ -105,6 +105,48 @@ func TestLabelList_WithSearch(t *testing.T) {
 	}
 }
 
+// TestLabelList_OrderBySortKeyset verifies that order_by, sort, and the
+// keyset pagination parameters (pagination, page_token) are forwarded as
+// query parameters to the GitLab Labels API.
+func TestLabelList_OrderBySortKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProjectLabels {
+			q := r.URL.Query()
+			if q.Get("order_by") != "name" {
+				t.Errorf("order_by = %q, want name", q.Get("order_by"))
+			}
+			if q.Get("sort") != "asc" {
+				t.Errorf("sort = %q, want asc", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok123" {
+				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"bug","color":"#d9534f","is_project_label":true}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "tok123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Labels) != 1 {
+		t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
+	}
+}
+
 // TestLabelList_EmptyProjectID verifies LabelList when empty project ID.
 func TestLabelList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +358,38 @@ func TestLabelUpdate_ArchivedFlag(t *testing.T) {
 	}
 }
 
+// TestLabelUpdate_NameBodyField verifies that the optional Name field is
+// sent in the update request body when supplied (alternative label selector
+// mirroring v2.UpdateLabelOptions.Name).
+func TestLabelUpdate_NameBodyField(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathLabelBug {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug","color":"#00FF00","is_project_label":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42",
+		LabelID:   "bug",
+		Name:      "bug",
+		Color:     "#00FF00",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedBody, "\"name\":\"bug\"") {
+		t.Errorf("request body should contain \"name\":\"bug\", got: %s", capturedBody)
+	}
+}
+
 // TestLabelUpdate_NotFound verifies LabelUpdate when not found.
 func TestLabelUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +415,29 @@ func TestLabelDelete_Success(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", LabelID: "bug"})
 	if err != nil {
 		t.Fatalf("Delete() unexpected error: %v", err)
+	}
+}
+
+// TestLabelDelete_NameBodyField verifies that the optional Name field is
+// forwarded as the name query parameter when supplied (alternative label
+// selector mirroring v2.DeleteLabelOptions.Name).
+func TestLabelDelete_NameBodyField(t *testing.T) {
+	var capturedQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.Path == pathLabelBug {
+			capturedQuery = r.URL.RawQuery
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", LabelID: "bug", Name: "bug"})
+	if err != nil {
+		t.Fatalf("Delete() unexpected error: %v", err)
+	}
+	if !strings.Contains(capturedQuery, "name=bug") {
+		t.Errorf("request query should contain name=bug, got: %s", capturedQuery)
 	}
 }
 

@@ -42,7 +42,10 @@ type ListOutput struct {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Search    string               `json:"search,omitempty" jsonschema:"Search by name"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at, name)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a feature flag user list.
@@ -81,14 +84,16 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("ff_user_list_list", toolutil.ErrFieldRequired("project_id"))
 	}
-	opts := &gl.ListFeatureFlagUserListsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListFeatureFlagUserListsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
 		opts.Search = input.Search
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	lists, resp, err := client.GL().FeatureFlagUserLists.ListFeatureFlagUserLists(
 		string(input.ProjectID), opts, gl.WithContext(ctx),

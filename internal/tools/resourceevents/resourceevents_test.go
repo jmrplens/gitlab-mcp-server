@@ -48,11 +48,11 @@ func TestListIssueLabelEvents_Success_DetailedFields(t *testing.T) {
 	if out.Events[0].Action != "add" {
 		t.Errorf("got action %q, want %q", out.Events[0].Action, "add")
 	}
-	if out.Events[0].Label.Name != "bug" {
-		t.Errorf("got label %q, want %q", out.Events[0].Label.Name, "bug")
+	if out.Events[0].Label == nil || out.Events[0].Label.Name != "bug" {
+		t.Errorf("got label %v, want name %q", out.Events[0].Label, "bug")
 	}
-	if out.Events[0].Username != "alice" {
-		t.Errorf("got username %q, want %q", out.Events[0].Username, "alice")
+	if out.Events[0].User == nil || out.Events[0].User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", out.Events[0].User, "alice")
 	}
 }
 
@@ -73,8 +73,8 @@ func TestGetIssueLabelEvent_Success_DetailedFields(t *testing.T) {
 	if out.ID != 10 {
 		t.Errorf("got ID %d, want 10", out.ID)
 	}
-	if out.Label.Name != "bug" {
-		t.Errorf("got label %q, want %q", out.Label.Name, "bug")
+	if out.Label == nil || out.Label.Name != "bug" {
+		t.Errorf("got label %v, want name %q", out.Label, "bug")
 	}
 }
 
@@ -132,8 +132,8 @@ func TestListIssueMilestoneEvents_Success_DetailedFields(t *testing.T) {
 	if len(out.Events) != 1 {
 		t.Fatalf(fmtWantOneEvent, len(out.Events))
 	}
-	if out.Events[0].MilestoneTitle != "v1.0" {
-		t.Errorf("got milestone %q, want %q", out.Events[0].MilestoneTitle, "v1.0")
+	if out.Events[0].Milestone == nil || out.Events[0].Milestone.Title != "v1.0" {
+		t.Errorf("got milestone %v, want title %q", out.Events[0].Milestone, "v1.0")
 	}
 }
 
@@ -151,8 +151,8 @@ func TestGetIssueMilestoneEvent_Success_DetailedFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.MilestoneTitle != "v1.0" {
-		t.Errorf("got milestone %q, want %q", out.MilestoneTitle, "v1.0")
+	if out.Milestone == nil || out.Milestone.Title != "v1.0" {
+		t.Errorf("got milestone %v, want title %q", out.Milestone, "v1.0")
 	}
 }
 
@@ -619,8 +619,8 @@ func TestGetIssueMilestoneEvent_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.MilestoneTitle != "v1.0" {
-		t.Errorf("expected v1.0, got %q", out.MilestoneTitle)
+	if out.Milestone == nil || out.Milestone.Title != "v1.0" {
+		t.Errorf("expected v1.0, got %v", out.Milestone)
 	}
 }
 
@@ -840,8 +840,8 @@ func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
 func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 	e := &gl.MilestoneEvent{ID: 1, Action: "add"}
 	out := toMilestoneEventOutput(e)
-	if out.UserID != 0 || out.MilestoneTitle != "" {
-		t.Error("expected zero values for nil user/milestone")
+	if out.User != nil || out.Milestone != nil {
+		t.Error("expected nil user/milestone for nil event sub-objects")
 	}
 }
 
@@ -857,8 +857,8 @@ func TestCovtoStateEventOutput_Nil(t *testing.T) {
 func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 	e := &gl.StateEvent{ID: 1, State: "opened"}
 	out := toStateEventOutput(e)
-	if out.UserID != 0 {
-		t.Error("expected zero UserID for nil user")
+	if out.User != nil {
+		t.Error("expected nil user for nil event user")
 	}
 	if out.State != "opened" {
 		t.Errorf("expected opened, got %q", out.State)
@@ -878,7 +878,7 @@ func TestFormatLabelEventsMarkdown_Empty(t *testing.T) {
 // TestFormatLabelEventsMarkdown_WithEvents verifies FormatLabelEventsMarkdown when with events.
 func TestFormatLabelEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListLabelEventsOutput{
-		Events: []LabelEventOutput{{ID: 1, Action: "add", Label: LabelEventLabelOutput{Name: "bug"}, Username: "alice"}},
+		Events: []LabelEventOutput{{ID: 1, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}}},
 	}
 	md := FormatLabelEventsMarkdown(out)
 	if !strings.Contains(md, "bug") || !strings.Contains(md, "alice") {
@@ -888,7 +888,7 @@ func TestFormatLabelEventsMarkdown_WithEvents(t *testing.T) {
 
 // TestFormatLabelEventMarkdown verifies FormatLabelEventMarkdown.
 func TestFormatLabelEventMarkdown(t *testing.T) {
-	out := LabelEventOutput{ID: 10, Action: "add", Label: LabelEventLabelOutput{Name: "bug"}, Username: "alice", ResourceType: "Issue", ResourceID: 1}
+	out := LabelEventOutput{ID: 10, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
 	md := FormatLabelEventMarkdown(out)
 	if !strings.Contains(md, "Label Event #10") || !strings.Contains(md, "bug") {
 		t.Error("expected label event details")
@@ -906,7 +906,7 @@ func TestFormatMilestoneEventsMarkdown_Empty(t *testing.T) {
 // TestFormatMilestoneEventsMarkdown_WithEvents verifies FormatMilestoneEventsMarkdown when with events.
 func TestFormatMilestoneEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListMilestoneEventsOutput{
-		Events: []MilestoneEventOutput{{ID: 1, Action: "add", MilestoneTitle: "v1.0", Username: "alice"}},
+		Events: []MilestoneEventOutput{{ID: 1, Action: "add", Milestone: &MilestoneOutput{Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}}},
 	}
 	md := FormatMilestoneEventsMarkdown(out)
 	if !strings.Contains(md, "v1.0") || !strings.Contains(md, "alice") {
@@ -916,7 +916,7 @@ func TestFormatMilestoneEventsMarkdown_WithEvents(t *testing.T) {
 
 // TestFormatMilestoneEventMarkdown verifies FormatMilestoneEventMarkdown.
 func TestFormatMilestoneEventMarkdown(t *testing.T) {
-	out := MilestoneEventOutput{ID: 30, Action: "add", MilestoneTitle: "v1.0", MilestoneID: 200, Username: "alice", ResourceType: "Issue", ResourceID: 1}
+	out := MilestoneEventOutput{ID: 30, Action: "add", Milestone: &MilestoneOutput{ID: 200, Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
 	md := FormatMilestoneEventMarkdown(out)
 	if !strings.Contains(md, "Milestone Event #30") || !strings.Contains(md, "v1.0") {
 		t.Error("expected milestone event details")
@@ -934,7 +934,7 @@ func TestFormatStateEventsMarkdown_Empty(t *testing.T) {
 // TestFormatStateEventsMarkdown_WithEvents verifies FormatStateEventsMarkdown when with events.
 func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListStateEventsOutput{
-		Events: []StateEventOutput{{ID: 1, State: "closed", Username: "alice", ResourceType: "Issue", ResourceID: 1}},
+		Events: []StateEventOutput{{ID: 1, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}},
 	}
 	md := FormatStateEventsMarkdown(out)
 	if !strings.Contains(md, "closed") || !strings.Contains(md, "alice") {
@@ -944,7 +944,7 @@ func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 
 // TestFormatStateEventMarkdown verifies FormatStateEventMarkdown.
 func TestFormatStateEventMarkdown(t *testing.T) {
-	out := StateEventOutput{ID: 40, State: "closed", Username: "alice", ResourceType: "Issue", ResourceID: 1}
+	out := StateEventOutput{ID: 40, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
 	md := FormatStateEventMarkdown(out)
 	if !strings.Contains(md, "State Event #40") || !strings.Contains(md, "closed") {
 		t.Error("expected state event details")
@@ -1038,11 +1038,11 @@ func TestListIssueIterationEvents_Success(t *testing.T) {
 	if out.Events[0].Action != "add" {
 		t.Errorf("got action %q, want %q", out.Events[0].Action, "add")
 	}
-	if out.Events[0].Username != "alice" {
-		t.Errorf("got username %q, want %q", out.Events[0].Username, "alice")
+	if out.Events[0].User == nil || out.Events[0].User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", out.Events[0].User, "alice")
 	}
-	if out.Events[0].Iteration.Title != "Sprint 1" {
-		t.Errorf("got iteration title %q, want %q", out.Events[0].Iteration.Title, "Sprint 1")
+	if out.Events[0].Iteration == nil || out.Events[0].Iteration.Title != "Sprint 1" {
+		t.Errorf("got iteration %v, want title %q", out.Events[0].Iteration, "Sprint 1")
 	}
 }
 
@@ -1118,11 +1118,11 @@ func TestGetIssueIterationEvent_Success(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf("got ID %d, want 1", out.ID)
 	}
-	if out.Iteration.Title != "Sprint 1" {
-		t.Errorf("got iteration title %q, want %q", out.Iteration.Title, "Sprint 1")
+	if out.Iteration == nil || out.Iteration.Title != "Sprint 1" {
+		t.Errorf("got iteration %v, want title %q", out.Iteration, "Sprint 1")
 	}
-	if out.Username != "alice" {
-		t.Errorf("got username %q, want %q", out.Username, "alice")
+	if out.User == nil || out.User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", out.User, "alice")
 	}
 }
 
@@ -1159,8 +1159,8 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 	if out.Events[0].Weight != 5 {
 		t.Errorf("got weight %d, want 5", out.Events[0].Weight)
 	}
-	if out.Events[0].Username != "alice" {
-		t.Errorf("got username %q, want %q", out.Events[0].Username, "alice")
+	if out.Events[0].User == nil || out.Events[0].User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", out.Events[0].User, "alice")
 	}
 }
 
@@ -1253,5 +1253,115 @@ func TestToWeightEventOutput_Nil(t *testing.T) {
 	out := toWeightEventOutput(nil)
 	if out.ID != 0 {
 		t.Errorf("expected zero ID, got %d", out.ID)
+	}
+}
+
+// ======================== Group Epic Label Events ========================.
+
+// covGID returns the group identifier used by the epic label-event tests.
+func covGID() toolutil.StringOrInt { return toolutil.StringOrInt("acme") }
+
+// TestListGroupEpicLabelEvents_Validation verifies ListGroupEpicLabelEvents
+// rejects input missing the required group_id and epic_iid fields without
+// reaching the API.
+func TestListGroupEpicLabelEvents_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{}); err == nil {
+		t.Fatal(errExpectedValidation)
+	}
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID()}); err == nil {
+		t.Fatal(errExpectedValidation)
+	}
+}
+
+// TestListGroupEpicLabelEvents_APIError verifies ListGroupEpicLabelEvents
+// surfaces an error when the GitLab API responds non-2xx.
+func TestListGroupEpicLabelEvents_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, covBadHandler())
+	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID(), EpicIID: 1}); err == nil {
+		t.Fatal("expected API error")
+	}
+}
+
+// TestListGroupEpicLabelEvents_Success verifies ListGroupEpicLabelEvents hits
+// the group epic resource_label_events endpoint and maps the label event,
+// nested label, acting user, and pagination metadata.
+func TestListGroupEpicLabelEvents_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/acme/epics/7/resource_label_events" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			{"id":50,"action":"add","created_at":"2026-05-01T09:00:00Z","resource_type":"Epic","resource_id":7,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}
+		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+	out, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID(), EpicIID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Events) != 1 {
+		t.Fatalf(fmtWantOneEvent, len(out.Events))
+	}
+	e := out.Events[0]
+	if e.ID != 50 || e.Action != "add" || e.ResourceType != "Epic" {
+		t.Errorf("unexpected event: %+v", e)
+	}
+	if e.Label == nil || e.Label.Name != "bug" {
+		t.Errorf("got label %v, want name %q", e.Label, "bug")
+	}
+	if e.User == nil || e.User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", e.User, "alice")
+	}
+	if out.Pagination.TotalItems != 1 {
+		t.Errorf("got total %d, want 1", out.Pagination.TotalItems)
+	}
+}
+
+// TestGetGroupEpicLabelEvent_Validation verifies GetGroupEpicLabelEvent rejects
+// input missing any required field without reaching the API.
+func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal(errNoReachAPI)
+	}))
+	cases := []GetGroupEpicLabelEventInput{
+		{},
+		{GroupID: covGID()},
+		{GroupID: covGID(), EpicIID: 7},
+	}
+	for _, in := range cases {
+		if _, err := GetGroupEpicLabelEvent(t.Context(), client, in); err == nil {
+			t.Fatalf("expected validation error for %+v", in)
+		}
+	}
+}
+
+// TestGetGroupEpicLabelEvent_APIError verifies GetGroupEpicLabelEvent surfaces
+// an error when the GitLab API responds non-2xx.
+func TestGetGroupEpicLabelEvent_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, covBadHandler())
+	if _, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50}); err == nil {
+		t.Fatal("expected API error")
+	}
+}
+
+// TestGetGroupEpicLabelEvent_Success verifies GetGroupEpicLabelEvent hits the
+// single group epic label event endpoint and maps the event fields.
+func TestGetGroupEpicLabelEvent_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/acme/epics/7/resource_label_events/50" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":50,"action":"add","created_at":"2026-05-01T09:00:00Z","resource_type":"Epic","resource_id":7,"user":{"id":5,"username":"alice"},"label":{"id":100,"name":"bug","color":"#f00","text_color":"#fff","description":"Bug label"}}`)
+	}))
+	out, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 50 || out.Label == nil || out.Label.Name != "bug" {
+		t.Errorf("unexpected output: %+v", out)
 	}
 }

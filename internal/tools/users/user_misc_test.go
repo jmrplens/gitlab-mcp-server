@@ -5,13 +5,153 @@ package users
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// userAvatarJSON is a minimal authenticated-user payload returned by the mocked
+// PUT /user/avatar endpoint, including the updated avatar URL.
+const userAvatarJSON = `{"id":7,"username":"alice","name":"Alice","state":"active","avatar_url":"https://gitlab.example.com/uploads/-/system/user/avatar/7/avatar.png"}`
+
+// TestUploadCurrentUserAvatar_Success_Base64 verifies UploadCurrentUserAvatar
+// PUTs to /user/avatar with base64 content and maps the returned user, including
+// the new avatar URL.
+func TestUploadCurrentUserAvatar_Success_Base64(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/avatar" {
+			testutil.RespondJSON(w, http.StatusOK, userAvatarJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake-image-data"))
+	out, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 7 {
+		t.Errorf("ID = %d, want 7", out.ID)
+	}
+	if !strings.Contains(out.AvatarURL, "avatar.png") {
+		t.Errorf("AvatarURL = %q, want it to reference avatar.png", out.AvatarURL)
+	}
+}
+
+// TestUploadCurrentUserAvatar_Success_FilePath verifies the file_path branch
+// reads a local image file and uploads its contents.
+func TestUploadCurrentUserAvatar_Success_FilePath(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/avatar" {
+			testutil.RespondJSON(w, http.StatusOK, userAvatarJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	path := filepath.Join(t.TempDir(), "avatar.png")
+	if err := os.WriteFile(path, []byte("fake-image-data"), 0o600); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+	out, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", FilePath: path,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 7 {
+		t.Errorf("ID = %d, want 7", out.ID)
+	}
+}
+
+// TestUploadCurrentUserAvatar_Validation covers the input-validation branches:
+// missing filename, no source, both sources, and invalid base64.
+func TestUploadCurrentUserAvatar_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called on validation error")
+	}))
+	cases := []struct {
+		name  string
+		input UploadCurrentUserAvatarInput
+	}{
+		{"missing filename", UploadCurrentUserAvatarInput{ContentBase64: "dGVzdA=="}},
+		{"no source", UploadCurrentUserAvatarInput{Filename: "a.png"}},
+		{"both sources", UploadCurrentUserAvatarInput{Filename: "a.png", FilePath: "/tmp/x.png", ContentBase64: "dGVzdA=="}},
+		{"invalid base64", UploadCurrentUserAvatarInput{Filename: "a.png", ContentBase64: "!!!not-base64!!!"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := UploadCurrentUserAvatar(context.Background(), client, tc.input); err == nil {
+				t.Fatalf("expected error for %s, got nil", tc.name)
+			}
+		})
+	}
+}
+
+// TestUploadCurrentUserAvatar_APIError verifies a 422 from the avatar endpoint is
+// wrapped with an actionable hint.
+func TestUploadCurrentUserAvatar_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"avatar invalid"}`)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake"))
+	if _, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	}); err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestUploadCurrentUserAvatar_UnauthorizedError verifies a non-422/400 status
+// (e.g. 401) is wrapped via the status-hint fallback path.
+func TestUploadCurrentUserAvatar_UnauthorizedError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake"))
+	if _, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	}); err == nil {
+		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestUploadCurrentUserAvatar_ContextCancelled verifies the handler returns the
+// context error before performing any work when the context is already cancelled.
+func TestUploadCurrentUserAvatar_ContextCancelled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called with a cancelled context")
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	content := base64.StdEncoding.EncodeToString([]byte("fake"))
+	if _, err := UploadCurrentUserAvatar(ctx, client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	}); err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+}
+
+// TestUploadCurrentUserAvatar_FilePathNotFound verifies a missing local file path
+// is surfaced as an error before any API call.
+func TestUploadCurrentUserAvatar_FilePathNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called when local file is missing")
+	}))
+	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
+	if _, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", FilePath: missing,
+	}); err == nil {
+		t.Fatal("expected error for missing file_path, got nil")
+	}
+}
 
 // TestGetUserActivities_Success verifies GetUserActivities returns the activity
 // list when GET /user/activities responds 200 with a single record.

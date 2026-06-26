@@ -445,7 +445,36 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "notifications" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if strings.HasPrefix(strings.ToLower(spec.Usage), "use to execute") {
+			t.Errorf("%s: generic Usage placeholder: %q", spec.Name, spec.Usage)
+		}
+		if !hasNaturalLanguageAlias(spec) {
+			t.Errorf("%s: missing natural-language alias beyond tool name: %v", spec.Name, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty RelatedActions", spec.Name)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description missing Returns:/See also: form: %q", spec.Name, desc)
+		}
 	}
+}
+
+// hasNaturalLanguageAlias reports whether spec carries at least one alias
+// that is not merely the canonical action name or the individual tool name,
+// mirroring the R-META aliases_only_toolname audit check.
+func hasNaturalLanguageAlias(spec toolutil.ActionSpec) bool {
+	canonical := strings.ToLower(strings.TrimSpace(spec.Name))
+	tool := strings.ToLower(strings.TrimSpace(spec.IndividualTool.Name))
+	for _, alias := range spec.Aliases {
+		normalized := strings.ToLower(strings.TrimSpace(alias))
+		if normalized == "" || normalized == canonical || normalized == tool {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // ActionSpec route execution for all 6 tools.

@@ -54,6 +54,15 @@ func FormatMarkdownString(out Output) string {
 	if out.Plan != "" {
 		fmt.Fprintf(&b, "| Plan | %s |\n", out.Plan)
 	}
+	if out.TrialEndsOn != "" {
+		fmt.Fprintf(&b, "| Trial Ends On | %s |\n", out.TrialEndsOn)
+	}
+	if out.MaxSeatsUsed != nil {
+		fmt.Fprintf(&b, "| Max Seats Used | %d |\n", *out.MaxSeatsUsed)
+	}
+	if out.SeatsInUse != nil {
+		fmt.Fprintf(&b, "| Seats In Use | %d |\n", *out.SeatsInUse)
+	}
 	toolutil.WriteHints(&b, "Use the namespace ID with project or group tools for further operations")
 	return b.String()
 }

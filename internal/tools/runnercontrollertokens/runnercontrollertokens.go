@@ -73,6 +73,9 @@ func toOutput(t *gl.RunnerControllerToken) Output {
 type ListInput struct {
 	ControllerID int64 `json:"controller_id" jsonschema:"Runner controller ID,required"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order the result set by (e.g. id, created_at)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort order: asc or desc"`
 }
 
 // List retrieves all tokens for a runner controller (admin only).
@@ -85,11 +88,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListRunnerControllerTokensOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	tokens, resp, err := client.GL().RunnerControllerTokens.ListRunnerControllerTokens(input.ControllerID, opts, gl.WithContext(ctx))

@@ -29,6 +29,20 @@ func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 func FormatAgentMarkdown(a AgentItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Cluster Agent\n\n- **ID**: %d\n- **Name**: %s\n", a.ID, a.Name)
+	if a.CreatedAt != "" {
+		fmt.Fprintf(&b, "- **Created At**: %s\n", a.CreatedAt)
+	}
+	if a.CreatedByUserID != 0 {
+		fmt.Fprintf(&b, "- **Created By User ID**: %d\n", a.CreatedByUserID)
+	}
+	if a.ConfigProject.ID != 0 {
+		cp := a.ConfigProject
+		name := cp.PathWithNamespace
+		if name == "" {
+			name = cp.Name
+		}
+		fmt.Fprintf(&b, "- **Config Project**: %s (ID %d)\n", toolutil.EscapeMdTableCell(name), cp.ID)
+	}
 	toolutil.WriteHints(&b, "Use action 'list_tokens' to see tokens for this agent")
 	return b.String()
 }
@@ -55,6 +69,15 @@ func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
 func FormatTokenMarkdown(t AgentTokenItem) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Agent Token\n\n- **ID**: %d\n- **Name**: %s\n- **Status**: %s\n", t.ID, t.Name, t.Status)
+	if t.Description != "" {
+		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(t.Description))
+	}
+	if t.CreatedAt != "" {
+		fmt.Fprintf(&sb, "- **Created At**: %s\n", t.CreatedAt)
+	}
+	if t.LastUsedAt != "" {
+		fmt.Fprintf(&sb, "- **Last Used At**: %s\n", t.LastUsedAt)
+	}
 	if t.Token != "" {
 		fmt.Fprintf(&sb, "- **Token**: %s\n", t.Token)
 	}

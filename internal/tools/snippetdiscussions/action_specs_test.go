@@ -126,6 +126,20 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestDecorateSnippetDiscussionMeta_DefaultFallback covers the defensive default
+// branch of decorateSnippetDiscussionMeta, exercised when an unknown individual
+// tool name is decorated.
+func TestDecorateSnippetDiscussionMeta_DefaultFallback(t *testing.T) {
+	options := toolutil.ActionSpecOptions{}
+	decorateSnippetDiscussionMeta(&options, "gitlab_unknown_tool")
+	if options.Usage == "" {
+		t.Error("expected fallback Usage to be set")
+	}
+	if len(options.RelatedActions) == 0 {
+		t.Error("expected fallback RelatedActions to be set")
+	}
+}
+
 func snippetDiscussionsActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

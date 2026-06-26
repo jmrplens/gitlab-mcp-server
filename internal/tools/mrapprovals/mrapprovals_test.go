@@ -5,6 +5,7 @@ package mrapprovals
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -85,11 +86,11 @@ func TestMRApprovalState_Success(t *testing.T) {
 	if r.Approved {
 		t.Error("expected rule Approved to be false")
 	}
-	if len(r.ApprovedByNames) != 1 || r.ApprovedByNames[0] != "Alice" {
-		t.Errorf("ApprovedByNames = %v, want [Alice]", r.ApprovedByNames)
+	if len(r.ApprovedBy) != 1 || r.ApprovedBy[0] == nil || r.ApprovedBy[0].Name != "Alice" {
+		t.Errorf("ApprovedBy = %v, want one entry [Alice]", r.ApprovedBy)
 	}
-	if len(r.EligibleNames) != 2 {
-		t.Errorf("EligibleNames count = %d, want 2", len(r.EligibleNames))
+	if len(r.EligibleApprovers) != 2 {
+		t.Errorf("EligibleApprovers count = %d, want 2", len(r.EligibleApprovers))
 	}
 }
 
@@ -198,11 +199,11 @@ func assertApprovalRule(t *testing.T, r RuleOutput, exp approvalRuleExpected) {
 	if r.Approved != exp.approved {
 		t.Errorf("Approved = %v, want %v", r.Approved, exp.approved)
 	}
-	if len(r.ApprovedByNames) != exp.approvedByCount {
-		t.Errorf("ApprovedByNames count = %d, want %d", len(r.ApprovedByNames), exp.approvedByCount)
+	if len(r.ApprovedBy) != exp.approvedByCount {
+		t.Errorf("ApprovedBy count = %d, want %d", len(r.ApprovedBy), exp.approvedByCount)
 	}
-	if len(r.EligibleNames) != exp.eligibleCount {
-		t.Errorf("EligibleNames count = %d, want %d", len(r.EligibleNames), exp.eligibleCount)
+	if len(r.EligibleApprovers) != exp.eligibleCount {
+		t.Errorf("EligibleApprovers count = %d, want %d", len(r.EligibleApprovers), exp.eligibleCount)
 	}
 }
 
@@ -345,11 +346,11 @@ func TestApprovalRuleToOutput_NilUsers(t *testing.T) {
 		ApprovedBy:        nil,
 		EligibleApprovers: nil,
 	})
-	if rule.ApprovedByNames != nil {
-		t.Errorf("expected nil ApprovedByNames, got %v", rule.ApprovedByNames)
+	if rule.ApprovedBy != nil {
+		t.Errorf("expected nil ApprovedBy, got %v", rule.ApprovedBy)
 	}
-	if rule.EligibleNames != nil {
-		t.Errorf("expected nil EligibleNames, got %v", rule.EligibleNames)
+	if rule.EligibleApprovers != nil {
+		t.Errorf("expected nil EligibleApprovers, got %v", rule.EligibleApprovers)
 	}
 }
 
@@ -371,11 +372,11 @@ func TestApprovalRuleToOutput_MultipleUsers(t *testing.T) {
 			{Name: "Charlie"},
 		},
 	})
-	if len(rule.ApprovedByNames) != 2 {
-		t.Errorf("ApprovedByNames count = %d, want 2", len(rule.ApprovedByNames))
+	if len(rule.ApprovedBy) != 2 {
+		t.Errorf("ApprovedBy count = %d, want 2", len(rule.ApprovedBy))
 	}
-	if len(rule.EligibleNames) != 3 {
-		t.Errorf("EligibleNames count = %d, want 3", len(rule.EligibleNames))
+	if len(rule.EligibleApprovers) != 3 {
+		t.Errorf("EligibleApprovers count = %d, want 3", len(rule.EligibleApprovers))
 	}
 	if rule.ID != 5 || rule.Name != "Team Lead" || rule.ApprovalsRequired != 3 || !rule.Approved {
 		t.Errorf("unexpected output: %+v", rule)
@@ -388,11 +389,11 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 		ApprovedBy:        []*gl.BasicUser{nil, {Name: "Valid"}},
 		EligibleApprovers: []*gl.BasicUser{{Name: "E1"}, nil},
 	})
-	if len(rule.ApprovedByNames) != 1 || rule.ApprovedByNames[0] != "Valid" {
-		t.Errorf("ApprovedByNames = %v, want [Valid]", rule.ApprovedByNames)
+	if len(rule.ApprovedBy) != 1 || rule.ApprovedBy[0] == nil || rule.ApprovedBy[0].Name != "Valid" {
+		t.Errorf("ApprovedBy = %v, want [Valid]", rule.ApprovedBy)
 	}
-	if len(rule.EligibleNames) != 1 || rule.EligibleNames[0] != "E1" {
-		t.Errorf("EligibleNames = %v, want [E1]", rule.EligibleNames)
+	if len(rule.EligibleApprovers) != 1 || rule.EligibleApprovers[0] == nil || rule.EligibleApprovers[0].Name != "E1" {
+		t.Errorf("EligibleApprovers = %v, want [E1]", rule.EligibleApprovers)
 	}
 }
 
@@ -436,14 +437,14 @@ func TestMRApprovalConfig_Success(t *testing.T) {
 	if !out.UserHasApproved {
 		t.Error("UserHasApproved = false, want true")
 	}
-	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Alice" {
-		t.Errorf("ApprovedBy = %v, want [{Alice 2026-01-15T10:30:00Z}]", out.ApprovedBy)
+	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0] == nil || out.ApprovedBy[0].User == nil || out.ApprovedBy[0].User.Name != "Alice" {
+		t.Errorf("ApprovedBy = %v, want one entry with user Alice", out.ApprovedBy)
 	}
 	if out.ApprovedBy[0].ApprovedAt != "2026-01-15T10:30:00Z" {
 		t.Errorf("ApprovedAt = %q, want %q", out.ApprovedBy[0].ApprovedAt, "2026-01-15T10:30:00Z")
 	}
-	if len(out.SuggestedNames) != 1 || out.SuggestedNames[0] != "Bob" {
-		t.Errorf("SuggestedNames = %v, want [Bob]", out.SuggestedNames)
+	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
+		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
 	}
 }
 
@@ -533,11 +534,11 @@ func TestMRApprovalRuleCreate_Success(t *testing.T) {
 	if out.ApprovalsRequired != 2 {
 		t.Errorf("ApprovalsRequired = %d, want 2", out.ApprovalsRequired)
 	}
-	if len(out.UserNames) != 1 || out.UserNames[0] != "Alice" {
-		t.Errorf("UserNames = %v, want [Alice]", out.UserNames)
+	if len(out.Users) != 1 || out.Users[0] == nil || out.Users[0].Name != "Alice" {
+		t.Errorf("Users = %v, want [Alice]", out.Users)
 	}
-	if len(out.GroupNames) != 1 || out.GroupNames[0] != "Security" {
-		t.Errorf("GroupNames = %v, want [Security]", out.GroupNames)
+	if len(out.Groups) != 1 || out.Groups[0] == nil || out.Groups[0].Name != "Security" {
+		t.Errorf("Groups = %v, want [Security]", out.Groups)
 	}
 }
 
@@ -1019,11 +1020,11 @@ func TestUpdateRule_AllOptionalFields(t *testing.T) {
 	if out.ApprovalsRequired != 4 {
 		t.Errorf("ApprovalsRequired = %d, want 4", out.ApprovalsRequired)
 	}
-	if len(out.UserNames) != 1 {
-		t.Errorf("UserNames count = %d, want 1", len(out.UserNames))
+	if len(out.Users) != 1 {
+		t.Errorf("Users count = %d, want 1", len(out.Users))
 	}
-	if len(out.GroupNames) != 1 {
-		t.Errorf("GroupNames count = %d, want 1", len(out.GroupNames))
+	if len(out.Groups) != 1 {
+		t.Errorf("Groups count = %d, want 1", len(out.Groups))
 	}
 }
 
@@ -1066,11 +1067,11 @@ func TestDeleteRule_ServerError(t *testing.T) {
 func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 	r := fakeApprovalRule(t)
 	out := RuleToOutput(&r)
-	if len(out.UserNames) != 2 {
-		t.Errorf("UserNames count = %d, want 2", len(out.UserNames))
+	if len(out.Users) != 2 {
+		t.Errorf("Users count = %d, want 2", len(out.Users))
 	}
-	if len(out.GroupNames) != 1 {
-		t.Errorf("GroupNames count = %d, want 1", len(out.GroupNames))
+	if len(out.Groups) != 1 {
+		t.Errorf("Groups count = %d, want 1", len(out.Groups))
 	}
 	if out.ReportType != "test_report" {
 		t.Errorf("ReportType = %q, want %q", out.ReportType, "test_report")
@@ -1087,8 +1088,8 @@ func TestRuleToOutput_WithUsersAndGroups(t *testing.T) {
 func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 	r := fakeApprovalRuleNilGroup(t)
 	out := RuleToOutput(&r)
-	if len(out.GroupNames) != 1 || out.GroupNames[0] != "Good" {
-		t.Errorf("GroupNames = %v, want [Good]", out.GroupNames)
+	if len(out.Groups) != 1 || out.Groups[0] == nil || out.Groups[0].Name != "Good" {
+		t.Errorf("Groups = %v, want [Good]", out.Groups)
 	}
 }
 
@@ -1100,11 +1101,20 @@ func TestRuleToOutput_NilGroupEntry(t *testing.T) {
 func TestConfig_ToOutputNilEntries(t *testing.T) {
 	c := fakeConfigNilEntries(t)
 	out := configToOutput(&c)
-	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Alice" {
-		t.Errorf("ApprovedBy = %v, want [{Alice}]", out.ApprovedBy)
+	// The nil *MergeRequestApproverUser element is skipped; the {User: nil}
+	// element is preserved (1:1 SDK fidelity) with a nil user object, leaving
+	// two output entries.
+	if len(out.ApprovedBy) != 2 {
+		t.Fatalf("ApprovedBy count = %d, want 2", len(out.ApprovedBy))
 	}
-	if len(out.SuggestedNames) != 1 || out.SuggestedNames[0] != "Bob" {
-		t.Errorf("SuggestedNames = %v, want [Bob]", out.SuggestedNames)
+	if out.ApprovedBy[0] == nil || out.ApprovedBy[0].User != nil {
+		t.Errorf("ApprovedBy[0] = %v, want preserved entry with nil user", out.ApprovedBy[0])
+	}
+	if out.ApprovedBy[1] == nil || out.ApprovedBy[1].User == nil || out.ApprovedBy[1].User.Name != "Alice" {
+		t.Errorf("ApprovedBy[1] = %v, want user Alice", out.ApprovedBy[1])
+	}
+	if len(out.SuggestedApprovers) != 1 || out.SuggestedApprovers[0] == nil || out.SuggestedApprovers[0].Name != "Bob" {
+		t.Errorf("SuggestedApprovers = %v, want [Bob]", out.SuggestedApprovers)
 	}
 }
 
@@ -1117,8 +1127,8 @@ func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
 		Rules: []RuleOutput{
-			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedByNames: []string{"Alice"}},
-			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedByNames: nil},
+			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
+			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedBy: nil},
 		},
 	}
 	md := FormatStateMarkdown(s)
@@ -1146,7 +1156,7 @@ func TestFormatStateMarkdown_Empty(t *testing.T) {
 func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	out := RulesOutput{
 		Rules: []RuleOutput{
-			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, Approved: true, EligibleNames: []string{"Eve", "Frank"}},
+			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, Approved: true, EligibleApprovers: []*BasicUserOutput{{Name: "Eve"}, {Name: "Frank"}}},
 		},
 	}
 	md := FormatRulesMarkdown(out)
@@ -1170,16 +1180,16 @@ func TestFormatRulesMarkdown_Empty(t *testing.T) {
 // TestFormatConfigMarkdown_Full verifies FormatConfigMarkdown when full.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
-		IID:               10,
-		State:             "opened",
-		Approved:          true,
-		ApprovalsRequired: 2,
-		ApprovalsLeft:     0,
-		HasApprovalRules:  true,
-		UserHasApproved:   true,
-		UserCanApprove:    false,
-		ApprovedBy:        []Approver{{Name: "Alice"}},
-		SuggestedNames:    []string{"Bob"},
+		IID:                10,
+		State:              "opened",
+		Approved:           true,
+		ApprovalsRequired:  2,
+		ApprovalsLeft:      0,
+		HasApprovalRules:   true,
+		UserHasApproved:    true,
+		UserCanApprove:     false,
+		ApprovedBy:         []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice"}}},
+		SuggestedApprovers: []*BasicUserOutput{{Name: "Bob"}},
 	}
 	md := FormatConfigMarkdown(c)
 	assertContains(t, md, "## MR Approval Configuration")
@@ -1208,9 +1218,9 @@ func TestFormatConfigMarkdown_Minimal(t *testing.T) {
 func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	c := ConfigOutput{
 		State: "opened",
-		ApprovedBy: []Approver{
-			{Name: "Alice", ApprovedAt: "2026-03-15T14:00:00Z"},
-			{Name: "Bob", ApprovedAt: ""},
+		ApprovedBy: []*MergeRequestApproverUserOutput{
+			{User: &BasicUserOutput{Name: "Alice"}, ApprovedAt: "2026-03-15T14:00:00Z"},
+			{User: &BasicUserOutput{Name: "Bob"}, ApprovedAt: ""},
 		},
 	}
 	md := FormatConfigMarkdown(c)
@@ -1219,6 +1229,22 @@ func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	if strings.Contains(md, "Bob (") {
 		t.Error("Bob should not have date parentheses")
 	}
+}
+
+// TestFormatConfigMarkdown_SkipsNilApprovers verifies the config Markdown
+// formatter skips approver entries with a nil user object while rendering the
+// remaining named approvers.
+func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
+	c := ConfigOutput{
+		State: "opened",
+		ApprovedBy: []*MergeRequestApproverUserOutput{
+			nil,
+			{User: nil},
+			{User: &BasicUserOutput{Name: "Carol"}},
+		},
+	}
+	md := FormatConfigMarkdown(c)
+	assertContains(t, md, "**Approved by**: Carol")
 }
 
 // ---------------------------------------------------------------------------
@@ -1233,9 +1259,9 @@ func TestFormatRuleMarkdown_Full(t *testing.T) {
 		RuleType:          "regular",
 		ApprovalsRequired: 2,
 		Approved:          true,
-		EligibleNames:     []string{"Alice", "Bob"},
-		UserNames:         []string{"Alice"},
-		GroupNames:        []string{"Leads"},
+		EligibleApprovers: []*BasicUserOutput{{Name: "Alice"}, {Name: "Bob"}},
+		Users:             []*BasicUserOutput{{Name: "Alice"}},
+		Groups:            []*GroupOutput{{Name: "Leads"}},
 	}
 	md := FormatRuleMarkdown(r)
 	assertContains(t, md, "## Approval Rule: Team Leads")
@@ -1325,5 +1351,207 @@ func fakeConfigNilEntries(t *testing.T) gl.MergeRequestApprovals {
 			nil,
 			{Name: "Bob"},
 		},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// overridden raw-fetch + version-tolerance tests
+// ---------------------------------------------------------------------------.
+
+// TestState_OverriddenSurfaced verifies the raw-fetched, SDK-missing "overridden"
+// boolean on an approval_state rule is surfaced on RuleOutput.Overridden.
+func TestState_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_state" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"approval_rules_overwritten": true,
+				"rules": [
+					{"id": 1, "name": "Ruby", "rule_type": "regular", "approvals_required": 2, "approved": true, "overridden": true}
+				]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := State(context.Background(), client, StateInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(out.Rules))
+	}
+	if !out.Rules[0].Overridden {
+		t.Errorf("expected Overridden=true, got %+v", out.Rules[0])
+	}
+}
+
+// TestRules_OverriddenSurfaced verifies the raw-fetched "overridden" boolean is
+// surfaced on each rule of the approval_rules list response.
+func TestRules_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testApprovalRulesPath && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": 1, "name": "security", "rule_type": "regular", "approvals_required": 3, "overridden": true}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 || !out.Rules[0].Overridden {
+		t.Fatalf("expected one rule with Overridden=true, got %+v", out.Rules)
+	}
+}
+
+// TestCreateRule_OverriddenSurfaced verifies the raw create response surfaces
+// the documented "overridden" boolean.
+func TestCreateRule_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == testApprovalRulesPath {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id": 7, "name": "new", "rule_type": "regular", "approvals_required": 1, "overridden": true}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
+	}))
+
+	out, err := CreateRule(context.Background(), client, CreateRuleInput{
+		ProjectID: "42", MRIID: 1, Name: "new", ApprovalsRequired: 1,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Overridden || out.ID != 7 {
+		t.Fatalf("expected created rule with Overridden=true, got %+v", out)
+	}
+}
+
+// TestUpdateRule_OverriddenSurfaced verifies the raw update response surfaces
+// the documented "overridden" boolean.
+func TestUpdateRule_OverriddenSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id": 5, "name": "upd", "rule_type": "regular", "approvals_required": 2, "overridden": true}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"nf"}`)
+	}))
+
+	out, err := UpdateRule(context.Background(), client, UpdateRuleInput{
+		ProjectID: "42", MRIID: 1, ApprovalRuleID: 5,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Overridden {
+		t.Fatalf("expected Overridden=true, got %+v", out)
+	}
+}
+
+// TestRules_OverriddenVersionTolerant verifies that older GitLab instances which
+// omit the "overridden" field decode successfully (no error) and that the absent
+// field marshals out of the rendered JSON via the omitempty tag. This pins the
+// version-tolerance guarantee: a single Do(&superset) unmarshal treats an absent
+// field as its zero value rather than failing the tool.
+func TestRules_OverriddenVersionTolerant(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testApprovalRulesPath && r.Method == http.MethodGet {
+			// Response without the "overridden" field (older instance).
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": 1, "name": "security", "rule_type": "regular", "approvals_required": 3}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf("expected success when overridden omitted, got error: %v", err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(out.Rules))
+	}
+	if out.Rules[0].Overridden {
+		t.Errorf("expected Overridden=false (zero) when omitted, got true")
+	}
+	b, err := json.Marshal(out.Rules[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "overridden") {
+		t.Errorf("expected omitempty to drop overridden from JSON, got %s", b)
+	}
+}
+
+// TestRawRuleToOutput_NilNested verifies rawRuleToOutput is nil-safe for absent
+// nested approver/user/group/source-rule objects and maps the scalar fields.
+func TestRawRuleToOutput_NilNested(t *testing.T) {
+	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+		ID: 3, Name: "n", RuleType: "regular", ReportType: "rt", Section: "s",
+		ApprovalsRequired: 4, Approved: true, ContainsHiddenGroups: true, Overridden: true,
+	})
+	if out.ID != 3 || out.Name != "n" || out.RuleType != "regular" || out.ReportType != "rt" ||
+		out.Section != "s" || out.ApprovalsRequired != 4 || !out.Approved ||
+		!out.ContainsHiddenGroups || !out.Overridden {
+		t.Fatalf("rawRuleToOutput scalar mapping = %+v", out)
+	}
+	if out.ApprovedBy != nil || out.EligibleApprovers != nil || out.Users != nil ||
+		out.Groups != nil || out.SourceRule != nil {
+		t.Errorf("expected nil nested objects, got %+v", out)
+	}
+}
+
+// TestRawRuleToOutput_NestedSubsets verifies rawRuleToOutput projects nested
+// objects through the documented-reference-subset converters (BasicUserOutput,
+// GroupOutput, ProjectApprovalRuleOutput).
+func TestRawRuleToOutput_NestedSubsets(t *testing.T) {
+	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+		ID:                1,
+		ApprovedBy:        []*gl.BasicUser{{Name: "Ann"}},
+		EligibleApprovers: []*gl.BasicUser{{Name: "Eli"}},
+		Users:             []*gl.BasicUser{{Name: "Usr"}},
+		Groups:            []*gl.Group{{Name: "Grp"}},
+		SourceRule:        &gl.ProjectApprovalRule{ID: 9, Name: "src"},
+	})
+	if len(out.ApprovedBy) != 1 || out.ApprovedBy[0].Name != "Ann" {
+		t.Errorf("ApprovedBy = %+v", out.ApprovedBy)
+	}
+	if len(out.EligibleApprovers) != 1 || out.EligibleApprovers[0].Name != "Eli" {
+		t.Errorf("EligibleApprovers = %+v", out.EligibleApprovers)
+	}
+	if len(out.Users) != 1 || out.Users[0].Name != "Usr" {
+		t.Errorf("Users = %+v", out.Users)
+	}
+	if len(out.Groups) != 1 || out.Groups[0].Name != "Grp" {
+		t.Errorf("Groups = %+v", out.Groups)
+	}
+	if out.SourceRule == nil || out.SourceRule.ID != 9 || out.SourceRule.Name != "src" {
+		t.Errorf("SourceRule = %+v", out.SourceRule)
+	}
+}
+
+// TestRawHelpers_NewRequestError verifies the raw-fetch helpers propagate the
+// error from client.GL().NewRequest when the path cannot be parsed (an invalid
+// percent-escape makes url.PathUnescape fail), covering the early-return branch.
+func TestRawHelpers_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	ctx := context.Background()
+	const badPath = "projects/%zz/merge_requests/1/approval_rules"
+
+	if _, err := rawListApprovalRules(ctx, client, badPath); err == nil {
+		t.Error("rawListApprovalRules: expected error for malformed path")
+	}
+	if _, err := rawApprovalState(ctx, client, badPath); err == nil {
+		t.Error("rawApprovalState: expected error for malformed path")
+	}
+	if _, err := rawMutateApprovalRule(ctx, client, http.MethodPost, badPath, nil); err == nil {
+		t.Error("rawMutateApprovalRule: expected error for malformed path")
 	}
 }

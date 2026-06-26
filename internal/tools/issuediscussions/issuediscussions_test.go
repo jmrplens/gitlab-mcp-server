@@ -5,7 +5,9 @@ package issuediscussions
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -162,6 +164,107 @@ func TestGet_APIError(t *testing.T) {
 	_, err := Get(t.Context(), client, GetInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID})
 	if err == nil {
 		t.Fatal("expected error for API error response")
+	}
+}
+
+// TestList_AppliesListAndKeysetOptions verifies that List wires order_by,
+// sort, page/per_page, and keyset pagination (pagination + page_token) into
+// the outbound request query, covering the toolutil.ApplyListOptions path and
+// the new 1:1-audit list fields.
+func TestList_AppliesListAndKeysetOptions(t *testing.T) {
+	var gotQuery url.Values
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := List(t.Context(), client, ListInput{
+		ProjectID:             "42",
+		IssueIID:              10,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 25},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-99"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	wants := map[string]string{
+		"order_by":   "created_at",
+		"sort":       "desc",
+		"page":       "3",
+		"per_page":   "25",
+		"pagination": "keyset",
+		"page_token": "cursor-99",
+	}
+	for key, want := range wants {
+		if got := gotQuery.Get(key); got != want {
+			t.Errorf("query %q = %q, want %q", key, got, want)
+		}
+	}
+}
+
+// TestCreate_SendsCreatedAt verifies that Create forwards the created_at
+// backdate field into the request body when supplied.
+func TestCreate_SendsCreatedAt(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":"new123","individual_note":false,"notes":[{"id":5,"body":"x","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, IssueIID: 10, Body: "x", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
+		t.Errorf("request body %q missing created_at", body)
+	}
+}
+
+// TestAddNote_SendsCreatedAt verifies that AddNote forwards the created_at
+// backdate field into the request body when supplied.
+func TestAddNote_SendsCreatedAt(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":99,"body":"Reply","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, Body: "Reply", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
+		t.Errorf("request body %q missing created_at", body)
+	}
+}
+
+// TestUpdateNote_SendsCreatedAt verifies that UpdateNote forwards the
+// created_at override field into the request body when supplied.
+func TestUpdateNote_SendsCreatedAt(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":99,"body":"Updated","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 99, Body: "Updated", CreatedAt: "2025-01-01T00:00:00Z"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
+		t.Errorf("request body %q missing created_at", body)
 	}
 }
 
@@ -618,7 +721,11 @@ func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	out, err := List(t.Context(), client, ListInput{ProjectID: "42", IssueIID: 10, Page: 1, PerPage: 2})
+	out, err := List(t.Context(), client, ListInput{
+		ProjectID:       "42",
+		IssueIID:        10,
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}

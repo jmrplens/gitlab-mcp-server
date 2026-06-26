@@ -5,7 +5,9 @@ package repository
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -65,19 +67,29 @@ func TestRepositoryTree_Success(t *testing.T) {
 }
 
 // TestRepositoryTree_WithOptions verifies RepositoryTree when with options.
+// assertQueryParams fails the test for each key whose request query value does
+// not match the expected value in want.
+func assertQueryParams(t *testing.T, q url.Values, want map[string]string) {
+	t.Helper()
+	for key, exp := range want {
+		if got := q.Get(key); got != exp {
+			t.Errorf("expected %s=%s, got %q", key, exp, got)
+		}
+	}
+}
+
 func TestRepositoryTree_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {
-			q := r.URL.Query()
-			if q.Get("path") != "src" {
-				t.Errorf("expected path=src, got %q", q.Get("path"))
-			}
-			if q.Get("ref") != "develop" {
-				t.Errorf("expected ref=develop, got %q", q.Get("ref"))
-			}
-			if q.Get("recursive") != "true" {
-				t.Errorf("expected recursive=true, got %q", q.Get("recursive"))
-			}
+			assertQueryParams(t, r.URL.Query(), map[string]string{
+				"path":       "src",
+				"ref":        "develop",
+				"recursive":  "true",
+				"order_by":   "path",
+				"sort":       "desc",
+				"pagination": "keyset",
+				"page_token": "cursor-1",
+			})
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":"abc3","name":"main.go","type":"blob","path":"src/main.go","mode":"100644"}]`)
 			return
 		}
@@ -85,10 +97,13 @@ func TestRepositoryTree_WithOptions(t *testing.T) {
 	}))
 
 	out, err := Tree(context.Background(), client, TreeInput{
-		ProjectID: "42",
-		Path:      "src",
-		Ref:       "develop",
-		Recursive: true,
+		ProjectID:             "42",
+		Path:                  "src",
+		Ref:                   "develop",
+		Recursive:             true,
+		OrderBy:               "path",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-1"},
 	})
 	if err != nil {
 		t.Fatalf("Tree() unexpected error: %v", err)
@@ -132,6 +147,7 @@ func TestRepositoryCompare_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoCompare {
 			testutil.RespondJSON(w, http.StatusOK, `{
+				"commit":{"id":"abc123","short_id":"abc123d","title":"feat: add file"},
 				"commits":[
 					{"id":"abc123","short_id":"abc123d","title":"feat: add file","author_name":"Test","committed_date":"2026-03-01T10:00:00Z","web_url":"https://gitlab.example.com/-/commit/abc123"}
 				],
@@ -154,6 +170,12 @@ func TestRepositoryCompare_Success(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Compare() unexpected error: %v", err)
+	}
+	if out.Commit == nil {
+		t.Fatal("Compare() base Commit is nil, want populated")
+	}
+	if out.Commit.ID != "abc123" {
+		t.Errorf("Commit.ID = %q, want %q", out.Commit.ID, "abc123")
 	}
 	if len(out.Commits) != 1 {
 		t.Fatalf("len(Commits) = %d, want 1", len(out.Commits))
@@ -841,13 +863,12 @@ func TestRepositoryCompare_WithOptions(t *testing.T) {
 func TestRepositoryContributors_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/contributors" {
-			q := r.URL.Query()
-			if q.Get("order_by") != "name" {
-				t.Errorf("expected order_by=name, got %q", q.Get("order_by"))
-			}
-			if q.Get("sort") != "desc" {
-				t.Errorf("expected sort=desc, got %q", q.Get("sort"))
-			}
+			assertQueryParams(t, r.URL.Query(), map[string]string{
+				"order_by":   "name",
+				"sort":       "desc",
+				"pagination": "keyset",
+				"page_token": "next-cur",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 				{"name":"Z","email":"z@test.com","commits":1,"additions":0,"deletions":0}
 			]`, testutil.PaginationHeaders{Page: "2", PerPage: "10", Total: "11", TotalPages: "2"})
@@ -857,9 +878,10 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	}))
 
 	input := ContributorsInput{
-		ProjectID: "42",
-		OrderBy:   "name",
-		Sort:      "desc",
+		ProjectID:             "42",
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "next-cur"},
 	}
 	input.Page = 2
 	input.PerPage = 10
@@ -880,6 +902,10 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"date":"2026-03-01"`) {
+				t.Errorf("expected body to contain date=2026-03-01, got %q", string(body))
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -891,6 +917,7 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 		Version:    "2.0.0",
 		Branch:     "develop",
 		ConfigFile: ".changelog.yml",
+		Date:       "2026-03-01T10:00:00Z",
 		File:       "CHANGELOG.md",
 		From:       "v1.0.0",
 		To:         "v2.0.0",
@@ -912,6 +939,9 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
+			if got := r.URL.Query().Get("date"); got != "2026-03-01" {
+				t.Errorf("expected date=2026-03-01, got %q", got)
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{"notes":"## 2.0.0\n\n- feat: stuff\n"}`)
 			return
 		}
@@ -922,6 +952,7 @@ func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 		ProjectID:  "42",
 		Version:    "2.0.0",
 		ConfigFile: ".changelog.yml",
+		Date:       "2026-03-01T10:00:00Z",
 		From:       "v1.0.0",
 		To:         "v2.0.0",
 		Trailer:    "Changelog",

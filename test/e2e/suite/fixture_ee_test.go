@@ -426,7 +426,7 @@ func createBranchMeta(ctx context.Context, t *testing.T, session *mcp.ClientSess
 		},
 	})
 	requireNoError(t, err, "create branch meta "+branchName)
-	return BranchFixture{Name: out.Name, CommitID: out.CommitID}
+	return BranchFixture{Name: out.Name, CommitID: out.Commit.ID}
 }
 
 // createMRMeta creates a merge request via the gitlab_merge_request meta-tool.

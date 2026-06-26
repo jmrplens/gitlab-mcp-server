@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -53,8 +55,8 @@ func FormatMRsMarkdown(out MergeRequestsOutput) string {
 			mr.IID, mr.WebURL,
 			toolutil.EscapeMdTableCell(mr.Title),
 			toolutil.MRStateEmoji(mr.State), mr.State,
-			toolutil.EscapeMdTableCell(mr.Author),
-			toolutil.EscapeMdTableCell(mr.ProjectPath),
+			toolutil.EscapeMdTableCell(mergerequests.AuthorName(mr)),
+			toolutil.EscapeMdTableCell(mergerequests.ProjectPath(mr)),
 			toolutil.EscapeMdTableCell(mr.SourceBranch),
 			toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
@@ -82,7 +84,7 @@ func FormatIssuesMarkdown(out IssuesOutput) string {
 			i.IID, i.WebURL,
 			toolutil.EscapeMdTableCell(i.Title),
 			toolutil.IssueStateEmoji(i.State), i.State,
-			toolutil.EscapeMdTableCell(i.Author),
+			toolutil.EscapeMdTableCell(issues.AuthorName(i)),
 			toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)

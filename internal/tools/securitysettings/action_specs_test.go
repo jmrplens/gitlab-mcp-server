@@ -4,6 +4,7 @@ package securitysettings
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -38,6 +39,54 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "securitysettings" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadata verifies the R-META discovery metadata for
+// each security settings tool: action-specific Usage, distinctive
+// natural-language Aliases beyond the tool name, canonical RelatedActions, and a
+// "Returns: … See also: …" IndividualTool.Description.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := append(ProjectActionSpecs(client), GroupActionSpecs(client)...)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	for _, tool := range []string{
+		"gitlab_get_project_security_settings",
+		"gitlab_update_project_secret_push_protection",
+		"gitlab_update_group_secret_push_protection",
+	} {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := specByTool[tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tool)
+			}
+			if strings.TrimSpace(spec.Usage) == "" {
+				t.Errorf("%s: empty Usage", tool)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: empty RelatedActions", tool)
+			}
+			distinct := false
+			for _, a := range spec.Aliases {
+				if a != tool {
+					distinct = true
+					break
+				}
+			}
+			if !distinct {
+				t.Errorf("%s: aliases only contain the tool name: %v", tool, spec.Aliases)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: description missing Returns:/See also: form: %q", tool, desc)
+			}
+		})
 	}
 }
 

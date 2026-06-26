@@ -24,6 +24,8 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-050", "Get raw content of personal snippet ID `33`.", readStep("gitlab_snippet", "content", params("snippet_id"), nil)),
 		baseReadEvalCase("MT-052", "Show instance application settings.", readStep("gitlab_admin", "settings_get", nil, nil)),
 		artifactDownloadEvalCase(),
+		environmentLastDeploymentEvalCase(),
+		deploymentGetEvalCase(),
 		baseReadEvalCase("MT-071", "List branches in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_branch", "list", params("project_id"), params("search", "per_page"))),
 		baseReadEvalCase("MT-072", "List CI/CD catalog resources.", readStep("gitlab_ci_catalog", "list", nil, params("search", "scope", "sort"))),
 		baseReadEvalCase("MT-073", "List custom emoji for group path `my-org`.", readStep("gitlab_custom_emoji", "list", params("group_path"), params("first", "after"))),
@@ -89,6 +91,53 @@ func artifactDownloadEvalCase() Case {
 	evalCase.PromptTemplate = PromptTemplate{Text: "Download artifact `{{ .Values.artifact_path }}` from job `{{ .Job.ID }}` in project `{{ .Project.Path }}`."}
 	evalCase.Fixtures = []string{fixtureFailedJobArtifact}
 	return evalCase
+}
+
+// environmentLastDeploymentEvalCase asks the model to get a seeded environment
+// and report its last deployment's commit SHA and status. The output_contains
+// assertion grades the real gitlab_environment get output for the emitted
+// deployment SHA and the running status. The deployment was created via the
+// deployments API with no CI job, so last_deployment.deployable is null; the
+// assertion targets only the populated top-level last_deployment fields.
+func environmentLastDeploymentEvalCase() Case {
+	evalCase := baseReadEvalCase(
+		"MS-ENV-DEP-1",
+		"Get the environment `eval-deploy` (environment_id provided) in project `my-org/tools/gitlab-mcp-server` and report its last deployment's commit SHA and status.",
+		readStep("gitlab_environment", "get", params("project_id", "environment_id"), nil),
+	)
+	evalCase.PromptTemplate = PromptTemplate{Text: "Get the environment `{{ .Environment.Name }}` (environment_id `{{ .Values.environment_id }}`) in project `{{ .Project.Path }}` and report its last deployment's commit SHA and status."}
+	evalCase.Fixtures = []string{fixtureEnvironmentDeployment}
+	evalCase.Assertions = []Assertion{
+		outputContainsAssertion(1, "environment last deployment evidence", "{{ .Values.deployment_sha }}", "running"),
+	}
+	return evalCase
+}
+
+// deploymentGetEvalCase asks the model to get a seeded deployment by ID and
+// report its ref and status, grading the real gitlab_environment
+// deployment_get output for ref=main and the running status.
+func deploymentGetEvalCase() Case {
+	evalCase := baseReadEvalCase(
+		"MS-ENV-DEP-2",
+		"Get the deployment by ID (provided) in project `my-org/tools/gitlab-mcp-server` and report its ref and status.",
+		readStep("gitlab_environment", "deployment_get", params("project_id", "deployment_id"), nil),
+	)
+	evalCase.PromptTemplate = PromptTemplate{Text: "Get the deployment with deployment_id `{{ .Values.deployment_id }}` in project `{{ .Project.Path }}` and report its ref and status."}
+	evalCase.Fixtures = []string{fixtureEnvironmentDeployment}
+	evalCase.Assertions = []Assertion{
+		outputContainsAssertion(1, "deployment ref and status evidence", "{{ .Values.deployment_ref }}", "running"),
+	}
+	return evalCase
+}
+
+func outputContainsAssertion(step int, name string, inputs ...string) Assertion {
+	return Assertion{
+		Type:     "output_contains",
+		Step:     step,
+		Name:     name,
+		Required: true,
+		Inputs:   inputs,
+	}
 }
 
 func baseReadEvalCase(id, prompt string, steps ...Step) Case {

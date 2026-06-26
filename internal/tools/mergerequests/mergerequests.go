@@ -31,11 +31,11 @@ type CreateInput struct {
 	Description  string               `json:"description,omitempty" jsonschema:"Merge request description (Markdown supported)"`
 
 	// Assignment and tracking
-	AssigneeID  int64   `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
-	AssigneeIDs []int64 `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
-	ReviewerIDs []int64 `json:"reviewer_ids,omitempty" jsonschema:"User IDs to add as reviewers"`
-	Labels      string  `json:"labels,omitempty" jsonschema:"Comma-separated labels to apply"`
-	MilestoneID int64   `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request"`
+	AssigneeID  int64    `json:"assignee_id,omitempty" jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
+	AssigneeIDs []int64  `json:"assignee_ids,omitempty" jsonschema:"User IDs to assign"`
+	ReviewerIDs []int64  `json:"reviewer_ids,omitempty" jsonschema:"User IDs to add as reviewers"`
+	Labels      []string `json:"labels,omitempty" jsonschema:"Label names to apply"`
+	MilestoneID int64    `json:"milestone_id,omitempty" jsonschema:"Milestone ID to associate with the merge request"`
 
 	// Merge behavior
 	RemoveSourceBranch *bool `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
@@ -44,71 +44,81 @@ type CreateInput struct {
 
 	// Cross-project
 	TargetProjectID int64 `json:"target_project_id,omitempty" jsonschema:"Target project ID (for cross-project/fork MRs)"`
+
+	// Deprecated approvals control (use the Merge Request Approvals API instead)
+	ApprovalsBeforeMerge int64 `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before this MR can be merged (deprecated; use the approval rules API)"`
 }
 
-// Output represents a merge request.
+// Output represents a merge request. It mirrors the fuller gl.MergeRequest
+// (the get endpoint) as a superset; fields present only on gl.MergeRequest are
+// left zero/nil (and elided via omitempty) when converting from the lighter
+// gl.BasicMergeRequest returned by list endpoints.
 type Output struct {
 	toolutil.HintableOutput
-	ID                          int64           `json:"id"`
-	IID                         int64           `json:"merge_request_iid"`
-	ProjectID                   int64           `json:"project_id"`
-	ProjectPath                 string          `json:"project_path,omitempty"`
-	SourceProjectID             int64           `json:"source_project_id,omitempty"`
-	TargetProjectID             int64           `json:"target_project_id,omitempty"`
-	Title                       string          `json:"title"`
-	Description                 string          `json:"description"`
-	State                       string          `json:"state"`
-	SourceBranch                string          `json:"source_branch"`
-	TargetBranch                string          `json:"target_branch"`
-	WebURL                      string          `json:"web_url"`
-	MergeStatus                 string          `json:"merge_status"`
-	Draft                       bool            `json:"draft"`
-	HasConflicts                bool            `json:"has_conflicts"`
-	BlockingDiscussionsResolved bool            `json:"blocking_discussions_resolved"`
-	Squash                      bool            `json:"squash,omitempty"`
-	SquashOnMerge               bool            `json:"squash_on_merge,omitempty"`
-	MergeWhenPipelineSucceeds   bool            `json:"merge_when_pipeline_succeeds,omitempty"`
-	ShouldRemoveSourceBranch    bool            `json:"should_remove_source_branch,omitempty"`
-	DiscussionLocked            bool            `json:"discussion_locked"`
-	RebaseInProgress            bool            `json:"rebase_in_progress,omitempty"`
-	Author                      string          `json:"author,omitempty"`
-	MergedBy                    string          `json:"merged_by,omitempty"`
-	Assignees                   []string        `json:"assignees"`
-	Reviewers                   []string        `json:"reviewers"`
-	Labels                      []string        `json:"labels"`
-	Milestone                   string          `json:"milestone,omitempty"`
-	References                  string          `json:"references,omitempty"`
-	SHA                         string          `json:"sha,omitempty"`
-	MergeCommitSHA              string          `json:"merge_commit_sha,omitempty"`
-	MergeError                  string          `json:"merge_error,omitempty"`
-	ChangesCount                string          `json:"changes_count,omitempty"`
-	DivergedCommitsCount        int64           `json:"diverged_commits_count,omitempty"`
-	Upvotes                     int64           `json:"upvotes,omitempty"`
-	Downvotes                   int64           `json:"downvotes,omitempty"`
-	SquashCommitSHA             string          `json:"squash_commit_sha,omitempty"`
-	ForceRemoveSourceBranch     bool            `json:"force_remove_source_branch,omitempty"`
-	AllowCollaboration          bool            `json:"allow_collaboration,omitempty"`
-	ClosedBy                    string          `json:"closed_by,omitempty"`
-	MergeAfter                  string          `json:"merge_after,omitempty"`
-	TaskCompletionCount         int64           `json:"task_completion_count,omitempty"`
-	TaskCompletionTotal         int64           `json:"task_completion_total,omitempty"`
-	TimeEstimate                int64           `json:"time_estimate,omitempty"`
-	TotalTimeSpent              int64           `json:"total_time_spent,omitempty"`
-	Subscribed                  bool            `json:"subscribed,omitempty"`
-	FirstContribution           bool            `json:"first_contribution,omitempty"`
-	DiffRefs                    *DiffRefsOutput `json:"diff_refs,omitempty"`
-	PipelineID                  int64           `json:"pipeline_id,omitempty"`
-	PipelineWebURL              string          `json:"pipeline_web_url,omitempty"`
-	PipelineName                string          `json:"pipeline_name,omitempty"`
-	HeadPipelineID              int64           `json:"head_pipeline_id,omitempty"`
-	LatestBuildStartedAt        string          `json:"latest_build_started_at,omitempty"`
-	LatestBuildFinishedAt       string          `json:"latest_build_finished_at,omitempty"`
-	CreatedAt                   string          `json:"created_at"`
-	UpdatedAt                   string          `json:"updated_at"`
-	MergedAt                    string          `json:"merged_at,omitempty"`
-	ClosedAt                    string          `json:"closed_at,omitempty"`
-	PreparedAt                  string          `json:"prepared_at,omitempty"`
-	UserNotesCount              int64           `json:"user_notes_count,omitempty"`
+	ID                          int64                       `json:"id"`
+	IID                         int64                       `json:"iid"`
+	ProjectID                   int64                       `json:"project_id"`
+	SourceProjectID             int64                       `json:"source_project_id,omitempty"`
+	TargetProjectID             int64                       `json:"target_project_id,omitempty"`
+	Title                       string                      `json:"title"`
+	Description                 string                      `json:"description"`
+	State                       string                      `json:"state"`
+	Imported                    bool                        `json:"imported,omitempty"`
+	ImportedFrom                string                      `json:"imported_from,omitempty"`
+	SourceBranch                string                      `json:"source_branch"`
+	TargetBranch                string                      `json:"target_branch"`
+	WebURL                      string                      `json:"web_url"`
+	DetailedMergeStatus         string                      `json:"detailed_merge_status,omitempty"`
+	Draft                       bool                        `json:"draft"`
+	WorkInProgress              bool                        `json:"work_in_progress,omitempty"`
+	HasConflicts                bool                        `json:"has_conflicts"`
+	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
+	Squash                      bool                        `json:"squash,omitempty"`
+	SquashOnMerge               bool                        `json:"squash_on_merge,omitempty"`
+	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds,omitempty"`
+	ShouldRemoveSourceBranch    bool                        `json:"should_remove_source_branch,omitempty"`
+	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push,omitempty"`
+	DiscussionLocked            bool                        `json:"discussion_locked"`
+	RebaseInProgress            bool                        `json:"rebase_in_progress,omitempty"`
+	Author                      *BasicUserOutput            `json:"author,omitempty"`
+	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
+	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
+	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
+	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
+	Assignees                   []*BasicUserOutput          `json:"assignees"`
+	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
+	Labels                      []string                    `json:"labels"`
+	LabelDetails                []*LabelDetailsOutput       `json:"label_details,omitempty"`
+	Milestone                   *MilestoneOutput            `json:"milestone,omitempty"`
+	References                  *ReferencesOutput           `json:"references,omitempty"`
+	SHA                         string                      `json:"sha,omitempty"`
+	MergeCommitSHA              string                      `json:"merge_commit_sha,omitempty"`
+	MergeError                  string                      `json:"merge_error,omitempty"`
+	ChangesCount                string                      `json:"changes_count,omitempty"`
+	DivergedCommitsCount        int64                       `json:"diverged_commits_count,omitempty"`
+	Upvotes                     int64                       `json:"upvotes,omitempty"`
+	Downvotes                   int64                       `json:"downvotes,omitempty"`
+	SquashCommitSHA             string                      `json:"squash_commit_sha,omitempty"`
+	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch,omitempty"`
+	AllowCollaboration          bool                        `json:"allow_collaboration,omitempty"`
+	MergeAfter                  string                      `json:"merge_after,omitempty"`
+	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	TimeStats                   *TimeStatsOutput            `json:"time_stats,omitempty"`
+	Subscribed                  bool                        `json:"subscribed,omitempty"`
+	FirstContribution           bool                        `json:"first_contribution,omitempty"`
+	User                        *MergeRequestUserOutput     `json:"user,omitempty"`
+	DiffRefs                    *DiffRefsOutput             `json:"diff_refs,omitempty"`
+	Pipeline                    *PipelineInfoOutput         `json:"pipeline,omitempty"`
+	HeadPipeline                *PipelineOutput             `json:"head_pipeline,omitempty"`
+	LatestBuildStartedAt        string                      `json:"latest_build_started_at,omitempty"`
+	LatestBuildFinishedAt       string                      `json:"latest_build_finished_at,omitempty"`
+	FirstDeployedToProductionAt string                      `json:"first_deployed_to_production_at,omitempty"`
+	CreatedAt                   string                      `json:"created_at"`
+	UpdatedAt                   string                      `json:"updated_at"`
+	MergedAt                    string                      `json:"merged_at,omitempty"`
+	ClosedAt                    string                      `json:"closed_at,omitempty"`
+	PreparedAt                  string                      `json:"prepared_at,omitempty"`
+	UserNotesCount              int64                       `json:"user_notes_count,omitempty"`
 }
 
 // DiffRefsOutput represents the diff refs (base, head, start SHAs) of a merge request.
@@ -120,31 +130,50 @@ type DiffRefsOutput struct {
 
 // GetInput defines parameters for retrieving a merge request.
 type GetInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	ProjectID                   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID                       int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	IncludeDivergedCommitsCount *bool                `json:"include_diverged_commits_count,omitempty" jsonschema:"Include the count of commits the source branch is behind the target branch (diverged_commits_count)"`
+	IncludeRebaseInProgress     *bool                `json:"include_rebase_in_progress,omitempty"     jsonschema:"Include whether a rebase is currently in progress (rebase_in_progress)"`
+	RenderHTML                  *bool                `json:"render_html,omitempty"                    jsonschema:"Return the title and description rendered to HTML"`
 }
 
 // ListInput defines filters for listing merge requests.
 type ListInput struct {
-	ProjectID      toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
-	State          string               `json:"state,omitempty"         jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels         string               `json:"labels,omitempty"        jsonschema:"Comma-separated label names to filter by"`
-	NotLabels      string               `json:"not_labels,omitempty"    jsonschema:"Comma-separated label names to exclude"`
-	Milestone      string               `json:"milestone,omitempty"     jsonschema:"Milestone title to filter by"`
-	Scope          string               `json:"scope,omitempty"         jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search         string               `json:"search,omitempty"        jsonschema:"Search in title and description"`
-	SourceBranch   string               `json:"source_branch,omitempty" jsonschema:"Filter by source branch name"`
-	TargetBranch   string               `json:"target_branch,omitempty" jsonschema:"Filter by target branch name"`
-	AuthorUsername string               `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	Draft          *bool                `json:"draft,omitempty"         jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	IIDs           []int64              `json:"iids,omitempty"          jsonschema:"Filter by merge request internal IDs"`
-	CreatedAfter   string               `json:"created_after,omitempty"  jsonschema:"Return MRs created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
-	CreatedBefore  string               `json:"created_before,omitempty" jsonschema:"Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
-	UpdatedAfter   string               `json:"updated_after,omitempty"  jsonschema:"Return MRs updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
-	UpdatedBefore  string               `json:"updated_before,omitempty" jsonschema:"Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
-	OrderBy        string               `json:"order_by,omitempty"      jsonschema:"Order by field (created_at, updated_at, title)"`
-	Sort           string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
+	ProjectID              toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
+	State                  string               `json:"state,omitempty"         jsonschema:"Filter by state (opened, closed, merged, all)"`
+	Labels                 []string             `json:"labels,omitempty"        jsonschema:"Label names to filter by"`
+	NotLabels              []string             `json:"not_labels,omitempty"    jsonschema:"Label names to exclude"`
+	Milestone              string               `json:"milestone,omitempty"     jsonschema:"Milestone title to filter by"`
+	Scope                  string               `json:"scope,omitempty"         jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search                 string               `json:"search,omitempty"        jsonschema:"Search in title and description"`
+	SourceBranch           string               `json:"source_branch,omitempty" jsonschema:"Filter by source branch name"`
+	TargetBranch           string               `json:"target_branch,omitempty" jsonschema:"Filter by target branch name"`
+	AuthorUsername         string               `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
+	NotAuthorUsername      string               `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerUsername       string               `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	Environment            string               `json:"environment,omitempty"         jsonschema:"Filter by deployment environment name"`
+	MyReactionEmoji        string               `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	View                   string               `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
+	WIP                    string               `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	AuthorID               int64                `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
+	AssigneeID             int64                `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
+	ReviewerID             int64                `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ApproverIDs            []int64              `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
+	ApprovedByIDs          []int64              `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"        jsonschema:"Include full label details (color, description) in the response"`
+	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty"  jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
+	Draft                  *bool                `json:"draft,omitempty"         jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	IIDs                   []int64              `json:"iids,omitempty"          jsonschema:"Filter by merge request internal IDs"`
+	CreatedAfter           string               `json:"created_after,omitempty"  jsonschema:"Return MRs created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore          string               `json:"created_before,omitempty" jsonschema:"Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter           string               `json:"updated_after,omitempty"  jsonschema:"Return MRs updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore          string               `json:"updated_before,omitempty" jsonschema:"Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
+	DeployedAfter          string               `json:"deployed_after,omitempty"  jsonschema:"Return MRs deployed after date (ISO 8601 format)"`
+	DeployedBefore         string               `json:"deployed_before,omitempty" jsonschema:"Return MRs deployed before date (ISO 8601 format)"`
+	OrderBy                string               `json:"order_by,omitempty"      jsonschema:"Order by field (created_at, updated_at, title)"`
+	Sort                   string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a paginated list of merge requests.
@@ -155,47 +184,79 @@ type ListOutput struct {
 }
 
 type mergeRequestListFilters struct {
-	State            string
-	Labels           string
-	NotLabels        string
-	Milestone        string
-	Scope            string
-	Search           string
-	SourceBranch     string
-	TargetBranch     string
-	AuthorUsername   string
-	ReviewerUsername string
-	Draft            *bool
-	CreatedAfter     string
-	CreatedBefore    string
-	UpdatedAfter     string
-	UpdatedBefore    string
-	OrderBy          string
-	Sort             string
-	Page             int
-	PerPage          int
+	State             string
+	Labels            []string
+	NotLabels         []string
+	Milestone         string
+	Scope             string
+	Search            string
+	SourceBranch      string
+	TargetBranch      string
+	AuthorUsername    string
+	NotAuthorUsername string
+	ReviewerUsername  string
+	Approved          string
+	In                string
+	MyReactionEmoji   string
+	View              string
+	WIP               string
+	Environment       string
+	AuthorID          int64
+	AssigneeID        int64
+	ReviewerID        int64
+	ApproverIDs       []int64
+	ApprovedByIDs     []int64
+	WithLabelsDetails *bool
+	WithMergeRecheck  *bool
+	Draft             *bool
+	CreatedAfter      string
+	CreatedBefore     string
+	UpdatedAfter      string
+	UpdatedBefore     string
+	DeployedAfter     string
+	DeployedBefore    string
+	OrderBy           string
+	Sort              string
+	Page              int
+	PerPage           int
+	Keyset            toolutil.KeysetPaginationInput
 }
 
 type mergeRequestListTarget struct {
-	state            func(*string)
-	labels           func(*gl.LabelOptions)
-	notLabels        func(*gl.LabelOptions)
-	milestone        func(*string)
-	scope            func(*string)
-	search           func(*string)
-	sourceBranch     func(*string)
-	targetBranch     func(*string)
-	authorUsername   func(*string)
-	reviewerUsername func(*string)
-	draft            func(*bool)
-	createdAfter     func(*time.Time)
-	createdBefore    func(*time.Time)
-	updatedAfter     func(*time.Time)
-	updatedBefore    func(*time.Time)
-	orderBy          func(*string)
-	sort             func(*string)
-	page             func(int64)
-	perPage          func(int64)
+	state             func(*string)
+	labels            func(*gl.LabelOptions)
+	notLabels         func(*gl.LabelOptions)
+	milestone         func(*string)
+	scope             func(*string)
+	search            func(*string)
+	sourceBranch      func(*string)
+	targetBranch      func(*string)
+	authorUsername    func(*string)
+	notAuthorUsername func(*string)
+	reviewerUsername  func(*string)
+	approved          func(*string)
+	in                func(*string)
+	myReactionEmoji   func(*string)
+	view              func(*string)
+	wip               func(*string)
+	environment       func(*string)
+	authorID          func(int64)
+	assigneeID        func(int64)
+	reviewerID        func(int64)
+	approverIDs       func([]int64)
+	approvedByIDs     func([]int64)
+	withLabelsDetails func(*bool)
+	withMergeRecheck  func(*bool)
+	draft             func(*bool)
+	createdAfter      func(*time.Time)
+	createdBefore     func(*time.Time)
+	updatedAfter      func(*time.Time)
+	updatedBefore     func(*time.Time)
+	deployedAfter     func(*time.Time)
+	deployedBefore    func(*time.Time)
+	orderBy           func(*string)
+	sort              func(*string)
+	listOptions       *gl.ListOptions
 }
 
 func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) ListOutput {
@@ -206,11 +267,13 @@ func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) List
 	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
-func labelOptions(csv string) *gl.LabelOptions {
-	if csv == "" {
+// labelOptions converts a label-name slice into a *gl.LabelOptions, or nil when
+// empty.
+func labelOptions(values []string) *gl.LabelOptions {
+	if len(values) == 0 {
 		return nil
 	}
-	labels := gl.LabelOptions(strings.Split(csv, ","))
+	labels := gl.LabelOptions(values)
 	return &labels
 }
 
@@ -222,9 +285,27 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setString(input.SourceBranch, target.sourceBranch)
 	setString(input.TargetBranch, target.targetBranch)
 	setString(input.AuthorUsername, target.authorUsername)
+	setString(input.NotAuthorUsername, target.notAuthorUsername)
 	setString(input.ReviewerUsername, target.reviewerUsername)
+	setString(input.Approved, target.approved)
+	setString(input.In, target.in)
+	setString(input.MyReactionEmoji, target.myReactionEmoji)
+	setString(input.View, target.view)
+	setString(input.WIP, target.wip)
+	setString(input.Environment, target.environment)
 	setString(input.OrderBy, target.orderBy)
 	setString(input.Sort, target.sort)
+	setInt64(input.AuthorID, target.authorID)
+	setInt64(input.AssigneeID, target.assigneeID)
+	setInt64(input.ReviewerID, target.reviewerID)
+	setInt64Slice(input.ApproverIDs, target.approverIDs)
+	setInt64Slice(input.ApprovedByIDs, target.approvedByIDs)
+	if input.WithLabelsDetails != nil && target.withLabelsDetails != nil {
+		target.withLabelsDetails(input.WithLabelsDetails)
+	}
+	if input.WithMergeRecheck != nil && target.withMergeRecheck != nil {
+		target.withMergeRecheck(input.WithMergeRecheck)
+	}
 	if labels := labelOptions(input.Labels); labels != nil && target.labels != nil {
 		target.labels(labels)
 	}
@@ -238,11 +319,22 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setTime(toolutil.ParseOptionalTime(input.CreatedBefore), target.createdBefore)
 	setTime(toolutil.ParseOptionalTime(input.UpdatedAfter), target.updatedAfter)
 	setTime(toolutil.ParseOptionalTime(input.UpdatedBefore), target.updatedBefore)
-	if input.Page > 0 && target.page != nil {
-		target.page(int64(input.Page))
+	setTime(toolutil.ParseOptionalTime(input.DeployedAfter), target.deployedAfter)
+	setTime(toolutil.ParseOptionalTime(input.DeployedBefore), target.deployedBefore)
+	if target.listOptions != nil {
+		toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
 	}
-	if input.PerPage > 0 && target.perPage != nil {
-		target.perPage(int64(input.PerPage))
+}
+
+func setInt64(value int64, setter func(int64)) {
+	if value != 0 && setter != nil {
+		setter(value)
+	}
+}
+
+func setInt64Slice(value []int64, setter func([]int64)) {
+	if len(value) > 0 && setter != nil {
+		setter(value)
 	}
 }
 
@@ -268,9 +360,9 @@ type UpdateInput struct {
 	AssigneeID         int64                `json:"assignee_id,omitempty"          jsonschema:"Single user ID to assign (use assignee_ids for multiple)"`
 	AssigneeIDs        []int64              `json:"assignee_ids,omitempty"         jsonschema:"User IDs to assign as merge request assignees"`
 	ReviewerIDs        []int64              `json:"reviewer_ids,omitempty"         jsonschema:"User IDs to add as reviewers"`
-	Labels             string               `json:"labels,omitempty"               jsonschema:"Comma-separated label names to replace all labels on the merge request"`
-	AddLabels          string               `json:"add_labels,omitempty"          jsonschema:"Comma-separated label names to add without removing existing"`
-	RemoveLabels       string               `json:"remove_labels,omitempty"       jsonschema:"Comma-separated label names to remove"`
+	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names to replace all labels on the merge request"`
+	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
+	RemoveLabels       []string             `json:"remove_labels,omitempty"       jsonschema:"Label names to remove"`
 	MilestoneID        int64                `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
 	RemoveSourceBranch *bool                `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested"`
 	Squash             *bool                `json:"squash,omitempty"              jsonschema:"Squash commits on merge. Only set if explicitly requested"`
@@ -281,20 +373,22 @@ type UpdateInput struct {
 
 // MergeInput defines parameters for merging a merge request.
 type MergeInput struct {
-	ProjectID                toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                    int64                `json:"merge_request_iid"                                  jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	MergeCommitMessage       string               `json:"merge_commit_message,omitempty"           jsonschema:"Custom merge commit message"`
-	Squash                   *bool                `json:"squash,omitempty"                         jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
-	ShouldRemoveSourceBranch *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
-	AutoMerge                *bool                `json:"auto_merge,omitempty"                     jsonschema:"Automatically merge when pipeline succeeds (auto-merge)"`
-	SHA                      string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request — merge only if HEAD matches (safety check)"`
-	SquashCommitMessage      string               `json:"squash_commit_message,omitempty"          jsonschema:"Custom squash commit message (used when squash is enabled)"`
+	ProjectID                 toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID                     int64                `json:"merge_request_iid"                                  jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	MergeCommitMessage        string               `json:"merge_commit_message,omitempty"           jsonschema:"Custom merge commit message"`
+	Squash                    *bool                `json:"squash,omitempty"                         jsonschema:"Squash commits on merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
+	ShouldRemoveSourceBranch  *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
+	AutoMerge                 *bool                `json:"auto_merge,omitempty"                     jsonschema:"Automatically merge when pipeline succeeds (auto-merge)"`
+	MergeWhenPipelineSucceeds *bool                `json:"merge_when_pipeline_succeeds,omitempty"   jsonschema:"Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge"`
+	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request — merge only if HEAD matches (safety check)"`
+	SquashCommitMessage       string               `json:"squash_commit_message,omitempty"          jsonschema:"Custom squash commit message (used when squash is enabled)"`
 }
 
 // ApproveInput defines parameters for approving a merge request.
 type ApproveInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request — approve only if HEAD matches (safety check, applies to approve only)"`
 }
 
 // ApproveOutput holds the approval state after approve/unapprove.
@@ -305,7 +399,9 @@ type ApproveOutput struct {
 	Approved          bool `json:"approved"`
 }
 
-// ToOutput converts a GitLab API [gl.MergeRequest] to the MCP tool output format.
+// ToOutput converts a GitLab API [gl.MergeRequest] (the get endpoint payload)
+// to the MCP tool output format. It first projects the embedded
+// BasicMergeRequest, then layers on the MergeRequest-only fields.
 func ToOutput(m *gl.MergeRequest) Output {
 	out := BasicToOutput(&m.BasicMergeRequest)
 	out.MergeError = m.MergeError
@@ -314,6 +410,8 @@ func ToOutput(m *gl.MergeRequest) Output {
 	out.DivergedCommitsCount = m.DivergedCommitsCount
 	out.Subscribed = m.Subscribed
 	out.FirstContribution = m.FirstContribution
+	out.WorkInProgress = m.WorkInProgress //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
+	out.User = mergeRequestUserOutput(m.User)
 	if m.DiffRefs.BaseSha != "" || m.DiffRefs.HeadSha != "" || m.DiffRefs.StartSha != "" {
 		out.DiffRefs = &DiffRefsOutput{
 			BaseSHA:  m.DiffRefs.BaseSha,
@@ -321,20 +419,11 @@ func ToOutput(m *gl.MergeRequest) Output {
 			StartSHA: m.DiffRefs.StartSha,
 		}
 	}
-	if m.Pipeline != nil {
-		out.PipelineID = m.Pipeline.ID
-		out.PipelineWebURL = m.Pipeline.WebURL
-		out.PipelineName = m.Pipeline.Name
-	}
-	if m.HeadPipeline != nil {
-		out.HeadPipelineID = m.HeadPipeline.ID
-	}
-	if m.LatestBuildStartedAt != nil {
-		out.LatestBuildStartedAt = m.LatestBuildStartedAt.Format(time.RFC3339)
-	}
-	if m.LatestBuildFinishedAt != nil {
-		out.LatestBuildFinishedAt = m.LatestBuildFinishedAt.Format(time.RFC3339)
-	}
+	out.Pipeline = pipelineInfoOutput(m.Pipeline)
+	out.HeadPipeline = pipelineOutput(m.HeadPipeline)
+	out.LatestBuildStartedAt = toolutil.FormatTimePtr(m.LatestBuildStartedAt)
+	out.LatestBuildFinishedAt = toolutil.FormatTimePtr(m.LatestBuildFinishedAt)
+	out.FirstDeployedToProductionAt = toolutil.FormatTimePtr(m.FirstDeployedToProductionAt)
 	return out
 }
 
@@ -349,10 +438,12 @@ func BasicToOutput(m *gl.BasicMergeRequest) Output {
 		Title:                       m.Title,
 		Description:                 m.Description,
 		State:                       m.State,
+		Imported:                    m.Imported,
+		ImportedFrom:                m.ImportedFrom,
 		SourceBranch:                m.SourceBranch,
 		TargetBranch:                m.TargetBranch,
 		WebURL:                      m.WebURL,
-		MergeStatus:                 m.DetailedMergeStatus,
+		DetailedMergeStatus:         m.DetailedMergeStatus,
 		Draft:                       m.Draft,
 		HasConflicts:                m.HasConflicts,
 		BlockingDiscussionsResolved: m.BlockingDiscussionsResolved,
@@ -366,7 +457,8 @@ func BasicToOutput(m *gl.BasicMergeRequest) Output {
 }
 
 // populatePeople extracts author, assignees, reviewers, labels, and metadata
-// from a BasicMergeRequest into the Output.
+// from a BasicMergeRequest into the Output, mirroring the SDK sub-objects on
+// their canonical json keys.
 func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 	out.SourceProjectID = m.SourceProjectID
 	out.TargetProjectID = m.TargetProjectID
@@ -375,76 +467,45 @@ func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 	out.ShouldRemoveSourceBranch = m.ShouldRemoveSourceBranch
 	out.ForceRemoveSourceBranch = m.ForceRemoveSourceBranch
 	out.AllowCollaboration = m.AllowCollaboration
+	out.AllowMaintainerToPush = m.AllowMaintainerToPush
 	out.SquashOnMerge = m.SquashOnMerge
 	out.SquashCommitSHA = m.SquashCommitSHA
 	out.Upvotes = m.Upvotes
 	out.Downvotes = m.Downvotes
-	if m.Author != nil {
-		out.Author = m.Author.Username
-	}
-	if m.MergeUser != nil {
-		out.MergedBy = m.MergeUser.Username
-	}
-	if m.ClosedBy != nil {
-		out.ClosedBy = m.ClosedBy.Username
-	}
-	for _, a := range m.Assignees {
-		out.Assignees = append(out.Assignees, a.Username)
-	}
+	out.Author = basicUserOutput(m.Author)
+	out.Assignee = basicUserOutput(m.Assignee)
+	out.MergeUser = basicUserOutput(m.MergeUser)
+	out.ClosedBy = basicUserOutput(m.ClosedBy)
+	out.MergedBy = basicUserOutput(m.MergedBy) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+	out.Assignees = basicUserOutputs(m.Assignees)
 	if out.Assignees == nil {
-		out.Assignees = []string{}
+		out.Assignees = []*BasicUserOutput{}
 	}
-	for _, r := range m.Reviewers {
-		out.Reviewers = append(out.Reviewers, r.Username)
-	}
+	out.Reviewers = basicUserOutputs(m.Reviewers)
 	if out.Reviewers == nil {
-		out.Reviewers = []string{}
+		out.Reviewers = []*BasicUserOutput{}
 	}
 	out.Labels = []string(m.Labels)
 	if out.Labels == nil {
 		out.Labels = []string{}
 	}
-	if m.Milestone != nil {
-		out.Milestone = m.Milestone.Title
-	}
-	if m.TaskCompletionStatus != nil {
-		out.TaskCompletionCount = m.TaskCompletionStatus.CompletedCount
-		out.TaskCompletionTotal = m.TaskCompletionStatus.Count
-	}
-	if m.TimeStats != nil {
-		out.TimeEstimate = m.TimeStats.TimeEstimate
-		out.TotalTimeSpent = m.TimeStats.TotalTimeSpent
-	}
+	out.LabelDetails = labelDetailsOutputs(m.LabelDetails)
+	out.Milestone = milestoneOutput(m.Milestone)
+	out.TaskCompletionStatus = taskCompletionStatusOutput(m.TaskCompletionStatus)
+	out.TimeStats = timeStatsPtr(m.TimeStats)
 	populateTimestamps(out, m)
 }
 
 // populateTimestamps extracts timestamps and references from a
 // BasicMergeRequest into the Output.
 func populateTimestamps(out *Output, m *gl.BasicMergeRequest) {
-	if m.MergeAfter != nil {
-		out.MergeAfter = m.MergeAfter.Format(time.RFC3339)
-	}
-	if m.CreatedAt != nil {
-		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
-	}
-	if m.UpdatedAt != nil {
-		out.UpdatedAt = m.UpdatedAt.Format(time.RFC3339)
-	}
-	if m.MergedAt != nil {
-		out.MergedAt = m.MergedAt.Format(time.RFC3339)
-	}
-	if m.ClosedAt != nil {
-		out.ClosedAt = m.ClosedAt.Format(time.RFC3339)
-	}
-	if m.PreparedAt != nil {
-		out.PreparedAt = m.PreparedAt.Format(time.RFC3339)
-	}
-	if m.References != nil {
-		out.References = m.References.Full
-		if idx := strings.LastIndex(m.References.Full, "!"); idx > 0 {
-			out.ProjectPath = m.References.Full[:idx]
-		}
-	}
+	out.MergeAfter = toolutil.FormatTimePtr(m.MergeAfter)
+	out.CreatedAt = toolutil.FormatTimePtr(m.CreatedAt)
+	out.UpdatedAt = toolutil.FormatTimePtr(m.UpdatedAt)
+	out.MergedAt = toolutil.FormatTimePtr(m.MergedAt)
+	out.ClosedAt = toolutil.FormatTimePtr(m.ClosedAt)
+	out.PreparedAt = toolutil.FormatTimePtr(m.PreparedAt)
+	out.References = referencesOutput(m.References)
 }
 
 // Create creates a new merge request in the specified GitLab project.
@@ -474,9 +535,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if len(input.ReviewerIDs) > 0 {
 		opts.ReviewerIDs = &input.ReviewerIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
+	if labels := labelOptions(input.Labels); labels != nil {
+		opts.Labels = labels
 	}
 	if input.RemoveSourceBranch != nil {
 		opts.RemoveSourceBranch = input.RemoveSourceBranch
@@ -492,6 +552,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.TargetProjectID != 0 {
 		opts.TargetProjectID = new(input.TargetProjectID)
+	}
+	if input.ApprovalsBeforeMerge != 0 {
+		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; no replacement on CreateMergeRequestOptions.
 	}
 	mr, _, err := client.GL().MergeRequests.CreateMergeRequest(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -520,7 +583,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrGet", "merge_request_iid")
 	}
-	mr, _, err := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
+	opts := &gl.GetMergeRequestsOptions{}
+	if input.IncludeDivergedCommitsCount != nil {
+		opts.IncludeDivergedCommitsCount = input.IncludeDivergedCommitsCount
+	}
+	if input.IncludeRebaseInProgress != nil {
+		opts.IncludeRebaseInProgress = input.IncludeRebaseInProgress
+	}
+	if input.RenderHTML != nil {
+		opts.RenderHTML = input.RenderHTML
+	}
+	mr, _, err := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrGet", err,
@@ -565,24 +638,30 @@ func projectMRListFilters(input ListInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
 		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
-		AuthorUsername: input.AuthorUsername, Draft: input.Draft, CreatedAfter: input.CreatedAfter,
+		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
+		MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP, Environment: input.Environment,
+		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
+		Draft: input.Draft, CreatedAfter: input.CreatedAfter,
 		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
-		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
+		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage, Keyset: input.KeysetPaginationInput,
 	}
 }
 
 func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mergeRequestListTarget {
-	return mergeRequestListTarget{
-		state: func(value *string) { opts.State = value }, labels: func(value *gl.LabelOptions) { opts.Labels = value },
-		notLabels: func(value *gl.LabelOptions) { opts.NotLabels = value }, milestone: func(value *string) { opts.Milestone = value },
-		scope: func(value *string) { opts.Scope = value }, search: func(value *string) { opts.Search = value },
-		sourceBranch: func(value *string) { opts.SourceBranch = value }, targetBranch: func(value *string) { opts.TargetBranch = value },
-		authorUsername: func(value *string) { opts.AuthorUsername = value }, draft: func(value *bool) { opts.Draft = value },
-		createdAfter: func(value *time.Time) { opts.CreatedAfter = value }, createdBefore: func(value *time.Time) { opts.CreatedBefore = value },
-		updatedAfter: func(value *time.Time) { opts.UpdatedAfter = value }, updatedBefore: func(value *time.Time) { opts.UpdatedBefore = value },
-		orderBy: func(value *string) { opts.OrderBy = value }, sort: func(value *string) { opts.Sort = value },
-		page: func(value int64) { opts.Page = value }, perPage: func(value int64) { opts.PerPage = value },
-	}
+	return newMergeRequestListTarget(mergeRequestListTargetFields{
+		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
+		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
+		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, myReactionEmoji: &opts.MyReactionEmoji,
+		view: &opts.View, wip: &opts.WIP, environment: &opts.Environment, authorID: &opts.AuthorID,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
+		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
+		orderBy: &opts.OrderBy, sort: &opts.Sort, listOptions: &opts.ListOptions,
+	})
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update options,
@@ -610,17 +689,14 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if len(input.ReviewerIDs) > 0 {
 		opts.ReviewerIDs = &input.ReviewerIDs
 	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
+	if labels := labelOptions(input.Labels); labels != nil {
+		opts.Labels = labels
 	}
-	if input.AddLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.AddLabels, ","))
-		opts.AddLabels = &labels
+	if labels := labelOptions(input.AddLabels); labels != nil {
+		opts.AddLabels = labels
 	}
-	if input.RemoveLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.RemoveLabels, ","))
-		opts.RemoveLabels = &labels
+	if labels := labelOptions(input.RemoveLabels); labels != nil {
+		opts.RemoveLabels = labels
 	}
 	if input.MilestoneID > 0 {
 		opts.MilestoneID = new(input.MilestoneID)
@@ -711,6 +787,9 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 	if input.AutoMerge != nil {
 		opts.AutoMerge = input.AutoMerge
 	}
+	if input.MergeWhenPipelineSucceeds != nil {
+		opts.MergeWhenPipelineSucceeds = input.MergeWhenPipelineSucceeds //nolint:staticcheck // SA1019: deprecated alias mirrored for 1:1 SDK fidelity; prefer auto_merge.
+	}
 	if input.SHA != "" {
 		opts.SHA = new(input.SHA)
 	}
@@ -740,7 +819,11 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 	if input.MRIID <= 0 {
 		return ApproveOutput{}, toolutil.ErrRequiredInt64("mrApprove", "merge_request_iid")
 	}
-	approvals, _, err := client.GL().MergeRequestApprovals.ApproveMergeRequest(string(input.ProjectID), input.MRIID, &gl.ApproveMergeRequestOptions{}, gl.WithContext(ctx))
+	approveOpts := &gl.ApproveMergeRequestOptions{}
+	if input.SHA != "" {
+		approveOpts.SHA = new(input.SHA)
+	}
+	approvals, _, err := client.GL().MergeRequestApprovals.ApproveMergeRequest(string(input.ProjectID), input.MRIID, approveOpts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ApproveOutput{}, toolutil.WrapErrWithHint("mrApprove", err,
@@ -786,7 +869,10 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 type CommitsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
+	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // CommitsOutput holds a paginated list of commits for a merge request.
@@ -796,26 +882,38 @@ type CommitsOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-func setMergeRequestPagination(page, perPage int, setPage, setPerPage func(int64)) {
-	if page > 0 {
-		setPage(int64(page))
+// mrItemListOptions captures the offset/keyset pagination and order_by/sort
+// parameters for the per-MR list helpers (commits, issues-closed,
+// related-issues). applyTo wires the values onto a [gl.ListOptions] via
+// ApplyListOptions, then sets OrderBy/Sort when supplied so an explicit
+// value always wins.
+type mrItemListOptions struct {
+	pagination toolutil.PaginationInput
+	keyset     toolutil.KeysetPaginationInput
+	orderBy    string
+	sort       string
+}
+
+func (o mrItemListOptions) applyTo(opts *gl.ListOptions) {
+	toolutil.ApplyListOptions(opts, o.pagination, o.keyset)
+	if o.orderBy != "" {
+		opts.OrderBy = o.orderBy
 	}
-	if perPage > 0 {
-		setPerPage(int64(perPage))
+	if o.sort != "" {
+		opts.Sort = o.sort
 	}
 }
 
 type mergeRequestItemsListArgs struct {
 	projectID         toolutil.StringOrInt
 	mrIID             int64
-	page              int
-	perPage           int
+	listOpts          mrItemListOptions
 	operation         string
 	missingProjectMsg string
 	notFoundHint      string
 }
 
-func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
+func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
 	var zero R
 	if err := ctx.Err(); err != nil {
 		return zero, err
@@ -826,7 +924,7 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestIt
 	if args.mrIID <= 0 {
 		return zero, toolutil.ErrRequiredInt64(args.operation, "merge_request_iid")
 	}
-	items, resp, err := list(string(args.projectID), args.mrIID, args.page, args.perPage, gl.WithContext(ctx))
+	items, resp, err := list(string(args.projectID), args.mrIID, args.listOpts, gl.WithContext(ctx))
 	if err != nil {
 		return zero, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
@@ -840,13 +938,17 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestIt
 // Commits retrieves the list of commits in a merge request.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
 	return listMergeRequestItems(ctx, mergeRequestItemsListArgs{
-		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrCommits",
+		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrCommits",
+		listOpts: mrItemListOptions{
+			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
+			orderBy: input.OrderBy, sort: input.Sort,
+		},
 		missingProjectMsg: "mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get",
 	},
-		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
+		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
-			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
 		}, commits.ToOutput, func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
 			return CommitsOutput{Commits: out, Pagination: pagination}
@@ -967,24 +1069,38 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 
 // ListGlobalInput defines filters for listing merge requests across all projects.
 type ListGlobalInput struct {
-	State            string `json:"state,omitempty"           jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels           string `json:"labels,omitempty"          jsonschema:"Comma-separated label names to filter by"`
-	NotLabels        string `json:"not_labels,omitempty"      jsonschema:"Comma-separated label names to exclude"`
-	Milestone        string `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope            string `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search           string `json:"search,omitempty"          jsonschema:"Search in title and description"`
-	SourceBranch     string `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
-	TargetBranch     string `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
-	AuthorUsername   string `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	ReviewerUsername string `json:"reviewer_username,omitempty" jsonschema:"Filter by reviewer username"`
-	Draft            *bool  `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	CreatedAfter     string `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601)"`
-	CreatedBefore    string `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
-	UpdatedAfter     string `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
-	UpdatedBefore    string `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601)"`
-	OrderBy          string `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
-	Sort             string `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
+	State                  string   `json:"state,omitempty"           jsonschema:"Filter by state (opened, closed, merged, all)"`
+	Labels                 []string `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
+	NotLabels              []string `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
+	Milestone              string   `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
+	Scope                  string   `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search                 string   `json:"search,omitempty"          jsonschema:"Search in title and description"`
+	SourceBranch           string   `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
+	TargetBranch           string   `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
+	AuthorUsername         string   `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
+	NotAuthorUsername      string   `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerUsername       string   `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	Approved               string   `json:"approved,omitempty"            jsonschema:"Filter by approval status: 'yes' or 'no' (Premium)"`
+	In                     string   `json:"in,omitempty"                  jsonschema:"Scope of the search filter (e.g. title, description, or title,description)"`
+	MyReactionEmoji        string   `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	View                   string   `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
+	WIP                    string   `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	AuthorID               int64    `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
+	AssigneeID             int64    `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
+	ReviewerID             int64    `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ApproverIDs            []int64  `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
+	ApprovedByIDs          []int64  `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	WithLabelsDetails      *bool    `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
+	WithMergeStatusRecheck *bool    `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
+	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	CreatedAfter           string   `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601)"`
+	CreatedBefore          string   `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
+	UpdatedAfter           string   `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
+	UpdatedBefore          string   `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601)"`
+	OrderBy                string   `json:"order_by,omitempty"        jsonschema:"Order by field (created_at, updated_at)"`
+	Sort                   string   `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGlobal returns a paginated list of merge requests across all projects
@@ -1013,9 +1129,14 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
 		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
-		AuthorUsername: input.AuthorUsername, ReviewerUsername: input.ReviewerUsername, Draft: input.Draft,
-		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
+		Approved: input.Approved, In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
+		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
+		Draft: input.Draft, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		Keyset: input.KeysetPaginationInput,
 	}
 }
 
@@ -1023,32 +1144,51 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 	return newMergeRequestListTarget(mergeRequestListTargetFields{
 		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
-		reviewerUsername: &opts.ReviewerUsername, draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
-		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort, page: &opts.Page,
-		perPage: &opts.PerPage,
+		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, approved: &opts.Approved, in: &opts.In,
+		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
+		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
+		listOptions: &opts.ListOptions,
 	})
 }
 
 type mergeRequestListTargetFields struct {
-	state            **string
-	labels           **gl.LabelOptions
-	notLabels        **gl.LabelOptions
-	milestone        **string
-	scope            **string
-	search           **string
-	sourceBranch     **string
-	targetBranch     **string
-	authorUsername   **string
-	reviewerUsername **string
-	draft            **bool
-	createdAfter     **time.Time
-	createdBefore    **time.Time
-	updatedAfter     **time.Time
-	updatedBefore    **time.Time
-	orderBy          **string
-	sort             **string
-	page             *int64
-	perPage          *int64
+	state             **string
+	labels            **gl.LabelOptions
+	notLabels         **gl.LabelOptions
+	milestone         **string
+	scope             **string
+	search            **string
+	sourceBranch      **string
+	targetBranch      **string
+	authorUsername    **string
+	notAuthorUsername **string
+	reviewerUsername  **string
+	approved          **string
+	in                **string
+	myReactionEmoji   **string
+	view              **string
+	wip               **string
+	environment       **string
+	authorID          **int64
+	assigneeID        **gl.AssigneeIDValue
+	reviewerID        **gl.ReviewerIDValue
+	approverIDs       **gl.ApproverIDsValue
+	approvedByIDs     **gl.ApproverIDsValue
+	withLabelsDetails **bool
+	withMergeRecheck  **bool
+	draft             **bool
+	createdAfter      **time.Time
+	createdBefore     **time.Time
+	updatedAfter      **time.Time
+	updatedBefore     **time.Time
+	deployedAfter     **time.Time
+	deployedBefore    **time.Time
+	orderBy           **string
+	sort              **string
+	listOptions       *gl.ListOptions
 }
 
 func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequestListTarget {
@@ -1056,11 +1196,46 @@ func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequest
 		state: setStringPtr(fields.state), labels: setLabelOptionsPtr(fields.labels), notLabels: setLabelOptionsPtr(fields.notLabels),
 		milestone: setStringPtr(fields.milestone), scope: setStringPtr(fields.scope), search: setStringPtr(fields.search),
 		sourceBranch: setStringPtr(fields.sourceBranch), targetBranch: setStringPtr(fields.targetBranch),
-		authorUsername: setStringPtr(fields.authorUsername), reviewerUsername: setStringPtr(fields.reviewerUsername),
+		authorUsername: setStringPtr(fields.authorUsername), notAuthorUsername: setStringPtr(fields.notAuthorUsername),
+		reviewerUsername: setStringPtr(fields.reviewerUsername), approved: setStringPtr(fields.approved), in: setStringPtr(fields.in),
+		myReactionEmoji: setStringPtr(fields.myReactionEmoji), view: setStringPtr(fields.view), wip: setStringPtr(fields.wip),
+		environment: setStringPtr(fields.environment), authorID: setInt64Ptr(fields.authorID),
+		assigneeID: setAssigneeIDPtr(fields.assigneeID), reviewerID: setReviewerIDPtr(fields.reviewerID),
+		approverIDs: setApproverIDsPtr(fields.approverIDs), approvedByIDs: setApproverIDsPtr(fields.approvedByIDs),
+		withLabelsDetails: setBoolPtr(fields.withLabelsDetails), withMergeRecheck: setBoolPtr(fields.withMergeRecheck),
 		draft: setBoolPtr(fields.draft), createdAfter: setTimePtr(fields.createdAfter), createdBefore: setTimePtr(fields.createdBefore),
-		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore), orderBy: setStringPtr(fields.orderBy),
-		sort: setStringPtr(fields.sort), page: setInt64Value(fields.page), perPage: setInt64Value(fields.perPage),
+		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore),
+		deployedAfter: setTimePtr(fields.deployedAfter), deployedBefore: setTimePtr(fields.deployedBefore),
+		orderBy: setStringPtr(fields.orderBy), sort: setStringPtr(fields.sort), listOptions: fields.listOptions,
 	}
+}
+
+// setInt64Ptr returns a setter that wraps a scalar int64 into a *int64 stored
+// on the target options field (used for author_id).
+func setInt64Ptr(target **int64) func(int64) {
+	return func(value int64) {
+		v := value
+		*target = &v
+	}
+}
+
+// setAssigneeIDPtr returns a setter that wraps an int64 user ID into the SDK's
+// *AssigneeIDValue via gl.AssigneeID.
+func setAssigneeIDPtr(target **gl.AssigneeIDValue) func(int64) {
+	return func(value int64) { *target = gl.AssigneeID(value) }
+}
+
+// setReviewerIDPtr returns a setter that wraps an int64 user ID into the SDK's
+// *ReviewerIDValue via gl.ReviewerID.
+func setReviewerIDPtr(target **gl.ReviewerIDValue) func(int64) {
+	return func(value int64) { *target = gl.ReviewerID(value) }
+}
+
+// setApproverIDsPtr returns a setter that wraps a slice of user IDs into the
+// SDK's *ApproverIDsValue via gl.ApproverIDs (used for approver_ids and
+// approved_by_ids).
+func setApproverIDsPtr(target **gl.ApproverIDsValue) func([]int64) {
+	return func(value []int64) { *target = gl.ApproverIDs(value) }
 }
 
 func setStringPtr(target **string) func(*string) {
@@ -1079,31 +1254,40 @@ func setTimePtr(target **time.Time) func(*time.Time) {
 	return func(value *time.Time) { *target = value }
 }
 
-func setInt64Value(target *int64) func(int64) {
-	return func(value int64) { *target = value }
-}
-
 // ListGroupInput defines filters for listing merge requests in a group.
 type ListGroupInput struct {
-	GroupID          toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
-	State            string               `json:"state,omitempty"             jsonschema:"Filter by state (opened, closed, merged, all)"`
-	Labels           string               `json:"labels,omitempty"            jsonschema:"Comma-separated label names to filter by"`
-	NotLabels        string               `json:"not_labels,omitempty"        jsonschema:"Comma-separated label names to exclude"`
-	Milestone        string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
-	Scope            string               `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search           string               `json:"search,omitempty"            jsonschema:"Search in title and description"`
-	SourceBranch     string               `json:"source_branch,omitempty"     jsonschema:"Filter by source branch name"`
-	TargetBranch     string               `json:"target_branch,omitempty"     jsonschema:"Filter by target branch name"`
-	AuthorUsername   string               `json:"author_username,omitempty"   jsonschema:"Filter by author username"`
-	ReviewerUsername string               `json:"reviewer_username,omitempty" jsonschema:"Filter by reviewer username"`
-	Draft            *bool                `json:"draft,omitempty"             jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	CreatedAfter     string               `json:"created_after,omitempty"     jsonschema:"Return MRs created after date (ISO 8601)"`
-	CreatedBefore    string               `json:"created_before,omitempty"    jsonschema:"Return MRs created before date (ISO 8601)"`
-	UpdatedAfter     string               `json:"updated_after,omitempty"     jsonschema:"Return MRs updated after date (ISO 8601)"`
-	UpdatedBefore    string               `json:"updated_before,omitempty"    jsonschema:"Return MRs updated before date (ISO 8601)"`
-	OrderBy          string               `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at)"`
-	Sort             string               `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
+	GroupID                toolutil.StringOrInt `json:"group_id"                    jsonschema:"Group ID or URL-encoded path,required"`
+	State                  string               `json:"state,omitempty"             jsonschema:"Filter by state (opened, closed, merged, all)"`
+	Labels                 []string             `json:"labels,omitempty"            jsonschema:"Label names to filter by"`
+	NotLabels              []string             `json:"not_labels,omitempty"        jsonschema:"Label names to exclude"`
+	Milestone              string               `json:"milestone,omitempty"         jsonschema:"Milestone title to filter by"`
+	Scope                  string               `json:"scope,omitempty"             jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search                 string               `json:"search,omitempty"            jsonschema:"Search in title and description"`
+	SourceBranch           string               `json:"source_branch,omitempty"     jsonschema:"Filter by source branch name"`
+	TargetBranch           string               `json:"target_branch,omitempty"     jsonschema:"Filter by target branch name"`
+	AuthorUsername         string               `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
+	NotAuthorUsername      string               `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerUsername       string               `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	In                     string               `json:"in,omitempty"                  jsonschema:"Scope of the search filter (e.g. title, description, or title,description)"`
+	MyReactionEmoji        string               `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	View                   string               `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
+	WIP                    string               `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	AuthorID               int64                `json:"author_id,omitempty"           jsonschema:"Filter by author user ID"`
+	AssigneeID             int64                `json:"assignee_id,omitempty"         jsonschema:"Filter by assignee user ID"`
+	ReviewerID             int64                `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ApproverIDs            []int64              `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
+	ApprovedByIDs          []int64              `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
+	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
+	Draft                  *bool                `json:"draft,omitempty"             jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	CreatedAfter           string               `json:"created_after,omitempty"     jsonschema:"Return MRs created after date (ISO 8601)"`
+	CreatedBefore          string               `json:"created_before,omitempty"    jsonschema:"Return MRs created before date (ISO 8601)"`
+	UpdatedAfter           string               `json:"updated_after,omitempty"     jsonschema:"Return MRs updated after date (ISO 8601)"`
+	UpdatedBefore          string               `json:"updated_before,omitempty"    jsonschema:"Return MRs updated before date (ISO 8601)"`
+	OrderBy                string               `json:"order_by,omitempty"          jsonschema:"Order by field (created_at, updated_at)"`
+	Sort                   string               `json:"sort,omitempty"              jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroup returns a paginated list of merge requests in a group.
@@ -1138,9 +1322,14 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
 		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
-		AuthorUsername: input.AuthorUsername, ReviewerUsername: input.ReviewerUsername, Draft: input.Draft,
-		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
+		In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
+		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
+		Draft: input.Draft, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+		Keyset: input.KeysetPaginationInput,
 	}
 }
 
@@ -1148,9 +1337,13 @@ func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRe
 	return newMergeRequestListTarget(mergeRequestListTargetFields{
 		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
-		reviewerUsername: &opts.ReviewerUsername, draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
-		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort, page: &opts.Page,
-		perPage: &opts.PerPage,
+		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, in: &opts.In,
+		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
+		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
+		listOptions: &opts.ListOptions,
 	})
 }
 
@@ -1310,7 +1503,10 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 type IssuesClosedInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
+	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // IssuesClosedOutput holds the list of issues that would be closed by merging an MR.
@@ -1324,18 +1520,22 @@ type IssuesClosedOutput struct {
 // the specified merge request is merged.
 func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input IssuesClosedInput) (IssuesClosedOutput, error) {
 	return listMergeRequestIssues(ctx, mergeRequestItemsListArgs{
-		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrIssuesClosed",
+		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrIssuesClosed",
+		listOpts: mrItemListOptions{
+			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
+			orderBy: input.OrderBy, sort: input.Sort,
+		},
 		missingProjectMsg: "mrIssuesClosed: project_id is required",
 		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced via 'Closes #N' in MR description/commits are returned",
 	},
-		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
+		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.GetIssuesClosedOnMergeOptions{}
-			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().MergeRequests.GetIssuesClosedOnMerge(projectID, mrIID, listOptions, opts...)
 		})
 }
 
-func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
+func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
 	return listMergeRequestItems(ctx, args,
 		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) IssuesClosedOutput {
 			return IssuesClosedOutput{Issues: out, Pagination: pagination}
@@ -1577,7 +1777,10 @@ func GetTimeStats(ctx context.Context, client *gitlabclient.Client, input GetInp
 type RelatedIssuesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
+	OrderBy   string               `json:"order_by,omitempty"    jsonschema:"Column to order results by (e.g. created_at)"`
+	Sort      string               `json:"sort,omitempty"        jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // RelatedIssuesOutput holds the list of issues related to a merge request.
@@ -1590,18 +1793,22 @@ type RelatedIssuesOutput struct {
 // RelatedIssues retrieves the list of issues related to a merge request.
 func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input RelatedIssuesInput) (RelatedIssuesOutput, error) {
 	return listMergeRequestRelatedIssues(ctx, mergeRequestItemsListArgs{
-		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrRelatedIssues",
+		projectID: input.ProjectID, mrIID: input.MRIID, operation: "mrRelatedIssues",
+		listOpts: mrItemListOptions{
+			pagination: input.PaginationInput, keyset: input.KeysetPaginationInput,
+			orderBy: input.OrderBy, sort: input.Sort,
+		},
 		missingProjectMsg: "mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
 		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced in MR description/commits/notes are returned",
 	},
-		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
+		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.ListRelatedIssuesOptions{}
-			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().MergeRequests.ListRelatedIssues(projectID, mrIID, listOptions, opts...)
 		})
 }
 
-func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
+func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
 	return listMergeRequestItems(ctx, args,
 		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
 			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
@@ -1683,18 +1890,14 @@ type DependencyInput struct {
 	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the merge request that blocks this one"`
 }
 
-// DependencyOutput represents a merge request dependency.
+// DependencyOutput mirrors gl.MergeRequestDependency. The blocking merge
+// request is surfaced as a full nested object on the canonical
+// blocking_merge_request key rather than flattened scalars.
 type DependencyOutput struct {
 	toolutil.HintableOutput
-	ID                   int64  `json:"id"`
-	BlockingMRID         int64  `json:"blocking_merge_request_id"`
-	BlockingMRIID        int64  `json:"blocking_merge_request_iid"`
-	BlockingMRTitle      string `json:"blocking_merge_request_title"`
-	BlockingMRState      string `json:"blocking_merge_request_state"`
-	BlockingMRProjectID  int64  `json:"blocking_merge_request_project_id"`
-	BlockingSourceBranch string `json:"blocking_source_branch"`
-	BlockingTargetBranch string `json:"blocking_target_branch"`
-	ProjectID            int64  `json:"project_id"`
+	ID                   int64                       `json:"id"`
+	BlockingMergeRequest *BlockingMergeRequestOutput `json:"blocking_merge_request,omitempty"`
+	ProjectID            int64                       `json:"project_id"`
 }
 
 // DependenciesOutput holds a list of merge request dependencies.
@@ -1705,18 +1908,11 @@ type DependenciesOutput struct {
 
 // dependencyToOutput converts the GitLab API response to the tool output format.
 func dependencyToOutput(d *gl.MergeRequestDependency) DependencyOutput {
-	out := DependencyOutput{
-		ID:        d.ID,
-		ProjectID: d.ProjectID,
+	return DependencyOutput{
+		ID:                   d.ID,
+		ProjectID:            d.ProjectID,
+		BlockingMergeRequest: blockingMergeRequestOutput(d.BlockingMergeRequest),
 	}
-	out.BlockingMRID = d.BlockingMergeRequest.ID
-	out.BlockingMRIID = d.BlockingMergeRequest.Iid
-	out.BlockingMRTitle = d.BlockingMergeRequest.Title
-	out.BlockingMRState = d.BlockingMergeRequest.State
-	out.BlockingMRProjectID = d.BlockingMergeRequest.ProjectID
-	out.BlockingSourceBranch = d.BlockingMergeRequest.SourceBranch
-	out.BlockingTargetBranch = d.BlockingMergeRequest.TargetBranch
-	return out
 }
 
 // CreateDependency creates a new dependency (blocker) on a merge request.

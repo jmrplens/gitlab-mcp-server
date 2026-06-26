@@ -24,6 +24,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -62,7 +63,7 @@ func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterpris
 		},
 	})
 
-	tools.RegisterAll(server, client, enterprise)
+	tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
 	resources.Register(server, client)
 	resources.RegisterWorkflowGuides(server)
 	prompts.Register(server, client)

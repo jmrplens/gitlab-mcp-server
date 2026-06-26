@@ -12,7 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; requires Premium/Ultimate and sufficient project permissions"
+const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; available on all tiers, requires sufficient project permissions"
 
 // Output represents a project service account.
 type Output struct {
@@ -91,6 +91,7 @@ func toPATOutput(token *gl.PersonalAccessToken) PATOutput {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 	OrderBy string `json:"order_by,omitempty" jsonschema:"Order by id or username"`
 	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 }
@@ -105,12 +106,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListProjectServiceAccountsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
 		opts.OrderBy = &input.OrderBy
 	}
@@ -233,6 +229,7 @@ type ListPATInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	ServiceAccountID int64                `json:"service_account_id" jsonschema:"Service account user ID,required"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 	CreatedAfter   string `json:"created_after,omitempty" jsonschema:"Filter tokens created after RFC3339 datetime or YYYY-MM-DD date"`
 	CreatedBefore  string `json:"created_before,omitempty" jsonschema:"Filter tokens created before RFC3339 datetime or YYYY-MM-DD date"`
 	ExpiresAfter   string `json:"expires_after,omitempty" jsonschema:"Filter tokens expiring after YYYY-MM-DD date"`
@@ -242,6 +239,7 @@ type ListPATInput struct {
 	Revoked        *bool  `json:"revoked,omitempty" jsonschema:"Filter by revoked state"`
 	UserID         int64  `json:"user_id,omitempty" jsonschema:"Filter by user ID"`
 	Search         string `json:"search,omitempty" jsonschema:"Search token names"`
+	OrderBy        string `json:"order_by,omitempty" jsonschema:"Order tokens by column (keyset pagination)"`
 	Sort           string `json:"sort,omitempty" jsonschema:"Sort expression"`
 	State          string `json:"state,omitempty" jsonschema:"Token state filter: active or inactive"`
 }
@@ -397,9 +395,9 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 
 func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAccessTokensOptions, error) {
 	opts := &gl.ListProjectServiceAccountPersonalAccessTokensOptions{
-		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
-		Revoked:     input.Revoked,
+		Revoked: input.Revoked,
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	createdAfter, hasCreatedAfter, err := parseTimeFilter(input.CreatedAfter, "created_after")
 	if err != nil {
 		return nil, err
@@ -447,6 +445,9 @@ func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAc
 	}
 	if input.Search != "" {
 		opts.Search = &input.Search
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
 	if input.Sort != "" {
 		opts.Sort = &input.Sort

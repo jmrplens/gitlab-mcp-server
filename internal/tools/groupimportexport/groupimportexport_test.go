@@ -495,6 +495,49 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata verifies that every group import/export
+// ActionSpec carries non-generic discovery metadata: an action-specific Usage,
+// distinctive natural-language Aliases, canonical group.*-aware RelatedActions,
+// and a "Returns: … See also: …" individual-tool description (1:1 audit R-META).
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		tool := spec.IndividualTool.Name
+		if strings.Contains(spec.Usage, "domain action") {
+			t.Errorf("%s: Usage is generic placeholder: %q", tool, spec.Usage)
+		}
+		if len(spec.Aliases) < 2 {
+			t.Errorf("%s: want >=2 distinctive aliases, got %v", tool, spec.Aliases)
+		}
+		for _, alias := range spec.Aliases {
+			if alias == tool {
+				t.Errorf("%s: alias must not echo the tool name", tool)
+			}
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: missing RelatedActions", tool)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: description must contain Returns: and See also:, got %q", tool, desc)
+		}
+	}
+}
+
+// TestDecorateGroupImportExportMeta_UnknownTool verifies that decorating an
+// unknown tool is a no-op, preserving the generic base metadata so the helper's
+// early-return branch is exercised.
+func TestDecorateGroupImportExportMeta_UnknownTool(t *testing.T) {
+	options := groupImportExportOptions("gitlab_unknown_tool")
+	before := options
+	decorateGroupImportExportMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before.Usage || options.IndividualTool.Description != before.IndividualTool.Description {
+		t.Fatalf("decorate mutated options for unknown tool: %+v", options)
+	}
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

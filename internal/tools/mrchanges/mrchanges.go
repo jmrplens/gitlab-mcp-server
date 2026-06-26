@@ -19,6 +19,11 @@ const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_list_m
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
+	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format (default: false)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // FileDiffOutput represents a single file diff in a merge request.
@@ -32,6 +37,8 @@ type FileDiffOutput struct {
 	AMode         string `json:"a_mode"`
 	BMode         string `json:"b_mode"`
 	GeneratedFile bool   `json:"generated_file"`
+	Collapsed     bool   `json:"collapsed,omitempty"`
+	TooLarge      bool   `json:"too_large,omitempty"`
 }
 
 // Output holds the list of file diffs for a merge request.
@@ -55,6 +62,8 @@ func DiffToOutput(d *gl.MergeRequestDiff) FileDiffOutput {
 		AMode:         d.AMode,
 		BMode:         d.BMode,
 		GeneratedFile: d.GeneratedFile,
+		Collapsed:     d.Collapsed,
+		TooLarge:      d.TooLarge,
 	}
 }
 
@@ -71,7 +80,18 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrChangesGet", "merge_request_iid")
 	}
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, &gl.ListMergeRequestDiffsOptions{}, gl.WithContext(ctx))
+	opts := &gl.ListMergeRequestDiffsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	if input.Unidiff {
+		opts.Unidiff = new(true)
+	}
+	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrChangesGet", err, http.StatusNotFound, hintVerifyMR)
 	}
@@ -98,7 +118,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 type DiffVersionsListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request internal ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // DiffVersionGetInput defines parameters for getting a single MR diff version.
@@ -109,13 +132,35 @@ type DiffVersionGetInput struct {
 	Unidiff   bool                 `json:"unidiff,omitempty" jsonschema:"Return diffs in unified diff format (default: false)"`
 }
 
-// DiffVersionCommitOutput represents a commit summary in a diff version.
+// CommitStatsOutput mirrors gl.CommitStats: line additions/deletions for a commit.
+type CommitStatsOutput struct {
+	Additions int64 `json:"additions"`
+	Deletions int64 `json:"deletions"`
+	Total     int64 `json:"total"`
+}
+
+// DiffVersionCommitOutput is a full local mirror of gl.Commit (C-IMPORTS):
+// every field returned by the GitLab commit payload inside a diff version is
+// surfaced here.
 type DiffVersionCommitOutput struct {
-	ID         string `json:"id"`
-	ShortID    string `json:"short_id"`
-	Title      string `json:"title"`
-	AuthorName string `json:"author_name"`
-	CreatedAt  string `json:"created_at,omitempty"`
+	ID               string             `json:"id"`
+	ShortID          string             `json:"short_id"`
+	Title            string             `json:"title"`
+	AuthorName       string             `json:"author_name"`
+	AuthorEmail      string             `json:"author_email,omitempty"`
+	AuthoredDate     string             `json:"authored_date,omitempty"`
+	CommitterName    string             `json:"committer_name,omitempty"`
+	CommitterEmail   string             `json:"committer_email,omitempty"`
+	CommittedDate    string             `json:"committed_date,omitempty"`
+	CreatedAt        string             `json:"created_at,omitempty"`
+	Message          string             `json:"message,omitempty"`
+	ParentIDs        []string           `json:"parent_ids,omitempty"`
+	Stats            *CommitStatsOutput `json:"stats,omitempty"`
+	Status           string             `json:"status,omitempty"`
+	ProjectID        int64              `json:"project_id,omitempty"`
+	Trailers         map[string]string  `json:"trailers,omitempty"`
+	ExtendedTrailers map[string]string  `json:"extended_trailers,omitempty"`
+	WebURL           string             `json:"web_url,omitempty"`
 }
 
 // DiffVersionOutput represents a single merge request diff version.
@@ -156,13 +201,38 @@ func diffVersionToOutput(v *gl.MergeRequestDiffVersion) DiffVersionOutput {
 	}
 	for _, c := range v.Commits {
 		co := DiffVersionCommitOutput{
-			ID:         c.ID,
-			ShortID:    c.ShortID,
-			Title:      c.Title,
-			AuthorName: c.AuthorName,
+			ID:               c.ID,
+			ShortID:          c.ShortID,
+			Title:            c.Title,
+			AuthorName:       c.AuthorName,
+			AuthorEmail:      c.AuthorEmail,
+			CommitterName:    c.CommitterName,
+			CommitterEmail:   c.CommitterEmail,
+			Message:          c.Message,
+			ParentIDs:        c.ParentIDs,
+			ProjectID:        c.ProjectID,
+			Trailers:         c.Trailers,
+			ExtendedTrailers: c.ExtendedTrailers,
+			WebURL:           c.WebURL,
+		}
+		if c.AuthoredDate != nil {
+			co.AuthoredDate = c.AuthoredDate.Format(time.RFC3339)
+		}
+		if c.CommittedDate != nil {
+			co.CommittedDate = c.CommittedDate.Format(time.RFC3339)
 		}
 		if c.CreatedAt != nil {
 			co.CreatedAt = c.CreatedAt.Format(time.RFC3339)
+		}
+		if c.Status != nil {
+			co.Status = string(*c.Status)
+		}
+		if c.Stats != nil {
+			co.Stats = &CommitStatsOutput{
+				Additions: c.Stats.Additions,
+				Deletions: c.Stats.Deletions,
+				Total:     c.Stats.Total,
+			}
 		}
 		out.Commits = append(out.Commits, co)
 	}
@@ -192,11 +262,13 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 	if input.MRIID <= 0 {
 		return DiffVersionsListOutput{}, toolutil.ErrRequiredInt64("mrDiffVersionsList", "merge_request_iid")
 	}
-	opts := &gl.GetMergeRequestDiffVersionsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.GetMergeRequestDiffVersionsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	versions, resp, err := client.GL().MergeRequests.GetMergeRequestDiffVersions(
 		string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),

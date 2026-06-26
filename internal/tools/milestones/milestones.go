@@ -15,13 +15,17 @@ import (
 
 // ListInput defines parameters for listing milestones in a GitLab project.
 type ListInput struct {
-	ProjectID        toolutil.StringOrInt `json:"project_id"                  jsonschema:"Project ID or URL-encoded path,required"`
-	State            string               `json:"state,omitempty"             jsonschema:"Filter by state (active, closed)"`
-	Title            string               `json:"title,omitempty"             jsonschema:"Filter by exact milestone title"`
-	Search           string               `json:"search,omitempty"            jsonschema:"Search milestones by title or description"`
-	IncludeAncestors bool                 `json:"include_ancestors,omitempty" jsonschema:"Include milestones from parent groups"`
-	IIDs             []int64              `json:"iids,omitempty"              jsonschema:"Filter by milestone IIDs"`
+	ProjectID               toolutil.StringOrInt `json:"project_id"                         jsonschema:"Project ID or URL-encoded path,required"`
+	State                   string               `json:"state,omitempty"                    jsonschema:"Filter by state (active, closed)"`
+	Title                   string               `json:"title,omitempty"                    jsonschema:"Filter by exact milestone title"`
+	Search                  string               `json:"search,omitempty"                   jsonschema:"Search milestones by title or description"`
+	IncludeAncestors        bool                 `json:"include_ancestors,omitempty"        jsonschema:"Include milestones from parent groups"`
+	IncludeParentMilestones bool                 `json:"include_parent_milestones,omitempty" jsonschema:"Deprecated (GitLab 16.7+): use include_ancestors instead. Include milestones from parent groups"`
+	IIDs                    []int64              `json:"iids,omitempty"                     jsonschema:"Filter by milestone IIDs"`
+	OrderBy                 string               `json:"order_by,omitempty"                 jsonschema:"Order results by field (e.g. created_at, updated_at, due_date, title)"`
+	Sort                    string               `json:"sort,omitempty"                     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single project milestone.
@@ -74,14 +78,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.IncludeAncestors {
 		opts.IncludeAncestors = new(true)
 	}
+	if input.IncludeParentMilestones {
+		//nolint:staticcheck // 1:1 SDK field coverage: deprecated in GitLab 16.7 in favor of include_ancestors.
+		opts.IncludeParentMilestones = new(true)
+	}
 	if len(input.IIDs) > 0 {
 		opts.IIDs = &input.IIDs
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	milestones, resp, err := client.GL().Milestones.ListMilestones(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -167,14 +176,20 @@ type DeleteInput struct {
 type GetIssuesInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetMergeRequestsInput defines parameters for listing merge requests assigned to a milestone.
 type GetMergeRequestsInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
 	MilestoneIID int64                `json:"milestone_iid"  jsonschema:"Milestone IID (project-scoped). Use gitlab_milestone_list to find IIDs,required"`
+	OrderBy      string               `json:"order_by,omitempty" jsonschema:"Order results by field (e.g. created_at, updated_at)"`
+	Sort         string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ---------- Output types for related resources ----------.
@@ -399,11 +414,12 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	}
 
 	opts := &gl.GetMilestoneIssuesOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	issues, resp, err := client.GL().Milestones.GetMilestoneIssues(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
@@ -448,11 +464,12 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	}
 
 	opts := &gl.GetMilestoneMergeRequestsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	mrs, resp, err := client.GL().Milestones.GetMilestoneMergeRequests(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))

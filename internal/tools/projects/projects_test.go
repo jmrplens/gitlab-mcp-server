@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -755,7 +756,7 @@ func TestProjectHandlers_ContextCancelled(t *testing.T) {
 			return StartHousekeeping(ctx, client, StartHousekeepingInput{ProjectID: "42"})
 		}},
 		{name: "create for user", call: func(ctx context.Context) error {
-			_, err := CreateForUser(ctx, client, CreateForUserInput{UserID: 1, Name: "project"})
+			_, err := CreateForUser(ctx, client, CreateForUserInput{UserID: 1, CreateInput: CreateInput{Name: "project"}})
 			return err
 		}},
 	}
@@ -902,7 +903,7 @@ func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
 			return StartHousekeeping(context.Background(), client, StartHousekeepingInput{ProjectID: "42"})
 		}},
 		{name: "create for user forbidden", status: http.StatusForbidden, call: func(client *gitlabclient.Client) error {
-			_, err := CreateForUser(context.Background(), client, CreateForUserInput{UserID: 1, Name: "project"})
+			_, err := CreateForUser(context.Background(), client, CreateForUserInput{UserID: 1, CreateInput: CreateInput{Name: "project"}})
 			return err
 		}},
 	}
@@ -1020,8 +1021,8 @@ func TestProjectGet_SuccessEnrichedFields(t *testing.T) {
 	if out.SSHURLToRepo != "git@gitlab.example.com:jmrplens/my-repo.git" {
 		t.Errorf("out.SSHURLToRepo = %q, want SSH clone URL", out.SSHURLToRepo)
 	}
-	if out.Namespace != "jmrplens" {
-		t.Errorf("out.Namespace = %q, want %q", out.Namespace, "jmrplens")
+	if out.Namespace == nil || out.Namespace.FullPath != "jmrplens" {
+		t.Errorf("out.Namespace = %+v, want FullPath %q", out.Namespace, "jmrplens")
 	}
 	if len(out.Topics) != 3 {
 		t.Errorf("len(out.Topics) = %d, want 3", len(out.Topics))
@@ -2748,7 +2749,8 @@ func TestFormatMarkdown(t *testing.T) {
 		Visibility:                        testPrivate,
 		DefaultBranch:                     "main",
 		Description:                       testDescProject,
-		Namespace:                         "group",
+		Namespace:                         &NamespaceOutput{FullPath: "group"},
+		ForkedFromProject:                 &ForkParentOutput{PathWithNamespace: "upstream/proj"},
 		Archived:                          true,
 		ForksCount:                        5,
 		StarCount:                         10,
@@ -2763,7 +2765,7 @@ func TestFormatMarkdown(t *testing.T) {
 		ProtectMergeRequestPipelines:      &protectMRPipelines,
 	}
 	md := FormatMarkdown(out)
-	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
+	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Forked From", "upstream/proj", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatMarkdown missing %q", want)
 		}
@@ -3234,7 +3236,7 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		Visibility:        testPublic,
 		DefaultBranch:     "main",
 		Description:       testDescProject,
-		Namespace:         "ns",
+		Namespace:         &NamespaceOutput{FullPath: "ns"},
 		Archived:          true,
 		ForksCount:        5,
 		StarCount:         10,
@@ -4199,7 +4201,7 @@ func TestBuildUserProjectOpts_AllFields(t *testing.T) {
 	opts := buildUserProjectOpts(userProjectFilter{
 		Search: "query", Visibility: testPrivate, Archived: &archived,
 		OrderBy: "name", Sort: "desc", Simple: true,
-		Page: 2, PerPage: 25,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 25},
 	})
 
 	if opts.Search == nil || *opts.Search != "query" {
@@ -4259,8 +4261,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	specs := ActionSpecs(client, true)
 	byTool := projectSpecsByTool(t, specs)
 
-	if len(specs) != 54 {
-		t.Fatalf("len(ActionSpecs) = %d, want 54", len(specs))
+	if len(specs) != 57 {
+		t.Fatalf("len(ActionSpecs) = %d, want 57", len(specs))
 	}
 	if len(byTool) != len(specs) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
@@ -4510,10 +4512,14 @@ func TestListInvitedGroups_AllFilters(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListInvitedGroups(context.Background(), client, ListInvitedGroupsInput{
-		ProjectID:       "10",
-		Search:          "invited",
-		MinAccessLevel:  20,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		ProjectID:            "10",
+		Search:               "invited",
+		MinAccessLevel:       20,
+		Relation:             []string{"direct"},
+		WithCustomAttributes: new(true),
+		OrderBy:              "name",
+		Sort:                 testSortAsc,
+		PaginationInput:      toolutil.PaginationInput{Page: 1, PerPage: 20},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -4537,20 +4543,61 @@ func TestListUserProjects_AllFilters(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListUserProjects(context.Background(), client, ListUserProjectsInput{
-		UserID:          testUserJohn,
-		Search:          "proj",
-		Visibility:      testPublic,
-		Archived:        new(false),
-		OrderBy:         "name",
-		Sort:            testSortAsc,
-		Simple:          true,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		UserID: testUserJohn,
+		userProjectFilterInput: userProjectFilterInput{
+			Search:          "proj",
+			Visibility:      testPublic,
+			Archived:        new(false),
+			OrderBy:         "name",
+			Sort:            testSortAsc,
+			Simple:          true,
+			PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if len(out.Projects) != 1 {
 		t.Fatalf(fmtLenProjectsWant1, len(out.Projects))
+	}
+}
+
+// TestListUserProjects_FilterQueryParams verifies that the user-scoped project
+// list endpoint forwards the full ListProjectsOptions filter surface — keyset
+// pagination (pagination, page_token, id_after) and the documented filters
+// (min_access_level, membership) — onto the GitLab request URL.
+func TestListUserProjects_FilterQueryParams(t *testing.T) {
+	var gotQuery url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/users/john/projects" {
+			gotQuery = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":5,"name":"proj"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := ListUserProjects(context.Background(), client, ListUserProjectsInput{
+		UserID: testUserJohn,
+		userProjectFilterInput: userProjectFilterInput{
+			MinAccessLevel:        30,
+			Membership:            new(true),
+			IDAfter:               100,
+			KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for tag, want := range map[string]string{
+		"min_access_level": "30",
+		"membership":       "true",
+		"id_after":         "100",
+		"pagination":       "keyset",
+		"page_token":       "tok-1",
+	} {
+		if got := gotQuery.Get(tag); got != want {
+			t.Errorf("query param %s = %q, want %q", tag, got, want)
+		}
 	}
 }
 
@@ -4583,12 +4630,48 @@ func TestBuildListOpts_AllBranches(t *testing.T) {
 		IncludeHidden:            new(true),
 		IDAfter:                  100,
 		IDBefore:                 500,
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-01",
+		WithCustomAttributes:     new(true),
 	}
 	input.Page = 2
 	input.PerPage = 50
+	input.Pagination = "keyset"
+	input.PageToken = "tok-1"
 
 	opts := buildListOpts(input)
 	assertListProjectOpts(t, opts)
+	assertListProjectAdminOpts(t, opts)
+}
+
+// assertListProjectAdminOpts checks the additive admin-scoped filters and
+// keyset wiring added for 1:1 SDK parity.
+func assertListProjectAdminOpts(t *testing.T, opts *gl.ListProjectsOptions) {
+	t.Helper()
+	if opts.Active == nil || !*opts.Active {
+		t.Error("Active not set")
+	}
+	if opts.Imported == nil || !*opts.Imported {
+		t.Error("Imported not set")
+	}
+	if opts.RepositoryChecksumFailed == nil || !*opts.RepositoryChecksumFailed {
+		t.Error("RepositoryChecksumFailed not set")
+	}
+	if opts.WikiChecksumFailed == nil || !*opts.WikiChecksumFailed {
+		t.Error("WikiChecksumFailed not set")
+	}
+	if opts.RepositoryStorage == nil || *opts.RepositoryStorage != "nfs-01" {
+		t.Error("RepositoryStorage not set")
+	}
+	if opts.WithCustomAttributes == nil || !*opts.WithCustomAttributes {
+		t.Error("WithCustomAttributes not set")
+	}
+	if opts.Pagination != "keyset" || opts.PageToken != "tok-1" {
+		t.Error("keyset pagination not wired")
+	}
 }
 
 // assertListProjectOpts checks list project opts invariants for tests.
@@ -4711,8 +4794,8 @@ func TestToOutput_WithNamespace(t *testing.T) {
 		Namespace:  &gl.ProjectNamespace{FullPath: testMyGroup},
 	}
 	out := ToOutput(p)
-	if out.Namespace != testMyGroup {
-		t.Errorf("Namespace = %q, want %q", out.Namespace, testMyGroup)
+	if out.Namespace == nil || out.Namespace.FullPath != testMyGroup {
+		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, testMyGroup)
 	}
 }
 
@@ -6236,7 +6319,7 @@ func TestCreateForUser_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := CreateForUser(context.Background(), client, CreateForUserInput{
-		UserID: 5, Name: testRepoName,
+		UserID: 5, CreateInput: CreateInput{Name: testRepoName},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -6254,7 +6337,7 @@ func TestCreateForUser_EmptyUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
 	}))
-	_, err := CreateForUser(context.Background(), client, CreateForUserInput{Name: "repo"})
+	_, err := CreateForUser(context.Background(), client, CreateForUserInput{CreateInput: CreateInput{Name: "repo"}})
 	if err == nil {
 		t.Fatal(errEmptyUserID)
 	}
@@ -6277,7 +6360,7 @@ func TestCreateForUser_APIError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	_, err := CreateForUser(context.Background(), client, CreateForUserInput{
-		UserID: 5, Name: "repo",
+		UserID: 5, CreateInput: CreateInput{Name: "repo"},
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
@@ -6291,7 +6374,7 @@ func TestCreateForUser_ContextCancelled(t *testing.T) {
 	}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := CreateForUser(ctx, client, CreateForUserInput{
-		UserID: 5, Name: "repo",
+		UserID: 5, CreateInput: CreateInput{Name: "repo"},
 	})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
@@ -6366,19 +6449,21 @@ func TestCreateForUser_AllOptionalFields(t *testing.T) {
 	bTrue := true
 	bFalse := false
 	out, err := CreateForUser(context.Background(), client, CreateForUserInput{
-		UserID:               5,
-		Name:                 testRepoName,
-		Path:                 "custom-path",
-		NamespaceID:          10,
-		Description:          "desc",
-		Visibility:           "public",
-		InitializeWithReadme: true,
-		DefaultBranch:        "develop",
-		Topics:               []string{"go", "mcp"},
-		IssuesEnabled:        &bTrue,
-		MergeRequestsEnabled: &bFalse,
-		WikiEnabled:          &bTrue,
-		JobsEnabled:          &bFalse,
+		UserID: 5,
+		CreateInput: CreateInput{
+			Name:                 testRepoName,
+			Path:                 "custom-path",
+			NamespaceID:          10,
+			Description:          "desc",
+			Visibility:           "public",
+			InitializeWithReadme: true,
+			DefaultBranch:        "develop",
+			Topics:               []string{"go", "mcp"},
+			IssuesEnabled:        &bTrue,
+			MergeRequestsEnabled: &bFalse,
+			WikiEnabled:          &bTrue,
+			JobsEnabled:          &bFalse,
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -6445,6 +6530,7 @@ func TestCreateApprovalRule_AllOptionalFields(t *testing.T) {
 		Name:                          "rule1",
 		ApprovalsRequired:             2,
 		RuleType:                      "regular",
+		ReportType:                    "code_coverage",
 		UserIDs:                       []int64{1, 2},
 		GroupIDs:                      []int64{3},
 		ProtectedBranchIDs:            []int64{10},
@@ -6714,6 +6800,7 @@ func TestFork_AllOptionalFields(t *testing.T) {
 		Path:                          "my-fork",
 		NamespaceID:                   5,
 		NamespacePath:                 "user",
+		Namespace:                     "user",
 		Description:                   "forked",
 		Visibility:                    "private",
 		Branches:                      "main",
@@ -6844,9 +6931,9 @@ func TestFormatApprovalRuleMarkdown_AllFields(t *testing.T) {
 		ReportType:                    "code_coverage",
 		AppliesToAllProtectedBranches: true,
 		ContainsHiddenGroups:          false,
-		Users:                         []string{"alice", "bob"},
-		Groups:                        []string{"security-team"},
-		EligibleApprovers:             []string{"alice", "bob", "charlie"},
+		Users:                         []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}},
+		Groups:                        []*ApprovalGroupOutput{{Name: "security-team"}},
+		EligibleApprovers:             []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}, {Username: "charlie"}},
 	})
 	for _, want := range []string{"regular", "code_coverage", "alice, bob", "security-team", "alice, bob, charlie"} {
 		if !strings.Contains(md, want) {
@@ -6861,8 +6948,8 @@ func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
 		Rules: []ApprovalRuleOutput{
 			{
-				ID: 1, Name: "Review", RuleType: "regular", Users: []string{"alice"},
-				Groups: []string{"devs"}, ApprovalsRequired: 1,
+				ID: 1, Name: "Review", RuleType: "regular", Users: []*BasicUserOutput{{Username: "alice"}},
+				Groups: []*ApprovalGroupOutput{{Name: "devs"}}, ApprovalsRequired: 1,
 			},
 			{
 				ID: 2, Name: "Empty", ApprovalsRequired: 0,
@@ -6925,11 +7012,11 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 		DefaultBranch:     "main",
 	}
 	out := ToOutput(p)
-	if out.Namespace != "" {
-		t.Errorf("Namespace = %q, want empty", out.Namespace)
+	if out.Namespace != nil {
+		t.Errorf("Namespace = %+v, want nil", out.Namespace)
 	}
-	if out.ForkedFromProject != "" {
-		t.Error("expected empty ForkedFromProject")
+	if out.ForkedFromProject != nil {
+		t.Error("expected nil ForkedFromProject")
 	}
 	if out.ProtectMergeRequestPipelines == nil || *out.ProtectMergeRequestPipelines {
 		t.Error("expected ProtectMergeRequestPipelines to be explicit false")
@@ -7036,11 +7123,11 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 		LastActivityAt:               &now,
 	}
 	out := ToOutput(p)
-	if out.Namespace != "ns" {
-		t.Errorf("Namespace = %q, want %q", out.Namespace, "ns")
+	if out.Namespace == nil || out.Namespace.FullPath != "ns" {
+		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, "ns")
 	}
-	if out.ForkedFromProject != "upstream/test" {
-		t.Errorf("ForkedFromProject = %q, want %q", out.ForkedFromProject, "upstream/test")
+	if out.ForkedFromProject == nil || out.ForkedFromProject.PathWithNamespace != "upstream/test" {
+		t.Errorf("ForkedFromProject = %+v, want PathWithNamespace %q", out.ForkedFromProject, "upstream/test")
 	}
 	if out.MarkedForDeletionOn == "" {
 		t.Error("expected non-empty MarkedForDeletionOn")
@@ -7078,6 +7165,8 @@ func TestListApprovalRules_WithPagination(t *testing.T) {
 	}))
 	out, err := ListApprovalRules(context.Background(), client, ListApprovalRulesInput{
 		ProjectID:       "42",
+		OrderBy:         "id",
+		Sort:            testSortAsc,
 		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
 	})
 	if err != nil {
@@ -7151,5 +7240,692 @@ func TestActionSpecs_ProjectGetNotFound(t *testing.T) {
 	}
 	if _, ok := result.(projectNotFoundOutput); !ok {
 		t.Fatalf("result type = %T, want projectNotFoundOutput", result)
+	}
+}
+
+// TestBuildCreateOpts_AdditiveFields_AllMapped verifies that every additive
+// CreateInput field introduced for 1:1 SDK parity reaches the GitLab
+// CreateProjectOptions with the correct value and type.
+func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
+	input := CreateInput{
+		Name:                                     "p",
+		RepositoryStorage:                        "nfs-01",
+		TemplateName:                             "rails",
+		TemplateProjectID:                        7,
+		UseCustomTemplate:                        new(true),
+		GroupWithProjectTemplatesID:              11,
+		OnlyAllowMergeIfAllStatusChecksPassed:    new(true),
+		ResolveOutdatedDiffDiscussions:           new(true),
+		PrintingMergeRequestLinkEnabled:          new(true),
+		MergePipelinesEnabled:                    new(true),
+		MergeTrainsEnabled:                       new(true),
+		MergeTrainsSkipTrainAllowed:              new(true),
+		MergeCommitTemplate:                      "mct",
+		SquashCommitTemplate:                     "sct",
+		SuggestionCommitMessage:                  "scm",
+		IssueBranchTemplate:                      "ibt",
+		ApprovalsBeforeMerge:                     3,
+		MergeRequestTitleRegex:                   "^x",
+		MergeRequestTitleRegexDescription:        "desc",
+		SnippetsEnabled:                          new(true),
+		ContainerRegistryEnabled:                 new(true),
+		ServiceDeskEnabled:                       new(true),
+		EmailsEnabled:                            new(true),
+		EmailsDisabled:                           new(true),
+		ShowDefaultAwardEmojis:                   new(true),
+		AutoDevopsEnabled:                        new(true),
+		AutoDevopsDeployStrategy:                 "manual",
+		BuildGitStrategy:                         "fetch",
+		BuildCoverageRegex:                       "cov",
+		AutoCancelPendingPipelines:               "enabled",
+		CIForwardDeploymentEnabled:               new(true),
+		ResourceGroupDefaultProcessMode:          "oldest_first",
+		GroupRunnersEnabled:                      new(true),
+		PublicJobs:                               new(true),
+		Mirror:                                   new(true),
+		MirrorTriggerBuilds:                      new(true),
+		EnforceAuthChecksOnUploads:               new(true),
+		ExternalAuthorizationClassificationLabel: "label",
+		IssuesTemplate:                           "it",
+		MergeRequestsTemplate:                    "mrt",
+		TagList:                                  []string{"a"},
+	}
+	opts := buildCreateOpts(input)
+	assertCreateAdditiveScalars(t, opts)
+	assertCreateAdditiveBools(t, opts)
+}
+
+func assertCreateAdditiveScalars(t *testing.T, opts *gl.CreateProjectOptions) {
+	t.Helper()
+	checks := []struct {
+		name string
+		got  *string
+		want string
+	}{
+		{"RepositoryStorage", opts.RepositoryStorage, "nfs-01"},
+		{"TemplateName", opts.TemplateName, "rails"},
+		{"MergeCommitTemplate", opts.MergeCommitTemplate, "mct"},
+		{"SquashCommitTemplate", opts.SquashCommitTemplate, "sct"},
+		{"SuggestionCommitMessage", opts.SuggestionCommitMessage, "scm"},
+		{"IssueBranchTemplate", opts.IssueBranchTemplate, "ibt"},
+		{"MergeRequestTitleRegex", opts.MergeRequestTitleRegex, "^x"},
+		{"BuildGitStrategy", opts.BuildGitStrategy, "fetch"},
+		{"BuildCoverageRegex", opts.BuildCoverageRegex, "cov"},
+		{"AutoCancelPendingPipelines", opts.AutoCancelPendingPipelines, "enabled"},
+		{"AutoDevopsDeployStrategy", opts.AutoDevopsDeployStrategy, "manual"},
+		{"ExternalAuthorizationClassificationLabel", opts.ExternalAuthorizationClassificationLabel, "label"},
+		{"IssuesTemplate", opts.IssuesTemplate, "it"},                //nolint:staticcheck // 1:1 parity test.
+		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"}, //nolint:staticcheck // 1:1 parity test.
+	}
+	for _, c := range checks {
+		if c.got == nil || *c.got != c.want {
+			t.Errorf("%s = %v, want %q", c.name, c.got, c.want)
+		}
+	}
+	if opts.TemplateProjectID == nil || *opts.TemplateProjectID != 7 {
+		t.Error("TemplateProjectID not set")
+	}
+	if opts.GroupWithProjectTemplatesID == nil || *opts.GroupWithProjectTemplatesID != 11 {
+		t.Error("GroupWithProjectTemplatesID not set")
+	}
+	if opts.ApprovalsBeforeMerge == nil || *opts.ApprovalsBeforeMerge != 3 { //nolint:staticcheck // 1:1 parity test.
+		t.Error("ApprovalsBeforeMerge not set")
+	}
+	if opts.ResourceGroupDefaultProcessMode == nil || *opts.ResourceGroupDefaultProcessMode != "oldest_first" {
+		t.Error("ResourceGroupDefaultProcessMode not set")
+	}
+	if opts.TagList == nil || len(*opts.TagList) != 1 { //nolint:staticcheck // 1:1 parity test.
+		t.Error("TagList not set")
+	}
+}
+
+func assertCreateAdditiveBools(t *testing.T, opts *gl.CreateProjectOptions) {
+	t.Helper()
+	bools := map[string]*bool{
+		"UseCustomTemplate":                     opts.UseCustomTemplate,
+		"OnlyAllowMergeIfAllStatusChecksPassed": opts.OnlyAllowMergeIfAllStatusChecksPassed,
+		"ResolveOutdatedDiffDiscussions":        opts.ResolveOutdatedDiffDiscussions,
+		"PrintingMergeRequestLinkEnabled":       opts.PrintingMergeRequestLinkEnabled,
+		"MergePipelinesEnabled":                 opts.MergePipelinesEnabled,
+		"MergeTrainsEnabled":                    opts.MergeTrainsEnabled,
+		"MergeTrainsSkipTrainAllowed":           opts.MergeTrainsSkipTrainAllowed,
+		"ServiceDeskEnabled":                    opts.ServiceDeskEnabled, //nolint:staticcheck // 1:1 parity test.
+		"EmailsEnabled":                         opts.EmailsEnabled,
+		"EmailsDisabled":                        opts.EmailsDisabled, //nolint:staticcheck // 1:1 parity test.
+		"ShowDefaultAwardEmojis":                opts.ShowDefaultAwardEmojis,
+		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
+		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled, //nolint:staticcheck // 1:1 parity test.
+		"GroupRunnersEnabled":                   opts.GroupRunnersEnabled,
+		"PublicJobs":                            opts.PublicJobs,
+		"Mirror":                                opts.Mirror,
+		"MirrorTriggerBuilds":                   opts.MirrorTriggerBuilds,
+		"EnforceAuthChecksOnUploads":            opts.EnforceAuthChecksOnUploads,
+		"SnippetsEnabled":                       opts.SnippetsEnabled,          //nolint:staticcheck // 1:1 parity test.
+		"ContainerRegistryEnabled":              opts.ContainerRegistryEnabled, //nolint:staticcheck // 1:1 parity test.
+	}
+	for name, got := range bools {
+		if got == nil || !*got {
+			t.Errorf("%s not set true", name)
+		}
+	}
+}
+
+// TestBuildCreateOpts_AccessLevels_AllMapped verifies the additive string-based
+// access-level CreateInput fields reach the SDK options.
+func TestBuildCreateOpts_AccessLevels_AllMapped(t *testing.T) {
+	input := CreateInput{
+		Name:                             "p",
+		IssuesAccessLevel:                "enabled",
+		MergeRequestsAccessLevel:         "private",
+		WikiAccessLevel:                  "disabled",
+		BuildsAccessLevel:                "enabled",
+		RepositoryAccessLevel:            "private",
+		ForkingAccessLevel:               "enabled",
+		AnalyticsAccessLevel:             "private",
+		OperationsAccessLevel:            "enabled",
+		ReleasesAccessLevel:              "private",
+		EnvironmentsAccessLevel:          "enabled",
+		FeatureFlagsAccessLevel:          "private",
+		InfrastructureAccessLevel:        "enabled",
+		MonitorAccessLevel:               "private",
+		RequirementsAccessLevel:          "enabled",
+		SecurityAndComplianceAccessLevel: "private",
+		ModelExperimentsAccessLevel:      "enabled",
+		ModelRegistryAccessLevel:         "private",
+	}
+	opts := buildCreateOpts(input)
+	levels := map[string]*gl.AccessControlValue{
+		"IssuesAccessLevel":                opts.IssuesAccessLevel,
+		"MergeRequestsAccessLevel":         opts.MergeRequestsAccessLevel,
+		"WikiAccessLevel":                  opts.WikiAccessLevel,
+		"BuildsAccessLevel":                opts.BuildsAccessLevel,
+		"RepositoryAccessLevel":            opts.RepositoryAccessLevel,
+		"ForkingAccessLevel":               opts.ForkingAccessLevel,
+		"AnalyticsAccessLevel":             opts.AnalyticsAccessLevel,
+		"OperationsAccessLevel":            opts.OperationsAccessLevel,
+		"ReleasesAccessLevel":              opts.ReleasesAccessLevel,
+		"EnvironmentsAccessLevel":          opts.EnvironmentsAccessLevel,
+		"FeatureFlagsAccessLevel":          opts.FeatureFlagsAccessLevel,
+		"InfrastructureAccessLevel":        opts.InfrastructureAccessLevel,
+		"MonitorAccessLevel":               opts.MonitorAccessLevel,
+		"RequirementsAccessLevel":          opts.RequirementsAccessLevel,
+		"SecurityAndComplianceAccessLevel": opts.SecurityAndComplianceAccessLevel,
+		"ModelExperimentsAccessLevel":      opts.ModelExperimentsAccessLevel,
+		"ModelRegistryAccessLevel":         opts.ModelRegistryAccessLevel,
+	}
+	for name, got := range levels {
+		if got == nil || *got == "" {
+			t.Errorf("%s not set", name)
+		}
+	}
+	// Explicit access level wins over the deprecated bool toggle.
+	in2 := CreateInput{Name: "p", IssuesEnabled: new(false), IssuesAccessLevel: "enabled"}
+	if got := buildCreateOpts(in2).IssuesAccessLevel; got == nil || *got != gl.EnabledAccessControl {
+		t.Errorf("explicit IssuesAccessLevel did not win: %v", got)
+	}
+}
+
+// TestContainerExpirationPolicyInput_ToGL verifies the nested container
+// expiration policy mirror maps to the SDK attributes and returns nil when
+// empty.
+func TestContainerExpirationPolicyInput_ToGL(t *testing.T) {
+	if (&ContainerExpirationPolicyInput{}).toGL() != nil {
+		t.Error("empty policy should map to nil")
+	}
+	var nilPolicy *ContainerExpirationPolicyInput
+	if nilPolicy.toGL() != nil {
+		t.Error("nil policy should map to nil")
+	}
+	keep := int64(5)
+	p := &ContainerExpirationPolicyInput{
+		Cadence:         "7d",
+		KeepN:           &keep,
+		OlderThan:       "30d",
+		NameRegexDelete: "del",
+		NameRegexKeep:   "keep",
+		Enabled:         new(true),
+	}
+	got := p.toGL()
+	if got == nil {
+		t.Fatal("policy should not be nil")
+	}
+	if got.Cadence == nil || *got.Cadence != "7d" {
+		t.Error("Cadence not set")
+	}
+	if got.KeepN == nil || *got.KeepN != 5 {
+		t.Error("KeepN not set")
+	}
+	if got.OlderThan == nil || *got.OlderThan != "30d" {
+		t.Error("OlderThan not set")
+	}
+	if got.NameRegexDelete == nil || *got.NameRegexDelete != "del" {
+		t.Error("NameRegexDelete not set")
+	}
+	if got.NameRegexKeep == nil || *got.NameRegexKeep != "keep" {
+		t.Error("NameRegexKeep not set")
+	}
+	if got.Enabled == nil || !*got.Enabled {
+		t.Error("Enabled not set")
+	}
+	// Wired through buildCreateOpts.
+	opts := buildCreateOpts(CreateInput{Name: "p", ContainerExpirationPolicyAttributes: p})
+	if opts.ContainerExpirationPolicyAttributes == nil {
+		t.Error("ContainerExpirationPolicyAttributes not wired into create opts")
+	}
+}
+
+// TestCreateForUser_DelegatesFullSettings verifies CreateForUser reuses the full
+// CreateInput settings via the embedded struct.
+func TestCreateForUser_DelegatesFullSettings(t *testing.T) {
+	var got gl.CreateProjectForUserOptions
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/user/5" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"`+testRepoName+`"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateForUser(context.Background(), client, CreateForUserInput{
+		UserID: 5,
+		CreateInput: CreateInput{
+			Name:               testRepoName,
+			Mirror:             new(true),
+			AutoDevopsEnabled:  new(true),
+			RepositoryStorage:  "nfs-01",
+			ForkingAccessLevel: "enabled",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 42 {
+		t.Errorf("ID = %d, want 42", out.ID)
+	}
+	if got.Mirror == nil || !*got.Mirror {
+		t.Error("Mirror not forwarded to CreateProjectForUser")
+	}
+	if got.RepositoryStorage == nil || *got.RepositoryStorage != "nfs-01" {
+		t.Error("RepositoryStorage not forwarded")
+	}
+	if got.ForkingAccessLevel == nil {
+		t.Error("ForkingAccessLevel not forwarded")
+	}
+}
+
+// TestBuildUpdateOpts_AdditiveFields_AllMapped verifies that every additive
+// UpdateInput field introduced for 1:1 SDK parity reaches the GitLab
+// EditProjectOptions.
+func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
+	keep := int64(2)
+	input := UpdateInput{
+		ProjectID:                                "1",
+		Path:                                     "np",
+		ImportURL:                                "https://x",
+		RepositoryStorage:                        "nfs-02",
+		TagList:                                  []string{"t"},
+		OnlyAllowMergeIfAllStatusChecksPassed:    new(true),
+		AllowPipelineTriggerApproveDeployment:    new(true),
+		PreventMergeWithoutJiraIssue:             new(true),
+		MergeRequestDefaultTargetSelf:            new(true),
+		MergeTrainsSkipTrainAllowed:              new(true),
+		PrintingMergeRequestLinkEnabled:          new(true),
+		SuggestionCommitMessage:                  "scm",
+		IssueBranchTemplate:                      "ibt",
+		IssuesTemplate:                           "it",
+		MergeRequestsTemplate:                    "mrt",
+		SnippetsEnabled:                          new(true),
+		ContainerRegistryEnabled:                 new(true),
+		ServiceDeskEnabled:                       new(true),
+		EmailsEnabled:                            new(true),
+		EmailsDisabled:                           new(true),
+		ShowDefaultAwardEmojis:                   new(true),
+		GroupRunnersEnabled:                      new(true),
+		KeepLatestArtifact:                       new(true),
+		BuildTimeout:                             600,
+		MaxArtifactsSize:                         100,
+		AutoDevopsEnabled:                        new(true),
+		AutoDevopsDeployStrategy:                 "manual",
+		AutoDuoCodeReviewEnabled:                 new(true),
+		BuildGitStrategy:                         "clone",
+		BuildCoverageRegex:                       "cov",
+		AutoCancelPendingPipelines:               "enabled",
+		CIDefaultGitDepth:                        20,
+		CIDeletePipelinesInSeconds:               86400,
+		CIDisplayPipelineVariables:               new(true),
+		CIForwardDeploymentEnabled:               new(true),
+		CIForwardDeploymentRollbackAllowed:       new(true),
+		CIPushRepositoryForJobTokenAllowed:       new(true),
+		CIIDTokenSubClaimComponents:              []string{"project_id"},
+		CISeparatedCaches:                        new(true),
+		CIRestrictPipelineCancellationRole:       "maintainer",
+		CIPipelineVariablesMinimumOverrideRole:   "owner",
+		RestrictUserDefinedVariables:             new(true),
+		ResourceGroupDefaultProcessMode:          "newest_first",
+		PublicJobs:                               new(true),
+		Mirror:                                   new(true),
+		MirrorTriggerBuilds:                      new(true),
+		MirrorBranchRegex:                        "main",
+		MirrorOverwritesDivergedBranches:         new(true),
+		MirrorUserID:                             9,
+		OnlyMirrorProtectedBranches:              new(true),
+		EnforceAuthChecksOnUploads:               new(true),
+		ExternalAuthorizationClassificationLabel: "label",
+		ContainerExpirationPolicyAttributes:      &ContainerExpirationPolicyInput{KeepN: &keep},
+		RepositoryAccessLevel:                    "enabled",
+		ForkingAccessLevel:                       "private",
+	}
+	opts := buildUpdateOpts(input)
+	assertUpdateAdditiveScalars(t, opts)
+	assertUpdateAdditiveBools(t, opts)
+	assertUpdateAdditiveMisc(t, opts)
+}
+
+func assertUpdateAdditiveScalars(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
+	checks := []struct {
+		name string
+		got  *string
+		want string
+	}{
+		{"Path", opts.Path, "np"},
+		{"ImportURL", opts.ImportURL, "https://x"},
+		{"RepositoryStorage", opts.RepositoryStorage, "nfs-02"},
+		{"SuggestionCommitMessage", opts.SuggestionCommitMessage, "scm"},
+		{"IssueBranchTemplate", opts.IssueBranchTemplate, "ibt"},
+		{"IssuesTemplate", opts.IssuesTemplate, "it"},
+		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"},
+		{"AutoDevopsDeployStrategy", opts.AutoDevopsDeployStrategy, "manual"},
+		{"BuildGitStrategy", opts.BuildGitStrategy, "clone"},
+		{"BuildCoverageRegex", opts.BuildCoverageRegex, "cov"},
+		{"AutoCancelPendingPipelines", opts.AutoCancelPendingPipelines, "enabled"},
+		{"MirrorBranchRegex", opts.MirrorBranchRegex, "main"},
+		{"ExternalAuthorizationClassificationLabel", opts.ExternalAuthorizationClassificationLabel, "label"},
+		{"CIPipelineVariablesMinimumOverrideRole", opts.CIPipelineVariablesMinimumOverrideRole, "owner"},
+	}
+	for _, c := range checks {
+		if c.got == nil || *c.got != c.want {
+			t.Errorf("%s = %v, want %q", c.name, c.got, c.want)
+		}
+	}
+}
+
+func assertUpdateAdditiveBools(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
+	bools := map[string]*bool{
+		"OnlyAllowMergeIfAllStatusChecksPassed": opts.OnlyAllowMergeIfAllStatusChecksPassed,
+		"AllowPipelineTriggerApproveDeployment": opts.AllowPipelineTriggerApproveDeployment,
+		"PreventMergeWithoutJiraIssue":          opts.PreventMergeWithoutJiraIssue,
+		"MergeRequestDefaultTargetSelf":         opts.MergeRequestDefaultTargetSelf,
+		"MergeTrainsSkipTrainAllowed":           opts.MergeTrainsSkipTrainAllowed,
+		"PrintingMergeRequestLinkEnabled":       opts.PrintingMergeRequestLinkEnabled,
+		"SnippetsEnabled":                       opts.SnippetsEnabled,          //nolint:staticcheck // 1:1 parity test.
+		"ContainerRegistryEnabled":              opts.ContainerRegistryEnabled, //nolint:staticcheck // 1:1 parity test.
+		"ServiceDeskEnabled":                    opts.ServiceDeskEnabled,
+		"EmailsEnabled":                         opts.EmailsEnabled,
+		"EmailsDisabled":                        opts.EmailsDisabled, //nolint:staticcheck // 1:1 parity test.
+		"ShowDefaultAwardEmojis":                opts.ShowDefaultAwardEmojis,
+		"GroupRunnersEnabled":                   opts.GroupRunnersEnabled,
+		"KeepLatestArtifact":                    opts.KeepLatestArtifact,
+		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
+		"AutoDuoCodeReviewEnabled":              opts.AutoDuoCodeReviewEnabled,
+		"CIDisplayPipelineVariables":            opts.CIDisplayPipelineVariables,
+		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled,
+		"CIForwardDeploymentRollbackAllowed":    opts.CIForwardDeploymentRollbackAllowed,
+		"CIPushRepositoryForJobTokenAllowed":    opts.CIPushRepositoryForJobTokenAllowed,
+		"CISeparatedCaches":                     opts.CISeparatedCaches,
+		"RestrictUserDefinedVariables":          opts.RestrictUserDefinedVariables, //nolint:staticcheck // 1:1 parity test.
+		"PublicJobs":                            opts.PublicJobs,
+		"Mirror":                                opts.Mirror,
+		"MirrorTriggerBuilds":                   opts.MirrorTriggerBuilds,
+		"MirrorOverwritesDivergedBranches":      opts.MirrorOverwritesDivergedBranches,
+		"OnlyMirrorProtectedBranches":           opts.OnlyMirrorProtectedBranches,
+		"EnforceAuthChecksOnUploads":            opts.EnforceAuthChecksOnUploads,
+	}
+	for name, got := range bools {
+		if got == nil || !*got {
+			t.Errorf("%s not set true", name)
+		}
+	}
+}
+
+func assertUpdateAdditiveMisc(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
+	ints := []struct {
+		name string
+		got  *int64
+		want int64
+	}{
+		{"BuildTimeout", opts.BuildTimeout, 600},
+		{"MaxArtifactsSize", opts.MaxArtifactsSize, 100},
+		{"CIDefaultGitDepth", opts.CIDefaultGitDepth, 20},
+		{"CIDeletePipelinesInSeconds", opts.CIDeletePipelinesInSeconds, 86400},
+		{"MirrorUserID", opts.MirrorUserID, 9},
+	}
+	for _, c := range ints {
+		if c.got == nil || *c.got != c.want {
+			t.Errorf("%s = %v, want %d", c.name, c.got, c.want)
+		}
+	}
+	if opts.TagList == nil || len(*opts.TagList) != 1 { //nolint:staticcheck // 1:1 parity test.
+		t.Error("TagList not set")
+	}
+	if opts.CIIdTokenSubClaimComponents == nil || len(*opts.CIIdTokenSubClaimComponents) != 1 {
+		t.Error("CIIdTokenSubClaimComponents not set")
+	}
+	if opts.CIRestrictPipelineCancellationRole == nil {
+		t.Error("CIRestrictPipelineCancellationRole not set")
+	}
+	if opts.ResourceGroupDefaultProcessMode == nil || *opts.ResourceGroupDefaultProcessMode != "newest_first" {
+		t.Error("ResourceGroupDefaultProcessMode not set")
+	}
+	if opts.ContainerExpirationPolicyAttributes == nil {
+		t.Error("ContainerExpirationPolicyAttributes not set")
+	}
+	if opts.RepositoryAccessLevel == nil || opts.ForkingAccessLevel == nil {
+		t.Error("additive access levels not set")
+	}
+}
+
+// TestBuildUpdateOpts_AccessLevels_AllMapped verifies the additive string-based
+// access-level UpdateInput fields reach the SDK options.
+func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
+	input := UpdateInput{
+		ProjectID:                        "1",
+		IssuesAccessLevel:                "enabled",
+		MergeRequestsAccessLevel:         "private",
+		WikiAccessLevel:                  "disabled",
+		BuildsAccessLevel:                "enabled",
+		AnalyticsAccessLevel:             "private",
+		OperationsAccessLevel:            "enabled",
+		ReleasesAccessLevel:              "private",
+		EnvironmentsAccessLevel:          "enabled",
+		FeatureFlagsAccessLevel:          "private",
+		InfrastructureAccessLevel:        "enabled",
+		MonitorAccessLevel:               "private",
+		RequirementsAccessLevel:          "enabled",
+		SecurityAndComplianceAccessLevel: "private",
+		ModelExperimentsAccessLevel:      "enabled",
+		ModelRegistryAccessLevel:         "private",
+	}
+	opts := buildUpdateOpts(input)
+	levels := map[string]*gl.AccessControlValue{
+		"IssuesAccessLevel":                opts.IssuesAccessLevel,
+		"MergeRequestsAccessLevel":         opts.MergeRequestsAccessLevel,
+		"WikiAccessLevel":                  opts.WikiAccessLevel,
+		"BuildsAccessLevel":                opts.BuildsAccessLevel,
+		"AnalyticsAccessLevel":             opts.AnalyticsAccessLevel,
+		"OperationsAccessLevel":            opts.OperationsAccessLevel,
+		"ReleasesAccessLevel":              opts.ReleasesAccessLevel,
+		"EnvironmentsAccessLevel":          opts.EnvironmentsAccessLevel,
+		"FeatureFlagsAccessLevel":          opts.FeatureFlagsAccessLevel,
+		"InfrastructureAccessLevel":        opts.InfrastructureAccessLevel,
+		"MonitorAccessLevel":               opts.MonitorAccessLevel,
+		"RequirementsAccessLevel":          opts.RequirementsAccessLevel,
+		"SecurityAndComplianceAccessLevel": opts.SecurityAndComplianceAccessLevel,
+		"ModelExperimentsAccessLevel":      opts.ModelExperimentsAccessLevel,
+		"ModelRegistryAccessLevel":         opts.ModelRegistryAccessLevel,
+	}
+	for name, got := range levels {
+		if got == nil || *got == "" {
+			t.Errorf("%s not set", name)
+		}
+	}
+	// Bool toggle still bridges when access-level string is absent.
+	bridged := buildUpdateOpts(UpdateInput{ProjectID: "1", IssuesEnabled: new(false)})
+	if bridged.IssuesAccessLevel == nil || *bridged.IssuesAccessLevel != gl.DisabledAccessControl {
+		t.Error("IssuesEnabled bool did not bridge to IssuesAccessLevel")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 1:1 audit (P2/P3): fork + user-scoped + keyset filter coverage
+// ---------------------------------------------------------------------------.
+
+// TestBuildForkListOpts_AllBranches verifies buildForkListOpts wires every
+// additive ListProjectsOptions filter plus keyset pagination for the project
+// forks endpoint.
+func TestBuildForkListOpts_AllBranches(t *testing.T) {
+	input := ListForksInput{
+		ProjectID:                "1",
+		Owned:                    true,
+		Search:                   "fork",
+		Visibility:               testPrivate,
+		OrderBy:                  "name",
+		Sort:                     "desc",
+		Archived:                 new(true),
+		Topic:                    "go",
+		Simple:                   true,
+		MinAccessLevel:           30,
+		LastActivityAfter:        "2026-01-01T00:00:00Z",
+		LastActivityBefore:       "2026-12-31T00:00:00Z",
+		Starred:                  new(true),
+		Membership:               new(true),
+		WithIssuesEnabled:        new(true),
+		WithMergeRequestsEnabled: new(true),
+		SearchNamespaces:         new(true),
+		Statistics:               new(true),
+		WithProgrammingLanguage:  "Go",
+		IncludePendingDelete:     new(true),
+		IncludeHidden:            new(true),
+		IDAfter:                  100,
+		IDBefore:                 500,
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-01",
+		WithCustomAttributes:     new(true),
+	}
+	input.Page = 3
+	input.PerPage = 40
+	input.Pagination = "keyset"
+	input.PageToken = "tok-fork"
+
+	opts := buildForkListOpts(input)
+	assertAllListProjectFiltersSet(t, opts)
+	assertKeysetPagination(t, opts, 3, 40, "tok-fork")
+}
+
+// assertAllListProjectFiltersSet checks that every additive ListProjectsOptions
+// filter pointer/value is populated. Shared by the fork and user-scoped
+// full-filter tests to keep each test below the cyclomatic-complexity gate.
+func assertAllListProjectFiltersSet(t *testing.T, opts *gl.ListProjectsOptions) {
+	t.Helper()
+	scalars := []bool{
+		opts.Owned != nil, opts.Search != nil, opts.Visibility != nil,
+		opts.OrderBy != nil, opts.Sort != nil, opts.Topic != nil,
+		opts.Simple != nil, opts.MinAccessLevel != nil,
+		opts.LastActivityAfter != nil, opts.LastActivityBefore != nil,
+		opts.WithProgrammingLanguage != nil,
+	}
+	pointers := []bool{
+		opts.Archived != nil, opts.Starred != nil, opts.Membership != nil,
+		opts.WithIssuesEnabled != nil, opts.WithMergeRequestsEnabled != nil,
+		opts.SearchNamespaces != nil, opts.Statistics != nil,
+		opts.IncludePendingDelete != nil, opts.IncludeHidden != nil,
+		opts.IDAfter != nil, opts.IDBefore != nil,
+	}
+	admin := []bool{
+		opts.Active != nil, opts.Imported != nil, opts.RepositoryChecksumFailed != nil,
+		opts.WikiChecksumFailed != nil, opts.RepositoryStorage != nil,
+		opts.WithCustomAttributes != nil,
+	}
+	assertAllTrue(t, "scalar filters", scalars)
+	assertAllTrue(t, "pointer filters", pointers)
+	assertAllTrue(t, "admin filters", admin)
+}
+
+// assertAllTrue fails the test if any flag in the group is false.
+func assertAllTrue(t *testing.T, group string, flags []bool) {
+	t.Helper()
+	for i, ok := range flags {
+		if !ok {
+			t.Fatalf("%s: filter index %d not set", group, i)
+		}
+	}
+}
+
+// assertKeysetPagination verifies offset and keyset pagination were wired.
+func assertKeysetPagination(t *testing.T, opts *gl.ListProjectsOptions, page, perPage int64, token string) {
+	t.Helper()
+	if opts.Page != page || opts.PerPage != perPage || opts.Pagination != "keyset" || opts.PageToken != token {
+		t.Fatalf("keyset pagination not wired: page=%d per_page=%d pagination=%q token=%q",
+			opts.Page, opts.PerPage, opts.Pagination, opts.PageToken)
+	}
+}
+
+// TestBuildForkListOpts_NoFields verifies buildForkListOpts leaves unset filters nil.
+func TestBuildForkListOpts_NoFields(t *testing.T) {
+	opts := buildForkListOpts(ListForksInput{ProjectID: "1"})
+	if opts.Owned != nil || opts.Search != nil || opts.Archived != nil ||
+		opts.Active != nil || opts.RepositoryStorage != nil || opts.IDAfter != nil {
+		t.Error("unset fork filters should be nil")
+	}
+}
+
+// TestBuildUserProjectOpts_FullFilterSet verifies the user-scoped filter now
+// surfaces the full ListProjectsOptions filter set plus keyset pagination.
+func TestBuildUserProjectOpts_FullFilterSet(t *testing.T) {
+	f := userProjectFilterInput{
+		Search:                   "x",
+		Visibility:               testPublic,
+		Archived:                 new(true),
+		OrderBy:                  "id",
+		Sort:                     testSortAsc,
+		Simple:                   true,
+		Owned:                    true,
+		Topic:                    "go",
+		MinAccessLevel:           20,
+		Starred:                  new(true),
+		Membership:               new(true),
+		WithIssuesEnabled:        new(true),
+		WithMergeRequestsEnabled: new(true),
+		SearchNamespaces:         new(true),
+		Statistics:               new(true),
+		WithProgrammingLanguage:  "Go",
+		LastActivityAfter:        "2026-01-01T00:00:00Z",
+		LastActivityBefore:       "2026-12-31T00:00:00Z",
+		IDAfter:                  10,
+		IDBefore:                 99,
+		IncludePendingDelete:     new(true),
+		IncludeHidden:            new(true),
+		Active:                   new(true),
+		Imported:                 new(true),
+		RepositoryChecksumFailed: new(true),
+		WikiChecksumFailed:       new(true),
+		RepositoryStorage:        "nfs-02",
+		WithCustomAttributes:     new(true),
+	}
+	f.Page = 2
+	f.PerPage = 25
+	f.Pagination = "keyset"
+	f.PageToken = "tok-user"
+
+	opts := buildUserProjectOpts(f.toFilter())
+	assertAllListProjectFiltersSet(t, opts)
+	assertKeysetPagination(t, opts, 2, 25, "tok-user")
+}
+
+// TestApplyKeysetOrder verifies the order/sort helper only sets supplied values.
+func TestApplyKeysetOrder(t *testing.T) {
+	opts := &gl.ListOptions{}
+	applyKeysetOrder(opts, "", "")
+	if opts.OrderBy != "" || opts.Sort != "" {
+		t.Error("empty values must not be set")
+	}
+	applyKeysetOrder(opts, "name", "desc")
+	if opts.OrderBy != "name" || opts.Sort != "desc" {
+		t.Error("order_by/sort not set")
+	}
+}
+
+// TestAddHook_CustomHeaders verifies custom headers reach the add-hook request body.
+func TestAddHook_CustomHeaders(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/hooks" {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"url":"https://e.x","project_id":1}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := AddHook(context.Background(), client, AddHookInput{
+		ProjectID: "1",
+		URL:       "https://e.x",
+		HookOptionsInput: HookOptionsInput{
+			CustomHeaders: []HookCustomHeaderInput{{Key: "X-Token", Value: "secret"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 7 {
+		t.Fatalf("hook ID = %d, want 7", out.ID)
+	}
+	if !strings.Contains(body, "custom_headers") || !strings.Contains(body, "X-Token") {
+		t.Errorf("custom_headers not in request body: %s", body)
 	}
 }

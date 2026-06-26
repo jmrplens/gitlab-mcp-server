@@ -58,6 +58,9 @@ func FormatPATMarkdownString(o PATOutput) string {
 	if o.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created**: %s\n", o.CreatedAt)
 	}
+	if o.LastUsedAt != "" {
+		fmt.Fprintf(&b, "- **Last Used**: %s\n", o.LastUsedAt)
+	}
 	if o.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires**: %s\n", o.ExpiresAt)
 	}

@@ -13,6 +13,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestDecorateGroupMilestoneMeta_UnknownTool verifies the metadata decorator is
+// a no-op for an individual tool that has no entry in groupMilestoneActionMeta.
+// The test asserts the placeholder options are left untouched for an unknown tool.
+func TestDecorateGroupMilestoneMeta_UnknownTool(t *testing.T) {
+	options := groupMilestoneOptions("gitlab_unknown_tool")
+	before := options
+	decorateGroupMilestoneMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before.Usage {
+		t.Errorf("Usage mutated for unknown tool: got %q, want %q", options.Usage, before.Usage)
+	}
+	if options.IndividualTool.Description != before.IndividualTool.Description {
+		t.Errorf("Description mutated for unknown tool: got %q", options.IndividualTool.Description)
+	}
+}
+
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
 // The test exercises the DELETE path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

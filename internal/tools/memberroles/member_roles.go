@@ -21,6 +21,11 @@ type ListGroupInput struct {
 }
 
 // CreateInstanceInput holds parameters for creating an instance member role.
+// It mirrors [gl.CreateMemberRoleOptions] 1:1 by json/url tag (name,
+// base_access_level, description, plus the permission flags via the embedded
+// [Permissions]) and is the canonical typed pairing the shared options builder
+// consumes, so the SDK Options literal is attributed here rather than to the
+// permission-only [Permissions] fragment.
 type CreateInstanceInput struct {
 	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
 	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid),required"`
@@ -127,19 +132,21 @@ func toOutput(r *gl.MemberRole) Output {
 	}
 }
 
-// buildCreateOpts assembles a [gl.CreateMemberRoleOptions] from the
-// shared [Permissions] set, applying non-nil flags via
-// [applyAdminPermissionOpts] and [applyManageReadRemovePermissionOpts].
-func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl.CreateMemberRoleOptions {
+// buildCreateOpts assembles a [gl.CreateMemberRoleOptions] from a
+// [CreateInstanceInput], applying non-nil permission flags via
+// [applyAdminPermissionOpts] and [applyManageReadRemovePermissionOpts]. Group
+// creation routes through the same builder by projecting its name,
+// base_access_level, description, and permissions onto a [CreateInstanceInput].
+func buildCreateOpts(in CreateInstanceInput) *gl.CreateMemberRoleOptions {
 	opts := &gl.CreateMemberRoleOptions{
-		Name:            new(name),
-		BaseAccessLevel: new(gl.AccessLevelValue(baseLevel)),
+		Name:            new(in.Name),
+		BaseAccessLevel: new(gl.AccessLevelValue(in.BaseAccessLevel)),
 	}
-	if desc != "" {
-		opts.Description = new(desc)
+	if in.Description != "" {
+		opts.Description = new(in.Description)
 	}
-	applyAdminPermissionOpts(opts, p)
-	applyManageReadRemovePermissionOpts(opts, p)
+	applyAdminPermissionOpts(opts, in.Permissions)
+	applyManageReadRemovePermissionOpts(opts, in.Permissions)
 	return opts
 }
 
@@ -276,7 +283,7 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	if in.BaseAccessLevel == 0 {
 		return Output{}, toolutil.ErrFieldRequired("base_access_level")
 	}
-	opts := buildCreateOpts(in.Name, in.BaseAccessLevel, in.Description, in.Permissions)
+	opts := buildCreateOpts(in)
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
@@ -301,7 +308,12 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	if in.BaseAccessLevel == 0 {
 		return Output{}, toolutil.ErrFieldRequired("base_access_level")
 	}
-	opts := buildCreateOpts(in.Name, in.BaseAccessLevel, in.Description, in.Permissions)
+	opts := buildCreateOpts(CreateInstanceInput{
+		Name:            in.Name,
+		BaseAccessLevel: in.BaseAccessLevel,
+		Description:     in.Description,
+		Permissions:     in.Permissions,
+	})
 	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {

@@ -298,6 +298,47 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_NoGenericMetadata enforces the 1:1 R-META requirement that
+// every projects action exposes purpose-specific Usage, natural-language
+// aliases beyond the canonical/tool name, RelatedActions cross-links, and a
+// "Returns: … See also: …" individual-tool description.
+func TestActionSpecs_NoGenericMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client, true)
+
+	for _, spec := range specs {
+		tool := spec.IndividualTool.Name
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" || strings.HasPrefix(strings.ToLower(spec.Usage), "use to execute") {
+				t.Errorf("generic/empty Usage for %s: %q", tool, spec.Usage)
+			}
+			if !hasNaturalLanguageAlias(spec, tool) {
+				t.Errorf("aliases_only for %s: %v", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("empty RelatedActions for %s", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("missing individual-tool description for %s: %q", tool, desc)
+			}
+		})
+	}
+}
+
+// hasNaturalLanguageAlias reports whether spec carries at least one alias that
+// is not merely the canonical action ID or the projected individual-tool name.
+func hasNaturalLanguageAlias(spec toolutil.ActionSpec, tool string) bool {
+	for _, alias := range spec.Aliases {
+		if alias != tool && alias != spec.Name && !strings.Contains(alias, ".") {
+			return true
+		}
+	}
+	return false
+}
+
 func projectActionSpecByTool(t *testing.T, specs []toolutil.ActionSpec, toolName string) toolutil.ActionSpec {
 	t.Helper()
 	for _, spec := range specs {

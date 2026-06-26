@@ -28,6 +28,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -114,7 +115,7 @@ func newTestMCPServer(t *testing.T) *mcp.Server {
 		Name:    serverName,
 		Version: "test",
 	}, nil)
-	tools.RegisterAll(server, client, true)
+	tools.RegisterAll(server, client, edition.Ultimate)
 	resources.Register(server, client)
 	prompts.Register(server, client)
 	return server
@@ -960,9 +961,9 @@ func TestStaticConfigurationExamplesPreferToolSurface(t *testing.T) {
 	}
 }
 
-// TestMain_HelpParsesEnterpriseFlag verifies the CLI registers and visits the
-// --enterprise flag before returning through the help path.
-func TestMain_HelpParsesEnterpriseFlag(t *testing.T) {
+// TestMain_HelpParsesTierFlag verifies the CLI registers and visits the
+// --tier flag before returning through the help path.
+func TestMain_HelpParsesTierFlag(t *testing.T) {
 	oldArgs := os.Args
 	oldCommandLine := flag.CommandLine
 	oldStdout := os.Stdout
@@ -971,7 +972,7 @@ func TestMain_HelpParsesEnterpriseFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
-	os.Args = []string{"gitlab-mcp-server", "-h", "-enterprise"}
+	os.Args = []string{"gitlab-mcp-server", "-h", "-tier", "ultimate"}
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)
 	os.Stdout = w
@@ -1409,10 +1410,10 @@ func TestCreateServer_ToolManifestRoutesFollowVisibleTools(t *testing.T) {
 // server registers a different CE/Enterprise catalog later in the same process.
 func TestCreateServer_ToolManifestRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
-	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: false})
+	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Tier: edition.Free})
 	ceSession := newInMemorySession(t, ceServer)
 
-	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: true})
+	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Tier: edition.Ultimate})
 
 	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_project.push_rule_get"})
 	if err == nil {
@@ -2227,6 +2228,47 @@ func TestLegacyMetaToolsFlagValue_OnlyUsesExplicitFlag(t *testing.T) {
 	}
 }
 
+// TestResolveHTTPTier verifies that the --tier flag resolves to the expected
+// tier and explicit flag, including the unset (detect) and invalid cases.
+func TestResolveHTTPTier(t *testing.T) {
+	tests := []struct {
+		name         string
+		tier         string
+		tierSet      bool
+		wantTier     edition.Tier
+		wantExplicit bool
+		wantErr      bool
+	}{
+		{name: "unset detects", tierSet: false, wantTier: edition.Free, wantExplicit: false},
+		{name: "free", tier: "free", tierSet: true, wantTier: edition.Free, wantExplicit: true},
+		{name: "ce", tier: "ce", tierSet: true, wantTier: edition.Free, wantExplicit: true},
+		{name: "premium", tier: "premium", tierSet: true, wantTier: edition.Premium, wantExplicit: true},
+		{name: "ultimate", tier: "ultimate", tierSet: true, wantTier: edition.Ultimate, wantExplicit: true},
+		{name: "invalid", tier: "platinum", tierSet: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hcfg := &httpConfig{tier: tt.tier, tierSet: tt.tierSet}
+			tier, explicit, err := resolveHTTPTier(hcfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("resolveHTTPTier() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveHTTPTier() error = %v", err)
+			}
+			if tier != tt.wantTier {
+				t.Errorf("tier = %v, want %v", tier, tt.wantTier)
+			}
+			if explicit != tt.wantExplicit {
+				t.Errorf("explicit = %v, want %v", explicit, tt.wantExplicit)
+			}
+		})
+	}
+}
+
 // TestDoToolSearch_HonorsToolSurface verifies tool search can inspect each
 // selectable tool surface instead of always searching the legacy meta setting.
 func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
@@ -2249,7 +2291,7 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 			os.Stdout = w
 			t.Cleanup(func() { os.Stdout = oldStdout })
 
-			if searchErr := doToolSearch(tt.query, tt.toolSurface, false); searchErr != nil {
+			if searchErr := doToolSearch(tt.query, tt.toolSurface, edition.Free); searchErr != nil {
 				t.Fatalf("doToolSearch() error: %v", searchErr)
 			}
 			_ = w.Close()
@@ -2276,7 +2318,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_, _ string, _ bool) error {
+	toolSearchRunner = func(_, _ string, _ edition.Tier) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }
@@ -2309,7 +2351,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 		}
 	}()
 
-	runToolSearch("project", config.ToolSurfaceMeta, false)
+	runToolSearch("project", config.ToolSurfaceMeta, edition.Free)
 }
 
 // TestParseLogLevel verifies that LOG_LEVEL values map to correct slog levels.
@@ -3343,7 +3385,6 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 		GitLabURL:     "", // empty uses config.DefaultGitLabURL for dummy client registration
 		SkipTLSVerify: true,
 		MetaTools:     true,
-		Enterprise:    false,
 	}
 
 	data, err := buildServerCard(cfg)
@@ -3443,7 +3484,6 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 		GitLabURL:     "",
 		SkipTLSVerify: true,
 		MetaTools:     false,
-		Enterprise:    false,
 	}
 
 	data, err := buildServerCard(cfg)

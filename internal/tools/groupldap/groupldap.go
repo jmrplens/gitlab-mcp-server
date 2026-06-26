@@ -46,6 +46,17 @@ type ListInput struct {
 	GroupID string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 }
 
+// groupExists reports whether a group is reachable. It is used only to
+// disambiguate a 404 from ListGroupLDAPLinks (a group with no LDAP links versus
+// a missing group). It takes a plain groupID so the unrelated GetGroupOptions
+// existence-probe literal is not attributed to an LDAP input struct: the
+// LDAP-links list endpoint (GET /groups/:id/ldap_group_links) accepts no query
+// parameters, so ListInput intentionally carries only group_id.
+func groupExists(ctx context.Context, client *gitlabclient.Client, groupID string) bool {
+	_, _, err := client.GL().Groups.GetGroup(groupID, &gl.GetGroupOptions{}, gl.WithContext(ctx))
+	return err == nil
+}
+
 // List retrieves all LDAP links for a group.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.GroupID == "" {
@@ -53,10 +64,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	links, _, err := client.GL().Groups.ListGroupLDAPLinks(input.GroupID, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			if _, _, groupErr := client.GL().Groups.GetGroup(input.GroupID, &gl.GetGroupOptions{}, gl.WithContext(ctx)); groupErr == nil {
-				return ListOutput{Links: []Output{}}, nil
-			}
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) && groupExists(ctx, client, input.GroupID) {
+			return ListOutput{Links: []Output{}}, nil
 		}
 		return ListOutput{}, toolutil.WrapErrWithHint("list group LDAP links", err, groupLDAPLinkHint)
 	}

@@ -9,7 +9,26 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
+
+// tierIsEnterprise reports whether a GITLAB_TIER env value denotes an
+// Enterprise (Premium or Ultimate) tier. Unset/unknown values are treated as
+// not enterprise, mirroring the runtime detection fallback.
+func tierIsEnterprise(value string) bool {
+	tier, ok := edition.ParseTier(value)
+	return ok && tier.IsEnterprise()
+}
+
+// tierString maps the wizard's boolean Enterprise choice to a GITLAB_TIER value.
+// Enterprise maps to "ultimate" (the broadest catalog), preserving the prior
+// "enable all EE tools" semantics; otherwise "free".
+func tierString(enterprise bool) string {
+	if enterprise {
+		return edition.Ultimate.String()
+	}
+	return edition.Free.String()
+}
 
 // writeEnvFileFn is the function used to write the env file.
 // Tests can swap this to write to a temp directory instead.
@@ -59,7 +78,7 @@ func loadExistingConfigFromPath(path string) (ServerConfig, bool) {
 	cfg.ToolSurface, cfg.MetaTools = toolSurfaceFromEnv(vars)
 	cfg.CapabilitySurface = firstNonEmpty(vars["CAPABILITY_SURFACE"], cfg.CapabilitySurface)
 	cfg.MetaParamSchema = firstNonEmpty(vars["META_PARAM_SCHEMA"], cfg.MetaParamSchema)
-	cfg.Enterprise = envBool(vars, "GITLAB_ENTERPRISE", false)
+	cfg.Enterprise = tierIsEnterprise(vars["GITLAB_TIER"])
 	cfg.ReadOnly = envBool(vars, "GITLAB_READ_ONLY", false)
 	cfg.SafeMode = envBool(vars, "GITLAB_SAFE_MODE", false)
 	cfg.EmbeddedResources = envBool(vars, "EMBEDDED_RESOURCES", true)
@@ -128,7 +147,7 @@ func envFileEntries(cfg ServerConfig) []envFileEntry {
 		{"TOOL_SURFACE", cfg.ToolSurface},
 		{"CAPABILITY_SURFACE", cfg.CapabilitySurface},
 		{"META_PARAM_SCHEMA", cfg.MetaParamSchema},
-		{"GITLAB_ENTERPRISE", boolString(cfg.Enterprise)},
+		{"GITLAB_TIER", tierString(cfg.Enterprise)},
 		{"GITLAB_READ_ONLY", boolString(cfg.ReadOnly)},
 		{"GITLAB_SAFE_MODE", boolString(cfg.SafeMode)},
 		{"EMBEDDED_RESOURCES", boolString(cfg.EmbeddedResources)},

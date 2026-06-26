@@ -38,7 +38,9 @@ func FormatMarkdown(out Output) string {
 		fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	}
 	fmt.Fprintf(&b, "| Visibility | %s |\n", out.Visibility)
-	fmt.Fprintf(&b, "| Author | %s (@%s) |\n", out.Author.Name, out.Author.Username)
+	if out.Author != nil {
+		fmt.Fprintf(&b, "| Author | %s (@%s) |\n", out.Author.Name, out.Author.Username)
+	}
 	if out.ProjectID != 0 {
 		if pp := extractProjectPath(out.WebURL); pp != "" {
 			fmt.Fprintf(&b, "| Project | %s |\n", pp)

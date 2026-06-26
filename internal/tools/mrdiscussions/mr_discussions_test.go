@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -765,7 +767,7 @@ func TestFormatNoteMarkdown_Full(t *testing.T) {
 	n := NoteOutput{
 		ID:        500,
 		Body:      "Looks good!",
-		Author:    "reviewer",
+		Author:    &NoteUserOutput{Username: "reviewer"},
 		CreatedAt: "2026-03-02T12:00:00Z",
 		Resolved:  true,
 	}
@@ -786,7 +788,7 @@ func TestFormatNoteMarkdown_Full(t *testing.T) {
 
 // TestFormatNoteMarkdown_Minimal verifies FormatNoteMarkdown when minimal.
 func TestFormatNoteMarkdown_Minimal(t *testing.T) {
-	n := NoteOutput{ID: 1, Body: "hi", Author: "u", CreatedAt: "2026-01-01T00:00:00Z"}
+	n := NoteOutput{ID: 1, Body: "hi", Author: &NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z"}
 	md := FormatNoteMarkdown(n)
 	if !strings.Contains(md, "## Discussion Note #1") {
 		t.Errorf("missing header:\n%s", md)
@@ -805,9 +807,9 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 	d := Output{
 		ID:             "disc-abc",
 		IndividualNote: false,
-		Notes: []NoteOutput{
-			{ID: 1, Body: "First", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
-			{ID: 2, Body: "Reply", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z"},
+		Notes: []*NoteOutput{
+			{ID: 1, Body: "First", Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, Body: "Reply", Author: &NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
 	}
 	md := FormatOutputMarkdown(d)
@@ -850,8 +852,8 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithDiscussions(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: "d1", IndividualNote: false, Notes: []NoteOutput{{ID: 1}, {ID: 2}}},
-			{ID: "d2", IndividualNote: true, Notes: []NoteOutput{{ID: 3}}},
+			{ID: "d1", IndividualNote: false, Notes: []*NoteOutput{{ID: 1}, {ID: 2}}},
+			{ID: "d2", IndividualNote: true, Notes: []*NoteOutput{{ID: 3}}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 5, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -935,8 +937,8 @@ func TestNoteToOutput_NilTimestamps(t *testing.T) {
 	if !n.Internal {
 		t.Error("expected Internal = true")
 	}
-	if n.Type != "MergeRequest" {
-		t.Errorf("Type = %q, want %q", n.Type, "MergeRequest")
+	if n.NoteableType != "MergeRequest" {
+		t.Errorf("NoteableType = %q, want %q", n.NoteableType, "MergeRequest")
 	}
 	if n.NoteableID != 99 {
 		t.Errorf("NoteableID = %d, want 99", n.NoteableID)
@@ -1128,5 +1130,276 @@ func TestValidatePosition_APIError(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("expected nil (best-effort skip), got: %v", err)
+	}
+}
+
+// TestCreate_FullImagePosition verifies that Create maps the full image
+// (coordinate) DiffPosition onto the SDK PositionOptions, exercising the
+// width/height/x/y branches of buildPositionOptions. Image positions skip diff
+// validation because no line is set.
+func TestCreate_FullImagePosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1Discussions {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":"img1","individual_note":false,"notes":[{"id":700,"body":"see here","author":{"id":2,"username":"reviewer"}}]}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID,
+		MRIID:     1,
+		Body:      "see here",
+		CommitID:  "commit-abc",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		Position: &DiffPosition{
+			BaseSHA:      "base000",
+			StartSHA:     "start111",
+			HeadSHA:      "head222",
+			NewPath:      "design.png",
+			OldPath:      "design.png",
+			PositionType: "image",
+			Width:        100,
+			Height:       200,
+			X:            10.5,
+			Y:            20.5,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() image position unexpected error: %v", err)
+	}
+	if out.ID != "img1" {
+		t.Errorf(fmtIDWant, out.ID, "img1")
+	}
+}
+
+// TestBuildPositionOptions_TextLineRange verifies that buildPositionOptions
+// maps a multi-line text DiffPosition (with old_line and a line_range) onto the
+// SDK PositionOptions, covering the line-range builder branches.
+func TestBuildPositionOptions_TextLineRange(t *testing.T) {
+	pos := buildPositionOptions(&DiffPosition{
+		BaseSHA:  "base",
+		StartSHA: "start",
+		HeadSHA:  "head",
+		NewPath:  "main.go",
+		OldPath:  "main.go",
+		OldLine:  5,
+		NewLine:  6,
+		LineRange: &DiffLineRangeInput{
+			Start: &DiffLinePositionInput{LineCode: "code-a", Type: "old", OldLine: 5},
+			End:   &DiffLinePositionInput{LineCode: "code-b", Type: "new", NewLine: 6},
+		},
+	})
+	if pos.PositionType == nil || *pos.PositionType != "text" {
+		t.Fatalf("PositionType = %v, want text", pos.PositionType)
+	}
+	if pos.OldLine == nil || *pos.OldLine != 5 {
+		t.Errorf("OldLine = %v, want 5", pos.OldLine)
+	}
+	if pos.LineRange == nil || pos.LineRange.Start == nil || pos.LineRange.End == nil {
+		t.Fatal("expected populated line_range start and end")
+	}
+	if pos.LineRange.Start.LineCode == nil || *pos.LineRange.Start.LineCode != "code-a" {
+		t.Errorf("Start.LineCode = %v, want code-a", pos.LineRange.Start.LineCode)
+	}
+	if pos.LineRange.End.NewLine == nil || *pos.LineRange.End.NewLine != 6 {
+		t.Errorf("End.NewLine = %v, want 6", pos.LineRange.End.NewLine)
+	}
+}
+
+// TestBuildLineRangeOptions_Empty verifies that buildLineRangeOptions returns
+// nil when both endpoints are nil.
+func TestBuildLineRangeOptions_Empty(t *testing.T) {
+	if lr := buildLineRangeOptions(&DiffLineRangeInput{}); lr != nil {
+		t.Errorf("expected nil line range for empty endpoints, got %+v", lr)
+	}
+}
+
+// TestNoteToOutput_PositionAndResolvedBy verifies that NoteToOutput surfaces the
+// full position sub-object (including line_range) and the resolved_by object
+// from a fully populated note, exercising the output-side converters.
+func TestNoteToOutput_PositionAndResolvedBy(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1Discussions {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id":"pos1",
+				"individual_note":false,
+				"notes":[{
+					"id":800,
+					"body":"inline",
+					"author":{"id":2,"username":"reviewer","name":"Rev"},
+					"created_at":"2026-03-02T12:00:00Z",
+					"updated_at":"2026-03-02T12:05:00Z",
+					"expires_at":"2026-04-02T12:00:00Z",
+					"resolved":true,
+					"resolvable":true,
+					"resolved_at":"2026-03-03T09:00:00Z",
+					"resolved_by":{"id":7,"username":"maintainer"},
+					"attachment":"file.png",
+					"title":"a title",
+					"file_name":"snippet.go",
+					"position":{
+						"base_sha":"b","start_sha":"s","head_sha":"h",
+						"position_type":"text","new_path":"main.go","new_line":12,
+						"old_path":"main.go","old_line":11,
+						"line_range":{
+							"start":{"line_code":"lc1","type":"old","old_line":11},
+							"end":{"line_code":"lc2","type":"new","new_line":12}
+						}
+					}
+				}]
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, MRIID: 1, Body: "inline"})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	n := out.Notes[0]
+	assertNoteScalars(t, n)
+	assertNotePosition(t, n.Position)
+}
+
+// assertNoteScalars verifies the additive scalar / user sub-object fields mapped
+// by NoteToOutput from a fully populated note.
+func assertNoteScalars(t *testing.T, n *NoteOutput) {
+	t.Helper()
+	if n.Author == nil || n.Author.Name != "Rev" {
+		t.Fatalf("Author = %+v, want name Rev", n.Author)
+	}
+	if n.ResolvedBy == nil || n.ResolvedBy.Username != "maintainer" {
+		t.Fatalf("ResolvedBy = %+v, want maintainer", n.ResolvedBy)
+	}
+	if n.ResolvedAt == "" || n.ExpiresAt == "" {
+		t.Errorf("expected resolved_at and expires_at populated, got %q / %q", n.ResolvedAt, n.ExpiresAt)
+	}
+	if n.Attachment != "file.png" || n.Title != "a title" || n.FileName != "snippet.go" {
+		t.Errorf("attachment/title/file_name not mapped: %q / %q / %q", n.Attachment, n.Title, n.FileName)
+	}
+}
+
+// assertNotePosition verifies the position sub-object (including its multi-line
+// line_range) mapped by NoteToOutput.
+func assertNotePosition(t *testing.T, pos *NotePositionOutput) {
+	t.Helper()
+	if pos == nil {
+		t.Fatal("expected position object")
+	}
+	if pos.NewLine != 12 || pos.OldLine != 11 {
+		t.Errorf("position lines = %d/%d, want 12/11", pos.NewLine, pos.OldLine)
+	}
+	if pos.LineRange == nil || pos.LineRange.Start == nil || pos.LineRange.End == nil {
+		t.Fatal("expected populated line_range start/end on output position")
+	}
+	if pos.LineRange.Start.LineCode != "lc1" || pos.LineRange.End.NewLine != 12 {
+		t.Errorf("line_range endpoints not mapped: %+v", pos.LineRange)
+	}
+}
+
+// TestNoteAuthorUsername_NilAuthor verifies the nil-guard in noteAuthorUsername
+// returns an empty string when the author object is absent.
+func TestNoteAuthorUsername_NilAuthor(t *testing.T) {
+	if got := noteAuthorUsername(NoteOutput{ID: 1}); got != "" {
+		t.Errorf("noteAuthorUsername(nil author) = %q, want empty", got)
+	}
+}
+
+// TestNoteResolvedByOutput_Empty verifies noteResolvedByOutput returns nil when
+// no user has resolved the note.
+func TestNoteResolvedByOutput_Empty(t *testing.T) {
+	if got := noteResolvedByOutput(gl.NoteResolvedBy{}); got != nil {
+		t.Errorf("expected nil resolved_by for zero user, got %+v", got)
+	}
+}
+
+// TestDecorateMRDiscussionMeta_DefaultFallback covers the defensive default
+// branch of decorateMRDiscussionMeta for an unknown individual tool name.
+func TestDecorateMRDiscussionMeta_DefaultFallback(t *testing.T) {
+	var options toolutil.ActionSpecOptions
+	decorateMRDiscussionMeta(&options, "gitlab_unknown_tool")
+	if options.Usage == "" {
+		t.Error("expected fallback Usage to be set")
+	}
+	if len(options.RelatedActions) == 0 {
+		t.Error("expected fallback RelatedActions to be set")
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadata guards the 1:1-audit R-META requirements:
+// every MR discussion action must carry action-specific Usage (not the generic
+// placeholder), natural-language aliases, canonical mr_review.* RelatedActions,
+// parameter guidance, and an IndividualTool.Description with "Returns:" and
+// "See also:" sections.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	specs := newMRDiscussionsActionSpecs(t)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+
+	tools := []string{
+		"gitlab_mr_discussion_create",
+		"gitlab_mr_discussion_list",
+		"gitlab_mr_discussion_get",
+		"gitlab_mr_discussion_reply",
+		"gitlab_mr_discussion_resolve",
+		"gitlab_mr_discussion_note_update",
+		"gitlab_mr_discussion_note_delete",
+	}
+
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			assertDiscoveryMetadata(t, tool, byTool[tool])
+		})
+	}
+}
+
+// assertDiscoveryMetadata checks one MR discussion spec against the R-META
+// requirements: action-specific Usage, natural-language aliases, canonical
+// RelatedActions, parameter guidance, and a Returns:/See also: description.
+func assertDiscoveryMetadata(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute mrdiscussions domain action.") {
+		t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: expected RelatedActions, got none", tool)
+	}
+	for _, ra := range spec.RelatedActions {
+		if !strings.HasPrefix(ra, "mr_review.") && !strings.HasPrefix(ra, "merge_request.") {
+			t.Errorf("%s: RelatedAction %q is not a canonical mr_review.*/merge_request.* id", tool, ra)
+		}
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Errorf("%s: expected ParameterGuidance, got none", tool)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+	}
+}
+
+// TestLinePositionOutput_Nil verifies linePositionOutput returns nil for a nil
+// SDK line position.
+func TestLinePositionOutput_Nil(t *testing.T) {
+	if got := linePositionOutput(nil); got != nil {
+		t.Errorf("linePositionOutput(nil) = %+v, want nil", got)
+	}
+}
+
+// TestLineRangeOutput_NilAndEmpty verifies lineRangeOutput returns nil for a nil
+// range and for a range whose endpoints are both nil.
+func TestLineRangeOutput_NilAndEmpty(t *testing.T) {
+	if got := lineRangeOutput(nil); got != nil {
+		t.Errorf("lineRangeOutput(nil) = %+v, want nil", got)
+	}
+	if got := lineRangeOutput(&gl.LineRange{}); got != nil {
+		t.Errorf("lineRangeOutput(empty) = %+v, want nil", got)
 	}
 }

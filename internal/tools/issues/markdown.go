@@ -46,7 +46,7 @@ func FormatListAllMarkdown(out ListOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -56,6 +56,38 @@ func FormatListAllMarkdown(out ListOutput) string {
 		"Use `gitlab_issue_update` to change state or labels",
 	)
 	return b.String()
+}
+
+// AuthorName returns the issue author's display username for Markdown, read from
+// the full author object. It is exported so sibling packages (e.g.
+// mergerequests) that embed [Output] in their own tables can render the author
+// without reaching into the object.
+func AuthorName(i Output) string {
+	if i.Author != nil {
+		return i.Author.Username
+	}
+	return ""
+}
+
+// assigneeUsernames returns the assignee usernames for Markdown rendering,
+// read from the full assignee objects.
+func assigneeUsernames(i Output) []string {
+	names := make([]string, 0, len(i.Assignees))
+	for _, a := range i.Assignees {
+		if a != nil {
+			names = append(names, a.Username)
+		}
+	}
+	return names
+}
+
+// closerName returns the username of the user that closed the issue for
+// Markdown, read from the full closer object.
+func closerName(i Output) string {
+	if i.ClosedBy != nil {
+		return i.ClosedBy.Username
+	}
+	return ""
 }
 
 // FormatTimeStatsMarkdown renders time tracking statistics as Markdown.
@@ -109,7 +141,11 @@ func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
 	b.WriteString("| IID | Title | State | Author | Source → Target |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s → %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(mr.Author), mr.SourceBranch, mr.TargetBranch)
+		author := ""
+		if mr.Author != nil {
+			author = mr.Author.Username
+		}
+		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s → %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(author), mr.SourceBranch, mr.TargetBranch)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -128,8 +164,8 @@ func FormatMarkdown(i Output) string {
 		confidentialTag = " " + toolutil.EmojiConfidential
 	}
 	fmt.Fprintf(&b, "## %s Issue #%d: %s%s\n\n", toolutil.IssueStateEmoji(i.State), i.IID, toolutil.EscapeMdHeading(i.Title), confidentialTag)
-	if i.References != "" {
-		fmt.Fprintf(&b, "- **Reference**: %s\n", i.References)
+	if i.References != nil && i.References.Full != "" {
+		fmt.Fprintf(&b, "- **Reference**: %s\n", i.References.Full)
 	}
 	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.IssueStateEmoji(i.State), i.State)
 	if i.IssueType != "" && i.IssueType != "issue" {
@@ -138,22 +174,22 @@ func FormatMarkdown(i Output) string {
 	if i.Confidential {
 		fmt.Fprintf(&b, "- %s **Confidential**\n", toolutil.EmojiConfidential)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, i.Author)
+	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, AuthorName(i))
 	if len(i.Labels) > 0 {
 		fmt.Fprintf(&b, "- **Labels**: %s\n", strings.Join(i.Labels, ", "))
 	}
-	if len(i.Assignees) > 0 {
-		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(prefixAt(i.Assignees), ", "))
+	if names := assigneeUsernames(i); len(names) > 0 {
+		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(prefixAt(names), ", "))
 	}
-	if i.Milestone != "" {
-		fmt.Fprintf(&b, "- **Milestone**: %s\n", i.Milestone)
+	if i.Milestone != nil && i.Milestone.Title != "" {
+		fmt.Fprintf(&b, "- **Milestone**: %s\n", i.Milestone.Title)
 	}
 	if i.DueDate != "" {
 		fmt.Fprintf(&b, "- **Due Date**: %s\n", toolutil.FormatTime(i.DueDate))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(i.CreatedAt))
-	if i.State == "closed" && i.ClosedBy != "" {
-		fmt.Fprintf(&b, "- **Closed By**: @%s", i.ClosedBy)
+	if i.State == "closed" && closerName(i) != "" {
+		fmt.Fprintf(&b, "- **Closed By**: @%s", closerName(i))
 		if i.ClosedAt != "" {
 			fmt.Fprintf(&b, " on %s", toolutil.FormatTime(i.ClosedAt))
 		}
@@ -162,8 +198,8 @@ func FormatMarkdown(i Output) string {
 	if i.MergeRequestCount > 0 {
 		fmt.Fprintf(&b, "- **Linked MRs**: %d\n", i.MergeRequestCount)
 	}
-	if i.TaskCompletionTotal > 0 {
-		fmt.Fprintf(&b, "- **Tasks**: %d/%d completed\n", i.TaskCompletionCount, i.TaskCompletionTotal)
+	if i.TaskCompletionStatus != nil && i.TaskCompletionStatus.Count > 0 {
+		fmt.Fprintf(&b, "- **Tasks**: %d/%d completed\n", i.TaskCompletionStatus.CompletedCount, i.TaskCompletionStatus.Count)
 	}
 	if i.UserNotesCount > 0 {
 		fmt.Fprintf(&b, "- **Comments**: %d\n", i.UserNotesCount)
@@ -202,7 +238,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -228,7 +264,7 @@ func FormatListGroupMarkdown(out ListGroupOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

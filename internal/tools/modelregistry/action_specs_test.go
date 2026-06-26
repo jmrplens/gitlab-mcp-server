@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestActionSpecs_Metadata verifies model registry action spec metadata.
@@ -28,6 +29,32 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(specs[0].Aliases) == 0 {
 		t.Fatalf("Aliases for %s are empty", specs[0].Name)
 	}
+	if !hasNaturalLanguageAlias(specs[0]) {
+		t.Fatalf("Aliases for %s carry only the tool name; want distinctive natural-language aliases: %v", specs[0].Name, specs[0].Aliases)
+	}
+	if len(specs[0].RelatedActions) == 0 {
+		t.Fatalf("RelatedActions for %s are empty", specs[0].Name)
+	}
+	desc := specs[0].IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Fatalf("IndividualTool.Description for %s missing Returns:/See also: form: %q", specs[0].Name, desc)
+	}
+}
+
+// hasNaturalLanguageAlias reports whether the spec carries at least one alias
+// that is neither the canonical action name nor the individual tool name,
+// mirroring the R-META audit's aliases_only_toolname check.
+func hasNaturalLanguageAlias(spec toolutil.ActionSpec) bool {
+	canonical := strings.ToLower(strings.TrimSpace(spec.Name))
+	tool := strings.ToLower(strings.TrimSpace(spec.IndividualTool.Name))
+	for _, alias := range spec.Aliases {
+		normalized := strings.ToLower(strings.TrimSpace(alias))
+		if normalized == "" || normalized == canonical || normalized == tool {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // TestActionSpecs_CallRoute verifies the model registry download route executes successfully.

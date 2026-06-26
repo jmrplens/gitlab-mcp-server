@@ -19,19 +19,88 @@ type LinkedItem struct {
 	Path     string `json:"path,omitempty"`
 }
 
+// BasicUserOutput mirrors gl.BasicUser (and the compatible gl.EpicAuthor),
+// the compact user object embedded on the epic author and assignees keys.
+// Per the 1:1 audit policy (full nested objects, C-IMPORTS) the SDK
+// sub-object is replicated here rather than imported from a sibling package
+// to preserve the zero-import-cycle constraint.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name,omitempty"`
+	State     string `json:"state,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// basicUserFromUser converts a gl.BasicUser (Work Items API author/assignee)
+// to its output shape, returning nil when the SDK value is nil.
+func basicUserFromUser(u *gl.BasicUser) *BasicUserOutput {
+	if u == nil {
+		return nil
+	}
+	out := &BasicUserOutput{
+		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
+	}
+	if u.CreatedAt != nil {
+		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// basicUsersFromUsers converts a slice of gl.BasicUser, skipping nil elements
+// and returning nil for an empty or all-nil slice.
+func basicUsersFromUsers(users []*gl.BasicUser) []*BasicUserOutput {
+	if len(users) == 0 {
+		return nil
+	}
+	out := make([]*BasicUserOutput, 0, len(users))
+	for _, u := range users {
+		if v := basicUserFromUser(u); v != nil {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// basicUserFromEpicAuthor converts a gl.EpicAuthor (REST Epics API author) to
+// its output shape, returning nil when the SDK value is nil. gl.EpicAuthor has
+// no created_at field, so CreatedAt is left empty.
+func basicUserFromEpicAuthor(a *gl.EpicAuthor) *BasicUserOutput {
+	if a == nil {
+		return nil
+	}
+	return &BasicUserOutput{
+		ID: a.ID, Username: a.Username, Name: a.Name, State: a.State,
+		AvatarURL: a.AvatarURL, WebURL: a.WebURL,
+	}
+}
+
 // ListInput defines parameters for listing group epics via Work Items API.
 type ListInput struct {
 	FullPath           string   `json:"full_path" jsonschema:"Full path of the group (e.g. my-group or my-group/sub-group),required"`
 	State              string   `json:"state,omitempty" jsonschema:"Filter by state (opened/closed/all)"`
 	Search             string   `json:"search,omitempty" jsonschema:"Search in title and description"`
 	AuthorUsername     string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
+	AuthorID           *int64   `json:"author_id,omitempty" jsonschema:"Filter by author user ID"`
 	LabelName          []string `json:"label_name,omitempty" jsonschema:"Filter by label names"`
+	MyReactionEmoji    string   `json:"my_reaction_emoji,omitempty" jsonschema:"Filter by reaction emoji the authenticated user awarded (e.g. thumbsup or None/Any)"`
 	Confidential       *bool    `json:"confidential,omitempty" jsonschema:"Filter by confidentiality"`
-	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order"`
+	OrderBy            string   `json:"order_by,omitempty" jsonschema:"Order epics by field (created_at, updated_at, title)"`
+	Sort               string   `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
+	CreatedAfter       string   `json:"created_after,omitempty" jsonschema:"Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore      string   `json:"created_before,omitempty" jsonschema:"Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter       string   `json:"updated_after,omitempty" jsonschema:"Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore      string   `json:"updated_before,omitempty" jsonschema:"Return epics updated on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	WithLabelsDetails  *bool    `json:"with_labels_details,omitempty" jsonschema:"If true, return more details (name, color, description) for each label in the labels field"`
 	First              *int64   `json:"first,omitempty" jsonschema:"Number of items to return (cursor-based pagination)"`
 	After              string   `json:"after,omitempty" jsonschema:"Cursor for forward pagination"`
 	IncludeAncestors   *bool    `json:"include_ancestors,omitempty" jsonschema:"Include epics from ancestor groups"`
 	IncludeDescendants *bool    `json:"include_descendants,omitempty" jsonschema:"Include epics from descendant groups"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput defines parameters for getting a single epic.
@@ -86,32 +155,49 @@ type DeleteInput struct {
 	IID      int64  `json:"epic_iid" jsonschema:"Epic IID within the group,required"`
 }
 
-// Output represents a single epic (backed by a Work Item of type Epic).
+// Output represents a single epic (backed by a Work Item of type Epic, or by
+// the REST gl.Epic for the child-epic links endpoint). Per the 1:1 audit
+// policy it carries the union of fields exposed by gl.WorkItem and gl.Epic;
+// fields absent on a given source stay at their zero value.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int64        `json:"id"`
-	IID          int64        `json:"iid"`
-	Type         string       `json:"type"`
-	State        string       `json:"state"`
-	Status       string       `json:"status,omitempty"`
-	Title        string       `json:"title"`
-	Description  string       `json:"description,omitempty"`
-	WebURL       string       `json:"web_url,omitempty"`
-	Author       string       `json:"author,omitempty"`
-	Assignees    []string     `json:"assignees,omitempty"`
-	Labels       []string     `json:"labels,omitempty"`
-	LinkedItems  []LinkedItem `json:"linked_items,omitempty"`
-	Confidential bool         `json:"confidential,omitempty"`
-	Color        string       `json:"color,omitempty"`
-	StartDate    string       `json:"start_date,omitempty"`
-	DueDate      string       `json:"due_date,omitempty"`
-	HealthStatus string       `json:"health_status,omitempty"`
-	Weight       *int64       `json:"weight,omitempty"`
-	ParentIID    int64        `json:"parent_iid,omitempty"`
-	ParentPath   string       `json:"parent_path,omitempty"`
-	CreatedAt    string       `json:"created_at,omitempty"`
-	UpdatedAt    string       `json:"updated_at,omitempty"`
-	ClosedAt     string       `json:"closed_at,omitempty"`
+	ID           int64              `json:"id"`
+	IID          int64              `json:"iid"`
+	Type         string             `json:"type"`
+	State        string             `json:"state"`
+	Status       string             `json:"status,omitempty"`
+	Title        string             `json:"title"`
+	Description  string             `json:"description,omitempty"`
+	WebURL       string             `json:"web_url,omitempty"`
+	URL          string             `json:"url,omitempty"`
+	GroupID      int64              `json:"group_id,omitempty"`
+	ParentID     int64              `json:"parent_id,omitempty"`
+	Author       *BasicUserOutput   `json:"author,omitempty"`
+	Assignees    []*BasicUserOutput `json:"assignees,omitempty"`
+	Labels       []string           `json:"labels,omitempty"`
+	LinkedItems  []LinkedItem       `json:"linked_items,omitempty"`
+	Confidential bool               `json:"confidential,omitempty"`
+	Color        string             `json:"color,omitempty"`
+
+	StartDate               string `json:"start_date,omitempty"`
+	StartDateIsFixed        bool   `json:"start_date_is_fixed,omitempty"`
+	StartDateFixed          string `json:"start_date_fixed,omitempty"`
+	StartDateFromMilestones string `json:"start_date_from_milestones,omitempty"`
+	DueDate                 string `json:"due_date,omitempty"`
+	DueDateIsFixed          bool   `json:"due_date_is_fixed,omitempty"`
+	DueDateFixed            string `json:"due_date_fixed,omitempty"`
+	DueDateFromMilestones   string `json:"due_date_from_milestones,omitempty"`
+
+	HealthStatus   string `json:"health_status,omitempty"`
+	Weight         *int64 `json:"weight,omitempty"`
+	Upvotes        int64  `json:"upvotes,omitempty"`
+	Downvotes      int64  `json:"downvotes,omitempty"`
+	UserNotesCount int64  `json:"user_notes_count,omitempty"`
+	ParentIID      int64  `json:"parent_iid,omitempty"`
+	ParentPath     string `json:"parent_path,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
+	ClosedAt       string `json:"closed_at,omitempty"`
 }
 
 // ListOutput holds a list of epics with cursor-based pagination info.
@@ -126,17 +212,38 @@ type LinksOutput struct {
 	ChildEpics []LinksItem `json:"child_epics"`
 }
 
-// LinksItem is a simplified epic output for the GetLinks REST endpoint.
+// LinksItem is the child-epic output for the GetLinks REST endpoint, mirroring
+// gl.Epic. Per the 1:1 audit policy it surfaces every gl.Epic field; the author
+// is a full nested object.
 type LinksItem struct {
-	ID           int64    `json:"id"`
-	IID          int64    `json:"iid"`
-	Title        string   `json:"title"`
-	State        string   `json:"state"`
-	WebURL       string   `json:"web_url,omitempty"`
-	Author       string   `json:"author,omitempty"`
-	Labels       []string `json:"labels,omitempty"`
-	Confidential bool     `json:"confidential,omitempty"`
-	CreatedAt    string   `json:"created_at,omitempty"`
+	ID           int64            `json:"id"`
+	IID          int64            `json:"iid"`
+	GroupID      int64            `json:"group_id,omitempty"`
+	ParentID     int64            `json:"parent_id,omitempty"`
+	Title        string           `json:"title"`
+	Description  string           `json:"description,omitempty"`
+	State        string           `json:"state"`
+	WebURL       string           `json:"web_url,omitempty"`
+	URL          string           `json:"url,omitempty"`
+	Author       *BasicUserOutput `json:"author,omitempty"`
+	Labels       []string         `json:"labels,omitempty"`
+	Confidential bool             `json:"confidential,omitempty"`
+
+	StartDate               string `json:"start_date,omitempty"`
+	StartDateIsFixed        bool   `json:"start_date_is_fixed,omitempty"`
+	StartDateFixed          string `json:"start_date_fixed,omitempty"`
+	StartDateFromMilestones string `json:"start_date_from_milestones,omitempty"`
+	DueDate                 string `json:"due_date,omitempty"`
+	DueDateIsFixed          bool   `json:"due_date_is_fixed,omitempty"`
+	DueDateFixed            string `json:"due_date_fixed,omitempty"`
+	DueDateFromMilestones   string `json:"due_date_from_milestones,omitempty"`
+
+	Upvotes        int64  `json:"upvotes,omitempty"`
+	Downvotes      int64  `json:"downvotes,omitempty"`
+	UserNotesCount int64  `json:"user_notes_count,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"`
+	ClosedAt       string `json:"closed_at,omitempty"`
 }
 
 // toOutput converts a GitLab Work Item to the epic Output format.
@@ -155,12 +262,8 @@ func toOutput(wi *gl.WorkItem) Output {
 	if wi.Status != nil {
 		out.Status = *wi.Status
 	}
-	if wi.Author != nil {
-		out.Author = wi.Author.Username
-	}
-	for _, a := range wi.Assignees {
-		out.Assignees = append(out.Assignees, a.Username)
-	}
+	out.Author = basicUserFromUser(wi.Author)
+	out.Assignees = basicUsersFromUsers(wi.Assignees)
 	for _, l := range wi.Labels {
 		out.Labels = append(out.Labels, l.Name)
 	}
@@ -199,58 +302,77 @@ func toOutput(wi *gl.WorkItem) Output {
 	return out
 }
 
+// formatISODate renders an optional gl.ISOTime as YYYY-MM-DD, or "" when nil.
+func formatISODate(t *gl.ISOTime) string {
+	if t == nil {
+		return ""
+	}
+	return time.Time(*t).Format(time.DateOnly)
+}
+
 // toLinkItem converts a GitLab REST Epic to the LinksItem format.
 func toLinkItem(e *gl.Epic) LinksItem {
-	out := LinksItem{
-		ID:           e.ID,
-		IID:          e.IID,
-		Title:        e.Title,
-		State:        e.State,
-		WebURL:       e.WebURL,
-		Labels:       e.Labels,
-		Confidential: e.Confidential,
+	return LinksItem{
+		ID:                      e.ID,
+		IID:                     e.IID,
+		GroupID:                 e.GroupID,
+		ParentID:                e.ParentID,
+		Title:                   e.Title,
+		Description:             e.Description,
+		State:                   e.State,
+		WebURL:                  e.WebURL,
+		URL:                     e.URL,
+		Author:                  basicUserFromEpicAuthor(e.Author),
+		Labels:                  e.Labels,
+		Confidential:            e.Confidential,
+		StartDate:               formatISODate(e.StartDate),
+		StartDateIsFixed:        e.StartDateIsFixed,
+		StartDateFixed:          formatISODate(e.StartDateFixed),
+		StartDateFromMilestones: formatISODate(e.StartDateFromMilestones),
+		DueDate:                 formatISODate(e.DueDate),
+		DueDateIsFixed:          e.DueDateIsFixed,
+		DueDateFixed:            formatISODate(e.DueDateFixed),
+		DueDateFromMilestones:   formatISODate(e.DueDateFromMilestones),
+		Upvotes:                 e.Upvotes,
+		Downvotes:               e.Downvotes,
+		UserNotesCount:          e.UserNotesCount,
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
-	if e.Author != nil {
-		out.Author = e.Author.Username
-	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
-	}
-	return out
 }
 
 func epicToOutput(e *gl.Epic) Output {
-	out := Output{
-		ID:           e.ID,
-		IID:          e.IID,
-		Type:         "Epic",
-		State:        e.State,
-		Title:        e.Title,
-		Description:  e.Description,
-		WebURL:       e.WebURL,
-		Labels:       e.Labels,
-		Confidential: e.Confidential,
-		ParentIID:    e.ParentID,
+	return Output{
+		ID:                      e.ID,
+		IID:                     e.IID,
+		Type:                    "Epic",
+		State:                   e.State,
+		Title:                   e.Title,
+		Description:             e.Description,
+		WebURL:                  e.WebURL,
+		URL:                     e.URL,
+		GroupID:                 e.GroupID,
+		ParentID:                e.ParentID,
+		Author:                  basicUserFromEpicAuthor(e.Author),
+		Labels:                  e.Labels,
+		Confidential:            e.Confidential,
+		ParentIID:               e.ParentID,
+		StartDate:               formatISODate(e.StartDate),
+		StartDateIsFixed:        e.StartDateIsFixed,
+		StartDateFixed:          formatISODate(e.StartDateFixed),
+		StartDateFromMilestones: formatISODate(e.StartDateFromMilestones),
+		DueDate:                 formatISODate(e.DueDate),
+		DueDateIsFixed:          e.DueDateIsFixed,
+		DueDateFixed:            formatISODate(e.DueDateFixed),
+		DueDateFromMilestones:   formatISODate(e.DueDateFromMilestones),
+		Upvotes:                 e.Upvotes,
+		Downvotes:               e.Downvotes,
+		UserNotesCount:          e.UserNotesCount,
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
-	if e.Author != nil {
-		out.Author = e.Author.Username
-	}
-	if e.StartDate != nil {
-		out.StartDate = time.Time(*e.StartDate).Format(time.DateOnly)
-	}
-	if e.DueDate != nil {
-		out.DueDate = time.Time(*e.DueDate).Format(time.DateOnly)
-	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
-	}
-	if e.UpdatedAt != nil {
-		out.UpdatedAt = e.UpdatedAt.Format(time.RFC3339)
-	}
-	if e.ClosedAt != nil {
-		out.ClosedAt = e.ClosedAt.Format(time.RFC3339)
-	}
-	return out
 }
 
 // mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID.
@@ -271,6 +393,62 @@ func mapStatusToID(s string) gl.WorkItemStatusID {
 	}
 }
 
+// buildEpicListOptions maps a ListInput onto the REST ListGroupEpicsOptions,
+// setting only the filter, ordering, date, and pagination parameters the
+// caller supplied.
+func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
+	perPage := int64(20)
+	if input.First != nil && *input.First > 0 && *input.First <= 100 {
+		perPage = *input.First
+	}
+	opts := &gl.ListGroupEpicsOptions{ListOptions: gl.ListOptions{PerPage: perPage}}
+	if input.State != "" {
+		opts.State = &input.State
+	}
+	if input.Search != "" {
+		opts.Search = &input.Search
+	}
+	if input.AuthorID != nil {
+		opts.AuthorID = input.AuthorID
+	}
+	if len(input.LabelName) > 0 {
+		labels := gl.LabelOptions(input.LabelName)
+		opts.Labels = &labels
+	}
+	if input.MyReactionEmoji != "" {
+		opts.MyReactionEmoji = &input.MyReactionEmoji
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = &input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if t := toolutil.ParseOptionalTime(input.CreatedAfter); t != nil {
+		opts.CreatedAfter = t
+	}
+	if t := toolutil.ParseOptionalTime(input.CreatedBefore); t != nil {
+		opts.CreatedBefore = t
+	}
+	if t := toolutil.ParseOptionalTime(input.UpdatedAfter); t != nil {
+		opts.UpdatedAfter = t
+	}
+	if t := toolutil.ParseOptionalTime(input.UpdatedBefore); t != nil {
+		opts.UpdatedBefore = t
+	}
+	if input.WithLabelsDetails != nil {
+		opts.WithLabelDetails = input.WithLabelsDetails
+	}
+	if input.IncludeAncestors != nil {
+		opts.IncludeAncestorGroups = input.IncludeAncestors
+	}
+	if input.IncludeDescendants != nil {
+		opts.IncludeDescendantGroups = input.IncludeDescendants
+	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	return opts
+}
+
 // List retrieves epics for a group using the Work Items API with type filter.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -283,31 +461,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return listWithWorkItems(ctx, client, input)
 	}
 
-	perPage := int64(20)
-	if input.First != nil && *input.First > 0 && *input.First <= 100 {
-		perPage = *input.First
-	}
-	opts := &gl.ListGroupEpicsOptions{ListOptions: gl.ListOptions{PerPage: perPage}}
-	if input.State != "" {
-		opts.State = &input.State
-	}
-	if input.Search != "" {
-		opts.Search = &input.Search
-	}
-	if len(input.LabelName) > 0 {
-		labels := gl.LabelOptions(input.LabelName)
-		opts.Labels = &labels
-	}
-	if input.Sort != "" {
-		opts.Sort = &input.Sort
-	}
-	if input.IncludeAncestors != nil {
-		opts.IncludeAncestorGroups = input.IncludeAncestors
-	}
-	if input.IncludeDescendants != nil {
-		opts.IncludeDescendantGroups = input.IncludeDescendants
-	}
-
+	opts := buildEpicListOptions(input)
 	items, _, err := client.GL().Epics.ListGroupEpics(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,

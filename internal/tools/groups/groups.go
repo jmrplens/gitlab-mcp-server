@@ -24,10 +24,23 @@ type ListInput struct {
 	Statistics           bool    `json:"statistics,omitempty"            jsonschema:"Include group statistics (storage, counts)"`
 	WithCustomAttributes bool    `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	SkipGroups           []int64 `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
+	MinAccessLevel       int     `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	RepositoryStorage    string  `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
+	Active               *bool   `json:"active,omitempty"                jsonschema:"Filter by active (true) or inactive/archived (false) groups"`
+	Archived             *bool   `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
+	MarkedForDeletionOn  string  `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to groups marked for deletion on this date (YYYY-MM-DD)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a GitLab group.
+//
+// Fields mirror gl.Group (1:1 audit policy: full nested objects). Nested
+// sub-objects (statistics, custom_attributes, default_branch_protection_defaults,
+// shared_with_groups, ldap_group_links, saml_group_links, projects,
+// shared_projects) are surfaced as full local mirrors on their canonical json
+// keys (C-IMPORTS: replicated here rather than imported from sibling packages to
+// preserve the zero-import-cycle constraint).
 type Output struct {
 	toolutil.HintableOutput
 	ID                    int64  `json:"id"`
@@ -55,10 +68,108 @@ type Output struct {
 	EnabledGitAccessProtocol             string `json:"enabled_git_access_protocol,omitempty"`
 	MathRenderingLimitsEnabled           bool   `json:"math_rendering_limits_enabled"`
 	LockMathRenderingLimitsEnabled       bool   `json:"lock_math_rendering_limits_enabled"`
-	DuoAvailability                      string `json:"duo_availability,omitempty"`
-	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled"`
-	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled"`
-	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled"`
+	DuoAvailability                      string `json:"duo_availability,omitempty" tier:"premium"`
+	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled" tier:"premium"`
+	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled" tier:"premium"`
+	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled" tier:"premium"`
+	// Remaining gl.Group fields (1:1 audit).
+	MembershipLock                            bool                      `json:"membership_lock" tier:"premium"`
+	MaxArtifactsSize                          int64                     `json:"max_artifacts_size,omitempty"`
+	DefaultBranchProtectionDefaults           *BranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
+	RepositoryStorage                         string                    `json:"repository_storage,omitempty" tier:"premium"`
+	FileTemplateProjectID                     int64                     `json:"file_template_project_id,omitempty" tier:"premium"`
+	Statistics                                *StatisticsOutput         `json:"statistics,omitempty"`
+	CustomAttributes                          []CustomAttributeOutput   `json:"custom_attributes,omitempty"`
+	ShareWithGroupLock                        bool                      `json:"share_with_group_lock"`
+	RequireTwoFactorAuth                      bool                      `json:"require_two_factor_authentication"`
+	TwoFactorGracePeriod                      int64                     `json:"two_factor_grace_period,omitempty"`
+	AutoDevopsEnabled                         bool                      `json:"auto_devops_enabled"`
+	EmailsEnabled                             bool                      `json:"emails_enabled"`
+	EmailsDisabled                            bool                      `json:"emails_disabled"`
+	MentionsDisabled                          bool                      `json:"mentions_disabled"`
+	RunnersToken                              string                    `json:"runners_token,omitempty"`
+	SharedWithGroups                          []SharedWithGroupOutput   `json:"shared_with_groups,omitempty"`
+	LDAPCN                                    string                    `json:"ldap_cn,omitempty" tier:"premium"`
+	LDAPAccess                                int                       `json:"ldap_access,omitempty" tier:"premium"`
+	LDAPGroupLinks                            []LDAPGroupLinkOutput     `json:"ldap_group_links,omitempty"`
+	SAMLGroupLinks                            []SAMLGroupLinkOutput     `json:"saml_group_links,omitempty"`
+	SharedRunnersMinutesLimit                 int64                     `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
+	ExtraSharedRunnersMinutesLimit            int64                     `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
+	PreventForkingOutsideGroup                bool                      `json:"prevent_forking_outside_group" tier:"premium"`
+	IPRestrictionRanges                       string                    `json:"ip_restriction_ranges,omitempty" tier:"premium"`
+	AllowedEmailDomainsList                   string                    `json:"allowed_email_domains_list,omitempty" tier:"premium"`
+	WikiAccessLevel                           string                    `json:"wiki_access_level,omitempty" tier:"premium"`
+	OnlyAllowMergeIfPipelineSucceeds          bool                      `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
+	AllowMergeOnSkippedPipeline               bool                      `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved bool                      `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
+	DefaultBranchProtection                   int64                     `json:"default_branch_protection,omitempty"`
+	Projects                                  []ProjectItem             `json:"projects,omitempty"`
+	SharedProjects                            []ProjectItem             `json:"shared_projects,omitempty"`
+}
+
+// StatisticsOutput mirrors gl.Statistics (the statistics object, returned when
+// statistics=true is requested by an Owner).
+type StatisticsOutput struct {
+	CommitCount           int64 `json:"commit_count"`
+	StorageSize           int64 `json:"storage_size"`
+	RepositorySize        int64 `json:"repository_size"`
+	WikiSize              int64 `json:"wiki_size"`
+	LFSObjectsSize        int64 `json:"lfs_objects_size"`
+	JobArtifactsSize      int64 `json:"job_artifacts_size"`
+	PipelineArtifactsSize int64 `json:"pipeline_artifacts_size"`
+	PackagesSize          int64 `json:"packages_size"`
+	SnippetsSize          int64 `json:"snippets_size"`
+	UploadsSize           int64 `json:"uploads_size"`
+	ContainerRegistrySize int64 `json:"container_registry_size"`
+}
+
+// CustomAttributeOutput mirrors gl.CustomAttribute (a custom_attributes entry).
+type CustomAttributeOutput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// BranchProtectionDefaults mirrors gl.BranchProtectionDefaults (the
+// default_branch_protection_defaults object).
+type BranchProtectionDefaults struct {
+	AllowedToPush             []GroupAccessLevelOutput `json:"allowed_to_push,omitempty"`
+	AllowForcePush            bool                     `json:"allow_force_push,omitempty"`
+	AllowedToMerge            []GroupAccessLevelOutput `json:"allowed_to_merge,omitempty"`
+	DeveloperCanInitialPush   bool                     `json:"developer_can_initial_push,omitempty"`
+	CodeOwnerApprovalRequired bool                     `json:"code_owner_approval_required,omitempty"`
+}
+
+// GroupAccessLevelOutput mirrors gl.GroupAccessLevel (an access-level entry in
+// allowed_to_push / allowed_to_merge).
+type GroupAccessLevelOutput struct {
+	AccessLevel int `json:"access_level,omitempty"`
+}
+
+// SharedWithGroupOutput mirrors gl.SharedWithGroup (a shared_with_groups entry).
+type SharedWithGroupOutput struct {
+	GroupID          int64  `json:"group_id"`
+	GroupName        string `json:"group_name"`
+	GroupFullPath    string `json:"group_full_path"`
+	GroupAccessLevel int64  `json:"group_access_level"`
+	ExpiresAt        string `json:"expires_at,omitempty"`
+	MemberRoleID     int64  `json:"member_role_id,omitempty"`
+}
+
+// LDAPGroupLinkOutput mirrors gl.LDAPGroupLink (an ldap_group_links entry).
+type LDAPGroupLinkOutput struct {
+	CN           string `json:"cn"`
+	Filter       string `json:"filter,omitempty"`
+	GroupAccess  int    `json:"group_access"`
+	Provider     string `json:"provider"`
+	MemberRoleID int64  `json:"member_role_id,omitempty"`
+}
+
+// SAMLGroupLinkOutput mirrors gl.SAMLGroupLink (a saml_group_links entry).
+type SAMLGroupLinkOutput struct {
+	Name         string `json:"name"`
+	AccessLevel  int    `json:"access_level"`
+	MemberRoleID int64  `json:"member_role_id,omitempty"`
+	Provider     string `json:"provider,omitempty"`
 }
 
 // ListOutput holds a paginated list of groups.
@@ -70,31 +181,99 @@ type ListOutput struct {
 
 // GetInput defines parameters for retrieving a single group.
 type GetInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	WithProjects         *bool                `json:"with_projects,omitempty"          jsonschema:"Include the group's projects in the response (deprecated; prefer gitlab_group_projects)"`
+	OrderBy              string               `json:"order_by,omitempty"               jsonschema:"Order embedded projects by field (only applies with with_projects)"`
+	Sort                 string               `json:"sort,omitempty"                   jsonschema:"Sort direction for embedded projects (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // MembersListInput defines parameters for listing group members.
 type MembersListInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Query   string               `json:"query,omitempty" jsonschema:"Filter members by name or username"`
+	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	Query        string               `json:"query,omitempty"          jsonschema:"Filter members by name or username"`
+	UserIDs      []int64              `json:"user_ids,omitempty"       jsonschema:"Filter the result to the given user IDs"`
+	ShowSeatInfo *bool                `json:"show_seat_info,omitempty" jsonschema:"Include seat information for each member (Premium/Ultimate)"`
+	OrderBy      string               `json:"order_by,omitempty"       jsonschema:"Order members by field (id, name, username, access_level, last_activity_on)"`
+	Sort         string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // MemberOutput represents a GitLab group member.
+//
+// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects). The
+// created_by, group_saml_identity, and member_role sub-objects are surfaced as
+// full local mirrors on their canonical json keys (C-IMPORTS: replicated here
+// rather than imported from sibling packages to preserve the zero-import-cycle
+// constraint).
 type MemberOutput struct {
-	ID                     int64  `json:"id"`
-	Username               string `json:"username"`
-	Name                   string `json:"name"`
-	State                  string `json:"state"`
-	AvatarURL              string `json:"avatar_url,omitempty"`
-	AccessLevel            int    `json:"access_level"`
-	AccessLevelDescription string `json:"access_level_description"`
-	WebURL                 string `json:"web_url"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	ExpiresAt              string `json:"expires_at,omitempty"`
-	Email                  string `json:"email,omitempty"`
-	GroupSAMLProvider      string `json:"group_saml_provider,omitempty"`
-	MemberRoleName         string `json:"member_role_name,omitempty"`
+	ID                int64               `json:"id"`
+	Username          string              `json:"username"`
+	Name              string              `json:"name"`
+	State             string              `json:"state"`
+	AvatarURL         string              `json:"avatar_url,omitempty"`
+	AccessLevel       int                 `json:"access_level"`
+	WebURL            string              `json:"web_url"`
+	CreatedAt         string              `json:"created_at,omitempty"`
+	CreatedBy         *MemberUserOutput   `json:"created_by,omitempty"`
+	ExpiresAt         string              `json:"expires_at,omitempty"`
+	Email             string              `json:"email,omitempty"`
+	PublicEmail       string              `json:"public_email,omitempty"`
+	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty"`
+	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty"`
+	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
+}
+
+// MemberUserOutput mirrors gl.MemberCreatedBy (the created_by object).
+type MemberUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+}
+
+// SAMLIdentityOutput mirrors gl.GroupMemberSAMLIdentity (the
+// group_saml_identity object).
+type SAMLIdentityOutput struct {
+	ExternUID      string `json:"extern_uid"`
+	Provider       string `json:"provider"`
+	SAMLProviderID int64  `json:"saml_provider_id"`
+}
+
+// MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom member
+// roles are an Enterprise (Premium/Ultimate) feature; the object is nil on
+// instances or members without a custom role.
+type MemberRoleOutput struct {
+	ID                         int64  `json:"id"`
+	Name                       string `json:"name"`
+	Description                string `json:"description,omitempty"`
+	GroupID                    int64  `json:"group_id"`
+	BaseAccessLevel            int    `json:"base_access_level"`
+	AdminCICDVariables         bool   `json:"admin_cicd_variables,omitempty"`
+	AdminComplianceFramework   bool   `json:"admin_compliance_framework,omitempty"`
+	AdminGroupMembers          bool   `json:"admin_group_member,omitempty"`
+	AdminMergeRequests         bool   `json:"admin_merge_request,omitempty"`
+	AdminPushRules             bool   `json:"admin_push_rules,omitempty"`
+	AdminTerraformState        bool   `json:"admin_terraform_state,omitempty"`
+	AdminVulnerability         bool   `json:"admin_vulnerability,omitempty"`
+	AdminWebHook               bool   `json:"admin_web_hook,omitempty"`
+	ArchiveProject             bool   `json:"archive_project,omitempty"`
+	ManageDeployTokens         bool   `json:"manage_deploy_tokens,omitempty"`
+	ManageGroupAccessTokens    bool   `json:"manage_group_access_tokens,omitempty"`
+	ManageMergeRequestSettings bool   `json:"manage_merge_request_settings,omitempty"`
+	ManageProjectAccessTokens  bool   `json:"manage_project_access_tokens,omitempty"`
+	ManageSecurityPolicyLink   bool   `json:"manage_security_policy_link,omitempty"`
+	ReadCode                   bool   `json:"read_code,omitempty"`
+	ReadRunners                bool   `json:"read_runners,omitempty"`
+	ReadDependency             bool   `json:"read_dependency,omitempty"`
+	ReadVulnerability          bool   `json:"read_vulnerability,omitempty"`
+	RemoveGroup                bool   `json:"remove_group,omitempty"`
+	RemoveProject              bool   `json:"remove_project,omitempty"`
 }
 
 // MemberListOutput holds a paginated list of group members.
@@ -106,15 +285,24 @@ type MemberListOutput struct {
 
 // SubgroupsListInput defines parameters for listing subgroups.
 type SubgroupsListInput struct {
-	GroupID        toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
-	Search         string               `json:"search,omitempty"        jsonschema:"Filter subgroups by name or path"`
-	AllAvailable   bool                 `json:"all_available,omitempty" jsonschema:"Show all subgroups accessible by the authenticated user"`
-	Owned          bool                 `json:"owned,omitempty"         jsonschema:"Limit to subgroups explicitly owned by the authenticated user"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)"`
-	OrderBy        string               `json:"order_by,omitempty"      jsonschema:"Order subgroups by field (name, path, id, similarity)"`
-	Sort           string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
-	Statistics     bool                 `json:"statistics,omitempty"    jsonschema:"Include group statistics (storage, counts)"`
+	GroupID              toolutil.StringOrInt `json:"group_id"                jsonschema:"Group ID or URL-encoded path,required"`
+	Search               string               `json:"search,omitempty"        jsonschema:"Filter subgroups by name or path"`
+	AllAvailable         bool                 `json:"all_available,omitempty" jsonschema:"Show all subgroups accessible by the authenticated user"`
+	Owned                bool                 `json:"owned,omitempty"         jsonschema:"Limit to subgroups explicitly owned by the authenticated user"`
+	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)"`
+	OrderBy              string               `json:"order_by,omitempty"      jsonschema:"Order subgroups by field (name, path, id, similarity)"`
+	Sort                 string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
+	Statistics           bool                 `json:"statistics,omitempty"    jsonschema:"Include group statistics (storage, counts)"`
+	Visibility           string               `json:"visibility,omitempty"    jsonschema:"Filter by visibility (public, internal, private)"`
+	TopLevelOnly         bool                 `json:"top_level_only,omitempty" jsonschema:"Limit to top-level subgroups (exclude nested descendants)"`
+	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	SkipGroups           []int64              `json:"skip_groups,omitempty"   jsonschema:"Group IDs to exclude from results"`
+	RepositoryStorage    string               `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage shard (administrators only)"`
+	Active               *bool                `json:"active,omitempty"        jsonschema:"Filter by active (true) or inactive/archived (false) subgroups"`
+	Archived             *bool                `json:"archived,omitempty"      jsonschema:"Limit to archived subgroups (true) or non-archived (false)"`
+	MarkedForDeletionOn  string               `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to subgroups marked for deletion on this date (YYYY-MM-DD)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ToOutput converts a GitLab API [gl.Group] to the MCP tool output
@@ -154,22 +342,220 @@ func ToOutput(g *gl.Group) Output {
 	out.DuoFeaturesEnabled = g.DuoFeaturesEnabled
 	out.LockDuoFeaturesEnabled = g.LockDuoFeaturesEnabled
 	out.ExperimentFeaturesEnabled = g.ExperimentFeaturesEnabled
+	out.MembershipLock = g.MembershipLock
+	out.MaxArtifactsSize = g.MaxArtifactsSize
+	out.RepositoryStorage = g.RepositoryStorage
+	out.FileTemplateProjectID = g.FileTemplateProjectID
+	out.ShareWithGroupLock = g.ShareWithGroupLock
+	out.RequireTwoFactorAuth = g.RequireTwoFactorAuth
+	out.TwoFactorGracePeriod = g.TwoFactorGracePeriod
+	out.AutoDevopsEnabled = g.AutoDevopsEnabled
+	out.EmailsEnabled = g.EmailsEnabled
+	out.EmailsDisabled = g.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.MentionsDisabled = g.MentionsDisabled
+	out.RunnersToken = g.RunnersToken
+	out.LDAPCN = g.LDAPCN
+	out.LDAPAccess = int(g.LDAPAccess)
+	out.SharedRunnersMinutesLimit = g.SharedRunnersMinutesLimit
+	out.ExtraSharedRunnersMinutesLimit = g.ExtraSharedRunnersMinutesLimit
+	out.PreventForkingOutsideGroup = g.PreventForkingOutsideGroup
+	out.IPRestrictionRanges = g.IPRestrictionRanges
+	out.AllowedEmailDomainsList = g.AllowedEmailDomainsList
+	out.WikiAccessLevel = string(g.WikiAccessLevel)
+	out.OnlyAllowMergeIfPipelineSucceeds = g.OnlyAllowMergeIfPipelineSucceeds
+	out.AllowMergeOnSkippedPipeline = g.AllowMergeOnSkippedPipeline
+	out.OnlyAllowMergeIfAllDiscussionsAreResolved = g.OnlyAllowMergeIfAllDiscussionsAreResolved
+	out.DefaultBranchProtection = g.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.Statistics = statisticsOutput(g.Statistics)
+	out.DefaultBranchProtectionDefaults = branchProtectionDefaultsOutput(g.DefaultBranchProtectionDefaults)
+	out.CustomAttributes = customAttributesOutput(g.CustomAttributes)
+	out.SharedWithGroups = sharedWithGroupsOutput(g.SharedWithGroups)
+	out.LDAPGroupLinks = ldapGroupLinksOutput(g.LDAPGroupLinks)
+	out.SAMLGroupLinks = samlGroupLinksOutput(g.SAMLGroupLinks)
+	out.Projects = projectItemsFromGroup(g.Projects)             //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.SharedProjects = projectItemsFromGroup(g.SharedProjects) //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	return out
 }
 
-// MemberToOutput converts a GitLab API [gl.GroupMember] to the MCP
-// tool output format, including a human-readable access level description.
+// statisticsOutput mirrors a gl.Statistics into the local output shape.
+func statisticsOutput(s *gl.Statistics) *StatisticsOutput {
+	if s == nil {
+		return nil
+	}
+	return &StatisticsOutput{
+		CommitCount:           s.CommitCount,
+		StorageSize:           s.StorageSize,
+		RepositorySize:        s.RepositorySize,
+		WikiSize:              s.WikiSize,
+		LFSObjectsSize:        s.LFSObjectsSize,
+		JobArtifactsSize:      s.JobArtifactsSize,
+		PipelineArtifactsSize: s.PipelineArtifactsSize,
+		PackagesSize:          s.PackagesSize,
+		SnippetsSize:          s.SnippetsSize,
+		UploadsSize:           s.UploadsSize,
+		ContainerRegistrySize: s.ContainerRegistrySize,
+	}
+}
+
+// branchProtectionDefaultsOutput mirrors a gl.BranchProtectionDefaults into the
+// local output shape.
+func branchProtectionDefaultsOutput(d *gl.BranchProtectionDefaults) *BranchProtectionDefaults {
+	if d == nil {
+		return nil
+	}
+	return &BranchProtectionDefaults{
+		AllowedToPush:             groupAccessLevelsOutput(d.AllowedToPush),
+		AllowForcePush:            d.AllowForcePush,
+		AllowedToMerge:            groupAccessLevelsOutput(d.AllowedToMerge),
+		DeveloperCanInitialPush:   d.DeveloperCanInitialPush,
+		CodeOwnerApprovalRequired: d.CodeOwnerApprovalRequired,
+	}
+}
+
+// groupAccessLevelsOutput mirrors a slice of gl.GroupAccessLevel into the local
+// output shape.
+func groupAccessLevelsOutput(levels []*gl.GroupAccessLevel) []GroupAccessLevelOutput {
+	if len(levels) == 0 {
+		return nil
+	}
+	out := make([]GroupAccessLevelOutput, 0, len(levels))
+	for _, l := range levels {
+		if l == nil {
+			continue
+		}
+		var al int
+		if l.AccessLevel != nil {
+			al = int(*l.AccessLevel)
+		}
+		out = append(out, GroupAccessLevelOutput{AccessLevel: al})
+	}
+	return out
+}
+
+// customAttributesOutput mirrors a slice of gl.CustomAttribute into the local
+// output shape.
+func customAttributesOutput(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make([]CustomAttributeOutput, 0, len(attrs))
+	for _, a := range attrs {
+		if a == nil {
+			continue
+		}
+		out = append(out, CustomAttributeOutput{Key: a.Key, Value: a.Value})
+	}
+	return out
+}
+
+// sharedWithGroupsOutput mirrors a slice of gl.SharedWithGroup into the local
+// output shape.
+func sharedWithGroupsOutput(groups []gl.SharedWithGroup) []SharedWithGroupOutput {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]SharedWithGroupOutput, len(groups))
+	for i, g := range groups {
+		out[i] = SharedWithGroupOutput{
+			GroupID:          g.GroupID,
+			GroupName:        g.GroupName,
+			GroupFullPath:    g.GroupFullPath,
+			GroupAccessLevel: g.GroupAccessLevel,
+			MemberRoleID:     g.MemberRoleID,
+		}
+		if g.ExpiresAt != nil {
+			out[i].ExpiresAt = g.ExpiresAt.String()
+		}
+	}
+	return out
+}
+
+// ldapGroupLinksOutput mirrors a slice of gl.LDAPGroupLink into the local
+// output shape.
+func ldapGroupLinksOutput(links []*gl.LDAPGroupLink) []LDAPGroupLinkOutput {
+	if len(links) == 0 {
+		return nil
+	}
+	out := make([]LDAPGroupLinkOutput, 0, len(links))
+	for _, l := range links {
+		if l == nil {
+			continue
+		}
+		out = append(out, LDAPGroupLinkOutput{
+			CN:           l.CN,
+			Filter:       l.Filter,
+			GroupAccess:  int(l.GroupAccess),
+			Provider:     l.Provider,
+			MemberRoleID: l.MemberRoleID,
+		})
+	}
+	return out
+}
+
+// samlGroupLinksOutput mirrors a slice of gl.SAMLGroupLink into the local
+// output shape.
+func samlGroupLinksOutput(links []*gl.SAMLGroupLink) []SAMLGroupLinkOutput {
+	if len(links) == 0 {
+		return nil
+	}
+	out := make([]SAMLGroupLinkOutput, 0, len(links))
+	for _, l := range links {
+		if l == nil {
+			continue
+		}
+		out = append(out, SAMLGroupLinkOutput{
+			Name:         l.Name,
+			AccessLevel:  int(l.AccessLevel),
+			MemberRoleID: l.MemberRoleID,
+			Provider:     l.Provider,
+		})
+	}
+	return out
+}
+
+// projectItemsFromGroup maps the deprecated embedded gl.Project slices
+// (Group.Projects / Group.SharedProjects) into the local ProjectItem shape.
+func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
+	if len(projects) == 0 {
+		return nil
+	}
+	out := make([]ProjectItem, len(projects))
+	for i, p := range projects {
+		out[i] = ProjectItem{
+			ID:                p.ID,
+			Name:              p.Name,
+			PathWithNamespace: p.PathWithNamespace,
+			Description:       p.Description,
+			Visibility:        string(p.Visibility),
+			WebURL:            p.WebURL,
+			DefaultBranch:     p.DefaultBranch,
+			Archived:          p.Archived,
+		}
+		if p.CreatedAt != nil {
+			out[i].CreatedAt = p.CreatedAt.Format(time.RFC3339)
+		}
+	}
+	return out
+}
+
+// MemberToOutput converts a GitLab API [gl.GroupMember] to the MCP tool output
+// format, surfacing the full created_by, group_saml_identity, and member_role
+// sub-objects (1:1 audit policy: full nested objects).
 func MemberToOutput(m *gl.GroupMember) MemberOutput {
 	out := MemberOutput{
-		ID:                     m.ID,
-		Username:               m.Username,
-		Name:                   m.Name,
-		State:                  m.State,
-		AvatarURL:              m.AvatarURL,
-		AccessLevel:            int(m.AccessLevel),
-		AccessLevelDescription: toolutil.AccessLevelDescription(m.AccessLevel),
-		WebURL:                 m.WebURL,
-		Email:                  m.Email,
+		ID:                m.ID,
+		Username:          m.Username,
+		Name:              m.Name,
+		State:             m.State,
+		AvatarURL:         m.AvatarURL,
+		AccessLevel:       int(m.AccessLevel),
+		WebURL:            m.WebURL,
+		Email:             m.Email,
+		PublicEmail:       m.PublicEmail,
+		IsUsingSeat:       m.IsUsingSeat,
+		CreatedBy:         memberUserOutput(m.CreatedBy),
+		GroupSAMLIdentity: samlIdentityOutput(m.GroupSAMLIdentity),
+		MemberRole:        memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
@@ -177,13 +563,69 @@ func MemberToOutput(m *gl.GroupMember) MemberOutput {
 	if m.ExpiresAt != nil {
 		out.ExpiresAt = m.ExpiresAt.String()
 	}
-	if m.GroupSAMLIdentity != nil {
-		out.GroupSAMLProvider = m.GroupSAMLIdentity.Provider
-	}
-	if m.MemberRole != nil {
-		out.MemberRoleName = m.MemberRole.Name
-	}
 	return out
+}
+
+// memberUserOutput mirrors a gl.MemberCreatedBy into the local output shape.
+func memberUserOutput(u *gl.MemberCreatedBy) *MemberUserOutput {
+	if u == nil {
+		return nil
+	}
+	return &MemberUserOutput{
+		ID:        u.ID,
+		Username:  u.Username,
+		Name:      u.Name,
+		State:     u.State,
+		AvatarURL: u.AvatarURL,
+		WebURL:    u.WebURL,
+	}
+}
+
+// samlIdentityOutput mirrors a gl.GroupMemberSAMLIdentity into the local output
+// shape.
+func samlIdentityOutput(s *gl.GroupMemberSAMLIdentity) *SAMLIdentityOutput {
+	if s == nil {
+		return nil
+	}
+	return &SAMLIdentityOutput{
+		ExternUID:      s.ExternUID,
+		Provider:       s.Provider,
+		SAMLProviderID: s.SAMLProviderID,
+	}
+}
+
+// memberRoleOutput mirrors a gl.MemberRole into the local output shape.
+func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
+	if r == nil {
+		return nil
+	}
+	return &MemberRoleOutput{
+		ID:                         r.ID,
+		Name:                       r.Name,
+		Description:                r.Description,
+		GroupID:                    r.GroupID,
+		BaseAccessLevel:            int(r.BaseAccessLevel),
+		AdminCICDVariables:         r.AdminCICDVariables,
+		AdminComplianceFramework:   r.AdminComplianceFramework,
+		AdminGroupMembers:          r.AdminGroupMembers,
+		AdminMergeRequests:         r.AdminMergeRequests,
+		AdminPushRules:             r.AdminPushRules,
+		AdminTerraformState:        r.AdminTerraformState,
+		AdminVulnerability:         r.AdminVulnerability,
+		AdminWebHook:               r.AdminWebHook,
+		ArchiveProject:             r.ArchiveProject,
+		ManageDeployTokens:         r.ManageDeployTokens,
+		ManageGroupAccessTokens:    r.ManageGroupAccessTokens,
+		ManageMergeRequestSettings: r.ManageMergeRequestSettings,
+		ManageProjectAccessTokens:  r.ManageProjectAccessTokens,
+		ManageSecurityPolicyLink:   r.ManageSecurityPolicyLink,
+		ReadCode:                   r.ReadCode,
+		ReadRunners:                r.ReadRunners,
+		ReadDependency:             r.ReadDependency,
+		ReadVulnerability:          r.ReadVulnerability,
+		RemoveGroup:                r.RemoveGroup,
+		RemoveProject:              r.RemoveProject,
+	}
 }
 
 // List retrieves a paginated list of GitLab groups visible to the
@@ -195,12 +637,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListGroupsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -231,6 +668,23 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups
 	}
+	if input.MinAccessLevel > 0 {
+		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
+	}
+	if input.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(input.RepositoryStorage)
+	}
+	if input.Active != nil {
+		opts.Active = input.Active
+	}
+	if input.Archived != nil {
+		opts.Archived = input.Archived
+	}
+	if input.MarkedForDeletionOn != "" {
+		if t, perr := gl.ParseISOTime(input.MarkedForDeletionOn); perr == nil {
+			opts.MarkedForDeletionOn = &t
+		}
+	}
 
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -258,7 +712,22 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, errors.New("Get: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
 	}
 
-	g, _, err := client.GL().Groups.GetGroup(string(input.GroupID), &gl.GetGroupOptions{}, gl.WithContext(ctx))
+	opts := &gl.GetGroupOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
+	}
+	if input.WithProjects != nil {
+		opts.WithProjects = input.WithProjects //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
+	}
+
+	g, _, err := client.GL().Groups.GetGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
 			"verify group_id (numeric ID or full path like 'group/subgroup'); URL-encode '/' as '%2F' when using paths")
@@ -278,14 +747,21 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 	}
 
 	opts := &gl.ListGroupMembersOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Query != "" {
 		opts.Query = new(input.Query)
+	}
+	if len(input.UserIDs) > 0 {
+		opts.UserIDs = &input.UserIDs
+	}
+	if input.ShowSeatInfo != nil {
+		opts.ShowSeatInfo = input.ShowSeatInfo
 	}
 
 	memberList, resp, err := client.GL().Groups.ListAllGroupMembers(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -315,13 +791,31 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 		return ListOutput{}, errors.New("SubgroupsList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
 	}
 
+	opts := subgroupsListOptions(input)
+
+	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("SubgroupsList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; subgroup listing returns descendants at all depths")
+	}
+
+	out := ListOutput{
+		Groups:     make([]Output, len(groups)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, g := range groups {
+		out.Groups[i] = ToOutput(g)
+	}
+	return out, nil
+}
+
+// subgroupsListOptions builds the ListDescendantGroups options from the input,
+// applying offset/keyset pagination and every supported descendant-group
+// filter. Split out of SubgroupsList to keep that handler's cyclomatic
+// complexity flat.
+func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOptions {
 	opts := &gl.ListDescendantGroupsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -343,26 +837,83 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 	if input.Statistics {
 		opts.Statistics = new(true)
 	}
-
-	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("SubgroupsList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; subgroup listing returns descendants at all depths")
+	if input.Visibility != "" {
+		opts.Visibility = new(gl.VisibilityValue(input.Visibility))
 	}
-
-	out := ListOutput{
-		Groups:     make([]Output, len(groups)),
-		Pagination: toolutil.PaginationFromResponse(resp),
+	if input.TopLevelOnly {
+		opts.TopLevelOnly = new(true)
 	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
 	}
-	return out, nil
+	if len(input.SkipGroups) > 0 {
+		opts.SkipGroups = &input.SkipGroups
+	}
+	if input.RepositoryStorage != "" {
+		opts.RepositoryStorage = new(input.RepositoryStorage)
+	}
+	if input.Active != nil {
+		opts.Active = input.Active
+	}
+	if input.Archived != nil {
+		opts.Archived = input.Archived
+	}
+	if input.MarkedForDeletionOn != "" {
+		if t, perr := gl.ParseISOTime(input.MarkedForDeletionOn); perr == nil {
+			opts.MarkedForDeletionOn = &t
+		}
+	}
+	return opts
 }
 
 // ---------------------------------------------------------------------------
 // Input types for new group operations
 // ---------------------------------------------------------------------------.
+
+// BranchProtectionDefaultsInput mirrors gl.DefaultBranchProtectionDefaultsOptions
+// (the default_branch_protection_defaults object on create/update). Access
+// levels in allowed_to_push / allowed_to_merge are given as a list of integer
+// access levels; GitLab applies the highest provided level.
+type BranchProtectionDefaultsInput struct {
+	AllowedToPush             []int `json:"allowed_to_push,omitempty"              jsonschema:"Access levels allowed to push (30=Developer, 40=Maintainer); GitLab applies the highest provided"`
+	AllowForcePush            *bool `json:"allow_force_push,omitempty"             jsonschema:"Allow force push on the default branch"`
+	AllowedToMerge            []int `json:"allowed_to_merge,omitempty"             jsonschema:"Access levels allowed to merge (30=Developer, 40=Maintainer); GitLab applies the highest provided"`
+	DeveloperCanInitialPush   *bool `json:"developer_can_initial_push,omitempty"   jsonschema:"Allow developers to make the initial push to the default branch"`
+	CodeOwnerApprovalRequired *bool `json:"code_owner_approval_required,omitempty" jsonschema:"Require code owner approval before merging into the default branch"`
+}
+
+// toDefaultBranchProtectionDefaultsOptions converts the input into the SDK
+// options shape, returning nil when no field was supplied.
+func (b *BranchProtectionDefaultsInput) toOptions() *gl.DefaultBranchProtectionDefaultsOptions {
+	if b == nil {
+		return nil
+	}
+	opts := &gl.DefaultBranchProtectionDefaultsOptions{
+		AllowForcePush:            b.AllowForcePush,
+		DeveloperCanInitialPush:   b.DeveloperCanInitialPush,
+		CodeOwnerApprovalRequired: b.CodeOwnerApprovalRequired,
+	}
+	if levels := accessLevelOptions(b.AllowedToPush); levels != nil {
+		opts.AllowedToPush = levels
+	}
+	if levels := accessLevelOptions(b.AllowedToMerge); levels != nil {
+		opts.AllowedToMerge = levels
+	}
+	return opts
+}
+
+// accessLevelOptions converts integer access levels into the SDK
+// []*gl.GroupAccessLevel pointer-slice shape.
+func accessLevelOptions(levels []int) *[]*gl.GroupAccessLevel {
+	if len(levels) == 0 {
+		return nil
+	}
+	out := make([]*gl.GroupAccessLevel, len(levels))
+	for i, l := range levels {
+		out[i] = &gl.GroupAccessLevel{AccessLevel: new(gl.AccessLevelValue(l))}
+	}
+	return &out
+}
 
 // CreateInput defines parameters for creating a group.
 type CreateInput struct {
@@ -379,11 +930,30 @@ type CreateInput struct {
 	WebBasedCommitSigningEnabled *bool  `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool  `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
 
-	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
-	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
-	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
+	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
+	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
+	DefaultBranchProtectionDefaults *BranchProtectionDefaultsInput `json:"default_branch_protection_defaults,omitempty" jsonschema:"Default branch protection settings object"`
+	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (default_on, default_off, never_on)"`
+	EmailsEnabled                   *bool                          `json:"emails_enabled,omitempty"                     jsonschema:"Enable email notifications"`
+	EmailsDisabled                  *bool                          `json:"emails_disabled,omitempty"                    jsonschema:"Deprecated: disable email notifications. Prefer emails_enabled"`
+	EnabledGitAccessProtocol        string                         `json:"enabled_git_access_protocol,omitempty"        jsonschema:"Allowed Git access protocol (ssh, http, all)"`
+	ExperimentFeaturesEnabled       *bool                          `json:"experiment_features_enabled,omitempty"        jsonschema:"Enable experimental features"`
+	ExtraSharedRunnersMinutesLimit  *int64                         `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runner compute-minutes (administrators only)"`
+	MembershipLock                  *bool                          `json:"membership_lock,omitempty"                    jsonschema:"Prevent members from being added to projects in this group"`
+	MentionsDisabled                *bool                          `json:"mentions_disabled,omitempty"                  jsonschema:"Disable @-mention notifications"`
+	ProjectCreationLevel            string                         `json:"project_creation_level,omitempty"             jsonschema:"Who can create projects (noone, maintainer, developer)"`
+	RequireTwoFactorAuth            *bool                          `json:"require_two_factor_authentication,omitempty"  jsonschema:"Require two-factor authentication for members"`
+	ShareWithGroupLock              *bool                          `json:"share_with_group_lock,omitempty"              jsonschema:"Prevent sharing projects in this group with other groups"`
+	SharedRunnersMinutesLimit       *int64                         `json:"shared_runners_minutes_limit,omitempty"       jsonschema:"Shared runner compute-minutes limit (administrators only)"`
+	SubGroupCreationLevel           string                         `json:"subgroup_creation_level,omitempty"            jsonschema:"Who can create subgroups (owner, maintainer)"`
+	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
+	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  jsonschema:"Wiki access level (disabled, private, enabled)"`
+
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // UpdateInput defines parameters for updating a group.
@@ -399,6 +969,46 @@ type UpdateInput struct {
 	MathRenderingLimitsEnabled   *bool                `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
 	WebBasedCommitSigningEnabled *bool                `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool                `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
+
+	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
+	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
+	DefaultBranchProtectionDefaults *BranchProtectionDefaultsInput `json:"default_branch_protection_defaults,omitempty" jsonschema:"Default branch protection settings object"`
+	DuoAvailability                 string                         `json:"duo_availability,omitempty"                   jsonschema:"GitLab Duo availability (default_on, default_off, never_on)"`
+	DuoFeaturesEnabled              *bool                          `json:"duo_features_enabled,omitempty"               jsonschema:"Enable GitLab Duo features"`
+	LockDuoFeaturesEnabled          *bool                          `json:"lock_duo_features_enabled,omitempty"          jsonschema:"Prevent subgroups from changing the Duo features setting"`
+	EmailsEnabled                   *bool                          `json:"emails_enabled,omitempty"                     jsonschema:"Enable email notifications"`
+	EmailsDisabled                  *bool                          `json:"emails_disabled,omitempty"                    jsonschema:"Deprecated: disable email notifications. Prefer emails_enabled"`
+	EnabledGitAccessProtocol        string                         `json:"enabled_git_access_protocol,omitempty"        jsonschema:"Allowed Git access protocol (ssh, http, all)"`
+	ExperimentFeaturesEnabled       *bool                          `json:"experiment_features_enabled,omitempty"        jsonschema:"Enable experimental features"`
+	ExtraSharedRunnersMinutesLimit  *int64                         `json:"extra_shared_runners_minutes_limit,omitempty" jsonschema:"Extra shared runner compute-minutes (administrators only)"`
+	FileTemplateProjectID           *int64                         `json:"file_template_project_id,omitempty"           jsonschema:"Project ID providing file templates for this group (Premium/Ultimate)"`
+	IPRestrictionRanges             string                         `json:"ip_restriction_ranges,omitempty"              jsonschema:"Comma-separated CIDR ranges allowed to access the group (Premium/Ultimate)"`
+	AllowedEmailDomainsList         string                         `json:"allowed_email_domains_list,omitempty"         jsonschema:"Comma-separated list of email domains allowed for members (Premium/Ultimate)"`
+	LockMathRenderingLimitsEnabled  *bool                          `json:"lock_math_rendering_limits_enabled,omitempty" jsonschema:"Prevent subgroups from changing the math rendering limits setting"`
+	MaxArtifactsSize                *int64                         `json:"max_artifacts_size,omitempty"                 jsonschema:"Maximum job artifacts size in MB (administrators only)"`
+	MembershipLock                  *bool                          `json:"membership_lock,omitempty"                    jsonschema:"Prevent members from being added to projects in this group"`
+	MentionsDisabled                *bool                          `json:"mentions_disabled,omitempty"                  jsonschema:"Disable @-mention notifications"`
+	PreventForkingOutsideGroup      *bool                          `json:"prevent_forking_outside_group,omitempty"      jsonschema:"Prevent forking projects outside the group (Premium/Ultimate)"`
+	PreventSharingGroupsOutside     *bool                          `json:"prevent_sharing_groups_outside_hierarchy,omitempty" jsonschema:"Prevent inviting groups outside this group's hierarchy"`
+	ProjectCreationLevel            string                         `json:"project_creation_level,omitempty"             jsonschema:"Who can create projects (noone, maintainer, developer)"`
+	RequireTwoFactorAuth            *bool                          `json:"require_two_factor_authentication,omitempty"  jsonschema:"Require two-factor authentication for members"`
+	ShareWithGroupLock              *bool                          `json:"share_with_group_lock,omitempty"              jsonschema:"Prevent sharing projects in this group with other groups"`
+	SharedRunnersMinutesLimit       *int64                         `json:"shared_runners_minutes_limit,omitempty"       jsonschema:"Shared runner compute-minutes limit (administrators only)"`
+	SharedRunnersSetting            string                         `json:"shared_runners_setting,omitempty"             jsonschema:"Shared runners setting (enabled, disabled_and_overridable, disabled_and_unoverridable)"`
+	SubGroupCreationLevel           string                         `json:"subgroup_creation_level,omitempty"            jsonschema:"Who can create subgroups (owner, maintainer)"`
+	StepUpAuthRequiredOAuthProvider string                         `json:"step_up_auth_required_oauth_provider,omitempty" jsonschema:"OAuth provider required for step-up authentication"`
+	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
+	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  jsonschema:"Wiki access level (disabled, private, enabled)"`
+
+	OnlyAllowMergeIfPipelineSucceeds          *bool `json:"only_allow_merge_if_pipeline_succeeds,omitempty"           jsonschema:"Only allow merging when the pipeline succeeds"`
+	AllowMergeOnSkippedPipeline               *bool `json:"allow_merge_on_skipped_pipeline,omitempty"                jsonschema:"Allow merging when the pipeline is skipped"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved *bool `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merging when all discussions are resolved"`
+
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // DeleteInput defines parameters for deleting a group.
@@ -431,18 +1041,26 @@ type TransferInput struct {
 
 // ListProjectsInput defines parameters for listing group projects.
 type ListProjectsInput struct {
-	GroupID          toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
-	Search           string               `json:"search,omitempty"          jsonschema:"Filter projects by name"`
-	Archived         *bool                `json:"archived,omitempty"        jsonschema:"Filter archived projects"`
-	Visibility       string               `json:"visibility,omitempty"      jsonschema:"Filter by visibility (public, internal, private)"`
-	OrderBy          string               `json:"order_by,omitempty"        jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)"`
-	Sort             string               `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
-	Simple           bool                 `json:"simple,omitempty"          jsonschema:"Return limited fields"`
-	Owned            bool                 `json:"owned,omitempty"           jsonschema:"Limit to projects owned by current user"`
-	Starred          bool                 `json:"starred,omitempty"         jsonschema:"Limit to starred projects"`
-	IncludeSubGroups bool                 `json:"include_subgroups,omitempty" jsonschema:"Include projects in subgroups"`
-	WithShared       *bool                `json:"with_shared,omitempty"     jsonschema:"Include shared projects"`
+	GroupID                  toolutil.StringOrInt `json:"group_id"                  jsonschema:"Group ID or URL-encoded path,required"`
+	Search                   string               `json:"search,omitempty"          jsonschema:"Filter projects by name"`
+	Archived                 *bool                `json:"archived,omitempty"        jsonschema:"Filter archived projects"`
+	Visibility               string               `json:"visibility,omitempty"      jsonschema:"Filter by visibility (public, internal, private)"`
+	OrderBy                  string               `json:"order_by,omitempty"        jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)"`
+	Sort                     string               `json:"sort,omitempty"            jsonschema:"Sort direction (asc, desc)"`
+	Simple                   bool                 `json:"simple,omitempty"          jsonschema:"Return limited fields"`
+	Owned                    bool                 `json:"owned,omitempty"           jsonschema:"Limit to projects owned by current user"`
+	Starred                  bool                 `json:"starred,omitempty"         jsonschema:"Limit to starred projects"`
+	IncludeSubGroups         bool                 `json:"include_subgroups,omitempty" jsonschema:"Include projects in subgroups"`
+	WithShared               *bool                `json:"with_shared,omitempty"     jsonschema:"Include shared projects"`
+	Active                   *bool                `json:"active,omitempty"          jsonschema:"Filter by active (true) or inactive/archived (false) projects"`
+	MinAccessLevel           int                  `json:"min_access_level,omitempty" jsonschema:"Limit to projects where the caller has at least this access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	Topic                    string               `json:"topic,omitempty"           jsonschema:"Filter projects by topic"`
+	WithCustomAttributes     bool                 `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response"`
+	WithIssuesEnabled        *bool                `json:"with_issues_enabled,omitempty"        jsonschema:"Limit to projects with issues enabled"`
+	WithMergeRequestsEnabled *bool                `json:"with_merge_requests_enabled,omitempty" jsonschema:"Limit to projects with merge requests enabled"`
+	WithSecurityReports      *bool                `json:"with_security_reports,omitempty"      jsonschema:"Limit to projects with security reports (Ultimate)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ProjectItem is a simplified project representation for group context.
@@ -526,6 +1144,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.AutoBanUserOnExcessiveProjectsDownload != nil {
 		opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
 	}
+	applyCreateGroupExtras(input, opts)
 
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -535,6 +1154,40 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithMessage("groupCreate", err)
 	}
 	return ToOutput(g), nil
+}
+
+// applyCreateGroupExtras copies the remaining optional CreateGroup settings
+// (1:1 audit coverage of gl.CreateGroupOptions) onto the SDK options. Split out
+// of Create to keep that handler's cyclomatic complexity flat.
+func applyCreateGroupExtras(input CreateInput, opts *gl.CreateGroupOptions) {
+	opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	opts.DefaultBranchProtection = input.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
+	opts.EmailsEnabled = input.EmailsEnabled
+	opts.EmailsDisabled = input.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
+	opts.ExperimentFeaturesEnabled = input.ExperimentFeaturesEnabled
+	opts.ExtraSharedRunnersMinutesLimit = input.ExtraSharedRunnersMinutesLimit
+	opts.MembershipLock = input.MembershipLock
+	opts.MentionsDisabled = input.MentionsDisabled
+	opts.RequireTwoFactorAuth = input.RequireTwoFactorAuth
+	opts.ShareWithGroupLock = input.ShareWithGroupLock
+	opts.SharedRunnersMinutesLimit = input.SharedRunnersMinutesLimit
+	opts.TwoFactorGracePeriod = input.TwoFactorGracePeriod
+	opts.DefaultBranchProtectionDefaults = input.DefaultBranchProtectionDefaults.toOptions()
+	if input.DuoAvailability != "" {
+		opts.DuoAvailability = new(gl.DuoAvailabilityValue(input.DuoAvailability))
+	}
+	if input.EnabledGitAccessProtocol != "" {
+		opts.EnabledGitAccessProtocol = new(gl.EnabledGitAccessProtocolValue(input.EnabledGitAccessProtocol))
+	}
+	if input.ProjectCreationLevel != "" {
+		opts.ProjectCreationLevel = new(gl.ProjectCreationLevelValue(input.ProjectCreationLevel))
+	}
+	if input.SubGroupCreationLevel != "" {
+		opts.SubGroupCreationLevel = new(gl.SubGroupCreationLevelValue(input.SubGroupCreationLevel))
+	}
+	if input.WikiAccessLevel != "" {
+		opts.WikiAccessLevel = new(gl.AccessControlValue(input.WikiAccessLevel))
+	}
 }
 
 // Update modifies an existing GitLab group.
@@ -574,6 +1227,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.AllowPersonalSnippets != nil {
 		opts.AllowPersonalSnippets = input.AllowPersonalSnippets
 	}
+	applyUpdateGroupPointers(input, opts)
+	applyUpdateGroupEnums(input, opts)
 
 	g, _, err := client.GL().Groups.UpdateGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -583,6 +1238,78 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithMessage("groupUpdate", err)
 	}
 	return ToOutput(g), nil
+}
+
+// applyUpdateGroupPointers copies the pointer-valued UpdateGroup settings
+// (bool/int64 and the nested object) onto the SDK options. Pointer fields are
+// passed through verbatim so an explicit zero value (e.g. false) is preserved.
+// Split out of Update to keep that handler's cyclomatic complexity flat.
+func applyUpdateGroupPointers(input UpdateInput, opts *gl.UpdateGroupOptions) {
+	opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	opts.DefaultBranchProtection = input.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
+	opts.DuoFeaturesEnabled = input.DuoFeaturesEnabled
+	opts.LockDuoFeaturesEnabled = input.LockDuoFeaturesEnabled
+	opts.EmailsEnabled = input.EmailsEnabled
+	opts.EmailsDisabled = input.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
+	opts.ExperimentFeaturesEnabled = input.ExperimentFeaturesEnabled
+	opts.ExtraSharedRunnersMinutesLimit = input.ExtraSharedRunnersMinutesLimit
+	opts.FileTemplateProjectID = input.FileTemplateProjectID
+	opts.LockMathRenderingLimitsEnabled = input.LockMathRenderingLimitsEnabled
+	opts.MaxArtifactsSize = input.MaxArtifactsSize
+	opts.MembershipLock = input.MembershipLock
+	opts.MentionsDisabled = input.MentionsDisabled
+	opts.PreventForkingOutsideGroup = input.PreventForkingOutsideGroup
+	opts.PreventSharingGroupsOutsideHierarchy = input.PreventSharingGroupsOutside
+	opts.RequireTwoFactorAuth = input.RequireTwoFactorAuth
+	opts.ShareWithGroupLock = input.ShareWithGroupLock
+	opts.SharedRunnersMinutesLimit = input.SharedRunnersMinutesLimit
+	opts.TwoFactorGracePeriod = input.TwoFactorGracePeriod
+	opts.OnlyAllowMergeIfPipelineSucceeds = input.OnlyAllowMergeIfPipelineSucceeds
+	opts.AllowMergeOnSkippedPipeline = input.AllowMergeOnSkippedPipeline
+	opts.OnlyAllowMergeIfAllDiscussionsAreResolved = input.OnlyAllowMergeIfAllDiscussionsAreResolved
+	opts.UniqueProjectDownloadLimit = input.UniqueProjectDownloadLimit
+	opts.UniqueProjectDownloadLimitIntervalInSeconds = input.UniqueProjectDownloadLimitIntervalInSeconds
+	opts.AutoBanUserOnExcessiveProjectsDownload = input.AutoBanUserOnExcessiveProjectsDownload
+	opts.DefaultBranchProtectionDefaults = input.DefaultBranchProtectionDefaults.toOptions()
+	if len(input.UniqueProjectDownloadLimitAllowlist) > 0 {
+		opts.UniqueProjectDownloadLimitAllowlist = &input.UniqueProjectDownloadLimitAllowlist
+	}
+	if len(input.UniqueProjectDownloadLimitAlertlist) > 0 {
+		opts.UniqueProjectDownloadLimitAlertlist = &input.UniqueProjectDownloadLimitAlertlist
+	}
+}
+
+// applyUpdateGroupEnums copies the string-and-enum-valued UpdateGroup settings
+// onto the SDK options, converting each non-empty string to its typed value.
+// Split out of Update to keep that handler's cyclomatic complexity flat.
+func applyUpdateGroupEnums(input UpdateInput, opts *gl.UpdateGroupOptions) {
+	if input.IPRestrictionRanges != "" {
+		opts.IPRestrictionRanges = new(input.IPRestrictionRanges)
+	}
+	if input.AllowedEmailDomainsList != "" {
+		opts.AllowedEmailDomainsList = new(input.AllowedEmailDomainsList)
+	}
+	if input.StepUpAuthRequiredOAuthProvider != "" {
+		opts.StepUpAuthRequiredOAuthProvider = new(input.StepUpAuthRequiredOAuthProvider)
+	}
+	if input.DuoAvailability != "" {
+		opts.DuoAvailability = new(gl.DuoAvailabilityValue(input.DuoAvailability))
+	}
+	if input.EnabledGitAccessProtocol != "" {
+		opts.EnabledGitAccessProtocol = new(gl.EnabledGitAccessProtocolValue(input.EnabledGitAccessProtocol))
+	}
+	if input.ProjectCreationLevel != "" {
+		opts.ProjectCreationLevel = new(gl.ProjectCreationLevelValue(input.ProjectCreationLevel))
+	}
+	if input.SubGroupCreationLevel != "" {
+		opts.SubGroupCreationLevel = new(gl.SubGroupCreationLevelValue(input.SubGroupCreationLevel))
+	}
+	if input.SharedRunnersSetting != "" {
+		opts.SharedRunnersSetting = new(gl.SharedRunnersSettingValue(input.SharedRunnersSetting))
+	}
+	if input.WikiAccessLevel != "" {
+		opts.WikiAccessLevel = new(gl.AccessControlValue(input.WikiAccessLevel))
+	}
 }
 
 // Delete removes a GitLab group.
@@ -712,12 +1439,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 	}
 
 	opts := &gl.ListGroupProjectsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -748,6 +1470,27 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 	if input.WithShared != nil {
 		opts.WithShared = input.WithShared
 	}
+	if input.Active != nil {
+		opts.Active = input.Active
+	}
+	if input.MinAccessLevel > 0 {
+		opts.MinAccessLevel = new(gl.AccessLevelValue(input.MinAccessLevel))
+	}
+	if input.Topic != "" {
+		opts.Topic = new(input.Topic)
+	}
+	if input.WithCustomAttributes {
+		opts.WithCustomAttributes = new(true)
+	}
+	if input.WithIssuesEnabled != nil {
+		opts.WithIssuesEnabled = input.WithIssuesEnabled
+	}
+	if input.WithMergeRequestsEnabled != nil {
+		opts.WithMergeRequestsEnabled = input.WithMergeRequestsEnabled
+	}
+	if input.WithSecurityReports != nil {
+		opts.WithSecurityReports = input.WithSecurityReports
+	}
 
 	projects, resp, err := client.GL().Groups.ListGroupProjects(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -755,23 +1498,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 			"verify group_id with gitlab_group_get \u2014 use include_subgroups=true to also list projects in descendant groups")
 	}
 
-	items := make([]ProjectItem, len(projects))
-	for i, p := range projects {
-		items[i] = ProjectItem{
-			ID:                p.ID,
-			Name:              p.Name,
-			PathWithNamespace: p.PathWithNamespace,
-			Description:       p.Description,
-			Visibility:        string(p.Visibility),
-			WebURL:            p.WebURL,
-			DefaultBranch:     p.DefaultBranch,
-			Archived:          p.Archived,
-		}
-		if p.CreatedAt != nil {
-			items[i].CreatedAt = p.CreatedAt.Format(time.RFC3339)
-		}
-	}
-	return ListProjectsOutput{Projects: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListProjectsOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -789,6 +1516,7 @@ type SharedWithListInput struct {
 	SkipGroups           []int64              `json:"skip_groups,omitempty"    jsonschema:"Group IDs to exclude from the results"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // SharedWithList lists the groups that have been shared with the given group.
@@ -801,12 +1529,7 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 	}
 
 	opts := &gl.ListGroupsSharedWithOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
@@ -856,7 +1579,10 @@ type InvitedListInput struct {
 	MinAccessLevel       int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level the invitation grants (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
 	Relation             []string             `json:"relation,omitempty"       jsonschema:"Filter by relation (direct, inherited)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	OrderBy              string               `json:"order_by,omitempty"       jsonschema:"Order invited groups by field (name, path, id)"`
+	Sort                 string               `json:"sort,omitempty"           jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // InvitedList lists the groups invited to the given group.
@@ -869,11 +1595,12 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 	}
 
 	opts := &gl.ListInvitedGroupsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Search != "" {
 		opts.Search = new(input.Search)
@@ -912,7 +1639,10 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 type TransferLocationsListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id"         jsonschema:"Group ID or URL-encoded path,required"`
 	Search  string               `json:"search,omitempty" jsonschema:"Filter candidate parent groups by name or path"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Order candidate parent groups by field (name, path, id)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // TransferLocationOutput represents a candidate parent group for a transfer.
@@ -942,11 +1672,12 @@ func TransferLocationsList(ctx context.Context, client *gitlabclient.Client, inp
 	}
 
 	opts := &gl.ListTransferLocationsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Search != "" {
 		opts.Search = new(input.Search)

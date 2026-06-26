@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 // TestRemoveScopeFilteredTools_NilScopes verifies that nil token scopes
@@ -207,7 +209,7 @@ func newMetaServer(t *testing.T) *mcp.Server {
 	})
 	client := newTestClient(t, handler)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	if err := RegisterAllMeta(server, client, true); err != nil {
+	if err := RegisterAllMeta(server, client, edition.Ultimate); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}
 	return server

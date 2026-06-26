@@ -7,6 +7,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// userName returns the display username for a merge-train user sub-object, or
+// "" when the user is absent.
+func userName(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
 // FormatListMarkdown formats a list of merge train entries.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Trains) == 0 {
@@ -24,7 +33,7 @@ func FormatListMarkdown(out ListOutput) string {
 		}
 		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s | %s | %ds |\n",
 			t.ID, mr, toolutil.EscapeMdTableCell(t.MergeRequest.Title),
-			t.TargetBranch, t.Status, t.User, t.Duration)
+			t.TargetBranch, t.Status, userName(t.User), t.Duration)
 	}
 	toolutil.WriteListSummary(&sb, len(out.Trains), out.Pagination)
 	toolutil.WritePagination(&sb, out.Pagination)
@@ -44,11 +53,11 @@ func FormatOutputMarkdown(out Output) string {
 		mr = fmt.Sprintf("[!%d](%s) — %s", out.MergeRequest.IID, out.MergeRequest.WebURL, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
 	}
 	fmt.Fprintf(&sb, "| Merge Request | %s |\n", mr)
-	if out.User != "" {
-		fmt.Fprintf(&sb, "| User | %s |\n", out.User)
+	if name := userName(out.User); name != "" {
+		fmt.Fprintf(&sb, "| User | %s |\n", name)
 	}
-	if out.PipelineID > 0 {
-		fmt.Fprintf(&sb, "| Pipeline | #%d |\n", out.PipelineID)
+	if out.Pipeline != nil && out.Pipeline.ID > 0 {
+		fmt.Fprintf(&sb, "| Pipeline | #%d |\n", out.Pipeline.ID)
 	}
 	fmt.Fprintf(&sb, "| Duration | %ds |\n", out.Duration)
 	fmt.Fprintf(&sb, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))

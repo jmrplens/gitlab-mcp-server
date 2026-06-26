@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestCreateServiceAccount_Success verifies CreateServiceAccount returns the
@@ -153,10 +154,9 @@ func TestListServiceAccounts_AllOptions(t *testing.T) {
 	}))
 
 	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{
-		OrderBy: "id",
-		Sort:    "desc",
-		Page:    1,
-		PerPage: 20,
+		OrderBy:         "id",
+		Sort:            "desc",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
 	})
 	if err != nil {
 		t.Fatalf("ListServiceAccounts() unexpected error: %v", err)

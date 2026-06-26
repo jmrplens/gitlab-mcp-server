@@ -22,29 +22,53 @@ func formatReleaseNotFound(out releaseNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
+// releaseWebURL derives the release page URL from the _links.edit_url field by
+// trimming the trailing "/edit" segment, or returns "" when no links exist.
+func releaseWebURL(r Output) string {
+	if r.Links == nil || r.Links.EditURL == "" {
+		return ""
+	}
+	return strings.TrimSuffix(r.Links.EditURL, "/edit")
+}
+
+// milestoneTitles extracts the milestone titles from the nested milestone
+// objects for compact Markdown rendering.
+func milestoneTitles(ms []*MilestoneOutput) []string {
+	if len(ms) == 0 {
+		return nil
+	}
+	titles := make([]string, 0, len(ms))
+	for _, m := range ms {
+		if m != nil && m.Title != "" {
+			titles = append(titles, m.Title)
+		}
+	}
+	return titles
+}
+
 // FormatMarkdown renders a single release as a Markdown summary.
 func FormatMarkdown(r Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Release: %s\n\n", toolutil.EscapeMdHeading(r.Name))
 	fmt.Fprintf(&b, "- **Tag**: %s\n", r.TagName)
-	if r.Author != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, r.Author)
+	if r.Author != nil && r.Author.Username != "" {
+		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, r.Author.Username)
 	}
-	if r.WebURL != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdURL, r.WebURL)
+	if webURL := releaseWebURL(r); webURL != "" {
+		fmt.Fprintf(&b, toolutil.FmtMdURL, webURL)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(r.CreatedAt))
 	if r.ReleasedAt != "" {
 		fmt.Fprintf(&b, "- **Released**: %s\n", toolutil.FormatTime(r.ReleasedAt))
 	}
-	if r.CommitSHA != "" {
-		fmt.Fprintf(&b, "- **Commit**: %s\n", r.CommitSHA)
+	if r.Commit != nil && r.Commit.ID != "" {
+		fmt.Fprintf(&b, "- **Commit**: %s\n", r.Commit.ID)
 	}
 	if r.UpcomingRelease {
 		b.WriteString("- " + toolutil.EmojiCalendar + " **Upcoming release**\n")
 	}
-	if len(r.Milestones) > 0 {
-		fmt.Fprintf(&b, "- **Milestones**: %s\n", strings.Join(r.Milestones, ", "))
+	if titles := milestoneTitles(r.Milestones); len(titles) > 0 {
+		fmt.Fprintf(&b, "- **Milestones**: %s\n", strings.Join(titles, ", "))
 	}
 	if r.Description != "" {
 		fmt.Fprintf(&b, "\n### Description\n\n%s\n", toolutil.WrapGFMBody(r.Description))
@@ -77,10 +101,14 @@ func FormatListMarkdown(out ListOutput) string {
 			released = r.CreatedAt
 		}
 		tag := toolutil.EscapeMdTableCell(r.TagName)
-		if r.WebURL != "" {
-			tag = fmt.Sprintf("[%s](%s)", tag, r.WebURL)
+		if webURL := releaseWebURL(r); webURL != "" {
+			tag = fmt.Sprintf("[%s](%s)", tag, webURL)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", tag, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.Author), toolutil.FormatTime(released))
+		var author string
+		if r.Author != nil {
+			author = r.Author.Username
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", tag, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(author), toolutil.FormatTime(released))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

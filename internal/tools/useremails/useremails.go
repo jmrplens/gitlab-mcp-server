@@ -40,11 +40,15 @@ type DeleteOutput struct {
 
 // --- Input types ---.
 
-// ListForUserInput identifies a user for listing emails.
+// ListForUserInput identifies a user for listing emails and carries offset
+// and keyset pagination parameters mirroring v2.ListEmailsForUserOptions
+// (which embeds v2.ListOptions).
 type ListForUserInput struct {
-	UserID  int64 `json:"user_id" jsonschema:"GitLab user ID"`
-	Page    int   `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int   `json:"per_page,omitempty" jsonschema:"Items per page (max 100)"`
+	UserID int64 `json:"user_id" jsonschema:"GitLab user ID"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for ordered results: asc or desc"`
 }
 
 // GetInput identifies an email by ID.
@@ -102,11 +106,12 @@ func ListForUser(ctx context.Context, client *gitlabclient.Client, input ListFor
 		return ListOutput{}, errors.New(errUserIDPositive)
 	}
 	opts := &gl.ListEmailsForUserOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	emails, _, err := client.GL().Users.ListEmailsForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {

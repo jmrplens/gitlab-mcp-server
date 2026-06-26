@@ -248,3 +248,29 @@ func TestVoidResult(t *testing.T) {
 		t.Errorf("Message = %q, want %q", out.Message, "Mirroring started successfully.")
 	}
 }
+
+// TestApplyListOptions_SetsOffsetAndKeyset verifies ApplyListOptions copies only
+// the supplied offset and keyset pagination values onto a gl.ListOptions and
+// leaves unset fields at their zero value.
+func TestApplyListOptions_SetsOffsetAndKeyset(t *testing.T) {
+	var opts gl.ListOptions
+	ApplyListOptions(&opts, PaginationInput{Page: 3, PerPage: 50}, KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"})
+	if opts.Page != 3 || opts.PerPage != 50 {
+		t.Errorf("offset = %d/%d, want 3/50", opts.Page, opts.PerPage)
+	}
+	if opts.Pagination != "keyset" || opts.PageToken != "abc" {
+		t.Errorf("keyset = %q/%q, want keyset/abc", opts.Pagination, opts.PageToken)
+	}
+}
+
+// TestApplyListOptions_OnlyNonZero verifies that zero-valued pagination inputs
+// leave the corresponding gl.ListOptions fields untouched, and that a nil opts
+// pointer is a safe no-op.
+func TestApplyListOptions_OnlyNonZero(t *testing.T) {
+	opts := gl.ListOptions{Page: 7, PerPage: 10, Pagination: "offset", PageToken: "keep"}
+	ApplyListOptions(&opts, PaginationInput{}, KeysetPaginationInput{})
+	if opts.Page != 7 || opts.PerPage != 10 || opts.Pagination != "offset" || opts.PageToken != "keep" {
+		t.Errorf("zero inputs mutated opts: %+v", opts)
+	}
+	ApplyListOptions(nil, PaginationInput{Page: 1}, KeysetPaginationInput{}) // must not panic
+}

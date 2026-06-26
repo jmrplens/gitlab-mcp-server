@@ -653,7 +653,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	s := FormatMarkdown(Output{
 		ID: 1, Title: "T", FileName: "f.rb", Description: "desc",
 		Visibility: "private", ProjectID: 42, WebURL: testWebURL,
-		Author: AuthorOutput{Name: "User", Username: "user"},
+		Author: &SnippetAuthorOutput{Name: "User", Username: "user"},
 		Files:  []FileOutput{{Path: "f.rb", RawURL: "https://r"}},
 	})
 	if !strings.Contains(s, "File Name") {
@@ -672,7 +672,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 
 // TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
 func TestFormatMarkdown_Minimal(t *testing.T) {
-	s := FormatMarkdown(Output{ID: 1, Title: "T", Visibility: "private", Author: AuthorOutput{Name: "U", Username: "u"}})
+	s := FormatMarkdown(Output{ID: 1, Title: "T", Visibility: "private", Author: &SnippetAuthorOutput{Name: "U", Username: "u"}})
 	if strings.Contains(s, "File Name") {
 		t.Error("should not include File Name when empty")
 	}
@@ -731,7 +731,7 @@ func TestFormatMarkdown_WithProjectPath(t *testing.T) {
 		ID: 5, Title: "Project Snippet", Visibility: "internal",
 		ProjectID: 42,
 		WebURL:    "https://gitlab.example.com/my-group/my-project/-/snippets/5",
-		Author:    AuthorOutput{Name: "Dev", Username: "dev"},
+		Author:    &SnippetAuthorOutput{Name: "Dev", Username: "dev"},
 	})
 	if !strings.Contains(s, "| Project | my-group/my-project |") {
 		t.Errorf("expected project path row, got:\n%s", s)
@@ -746,7 +746,7 @@ func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
 	s := FormatMarkdown(Output{
 		ID: 5, Title: "Snippet", Visibility: "private",
 		ProjectID: 99, WebURL: testWebURL,
-		Author: AuthorOutput{Name: "U", Username: "u"},
+		Author: &SnippetAuthorOutput{Name: "U", Username: "u"},
 	})
 	if !strings.Contains(s, "| Project ID | 99 |") {
 		t.Errorf("expected numeric Project ID fallback, got:\n%s", s)
@@ -765,13 +765,13 @@ func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 				ID: 1, Title: "PS1", Visibility: "public",
 				ProjectID: 10,
 				WebURL:    "https://gitlab.example.com/team/app/-/snippets/1",
-				Author:    AuthorOutput{Username: "u1"},
+				Author:    &SnippetAuthorOutput{Username: "u1"},
 			},
 			{
 				ID: 2, Title: "PS2", Visibility: "private",
 				ProjectID: 20,
 				WebURL:    "https://short-url",
-				Author:    AuthorOutput{Username: "u2"},
+				Author:    &SnippetAuthorOutput{Username: "u2"},
 			},
 		},
 	}
@@ -791,7 +791,7 @@ func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 	out := ListOutput{
 		Snippets: []Output{
-			{ID: 1, Title: "Personal", Visibility: "private", Author: AuthorOutput{Username: "u1"}},
+			{ID: 1, Title: "Personal", Visibility: "private", Author: &SnippetAuthorOutput{Username: "u1"}},
 		},
 	}
 	md := FormatListMarkdown(out)

@@ -1,6 +1,10 @@
 package toolutil
 
-import "time"
+import (
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+)
 
 // ParseOptionalTime parses an RFC3339 string and returns a *time.Time.
 // Returns nil if the string is empty or unparseable.
@@ -31,4 +35,20 @@ func FormatTime(s string) string {
 		return t.Format("2 Jan 2006")
 	}
 	return s
+}
+
+// FormatTimePtr renders an optional *time.Time as RFC 3339, or "" when nil.
+func FormatTimePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
+// FormatISOTimePtr renders an optional *gl.ISOTime as YYYY-MM-DD, or "" when nil.
+func FormatISOTimePtr(t *gl.ISOTime) string {
+	if t == nil {
+		return ""
+	}
+	return time.Time(*t).Format("2006-01-02")
 }

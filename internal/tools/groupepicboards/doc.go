@@ -1,7 +1,7 @@
 // Package groupepicboards implements MCP tools for GitLab group epic board
 // operations.
 //
-// The package wraps GitLab GraphQL epic board fields:
+// The package wraps the GitLab REST group epic boards endpoints:
 //
-//   - https://docs.gitlab.com/api/graphql/reference/
+//   - https://docs.gitlab.com/api/group_epic_boards/
 package groupepicboards

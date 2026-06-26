@@ -34,6 +34,7 @@ type PublishInput struct {
 	FilePath       string               `json:"file_path,omitempty" jsonschema:"Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided."`
 	ContentBase64  string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Only one should be provided."`
 	Status         string               `json:"status,omitempty" jsonschema:"Package status: default or hidden"`
+	Select         string               `json:"select,omitempty" jsonschema:"Response detail selector. Set to 'package_file' to receive the published file metadata (id, size, checksums). Defaults to 'package_file'."`
 }
 
 // PublishOutput contains the result of a package file publish operation.
@@ -117,8 +118,13 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 		reader = toolutil.NewProgressReader(ctx, reader, fileSize, tracker)
 	}
 
-	// Use select=package_file to get metadata in response
-	selectVal := gl.GenericPackageSelectValue("package_file")
+	// Default to select=package_file so the response carries the
+	// published file metadata (id, size, checksums); honor an explicit
+	// select override when supplied.
+	selectVal := gl.SelectPackageFile
+	if input.Select != "" {
+		selectVal = gl.GenericPackageSelectValue(input.Select)
+	}
 
 	published, _, err := client.GL().GenericPackages.PublishPackageFile(
 		string(input.ProjectID),
@@ -247,21 +253,40 @@ type ListInput struct {
 	IncludeVersionless bool                 `json:"include_versionless,omitempty" jsonschema:"Include versionless packages"`
 	Status             string               `json:"status,omitempty" jsonschema:"Filter by status: default, hidden, processing, error"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// ListItem represents a single package in the list output.
+// ListItem represents a single package in the list output. It mirrors
+// the GitLab Packages API [gl.Package] object, surfacing the full
+// nested _links, pipeline, pipelines, and tags sub-objects.
 type ListItem struct {
 	ID               int64          `json:"id"`
 	Name             string         `json:"name"`
 	Version          string         `json:"version"`
 	PackageType      string         `json:"package_type"`
 	Status           string         `json:"status"`
+	Links            *LinksItem     `json:"_links,omitempty"`
 	Pipeline         *PipelineItem  `json:"pipeline,omitempty"`
 	Pipelines        []PipelineItem `json:"pipelines,omitempty"`
 	CreatedAt        string         `json:"created_at,omitempty"`
 	LastDownloadedAt string         `json:"last_downloaded_at,omitempty"`
-	Tags             []string       `json:"tags,omitempty"`
-	WebPath          string         `json:"web_path,omitempty"`
+	Tags             []TagItem      `json:"tags,omitempty"`
+}
+
+// LinksItem mirrors the GitLab Packages API [gl.PackageLinks] object,
+// holding the package's web path and delete API path.
+type LinksItem struct {
+	WebPath       string `json:"web_path,omitempty"`
+	DeleteAPIPath string `json:"delete_api_path,omitempty"`
+}
+
+// TagItem mirrors the GitLab Packages API [gl.PackageTag] object.
+type TagItem struct {
+	ID        int64  `json:"id"`
+	PackageID int64  `json:"package_id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // PipelineItem represents CI pipeline metadata attached to a package.
@@ -276,12 +301,16 @@ type PipelineItem struct {
 	User      *PipelineUser `json:"user,omitempty"`
 }
 
-// PipelineUser represents the user attached to package pipeline metadata.
+// PipelineUser mirrors the GitLab [gl.BasicUser] object attached to
+// package pipeline metadata.
 type PipelineUser struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	WebURL   string `json:"web_url"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // ListOutput contains the paginated list of packages.
@@ -296,12 +325,8 @@ type ListOutput struct {
 // the shared [ListInput] filter set, mapping the MCP-friendly
 // OrderBy/Sort/Status values to the GitLab Packages API fields.
 func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
-	opts := &gl.ListProjectPackagesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListProjectPackagesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.PackageName != "" {
 		opts.PackageName = &input.PackageName
 	}
@@ -357,14 +382,28 @@ func packageToListItem(p *gl.Package) ListItem {
 		item.LastDownloadedAt = p.LastDownloadedAt.String()
 	}
 	if len(p.Tags) > 0 {
-		tags := make([]string, 0, len(p.Tags))
+		tags := make([]TagItem, 0, len(p.Tags))
 		for _, tag := range p.Tags {
-			tags = append(tags, tag.Name)
+			tagItem := TagItem{
+				ID:        tag.ID,
+				PackageID: tag.PackageID,
+				Name:      tag.Name,
+			}
+			if tag.CreatedAt != nil {
+				tagItem.CreatedAt = tag.CreatedAt.String()
+			}
+			if tag.UpdatedAt != nil {
+				tagItem.UpdatedAt = tag.UpdatedAt.String()
+			}
+			tags = append(tags, tagItem)
 		}
 		item.Tags = tags
 	}
 	if p.Links != nil {
-		item.WebPath = p.Links.WebPath
+		item.Links = &LinksItem{
+			WebPath:       p.Links.WebPath,
+			DeleteAPIPath: p.Links.DeleteAPIPath,
+		}
 	}
 	return item
 }
@@ -391,12 +430,18 @@ func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
 		item.UpdatedAt = pipeline.UpdatedAt.String()
 	}
 	if pipeline.User != nil {
-		item.User = &PipelineUser{
-			ID:       pipeline.User.ID,
-			Username: pipeline.User.Username,
-			Name:     pipeline.User.Name,
-			WebURL:   pipeline.User.WebURL,
+		user := &PipelineUser{
+			ID:        pipeline.User.ID,
+			Username:  pipeline.User.Username,
+			Name:      pipeline.User.Name,
+			State:     pipeline.User.State,
+			AvatarURL: pipeline.User.AvatarURL,
+			WebURL:    pipeline.User.WebURL,
 		}
+		if pipeline.User.CreatedAt != nil {
+			user.CreatedAt = pipeline.User.CreatedAt.String()
+		}
+		item.User = user
 	}
 	return item
 }
@@ -430,13 +475,117 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, nil
 }
 
+// List Group Packages.
+
+// GroupListInput defines input for listing packages across a group and
+// its descendant projects.
+type GroupListInput struct {
+	GroupID            toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ExcludeSubgroups   bool                 `json:"exclude_subgroups,omitempty" jsonschema:"Exclude packages from subgroups (only return packages from the group's direct projects)"`
+	PackageName        string               `json:"package_name,omitempty" jsonschema:"Filter by package name"`
+	PackageType        string               `json:"package_type,omitempty" jsonschema:"Filter by type (generic, npm, maven, etc.)"`
+	OrderBy            string               `json:"order_by,omitempty" jsonschema:"Order by: name, created_at, version, type, project_path"`
+	Sort               string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
+	IncludeVersionless bool                 `json:"include_versionless,omitempty" jsonschema:"Include versionless packages"`
+	Status             string               `json:"status,omitempty" jsonschema:"Filter by status: default, hidden, processing, error"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
+}
+
+// GroupListItem represents a single package in the group list output.
+// It mirrors the GitLab Packages API [gl.GroupPackage] object, which
+// embeds the project-scoped [gl.Package] fields and adds the owning
+// project's ID and path.
+type GroupListItem struct {
+	ListItem
+	ProjectID   int64  `json:"project_id"`
+	ProjectPath string `json:"project_path,omitempty"`
+}
+
+// GroupListOutput contains the paginated list of group packages.
+type GroupListOutput struct {
+	toolutil.HintableOutput
+	Packages   []GroupListItem           `json:"packages"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// buildGroupListOptions assembles a [gl.ListGroupPackagesOptions] from
+// the shared [GroupListInput] filter set, mapping the MCP-friendly
+// OrderBy/Sort/Status values and the exclude_subgroups flag to the
+// GitLab group Packages API fields.
+func buildGroupListOptions(input GroupListInput) *gl.ListGroupPackagesOptions {
+	opts := &gl.ListGroupPackagesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.ExcludeSubgroups {
+		opts.ExcludeSubGroups = new(true)
+	}
+	if input.PackageName != "" {
+		opts.PackageName = &input.PackageName
+	}
+	if input.PackageType != "" {
+		opts.PackageType = &input.PackageType
+	}
+	if input.OrderBy != "" {
+		opts.OrderBy = &input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.IncludeVersionless {
+		opts.IncludeVersionless = new(true)
+	}
+	if input.Status != "" {
+		opts.Status = &input.Status
+	}
+	return opts
+}
+
+// GroupList retrieves a paginated list of packages across a group and
+// its descendant projects via the GitLab group Packages list API
+// (GET /groups/:id/packages). Each item carries the owning project's ID
+// and path in addition to the project-scoped package fields.
+func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupListInput) (GroupListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return GroupListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
+	}
+	if input.GroupID == "" {
+		return GroupListOutput{}, errors.New("packageGroupList: group_id is required")
+	}
+
+	pkgs, resp, err := client.GL().Packages.ListGroupPackages(string(input.GroupID), buildGroupListOptions(input), gl.WithContext(ctx))
+	if err != nil {
+		return GroupListOutput{}, toolutil.WrapErrWithStatusHint("packageGroupList", err, http.StatusNotFound,
+			"verify group_id with gitlab_group_get; the group may have no packages yet or package registry may be disabled")
+	}
+
+	items := make([]GroupListItem, 0, len(pkgs))
+	for _, p := range pkgs {
+		if p == nil {
+			continue
+		}
+		items = append(items, GroupListItem{
+			ListItem:    packageToListItem(&p.Package),
+			ProjectID:   p.ProjectID,
+			ProjectPath: p.ProjectPath,
+		})
+	}
+
+	return GroupListOutput{
+		Packages:   items,
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}, nil
+}
+
 // List Package Files.
 
 // FileListInput defines input for listing files within a package.
 type FileListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	PackageID toolutil.StringOrInt `json:"package_id" jsonschema:"Package ID,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order package files by: created_at, file_name, or id"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // FileListItem represents a single file within a package.
@@ -473,11 +622,13 @@ func FileList(ctx context.Context, client *gitlabclient.Client, input FileListIn
 		return FileListOutput{}, errors.New("packageFileList: package_id must be a positive integer")
 	}
 
-	opts := &gl.ListPackageFilesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListPackageFilesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	files, resp, err := client.GL().Packages.ListPackageFiles(string(input.ProjectID), pkgID, opts)

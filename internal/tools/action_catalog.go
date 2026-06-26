@@ -2,10 +2,13 @@ package tools
 
 import (
 	"fmt"
+	"maps"
+	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -14,16 +17,35 @@ import (
 // ActionCatalogOptions controls which action groups are included in the
 // canonical catalog.
 //
-// Enterprise toggles Premium/Ultimate-only domain groups; IncludeMCP adds
-// the gitlab_server maintenance group; Updater enables the
-// apply_update/check_update actions inside that group; SpecGroups injects
-// additional [ActionSpecGroup] overrides that merge on top of the
-// collected domain specs.
+// Tier is the effective instance licensing tier; an action is included only
+// when its per-action minimum tier (derived from [toolutil.ActionSpec.Edition]
+// via [edition.TierFromEdition]) is at most Tier. Enterprise is a deprecated
+// back-compat selector retained for callers and tests that predate the 3-tier
+// model: when Tier is the zero value ([edition.Free]) and Enterprise is true,
+// the effective tier is [edition.Ultimate] (all tools), preserving the historical
+// "enterprise = show everything" behavior. IncludeMCP adds the gitlab_server
+// maintenance group; Updater enables the apply_update/check_update actions
+// inside that group; SpecGroups injects additional [ActionSpecGroup] overrides
+// that merge on top of the collected domain specs.
 type ActionCatalogOptions struct {
+	Tier       edition.Tier
 	Enterprise bool
 	IncludeMCP bool
 	Updater    *autoupdate.Updater
 	SpecGroups []ActionSpecGroup
+}
+
+// effectiveTier resolves the licensing tier used to gate catalog actions.
+// An explicit Tier wins; otherwise the deprecated Enterprise flag maps true to
+// [edition.Ultimate] and false to [edition.Free].
+func (opts ActionCatalogOptions) effectiveTier() edition.Tier {
+	if opts.Tier != edition.Free {
+		return opts.Tier
+	}
+	if opts.Enterprise {
+		return edition.Ultimate
+	}
+	return edition.Free
 }
 
 // BuildActionCatalog builds the canonical action catalog for catalog-backed
@@ -43,7 +65,9 @@ type ActionCatalogOptions struct {
 // validation failure so callers can present a clear "build catalog
 // group" / "add catalog group" / "validate action catalog" message.
 func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
-	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, opts.Enterprise), opts.SpecGroups)
+	tier := opts.effectiveTier()
+	specGroups := mergeActionSpecGroupOverrides(CollectActionSpecs(client, tier.IsEnterprise()), opts.SpecGroups)
+	specGroups = filterActionSpecGroupsByTier(specGroups, tier)
 	catalog := actioncatalog.NewCatalog()
 	for _, specGroup := range specGroups {
 		group, groupErr := groupFromActionSpecGroup(specGroup)
@@ -63,6 +87,122 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 		return nil, fmt.Errorf("validate action catalog: %w", validateErr)
 	}
 	return catalog, nil
+}
+
+// filterActionSpecGroupsByTier drops every action whose minimum required tier
+// (from [toolutil.ActionSpec.Edition] via [edition.TierFromEdition]) exceeds the
+// instance tier, and drops any group left with no actions. This is the single
+// central tier gate: an instance at a given tier sees exactly the actions
+// available at that tier or below (Free ⊂ Premium ⊂ Ultimate). Input groups are
+// cloned so the shared spec slices returned by [CollectActionSpecs] are not
+// mutated.
+func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) []ActionSpecGroup {
+	out := make([]ActionSpecGroup, 0, len(groups))
+	for _, group := range groups {
+		// Pass through groups that were already empty so catalog validation can
+		// still report them (e.g. malformed explicit-group overrides); only the
+		// tier filter is allowed to remove a group here.
+		if len(group.Actions) == 0 {
+			out = append(out, group)
+			continue
+		}
+		kept := make([]toolutil.ActionSpec, 0, len(group.Actions))
+		for _, spec := range group.Actions {
+			if edition.TierFromEdition(spec.Edition) <= tier {
+				kept = append(kept, pruneSpecFieldsByTier(spec, tier))
+			}
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		group = actioncatalog.CloneCatalogGroupSpec(group)
+		group.Actions = kept
+		out = append(out, group)
+	}
+	return out
+}
+
+// pruneSpecFieldsByTier returns spec with input- and output-schema properties
+// that require a higher tier than the instance tier removed. Field tiers come
+// from the input/output type's `tier:"premium|ultimate"` struct tags via
+// [toolutil.FieldTiers]. The cached shared schemas are never mutated: a clone is
+// produced only when at least one field must be dropped, so a Free instance
+// never advertises Premium/Ultimate-only parameters or result fields.
+func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil.ActionSpec {
+	// Input pruning stays strict (lenientExtra=false): a lower-tier client must
+	// not send Premium/Ultimate parameters. Output pruning is lenient
+	// (lenientExtra=true): the model-facing output schema omits the higher-tier
+	// fields, but the GitLab instance may still return them (some CE/Free
+	// responses include Premium/Ultimate keys with default values), and the MCP
+	// server must not reject its own tool output over those extra properties.
+	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier, false)
+	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier, true)
+	return spec
+}
+
+// pruneSchemaFieldsByTier removes from schema the top-level properties whose
+// per-field tier (from rt's `tier:` struct tags) exceeds the instance tier. The
+// input schema is returned unchanged when nothing must be dropped, avoiding an
+// allocation and preserving the cached shared map.
+func pruneSchemaFieldsByTier(schema map[string]any, rt reflect.Type, tier edition.Tier, lenientExtra bool) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	fieldTiers := toolutil.FieldTiers(rt)
+	if len(fieldTiers) == 0 {
+		return schema
+	}
+	drop := make(map[string]bool, len(fieldTiers))
+	for name, fieldTier := range fieldTiers {
+		if edition.TierFromEdition(fieldTier) > tier {
+			drop[name] = true
+		}
+	}
+	if len(drop) == 0 {
+		return schema
+	}
+	return pruneSchemaProperties(schema, drop, lenientExtra)
+}
+
+// pruneSchemaProperties returns a shallow clone of a JSON Schema object with the
+// named properties removed from "properties" and "required". The input map is
+// not mutated. When lenientExtra is true the clone sets additionalProperties to
+// true so a payload that still contains the removed (higher-tier) keys validates
+// — used for output schemas, where the instance may return those keys.
+func pruneSchemaProperties(schema map[string]any, drop map[string]bool, lenientExtra bool) map[string]any {
+	cloned := make(map[string]any, len(schema))
+	maps.Copy(cloned, schema)
+	if lenientExtra {
+		cloned["additionalProperties"] = true
+	}
+	if props, ok := schema["properties"].(map[string]any); ok {
+		newProps := make(map[string]any, len(props))
+		for name, value := range props {
+			if !drop[name] {
+				newProps[name] = value
+			}
+		}
+		cloned["properties"] = newProps
+	}
+	switch req := schema["required"].(type) {
+	case []any:
+		newReq := make([]any, 0, len(req))
+		for _, item := range req {
+			if name, _ := item.(string); !drop[name] {
+				newReq = append(newReq, item)
+			}
+		}
+		cloned["required"] = newReq
+	case []string:
+		newReq := make([]string, 0, len(req))
+		for _, name := range req {
+			if !drop[name] {
+				newReq = append(newReq, name)
+			}
+		}
+		cloned["required"] = newReq
+	}
+	return cloned
 }
 
 // mergeActionSpecGroupOverrides folds overrideGroups into baseGroups by tool

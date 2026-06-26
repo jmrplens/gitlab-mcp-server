@@ -168,11 +168,11 @@ func TestIssueLinkGet_Success(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf("ID = %d, want 1", out.ID)
 	}
-	if out.SourceIssueIID != 5 {
-		t.Errorf("SourceIssueIID = %d, want 5", out.SourceIssueIID)
+	if out.SourceIssue == nil || out.SourceIssue.IID != 5 {
+		t.Errorf("SourceIssue.IID = %v, want 5", out.SourceIssue)
 	}
-	if out.TargetIssueIID != 8 {
-		t.Errorf("TargetIssueIID = %d, want 8", out.TargetIssueIID)
+	if out.TargetIssue == nil || out.TargetIssue.IID != 8 {
+		t.Errorf("TargetIssue.IID = %v, want 8", out.TargetIssue)
 	}
 	if out.LinkType != "blocks" {
 		t.Errorf(fmtLinkTypeWant, out.LinkType, "blocks")
@@ -256,11 +256,11 @@ func TestIssueLinkCreate_Success(t *testing.T) {
 	if out.ID != 2 {
 		t.Errorf("ID = %d, want 2", out.ID)
 	}
-	if out.TargetIssueIID != 12 {
-		t.Errorf("TargetIssueIID = %d, want 12", out.TargetIssueIID)
+	if out.TargetIssue == nil || out.TargetIssue.IID != 12 {
+		t.Errorf("TargetIssue.IID = %v, want 12", out.TargetIssue)
 	}
-	if out.TargetProjectID != 20 {
-		t.Errorf("TargetProjectID = %d, want 20", out.TargetProjectID)
+	if out.TargetIssue == nil || out.TargetIssue.ProjectID != 20 {
+		t.Errorf("TargetIssue.ProjectID = %v, want 20", out.TargetIssue)
 	}
 	if out.LinkType != "is_blocked_by" {
 		t.Errorf(fmtLinkTypeWant, out.LinkType, "is_blocked_by")
@@ -507,12 +507,10 @@ func TestIssueLinkIDNegative_Validation(t *testing.T) {
 // TestFormatOutputMarkdown_Populated covers FormatOutputMarkdown with table-driven subtests for populated.
 func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
-		ID:              42,
-		SourceIssueIID:  5,
-		SourceProjectID: 10,
-		TargetIssueIID:  8,
-		TargetProjectID: 20,
-		LinkType:        "blocks",
+		ID:          42,
+		SourceIssue: &IssueRefOutput{IID: 5, ProjectID: 10},
+		TargetIssue: &IssueRefOutput{IID: 8, ProjectID: 20},
+		LinkType:    "blocks",
 	}
 	md := FormatOutputMarkdown(out)
 
@@ -522,8 +520,8 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 		{"header", "## Issue Link"},
 		{"id", "**ID**: 42"},
 		{"link type", "**Link Type**: blocks"},
-		{"source", "**Source Issue IID**: 5 (project 10)"},
-		{"target", "**Target Issue IID**: 8 (project 20)"},
+		{"source", "**Source Issue**: IID 5 (project 10)"},
+		{"target", "**Target Issue**: IID 8 (project 20)"},
 	}
 	for _, c := range checks {
 		if !strings.Contains(md, c.want) {
@@ -537,6 +535,18 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
 		t.Errorf("expected empty string for zero-ID output, got %q", md)
+	}
+}
+
+// TestFormatOutputMarkdown_NilIssueObjects verifies the issueRefLine placeholder
+// is rendered when the source/target issue objects are absent.
+func TestFormatOutputMarkdown_NilIssueObjects(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 7, LinkType: "relates_to"})
+	if !strings.Contains(md, "**Source Issue**: (not available)") {
+		t.Errorf("expected source placeholder, got:\n%s", md)
+	}
+	if !strings.Contains(md, "**Target Issue**: (not available)") {
+		t.Errorf("expected target placeholder, got:\n%s", md)
 	}
 }
 
@@ -605,17 +615,11 @@ func TestToOutput_FullFields(t *testing.T) {
 	if out.LinkType != "blocks" {
 		t.Errorf("LinkType = %q, want %q", out.LinkType, "blocks")
 	}
-	if out.SourceIssueIID != 5 {
-		t.Errorf("SourceIssueIID = %d, want 5", out.SourceIssueIID)
+	if out.SourceIssue == nil || out.SourceIssue.IID != 5 || out.SourceIssue.ProjectID != 10 {
+		t.Errorf("SourceIssue = %+v, want IID 5 project 10", out.SourceIssue)
 	}
-	if out.SourceProjectID != 10 {
-		t.Errorf("SourceProjectID = %d, want 10", out.SourceProjectID)
-	}
-	if out.TargetIssueIID != 8 {
-		t.Errorf("TargetIssueIID = %d, want 8", out.TargetIssueIID)
-	}
-	if out.TargetProjectID != 20 {
-		t.Errorf("TargetProjectID = %d, want 20", out.TargetProjectID)
+	if out.TargetIssue == nil || out.TargetIssue.IID != 8 || out.TargetIssue.ProjectID != 20 {
+		t.Errorf("TargetIssue = %+v, want IID 8 project 20", out.TargetIssue)
 	}
 }
 
@@ -631,14 +635,11 @@ func TestToOutput_NilSourceIssue(t *testing.T) {
 	}
 	out := toOutput(link)
 
-	if out.SourceIssueIID != 0 {
-		t.Errorf("SourceIssueIID = %d, want 0 for nil source", out.SourceIssueIID)
+	if out.SourceIssue != nil {
+		t.Errorf("SourceIssue = %+v, want nil for nil source", out.SourceIssue)
 	}
-	if out.SourceProjectID != 0 {
-		t.Errorf("SourceProjectID = %d, want 0 for nil source", out.SourceProjectID)
-	}
-	if out.TargetIssueIID != 8 {
-		t.Errorf("TargetIssueIID = %d, want 8", out.TargetIssueIID)
+	if out.TargetIssue == nil || out.TargetIssue.IID != 8 {
+		t.Errorf("TargetIssue.IID = %v, want 8", out.TargetIssue)
 	}
 }
 
@@ -654,14 +655,11 @@ func TestToOutput_NilTargetIssue(t *testing.T) {
 	}
 	out := toOutput(link)
 
-	if out.TargetIssueIID != 0 {
-		t.Errorf("TargetIssueIID = %d, want 0 for nil target", out.TargetIssueIID)
+	if out.TargetIssue != nil {
+		t.Errorf("TargetIssue = %+v, want nil for nil target", out.TargetIssue)
 	}
-	if out.TargetProjectID != 0 {
-		t.Errorf("TargetProjectID = %d, want 0 for nil target", out.TargetProjectID)
-	}
-	if out.SourceIssueIID != 5 {
-		t.Errorf("SourceIssueIID = %d, want 5", out.SourceIssueIID)
+	if out.SourceIssue == nil || out.SourceIssue.IID != 5 {
+		t.Errorf("SourceIssue.IID = %v, want 5", out.SourceIssue)
 	}
 }
 
@@ -676,11 +674,11 @@ func TestToOutputBoth_Nil(t *testing.T) {
 	if out.ID != 3 {
 		t.Errorf("ID = %d, want 3", out.ID)
 	}
-	if out.SourceIssueIID != 0 || out.SourceProjectID != 0 {
-		t.Errorf("expected zero source fields for nil source issue")
+	if out.SourceIssue != nil {
+		t.Errorf("expected nil source issue object")
 	}
-	if out.TargetIssueIID != 0 || out.TargetProjectID != 0 {
-		t.Errorf("expected zero target fields for nil target issue")
+	if out.TargetIssue != nil {
+		t.Errorf("expected nil target issue object")
 	}
 }
 

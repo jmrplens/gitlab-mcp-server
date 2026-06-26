@@ -378,8 +378,8 @@ type CreateInput struct {
 	AssigneeIDs    []int64            `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees"`
 	MilestoneID    *int64             `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone"`
 	LabelIDs       []int64            `json:"label_ids,omitempty" jsonschema:"Global IDs of labels"`
-	Weight         *int64             `json:"weight,omitempty" jsonschema:"Weight of the work item"`
-	HealthStatus   string             `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	Weight         *int64             `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
+	HealthStatus   string             `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
 	Color          string             `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
 	DueDate        string             `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
 	StartDate      string             `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
@@ -467,9 +467,9 @@ type UpdateInput struct {
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
 	StartDate      string  `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
 	DueDate        string  `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
-	Weight         *int64  `json:"weight,omitempty" jsonschema:"Weight of the work item"`
-	HealthStatus   string  `json:"health_status,omitempty" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
-	IterationID    *int64  `json:"iteration_id,omitempty" jsonschema:"Global ID of the iteration"`
+	Weight         *int64  `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
+	HealthStatus   string  `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
+	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
 	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
 	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 }
@@ -595,6 +595,8 @@ type ListWorkItemTypesInput struct {
 	OnlyAvailable bool   `json:"only_available,omitempty" jsonschema:"Return only available work item types"`
 	First         int64  `json:"first,omitempty"      jsonschema:"Number of types to return from the beginning (cursor pagination)"`
 	After         string `json:"after,omitempty"      jsonschema:"Cursor for forward pagination"`
+	Last          int64  `json:"last,omitempty"       jsonschema:"Number of types to return from the end (backward cursor pagination)"`
+	Before        string `json:"before,omitempty"     jsonschema:"Cursor for backward pagination"`
 }
 
 // ListWorkItemTypes lists work item types (system-defined and custom) for a namespace.
@@ -615,6 +617,13 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	if input.After != "" {
 		opts.After = new(input.After)
+	}
+	if input.Last > 0 {
+		last := input.Last
+		opts.Last = &last
+	}
+	if input.Before != "" {
+		opts.Before = new(input.Before)
 	}
 	types, resp, err := client.GL().WorkItems.ListWorkItemTypes(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {

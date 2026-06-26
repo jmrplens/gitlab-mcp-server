@@ -20,11 +20,15 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	sb.WriteString("| IID | Title | State | Author | Source → Target |\n")
 	sb.WriteString("|-----|-------|-------|--------|----------------|\n")
 	for _, mr := range out.MergeRequests {
+		author := ""
+		if mr.Author != nil {
+			author = mr.Author.Username
+		}
 		fmt.Fprintf(&sb, "| !%d | %s | %s | %s | %s → %s |\n",
 			mr.IID,
 			toolutil.MdTitleLink(mr.Title, mr.WebURL),
 			mr.State,
-			mr.Author,
+			author,
 			mr.SourceBranch,
 			mr.TargetBranch)
 	}

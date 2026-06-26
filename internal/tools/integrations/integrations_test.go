@@ -124,6 +124,88 @@ func TestList_Error(t *testing.T) {
 
 // Get.
 
+// TestIntegrationToItem_MirrorsAllSDKFields verifies that integrationToItem
+// maps every field of the client-go gl.Integration base struct onto
+// IntegrationItem, including the full set of event-trigger flags and the
+// inherited flag. It pins the 1:1 field coverage against client-go.
+func TestIntegrationToItem_MirrorsAllSDKFields(t *testing.T) {
+	src := &gl.Integration{
+		ID: 7, Title: "Jira", Slug: "jira", Active: true,
+		AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
+		ConfidentialNoteEvents: true, DeploymentEvents: true,
+		GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
+		IncidentEvents: true, IssuesEvents: true, JobEvents: true,
+		MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
+		PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
+		WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
+	}
+	got := integrationToItem(src)
+	want := IntegrationItem{
+		ID: 7, Title: "Jira", Slug: "jira", Active: true,
+		AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
+		ConfidentialNoteEvents: true, DeploymentEvents: true,
+		GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
+		IncidentEvents: true, IssuesEvents: true, JobEvents: true,
+		MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
+		PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
+		WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
+	}
+	if got != want {
+		t.Fatalf("integrationToItem mismatch:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+// TestGroupDatadogToItem_MirrorsAllSDKFields verifies that groupDatadogToItem
+// maps every embedded gl.Integration event flag and the Datadog-specific
+// fields onto GroupDatadogItem, pinning 1:1 coverage against client-go.
+func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
+	archive := true
+	src := &gl.GroupDatadogIntegration{
+		Integration: gl.Integration{
+			ID: 9, Title: "datadog", Slug: "datadog", Active: true,
+			AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
+			ConfidentialNoteEvents: true, DeploymentEvents: true,
+			GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
+			IncidentEvents: true, IssuesEvents: true, JobEvents: true,
+			MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
+			PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
+			WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
+		},
+		APIURL: "https://api.datadoghq.com", DatadogEnv: "prod",
+		DatadogService: "svc", DatadogSite: "datadoghq.com", DatadogTags: "team:core",
+		ArchiveTraceEvents: &archive,
+	}
+	got := groupDatadogToItem(src)
+	flags := map[string]bool{
+		"AlertEvents": got.AlertEvents, "CommitEvents": got.CommitEvents,
+		"ConfidentialIssuesEvents":       got.ConfidentialIssuesEvents,
+		"ConfidentialNoteEvents":         got.ConfidentialNoteEvents,
+		"DeploymentEvents":               got.DeploymentEvents,
+		"GroupConfidentialMentionEvents": got.GroupConfidentialMentionEvents,
+		"GroupMentionEvents":             got.GroupMentionEvents,
+		"IncidentEvents":                 got.IncidentEvents,
+		"IssuesEvents":                   got.IssuesEvents, "JobEvents": got.JobEvents,
+		"MergeRequestsEvents": got.MergeRequestsEvents, "NoteEvents": got.NoteEvents,
+		"PipelineEvents": got.PipelineEvents, "PushEvents": got.PushEvents,
+		"TagPushEvents": got.TagPushEvents, "VulnerabilityEvents": got.VulnerabilityEvents,
+		"WikiPageEvents": got.WikiPageEvents, "CommentOnEventEnabled": got.CommentOnEventEnabled,
+		"Inherited": got.Inherited,
+	}
+	for name, set := range flags {
+		if !set {
+			t.Fatalf("groupDatadogToItem dropped event flag %s: %+v", name, got)
+		}
+	}
+	if got.APIURL != src.APIURL || got.DatadogEnv != src.DatadogEnv ||
+		got.DatadogService != src.DatadogService || got.DatadogSite != src.DatadogSite ||
+		got.DatadogTags != src.DatadogTags {
+		t.Fatalf("groupDatadogToItem dropped a Datadog field: %+v", got)
+	}
+	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
+		t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)
+	}
+}
+
 // TestGet_JiraSuccess verifies the Get_JiraSuccess handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

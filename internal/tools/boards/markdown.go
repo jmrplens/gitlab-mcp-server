@@ -7,32 +7,57 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// boardProjectLabel renders the most descriptive project reference, or "".
+func boardProjectLabel(p *ProjectOutput) string {
+	if p == nil {
+		return ""
+	}
+	if p.PathWithNamespace != "" {
+		return p.PathWithNamespace
+	}
+	return p.Name
+}
+
+// boardListLabelName returns the label name for a list, or "" when unset.
+func boardListLabelName(l BoardListOutput) string {
+	if l.Label != nil {
+		return l.Label.Name
+	}
+	return ""
+}
+
 // FormatBoardMarkdown formats a single board as markdown.
 func FormatBoardMarkdown(out BoardOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Board: %s\n\n", toolutil.EscapeMdTableCell(out.Name))
-	if out.ProjectPath != "" {
-		fmt.Fprintf(&b, "**Project**: %s\n", out.ProjectPath)
-	} else if out.ProjectName != "" {
-		fmt.Fprintf(&b, "**Project**: %s\n", out.ProjectName)
+	if project := boardProjectLabel(out.Project); project != "" {
+		fmt.Fprintf(&b, "**Project**: %s\n", project)
 	}
-	if out.MilestoneTitle != "" {
-		fmt.Fprintf(&b, "**Milestone**: %s\n", out.MilestoneTitle)
+	if out.Milestone != nil && out.Milestone.Title != "" {
+		fmt.Fprintf(&b, "**Milestone**: %s\n", out.Milestone.Title)
 	}
-	if out.AssigneeUser != "" {
-		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.AssigneeUser)
+	if out.Assignee != nil && out.Assignee.Username != "" {
+		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.Assignee.Username)
 	}
 	if out.Weight > 0 {
 		fmt.Fprintf(&b, "**Weight**: %d\n", out.Weight)
 	}
 	if len(out.Labels) > 0 {
-		fmt.Fprintf(&b, "**Labels**: %s\n", strings.Join(out.Labels, ", "))
+		names := make([]string, 0, len(out.Labels))
+		for _, lbl := range out.Labels {
+			if lbl != nil {
+				names = append(names, lbl.Name)
+			}
+		}
+		if len(names) > 0 {
+			fmt.Fprintf(&b, "**Labels**: %s\n", strings.Join(names, ", "))
+		}
 	}
 	fmt.Fprintf(&b, "**Hide Backlog**: %t | **Hide Closed**: %t\n", out.HideBacklogList, out.HideClosedList)
 	if len(out.Lists) > 0 {
 		b.WriteString("\n### Lists\n\n| Label | Position | Max Issues | Max Weight |\n|---|---|---|---|\n")
 		for _, l := range out.Lists {
-			label := toolutil.EscapeMdTableCell(l.LabelName)
+			label := toolutil.EscapeMdTableCell(boardListLabelName(l))
 			if label == "" {
 				label = fmt.Sprintf("#%d", l.ID)
 			}
@@ -56,15 +81,18 @@ func FormatListBoardsMarkdown(out ListBoardsOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Boards), out.Pagination)
 	b.WriteString("| Name | Project | Milestone | Assignee | Lists |\n|---|---|---|---|---|\n")
 	for _, bd := range out.Boards {
-		project := bd.ProjectPath
-		if project == "" {
-			project = bd.ProjectName
+		var milestone, assignee string
+		if bd.Milestone != nil {
+			milestone = bd.Milestone.Title
+		}
+		if bd.Assignee != nil {
+			assignee = bd.Assignee.Username
 		}
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d |\n",
 			toolutil.EscapeMdTableCell(bd.Name),
-			toolutil.EscapeMdTableCell(project),
-			toolutil.EscapeMdTableCell(bd.MilestoneTitle),
-			toolutil.EscapeMdTableCell(bd.AssigneeUser),
+			toolutil.EscapeMdTableCell(boardProjectLabel(bd.Project)),
+			toolutil.EscapeMdTableCell(milestone),
+			toolutil.EscapeMdTableCell(assignee),
 			len(bd.Lists))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -79,8 +107,8 @@ func FormatListBoardsMarkdown(out ListBoardsOutput) string {
 // FormatBoardListMarkdown formats a single board list as markdown.
 func FormatBoardListMarkdown(out BoardListOutput) string {
 	var b strings.Builder
-	if out.LabelName != "" {
-		fmt.Fprintf(&b, "## Board List: %s\n\n", toolutil.EscapeMdTableCell(out.LabelName))
+	if label := boardListLabelName(out); label != "" {
+		fmt.Fprintf(&b, "## Board List: %s\n\n", toolutil.EscapeMdTableCell(label))
 	} else {
 		fmt.Fprintf(&b, "## Board List #%d\n\n", out.ID)
 	}
@@ -91,11 +119,11 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	if out.MaxIssueWeight > 0 {
 		fmt.Fprintf(&b, "**Max Issue Weight**: %d\n", out.MaxIssueWeight)
 	}
-	if out.AssigneeUser != "" {
-		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.AssigneeUser)
+	if out.Assignee != nil && out.Assignee.Username != "" {
+		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.Assignee.Username)
 	}
-	if out.MilestoneTitle != "" {
-		fmt.Fprintf(&b, "**Milestone**: %s\n", out.MilestoneTitle)
+	if out.Milestone != nil && out.Milestone.Title != "" {
+		fmt.Fprintf(&b, "**Milestone**: %s\n", out.Milestone.Title)
 	}
 	toolutil.WriteHints(
 		&b,
@@ -112,7 +140,7 @@ func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Lists), out.Pagination)
 	b.WriteString("| Label | Position | Max Issues | Max Weight |\n|---|---|---|---|\n")
 	for _, l := range out.Lists {
-		label := toolutil.EscapeMdTableCell(l.LabelName)
+		label := toolutil.EscapeMdTableCell(boardListLabelName(l))
 		if label == "" {
 			label = fmt.Sprintf("#%d", l.ID)
 		}

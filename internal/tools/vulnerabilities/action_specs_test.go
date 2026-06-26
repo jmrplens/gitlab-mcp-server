@@ -4,6 +4,7 @@ package vulnerabilities
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -96,6 +97,67 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "vulnerabilities" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadata verifies every vulnerability action spec
+// carries non-generic discovery metadata: an action-specific Usage, aliases
+// beyond the tool name, canonical RelatedActions cross-links, and an
+// individual-tool description in the "Returns: … See also: …" form.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			assertDiscoveryMetadata(t, spec)
+		})
+	}
+}
+
+// assertDiscoveryMetadata fails the test if spec lacks non-generic Usage,
+// aliases beyond the tool name, canonical RelatedActions, or a
+// "Returns: … See also: …" individual-tool description.
+func assertDiscoveryMetadata(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	const genericUsage = "Use to execute vulnerabilities domain action."
+	tool := spec.IndividualTool.Name
+	if spec.Usage == "" || spec.Usage == genericUsage {
+		t.Fatalf("%s: generic or empty Usage: %q", tool, spec.Usage)
+	}
+	if len(spec.Aliases) == 0 {
+		t.Fatalf("%s: no Aliases", tool)
+	}
+	for _, alias := range spec.Aliases {
+		if alias == tool {
+			t.Fatalf("%s: alias equals tool name", tool)
+		}
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Fatalf("%s: empty RelatedActions", tool)
+	}
+	for _, related := range spec.RelatedActions {
+		if !strings.Contains(related, ".") {
+			t.Fatalf("%s: related action %q is not a canonical {domain}.{action} id", tool, related)
+		}
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Fatalf("%s: description missing Returns/See also: %q", tool, desc)
+	}
+}
+
+// TestDecorateVulnerabilityMeta_UnknownToolIsNoOp verifies that decorating an
+// individual tool with no metadata entry leaves the generic options untouched.
+func TestDecorateVulnerabilityMeta_UnknownToolIsNoOp(t *testing.T) {
+	options := vulnerabilityOptions("gitlab_unknown_vulnerability_tool")
+	before := options
+	decorateVulnerabilityMeta(&options, "gitlab_unknown_vulnerability_tool")
+	if options.Usage != before.Usage || options.IndividualTool.Description != before.IndividualTool.Description {
+		t.Fatalf("decorateVulnerabilityMeta mutated options for unknown tool: %+v", options)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Fatalf("expected no RelatedActions for unknown tool, got %v", options.RelatedActions)
 	}
 }
 

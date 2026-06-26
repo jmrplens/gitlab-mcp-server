@@ -223,7 +223,8 @@ func TestList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"go","name":"Go"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID: "1", TemplateType: "gitignores", Page: 3, PerPage: 10,
+		ProjectID: "1", TemplateType: "gitignores",
+		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 10},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -244,6 +245,42 @@ func TestList_ZeroPagination(t *testing.T) {
 	}))
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: "1", TemplateType: "dockerfiles",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Templates) != 1 {
+		t.Fatalf("len = %d, want 1", len(out.Templates))
+	}
+}
+
+// TestList_WithFiltersAndKeyset verifies that id, type, order_by, sort, and
+// keyset pagination inputs are wired onto the request query string.
+func TestList_WithFiltersAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		for key, want := range map[string]string{
+			"id":         "42",
+			"type":       "licenses",
+			"order_by":   "name",
+			"sort":       "asc",
+			"pagination": "keyset",
+			"page_token": "tok123",
+		} {
+			if q.Get(key) != want {
+				t.Errorf("query %s = %q, want %q (raw=%s)", key, q.Get(key), want, r.URL.RawQuery)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             "1",
+		TemplateType:          "licenses",
+		ID:                    42,
+		Type:                  "licenses",
+		OrderBy:               "name",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

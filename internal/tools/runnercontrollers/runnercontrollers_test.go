@@ -75,6 +75,47 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
+// TestList_WithKeysetPagination verifies that List forwards keyset pagination parameters.
+func TestList_WithKeysetPagination(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("pagination") != "keyset" {
+			t.Errorf("expected pagination=keyset, got %s", r.URL.Query().Get("pagination"))
+		}
+		if r.URL.Query().Get("page_token") != "cursor-42" {
+			t.Errorf("expected page_token=cursor-42, got %s", r.URL.Query().Get("page_token"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-42"},
+	})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+}
+
+// TestList_WithOrderBySort verifies that List forwards the order_by and sort
+// query parameters (R-INPUT: gl.ListOptions.OrderBy/Sort).
+func TestList_WithOrderBySort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("order_by") != "created_at" {
+			t.Errorf("expected order_by=created_at, got %s", r.URL.Query().Get("order_by"))
+		}
+		if r.URL.Query().Get("sort") != "desc" {
+			t.Errorf("expected sort=desc, got %s", r.URL.Query().Get("sort"))
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+
+	_, err := List(context.Background(), client, ListInput{OrderBy: "created_at", Sort: "desc"})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+}
+
 // TestList_Empty verifies that List handles empty results.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

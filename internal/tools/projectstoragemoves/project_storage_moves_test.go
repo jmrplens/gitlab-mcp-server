@@ -21,8 +21,12 @@ const storageMoveJSON = `{
 	"destination_storage_name": "storage2",
 	"project": {
 		"id": 42,
+		"description": "demo project",
 		"name": "my-project",
-		"path_with_namespace": "group/my-project"
+		"name_with_namespace": "Group / my-project",
+		"path": "my-project",
+		"path_with_namespace": "group/my-project",
+		"created_at": "2025-12-01T08:00:00Z"
 	}
 }`
 
@@ -32,6 +36,46 @@ const storageMoveNoProjectJSON = `{
 	"source_storage_name": "default",
 	"destination_storage_name": "storage3"
 }`
+
+// assertFullMove validates that the first move in a ListOutput mirrors the
+// fully populated storageMoveJSON fixture, including all nested project fields.
+func assertFullMove(t *testing.T, out ListOutput) {
+	t.Helper()
+	m := out.Moves[0]
+	assertStr(t, "State", m.State, "finished")
+	assertStr(t, "SourceStorageName", m.SourceStorageName, "default")
+	assertStr(t, "DestinationStorageName", m.DestinationStorageName, "storage2")
+	if m.ID != 1 {
+		t.Errorf("ID = %d, want 1", m.ID)
+	}
+	if m.CreatedAt.IsZero() {
+		t.Error("expected non-zero CreatedAt")
+	}
+	if out.Pagination.Page != 1 {
+		t.Errorf("Pagination.Page = %d, want 1", out.Pagination.Page)
+	}
+	if m.Project == nil {
+		t.Fatal("expected non-nil project")
+	}
+	if m.Project.ID != 42 {
+		t.Errorf("Project.ID = %d, want 42", m.Project.ID)
+	}
+	assertStr(t, "Project.Description", m.Project.Description, "demo project")
+	assertStr(t, "Project.Name", m.Project.Name, "my-project")
+	assertStr(t, "Project.NameWithNamespace", m.Project.NameWithNamespace, "Group / my-project")
+	assertStr(t, "Project.Path", m.Project.Path, "my-project")
+	assertStr(t, "Project.PathWithNamespace", m.Project.PathWithNamespace, "group/my-project")
+	if m.Project.CreatedAt == nil || m.Project.CreatedAt.IsZero() {
+		t.Error("expected non-nil/non-zero Project.CreatedAt")
+	}
+}
+
+func assertStr(t *testing.T, field, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s = %q, want %q", field, got, want)
+	}
+}
 
 // TestRetrieveAll validates the RetrieveAll function covering success with
 // pagination, empty results, API errors, and context cancellation.
@@ -48,36 +92,7 @@ func TestRetrieveAll(t *testing.T) {
 				})
 			},
 			wantMoves: 1,
-			validate: func(t *testing.T, out ListOutput) {
-				t.Helper()
-				if out.Moves[0].ID != 1 {
-					t.Errorf("ID = %d, want 1", out.Moves[0].ID)
-				}
-				if out.Moves[0].State != "finished" {
-					t.Errorf("State = %q, want %q", out.Moves[0].State, "finished")
-				}
-				if out.Moves[0].SourceStorageName != "default" {
-					t.Errorf("SourceStorageName = %q, want %q", out.Moves[0].SourceStorageName, "default")
-				}
-				if out.Moves[0].DestinationStorageName != "storage2" {
-					t.Errorf("DestinationStorageName = %q, want %q", out.Moves[0].DestinationStorageName, "storage2")
-				}
-				if out.Moves[0].Project == nil {
-					t.Fatal("expected non-nil project")
-				}
-				if out.Moves[0].Project.ID != 42 {
-					t.Errorf("Project.ID = %d, want 42", out.Moves[0].Project.ID)
-				}
-				if out.Moves[0].Project.PathWithNamespace != "group/my-project" {
-					t.Errorf("Project.PathWithNamespace = %q, want %q", out.Moves[0].Project.PathWithNamespace, "group/my-project")
-				}
-				if out.Moves[0].CreatedAt.IsZero() {
-					t.Error("expected non-zero CreatedAt")
-				}
-				if out.Pagination.Page != 1 {
-					t.Errorf("Pagination.Page = %d, want 1", out.Pagination.Page)
-				}
-			},
+			validate:  assertFullMove,
 		},
 		{
 			name:  "returns empty list",
@@ -176,6 +191,75 @@ func TestRetrieveAll_ContextCanceled(t *testing.T) {
 	_, err := RetrieveAll(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal("expected error for canceled context")
+	}
+}
+
+// TestRetrieveAll_KeysetAndOrdering verifies that keyset pagination, order_by,
+// and sort inputs are forwarded as query parameters to the GitLab API.
+func TestRetrieveAll_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if got := q.Get("pagination"); got != "keyset" {
+			t.Errorf("pagination = %q, want keyset", got)
+		}
+		if got := q.Get("page_token"); got != "99" {
+			t.Errorf("page_token = %q, want 99", got)
+		}
+		if got := q.Get("order_by"); got != "id" {
+			t.Errorf("order_by = %q, want id", got)
+		}
+		if got := q.Get("sort"); got != "desc" {
+			t.Errorf("sort = %q, want desc", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	in := ListInput{
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+	}
+	out, err := RetrieveAll(context.Background(), client, in)
+	if err != nil {
+		t.Fatalf("RetrieveAll error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("got %d moves, want 1", len(out.Moves))
+	}
+}
+
+// TestRetrieveForProject_KeysetAndOrdering verifies that keyset pagination,
+// order_by, and sort inputs are forwarded for the project-scoped listing.
+func TestRetrieveForProject_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if got := q.Get("pagination"); got != "keyset" {
+			t.Errorf("pagination = %q, want keyset", got)
+		}
+		if got := q.Get("page_token"); got != "7" {
+			t.Errorf("page_token = %q, want 7", got)
+		}
+		if got := q.Get("order_by"); got != "id" {
+			t.Errorf("order_by = %q, want id", got)
+		}
+		if got := q.Get("sort"); got != "asc" {
+			t.Errorf("sort = %q, want asc", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
+	}))
+
+	in := ListForProjectInput{
+		ProjectID:             42,
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+	}
+	out, err := RetrieveForProject(context.Background(), client, in)
+	if err != nil {
+		t.Fatalf("RetrieveForProject error: %v", err)
+	}
+	if len(out.Moves) != 1 {
+		t.Fatalf("got %d moves, want 1", len(out.Moves))
 	}
 }
 

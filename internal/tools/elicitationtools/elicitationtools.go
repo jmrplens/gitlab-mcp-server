@@ -163,7 +163,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 		ProjectID:    input.ProjectID,
 		Title:        title,
 		Description:  description,
-		Labels:       strings.Join(labels, ","),
+		Labels:       labels,
 		Confidential: confidential,
 	})
 }
@@ -248,7 +248,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		TargetBranch:       targetBranch,
 		Title:              title,
 		Description:        description,
-		Labels:             strings.Join(labels, ","),
+		Labels:             labels,
 		RemoveSourceBranch: removeSource,
 		Squash:             squash,
 	})

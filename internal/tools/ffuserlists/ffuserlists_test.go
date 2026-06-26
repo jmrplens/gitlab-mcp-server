@@ -383,6 +383,43 @@ func TestListUserLists_WithSearch(t *testing.T) {
 	}
 }
 
+// TestListUserLists_KeysetAndOrdering verifies that ListUserLists forwards
+// order_by, sort, pagination, page_token, and offset pagination parameters to
+// the GitLab API query string (1:1 audit P3 keyset pagination).
+func TestListUserLists_KeysetAndOrdering(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		for key, want := range map[string]string{
+			"order_by":   "updated_at",
+			"sort":       "desc",
+			"pagination": "keyset",
+			"page_token": "cursor-7",
+			"per_page":   "50",
+		} {
+			if got := q.Get(key); got != want {
+				t.Errorf("query %s = %q, want %q", key, got, want)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[`+covUserListJSON+`]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListUserLists(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		OrderBy:               "updated_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-7"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.UserLists) != 1 {
+		t.Errorf("expected 1 user list, got %d", len(out.UserLists))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Get — API error
 // ---------------------------------------------------------------------------.

@@ -5,6 +5,8 @@ package markdown
 import (
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -119,6 +121,44 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if !spec.ReadOnly || !spec.Idempotent {
 		t.Error("markdown render action should be read-only and idempotent")
 	}
+	if isGenericUsage(spec.Usage) {
+		t.Errorf("Usage is generic/placeholder: %q", spec.Usage)
+	}
+	if hasOnlyToolnameAlias(spec) {
+		t.Error("Aliases should include distinctive natural-language phrasing beyond the tool name")
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Error("RelatedActions should cross-link related actions")
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("IndividualTool.Description must use the \"Returns: … See also: …\" form, got %q", desc)
+	}
+}
+
+// genericUsageRe matches placeholder Usage sentences such as
+// "Use to execute X domain action."; it mirrors the R-META auditor.
+var genericUsageRe = regexp.MustCompile(`(?i)^use to execute\b.*\baction\.?\s*$`)
+
+// isGenericUsage reports whether usage is empty or a placeholder sentence.
+func isGenericUsage(usage string) bool {
+	trimmed := strings.TrimSpace(usage)
+	return trimmed == "" || genericUsageRe.MatchString(trimmed)
+}
+
+// hasOnlyToolnameAlias reports whether the spec exposes no natural-language
+// alias beyond its canonical name and projected individual-tool name.
+func hasOnlyToolnameAlias(spec toolutil.ActionSpec) bool {
+	canonical := strings.ToLower(strings.TrimSpace(spec.Name))
+	tool := strings.ToLower(strings.TrimSpace(spec.IndividualTool.Name))
+	for _, alias := range spec.Aliases {
+		normalized := strings.ToLower(strings.TrimSpace(alias))
+		if normalized == "" || normalized == canonical || normalized == tool {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // TestActionSpecs_CallRoute verifies markdown rendering through the canonical route.

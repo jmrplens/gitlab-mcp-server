@@ -5,7 +5,7 @@ package pipelinetriggers
 
 import (
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -54,8 +54,14 @@ func TestListTriggers_Success(t *testing.T) {
 	if out.Triggers[0].Token != "abc123" {
 		t.Errorf("token = %q, want %q", out.Triggers[0].Token, "abc123")
 	}
-	if out.Triggers[0].OwnerName != "Admin" {
-		t.Errorf("owner_name = %q, want %q", out.Triggers[0].OwnerName, "Admin")
+	if out.Triggers[0].Owner == nil {
+		t.Fatal("expected owner object to be populated")
+	}
+	if out.Triggers[0].Owner.Name != "Admin" {
+		t.Errorf("owner.name = %q, want %q", out.Triggers[0].Owner.Name, "Admin")
+	}
+	if out.Triggers[0].Owner.ID != 1 {
+		t.Errorf("owner.id = %d, want 1", out.Triggers[0].Owner.ID)
 	}
 }
 
@@ -227,51 +233,230 @@ func TestRunTrigger_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineID != 99 {
-		t.Errorf("pipeline_id = %d, want 99", out.PipelineID)
+	if out.ID != 99 {
+		t.Errorf("id = %d, want 99", out.ID)
 	}
 	if out.Status != "created" {
 		t.Errorf("status = %q, want %q", out.Status, "created")
 	}
 }
 
-// TestRunTrigger_WithVariables verifies RunTrigger when with variables.
+// TestRunTrigger_WithVariables verifies RunTrigger forwards CI/CD variables as
+// a map[string]string to the SDK.
 func TestRunTrigger_WithVariables(t *testing.T) {
+	var gotBody string
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":100,"sha":"def","ref":"main","status":"created","web_url":"https://gl/p/1/-/pipelines/100"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	vars, err := json.Marshal(map[string]string{"ENV": "prod"})
-	if err != nil {
-		t.Fatalf("marshal variables: %v", err)
-	}
 	out, err := RunTrigger(context.Background(), client, RunInput{
 		ProjectID: "1",
 		Ref:       "main",
 		Token:     "tok123",
-		Variables: string(vars),
+		Variables: map[string]string{"ENV": "prod"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.PipelineID != 100 {
-		t.Errorf("pipeline_id = %d, want 100", out.PipelineID)
+	if out.ID != 100 {
+		t.Errorf("id = %d, want 100", out.ID)
+	}
+	if !strings.Contains(gotBody, "ENV") || !strings.Contains(gotBody, "prod") {
+		t.Errorf("request body = %q, want to carry variables[ENV]=prod", gotBody)
 	}
 }
 
-// TestRunTrigger_InvalidVariablesJSON verifies RunTrigger when invalid variables JSON.
-func TestRunTrigger_InvalidVariablesJSON(t *testing.T) {
+// TestRunTrigger_FullPipeline verifies convertPipeline surfaces the nested user
+// and detailed_status sub-objects plus the additive Pipeline fields.
+func TestRunTrigger_FullPipeline(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id":99,"iid":5,"project_id":1,"status":"running","source":"trigger",
+			"ref":"main","name":"deploy","sha":"abc","before_sha":"def","tag":true,
+			"yaml_errors":"","duration":42,"queued_duration":3,"coverage":"88.5",
+			"web_url":"https://gl/p/1/-/pipelines/99",
+			"user":{"id":7,"username":"bot","name":"Bot","state":"active"},
+			"detailed_status":{"icon":"status_running","text":"running","label":"running","group":"running","tooltip":"running","has_details":true,"details_path":"/p","favicon":"/f","illustration":{"image":"/img"}},
+			"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z",
+			"started_at":"2026-01-01T01:00:00Z","finished_at":"2026-01-01T02:00:00Z",
+			"committed_at":"2026-01-01T00:30:00Z"
+		}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.IID != 5 || out.ProjectID != 1 || out.Source != "trigger" || out.Name != "deploy" {
+		t.Errorf("scalar fields not mapped: %+v", out)
+	}
+	if out.BeforeSHA != "def" || !out.Tag || out.Duration != 42 || out.QueuedDuration != 3 || out.Coverage != "88.5" {
+		t.Errorf("additive fields not mapped: %+v", out)
+	}
+	if out.User == nil || out.User.Username != "bot" {
+		t.Fatalf("user object not mapped: %+v", out.User)
+	}
+	assertDetailedStatusRunning(t, out.DetailedStatus)
+	if out.StartedAt == "" || out.FinishedAt == "" || out.CommittedAt == "" || out.UpdatedAt == "" {
+		t.Errorf("timestamps not mapped: %+v", out)
+	}
+}
+
+// assertDetailedStatusRunning verifies the triggered-pipeline detailed_status
+// object and its nested illustration sub-object were mapped from the API
+// response. Extracted from TestRunTrigger_FullPipeline to keep that test below
+// the gocyclo complexity threshold.
+func assertDetailedStatusRunning(t *testing.T, ds *DetailedStatusOutput) {
+	t.Helper()
+	if ds == nil || ds.Label != "running" {
+		t.Fatalf("detailed_status not mapped: %+v", ds)
+	}
+	if ds.Illustration == nil || ds.Illustration.Image != "/img" {
+		t.Fatalf("detailed_status illustration not mapped: %+v", ds.Illustration)
+	}
+}
+
+// TestRunTrigger_NullIllustration verifies version tolerance for the documented
+// "illustration": null detailed_status payload. Per doc/api/pipeline_triggers.md
+// the triggered-pipeline response renders illustration as null by default, and
+// older GitLab versions omit the nested image entirely; the converter must leave
+// DetailedStatus.Illustration nil rather than emit an empty object.
+func TestRunTrigger_NullIllustration(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id":99,"status":"created","ref":"main","sha":"abc",
+			"web_url":"https://gl/p/1/-/pipelines/99",
+			"detailed_status":{"icon":"status_created","text":"created","label":"created","group":"created","tooltip":"created","has_details":true,"details_path":"/p","illustration":null,"favicon":"/f"}
+		}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.DetailedStatus == nil {
+		t.Fatalf("detailed_status not mapped: %+v", out)
+	}
+	if out.DetailedStatus.Illustration != nil {
+		t.Errorf("expected nil illustration for null payload, got %+v", out.DetailedStatus.Illustration)
+	}
+}
+
+// TestListTriggers_OrderBySort verifies ListTriggers forwards order_by and sort
+// to the API query.
+func TestListTriggers_OrderBySort(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"description":"t","token":"a"}]`)
+	}))
+	_, err := ListTriggers(context.Background(), client, ListInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query = %q, want to contain %q", gotQuery, want)
+		}
+	}
+}
+
+// TestDecoratePipelineTriggerMeta_UnknownTool verifies the decorator is a no-op
+// for a tool with no metadata entry, leaving the generic options unchanged.
+func TestDecoratePipelineTriggerMeta_UnknownTool(t *testing.T) {
+	options := pipelineTriggerOptions("gitlab_unknown_tool")
+	before := options.Usage
+	decoratePipelineTriggerMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before {
+		t.Errorf("usage changed for unknown tool: %q", options.Usage)
+	}
+}
+
+// TestRunTrigger_WithInputs verifies RunTrigger forwards typed pipeline inputs
+// of every supported value kind without error.
+func TestRunTrigger_WithInputs(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":101,"sha":"def","ref":"main","status":"created"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := RunTrigger(context.Background(), client, RunInput{
+		ProjectID: "1",
+		Ref:       "main",
+		Token:     "tok123",
+		Inputs: map[string]any{
+			"environment": "production",
+			"replicas":    float64(3),
+			"debug":       false,
+			"regions":     []any{"us-east", "eu-west"},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 101 {
+		t.Errorf("id = %d, want 101", out.ID)
+	}
+}
+
+// TestRunTrigger_InvalidInputArray verifies RunTrigger rejects an input array
+// containing non-string elements.
+func TestRunTrigger_InvalidInputArray(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := RunTrigger(context.Background(), client, RunInput{
 		ProjectID: "1",
 		Ref:       "main",
 		Token:     "tok",
-		Variables: "not-json",
+		Inputs:    map[string]any{"regions": []any{"us-east", 42}},
 	})
 	if err == nil {
-		t.Fatal("expected error for invalid variables JSON")
+		t.Fatal("expected error for non-string array element in inputs")
+	}
+}
+
+// TestRunTrigger_InvalidInputType verifies RunTrigger rejects an input value of
+// an unsupported type.
+func TestRunTrigger_InvalidInputType(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	_, err := RunTrigger(context.Background(), client, RunInput{
+		ProjectID: "1",
+		Ref:       "main",
+		Token:     "tok",
+		Inputs:    map[string]any{"weird": map[string]any{"nested": true}},
+	})
+	if err == nil {
+		t.Fatal("expected error for unsupported input value type")
+	}
+}
+
+// TestBuildPipelineInputs_IntegerKinds verifies buildPipelineInputs accepts the
+// int and int64 value kinds (which JSON decoding does not normally produce but
+// programmatic callers may supply).
+func TestBuildPipelineInputs_IntegerKinds(t *testing.T) {
+	inputs, err := buildPipelineInputs(map[string]any{
+		"a": int(1),
+		"b": int64(2),
+		"c": []string{"x", "y"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(inputs) != 3 {
+		t.Fatalf("len(inputs) = %d, want 3", len(inputs))
 	}
 }
 
@@ -299,7 +484,7 @@ func TestRunTrigger_MissingToken(t *testing.T) {
 
 // TestFormatTriggerMarkdown verifies FormatTriggerMarkdown.
 func TestFormatTriggerMarkdown(t *testing.T) {
-	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", OwnerName: "Admin", CreatedAt: "2026-01-01T00:00:00Z"})
+	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", Owner: &UserOutput{ID: 1, Name: "Admin"}, CreatedAt: "2026-01-01T00:00:00Z"})
 	if md == "" {
 		t.Error("expected non-empty markdown")
 	}
@@ -328,7 +513,7 @@ func TestFormatListTriggersMarkdown_WithData(t *testing.T) {
 
 // TestFormatRunOutputMarkdown verifies FormatRunOutputMarkdown.
 func TestFormatRunOutputMarkdown(t *testing.T) {
-	md := FormatRunOutputMarkdown(RunOutput{PipelineID: 99, SHA: "abc", Ref: "main", Status: "created", WebURL: "https://gl/p/1"})
+	md := FormatRunOutputMarkdown(RunOutput{ID: 99, SHA: "abc", Ref: "main", Status: "created", WebURL: "https://gl/p/1"})
 	if md == "" {
 		t.Error("expected non-empty markdown")
 	}
@@ -625,8 +810,7 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		ID:          10,
 		Description: "deploy trigger",
 		Token:       "abc123",
-		OwnerName:   "Admin",
-		OwnerID:     1,
+		Owner:       &UserOutput{ID: 1, Name: "Admin"},
 		CreatedAt:   "2026-01-01T00:00:00Z",
 		UpdatedAt:   "2026-06-01T00:00:00Z",
 		LastUsed:    "2026-12-01T00:00:00Z",
@@ -676,8 +860,8 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 	out := ListOutput{
 		Triggers: []Output{
-			{ID: 1, Description: "Trigger A", Token: "tokA", OwnerName: "admin", LastUsed: "2026-01-01T00:00:00Z"},
-			{ID: 2, Description: "Trigger B", Token: "tokB", OwnerName: "user1", LastUsed: ""},
+			{ID: 1, Description: "Trigger A", Token: "tokA", Owner: &UserOutput{Name: "admin"}, LastUsed: "2026-01-01T00:00:00Z"},
+			{ID: 2, Description: "Trigger B", Token: "tokB", Owner: &UserOutput{Name: "user1"}, LastUsed: ""},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -708,10 +892,10 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 // TestFormatRunOutputMarkdown_WithoutWebURL verifies FormatRunOutputMarkdown when without web URL.
 func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
 	md := FormatRunOutputMarkdown(RunOutput{
-		PipelineID: 50,
-		SHA:        "deadbeef",
-		Ref:        "develop",
-		Status:     "pending",
+		ID:     50,
+		SHA:    "deadbeef",
+		Ref:    "develop",
+		Status: "pending",
 	})
 	for _, want := range []string{
 		"## Pipeline Triggered",
@@ -732,12 +916,12 @@ func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
 // TestFormatRunOutputMarkdown_AllFields verifies FormatRunOutputMarkdown when all fields.
 func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatRunOutputMarkdown(RunOutput{
-		PipelineID: 99,
-		SHA:        "abc",
-		Ref:        "main",
-		Status:     "created",
-		WebURL:     "https://gl/p/1/-/pipelines/99",
-		CreatedAt:  "2026-06-01T00:00:00Z",
+		ID:        99,
+		SHA:       "abc",
+		Ref:       "main",
+		Status:    "created",
+		WebURL:    "https://gl/p/1/-/pipelines/99",
+		CreatedAt: "2026-06-01T00:00:00Z",
 	})
 	for _, want := range []string{
 		"## Pipeline Triggered",

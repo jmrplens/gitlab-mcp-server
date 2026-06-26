@@ -14,10 +14,14 @@ import (
 // List
 // ---------------------------------------------------------------------------.
 
-// ListInput is the input for listing applications.
+// ListInput is the input for listing applications. It mirrors
+// gl.ListApplicationsOptions, which embeds gl.ListOptions and therefore exposes
+// both offset and keyset pagination plus order_by/sort.
 type ListInput struct {
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"For keyset pagination: name of the column by which to order results"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"For keyset pagination: sort order (asc or desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ApplicationItem represents a single application.
@@ -40,11 +44,13 @@ type ListOutput struct {
 
 // List retrieves all applications (admin).
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListApplicationsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    input.Page,
-			PerPage: input.PerPage,
-		},
+	opts := &gl.ListApplicationsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	apps, resp, err := client.GL().Applications.ListApplications(opts, gl.WithContext(ctx))

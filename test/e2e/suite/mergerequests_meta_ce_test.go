@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
@@ -462,7 +463,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
 				"merge_request_iid": mrIID,
-				"add_labels":        "e2e-mr-event-label",
+				"add_labels":        []string{"e2e-mr-event-label"},
 			},
 		})
 		requireNoError(t, err, "add label to MR")
@@ -780,7 +781,7 @@ func startApprovalResetBotSession(ctx context.Context, t *testing.T, gitlabURL, 
 	requireNoError(t, err, "build bot GitLab client")
 
 	botServer := mcp.NewServer(&mcp.Implementation{Name: "gitlab-mcp-server-e2e-approval-reset-bot", Version: "test"}, nil)
-	requireNoError(t, tools.RegisterAllMeta(botServer, botClient, sess.enterprise), "RegisterAllMeta on bot server")
+	requireNoError(t, tools.RegisterAllMeta(botServer, botClient, edition.TierForEnterprise(sess.enterprise)), "RegisterAllMeta on bot server")
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	botCtx, botCancel := context.WithCancel(ctx)

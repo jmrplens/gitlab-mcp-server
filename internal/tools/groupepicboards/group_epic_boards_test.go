@@ -22,9 +22,12 @@ const (
 	boardJSON = `{
 		"id": 1,
 		"name": "Epic Board",
-		"labels": [{"id": 10, "name": "Priority"}],
+		"hide_backlog_list": true,
+		"hide_closed_list": false,
+		"group": {"id": 7, "name": "My Group", "web_url": "http://example.com/groups/my-group"},
+		"labels": [{"id": 10, "title": "Priority", "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>", "group_id": 7, "project_id": null, "template": false, "created_at": "2023-01-27T10:40:59.738Z", "updated_at": "2023-01-27T10:40:59.738Z"}],
 		"lists": [
-			{"id": 100, "label": {"id": 10, "name": "Priority"}, "position": 0}
+			{"id": 100, "label": {"id": 10, "name": "Priority", "color": "#F0AD4E", "description": null}, "position": 0, "list_type": "label", "collapsed": false}
 		]
 	}`
 
@@ -75,6 +78,23 @@ func TestList(t *testing.T) {
 					t.Errorf("TotalItems = %d, want 10", out.Pagination.TotalItems)
 				}
 			},
+		},
+		{
+			name: "forwards order_by, sort, and keyset params",
+			input: ListInput{
+				GroupID:               testGroupID,
+				OrderBy:               "name",
+				Sort:                  "desc",
+				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+			},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "order_by", "name")
+				testutil.AssertQueryParam(t, r, "sort", "desc")
+				testutil.AssertQueryParam(t, r, "pagination", "keyset")
+				testutil.AssertQueryParam(t, r, "page_token", "tok")
+				testutil.RespondJSON(w, http.StatusOK, "[]")
+			}),
+			wantCount: 0,
 		},
 		{
 			name:  "returns error for missing group_id",
@@ -140,18 +160,33 @@ func assertListBoardLabels(t *testing.T, board Output) {
 	if len(board.Labels) != 1 {
 		t.Fatalf("len(Labels) = %d, want 1", len(board.Labels))
 	}
-	if board.Labels[0] != "Priority" {
-		t.Errorf("Labels[0] = %q, want %q", board.Labels[0], "Priority")
+	if board.Labels[0].Name != "Priority" {
+		t.Errorf("Labels[0].Name = %q, want %q", board.Labels[0].Name, "Priority")
+	}
+	if board.Labels[0].Color != "#FF0000" {
+		t.Errorf("Labels[0].Color = %q, want %q", board.Labels[0].Color, "#FF0000")
+	}
+	if board.Labels[0].DescriptionHTML != "<p>P</p>" {
+		t.Errorf("Labels[0].DescriptionHTML = %q, want %q", board.Labels[0].DescriptionHTML, "<p>P</p>")
 	}
 }
 
 func assertListBoardLists(t *testing.T, board Output) {
 	t.Helper()
+	if board.Group == nil || board.Group.Name != "My Group" {
+		t.Errorf("Group = %+v, want name My Group", board.Group)
+	}
+	if !board.HideBacklogList || board.HideClosedList {
+		t.Errorf("hide flags = %v/%v, want true/false", board.HideBacklogList, board.HideClosedList)
+	}
 	if len(board.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(board.Lists))
 	}
-	if board.Lists[0].Label != "Priority" {
-		t.Errorf("Lists[0].Label = %q, want %q", board.Lists[0].Label, "Priority")
+	if board.Lists[0].Label == nil || board.Lists[0].Label.Name != "Priority" {
+		t.Errorf("Lists[0].Label = %+v, want name Priority", board.Lists[0].Label)
+	}
+	if board.Lists[0].ListType != "label" {
+		t.Errorf("Lists[0].ListType = %q, want label", board.Lists[0].ListType)
 	}
 }
 
@@ -284,14 +319,20 @@ func assertEpicBoardDetails(t *testing.T, out Output) {
 	if out.Name != "Epic Board" {
 		t.Errorf("Name = %q, want %q", out.Name, "Epic Board")
 	}
-	if len(out.Labels) != 1 || out.Labels[0] != "Priority" {
+	if len(out.Labels) != 1 || out.Labels[0].Name != "Priority" {
 		t.Errorf("Labels = %v, want [Priority]", out.Labels)
+	}
+	if out.Labels[0].Title != "Priority" || out.Labels[0].GroupID != 7 || out.Labels[0].CreatedAt == "" {
+		t.Errorf("Labels[0] superset = %+v, want title/group_id/created_at populated", out.Labels[0])
+	}
+	if out.Group == nil || out.Group.ID != 7 || out.Group.WebURL == "" {
+		t.Errorf("Group = %+v, want id 7 with web_url", out.Group)
 	}
 	if len(out.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
 	}
-	if out.Lists[0].LabelID != 10 {
-		t.Errorf("Lists[0].LabelID = %d, want 10", out.Lists[0].LabelID)
+	if out.Lists[0].Label == nil || out.Lists[0].Label.ID != 10 {
+		t.Errorf("Lists[0].Label = %+v, want id 10", out.Lists[0].Label)
 	}
 	if out.Lists[0].Position != 0 {
 		t.Errorf("Lists[0].Position = %d, want 0", out.Lists[0].Position)
@@ -316,11 +357,8 @@ func assertBoardListWithoutLabel(t *testing.T, out Output) {
 	if len(out.Lists) != 1 {
 		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
 	}
-	if out.Lists[0].Label != "" {
-		t.Errorf("Lists[0].Label = %q, want empty", out.Lists[0].Label)
-	}
-	if out.Lists[0].LabelID != 0 {
-		t.Errorf("Lists[0].LabelID = %d, want 0", out.Lists[0].LabelID)
+	if out.Lists[0].Label != nil {
+		t.Errorf("Lists[0].Label = %+v, want nil", out.Lists[0].Label)
 	}
 	if out.Lists[0].Position != 2 {
 		t.Errorf("Lists[0].Position = %d, want 2", out.Lists[0].Position)
@@ -332,8 +370,8 @@ func assertNullLabelFiltered(t *testing.T, out Output) {
 	if len(out.Labels) != 1 {
 		t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
 	}
-	if out.Labels[0] != "Bug" {
-		t.Errorf("Labels[0] = %q, want %q", out.Labels[0], "Bug")
+	if out.Labels[0].Name != "Bug" {
+		t.Errorf("Labels[0].Name = %q, want %q", out.Labels[0].Name, "Bug")
 	}
 }
 
@@ -390,6 +428,37 @@ func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestGet_VersionTolerantOmittedFields verifies that an older GitLab instance
+// response which omits the raw-superset keys (hide_*_list, the label
+// title/group_id/template/created_at/updated_at, and each list's
+// list_type/collapsed) decodes without error: the missing fields stay at their
+// zero value and are omitted from the envelope rather than hard-failing.
+func TestGet_VersionTolerantOmittedFields(t *testing.T) {
+	const legacyJSON = `{
+		"id": 1,
+		"name": "Legacy Board",
+		"group": {"id": 7, "name": "My Group"},
+		"labels": [{"id": 10, "name": "Priority", "color": "#FF0000"}],
+		"lists": [{"id": 100, "label": {"id": 10, "name": "Priority"}, "position": 0}]
+	}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, legacyJSON)
+	}))
+	out, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, BoardID: 1})
+	if err != nil {
+		t.Fatalf("Get() legacy response error = %v, want nil", err)
+	}
+	if out.HideBacklogList || out.HideClosedList {
+		t.Errorf("hide flags = %v/%v, want false/false when omitted", out.HideBacklogList, out.HideClosedList)
+	}
+	if len(out.Labels) != 1 || out.Labels[0].Title != "" || out.Labels[0].CreatedAt != "" {
+		t.Errorf("label superset = %+v, want zero when omitted", out.Labels)
+	}
+	if len(out.Lists) != 1 || out.Lists[0].ListType != "" || out.Lists[0].Collapsed != nil {
+		t.Errorf("list superset = %+v, want zero/nil when omitted", out.Lists)
+	}
+}
+
 // TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
@@ -405,10 +474,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			input: Output{
 				ID:     1,
 				Name:   "Sprint Board",
-				Labels: []string{"Priority", "Bug"},
-				Lists: []BoardListEntry{
-					{ID: 100, Label: "Priority", LabelID: 10, Position: 0},
-					{ID: 101, Label: "Bug", LabelID: 11, Position: 1},
+				Group:  &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://x"},
+				Labels: []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, {ID: 11, Name: "Bug"}},
+				Lists: []BoardListOutput{
+					{ID: 100, Label: &ListLabelOutput{ID: 10, Name: "Priority"}, Position: 0},
+					{ID: 101, Label: &ListLabelOutput{ID: 11, Name: "Bug"}, Position: 1},
 				},
 			},
 			contains: []string{
@@ -468,7 +538,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders board list table",
 			input: ListOutput{
 				Boards: []Output{
-					{ID: 1, Name: "Sprint", Labels: []string{"P1"}, Lists: []BoardListEntry{{ID: 10}}},
+					{ID: 1, Name: "Sprint", Labels: []*LabelDetailsOutput{{ID: 1, Name: "P1"}}, Lists: []BoardListOutput{{ID: 10}}},
 					{ID: 2, Name: "Backlog"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},

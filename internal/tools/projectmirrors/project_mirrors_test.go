@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -146,6 +147,40 @@ func TestList_Success(t *testing.T) {
 	}
 	if !out.Mirrors[0].KeepDivergentRefs {
 		t.Error("KeepDivergentRefs = false, want true")
+	}
+}
+
+// TestList_KeysetAndOrdering verifies that List forwards keyset pagination
+// (pagination, page_token) and ordering (order_by, sort) query parameters to
+// the GitLab remote_mirrors endpoint.
+func TestList_KeysetAndOrdering(t *testing.T) {
+	var got url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMirrors {
+			got = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, "["+mirrorJSON+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             testProjectID,
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	for key, want := range map[string]string{
+		"order_by":   "id",
+		"sort":       "desc",
+		"pagination": "keyset",
+		"page_token": "abc",
+	} {
+		if got.Get(key) != want {
+			t.Errorf("query %q = %q, want %q", key, got.Get(key), want)
+		}
 	}
 }
 

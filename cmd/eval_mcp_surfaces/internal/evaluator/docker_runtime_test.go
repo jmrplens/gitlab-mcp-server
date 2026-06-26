@@ -62,14 +62,15 @@ func TestDockerComposeCommand_UsesDefaultsAndOverrides(t *testing.T) {
 //
 // The test clears the GITLAB_IMAGE and EVAL_DOCKER_GITLAB_IMAGE environment
 // variables, runs dockerRuntimeEnv for the docker-enterprise-read preset, and
-// asserts the joined env output contains GITLAB_ENTERPRISE=true,
-// GITLAB_IMAGE=gitlab/gitlab-ee:latest, and the documented Docker Compose
-// file. This protects Enterprise presets from regressing to the CE image.
+// asserts the joined env output contains GITLAB_TIER=ultimate (the evaluated
+// server reads GITLAB_TIER now), GITLAB_IMAGE=gitlab/gitlab-ee:latest, and the
+// documented Docker Compose file. This protects Enterprise presets from
+// regressing to the CE image.
 func TestDockerRuntimeEnv_EnterpriseImageDefault(t *testing.T) {
 	t.Setenv("GITLAB_IMAGE", "")
 	t.Setenv("EVAL_DOCKER_GITLAB_IMAGE", "")
 	env := strings.Join(dockerRuntimeEnv(options{Preset: presetDockerEnterpriseRead, Edition: editionEnterprise}), "\n")
-	for _, want := range []string{"GITLAB_ENTERPRISE=true", "GITLAB_IMAGE=gitlab/gitlab-ee:latest", "E2E_DOCKER_COMPOSE_FILE=test/e2e/docker-compose.yml"} {
+	for _, want := range []string{"GITLAB_TIER=ultimate", "GITLAB_IMAGE=gitlab/gitlab-ee:latest", "E2E_DOCKER_COMPOSE_FILE=test/e2e/docker-compose.yml"} {
 		if !strings.Contains(env, want) {
 			t.Fatalf("dockerRuntimeEnv() = %q, want %q", env, want)
 		}

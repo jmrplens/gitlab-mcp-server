@@ -13,8 +13,10 @@ import (
 
 // ListInput is the input for listing Dockerfile templates.
 type ListInput struct {
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Items per page"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Order results by a field supported by the templates endpoint (e.g. key, name)"`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // TemplateListItem represents a Dockerfile template in a list.
@@ -29,8 +31,13 @@ type ListOutput struct {
 
 // List lists all available Dockerfile templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListDockerfileTemplatesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
+	opts := &gl.ListDockerfileTemplatesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	items, resp, err := client.GL().DockerfileTemplate.ListTemplates(opts, gl.WithContext(ctx))
 	if err != nil {

@@ -19,9 +19,15 @@ const (
 
 // ---------- Input types ----------.
 
-// ListInput holds parameters for listing instance CI/CD variables.
+// ListInput holds parameters for listing instance CI/CD variables. The OrderBy,
+// Sort, and embedded KeysetPaginationInput fields mirror the SDK
+// gl.ListInstanceVariablesOptions (its embedded gl.ListOptions: order_by, sort,
+// pagination, page_token) so every supported list filter is exposed 1:1.
 type ListInput struct {
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column by which to order keyset-paginated results"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput holds parameters for retrieving a single instance CI/CD variable.
@@ -100,11 +106,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage("list instance variables", err)
 	}
 
-	opts := &gl.ListInstanceVariablesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListInstanceVariablesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	vars, resp, err := client.GL().InstanceVariables.ListVariables(opts, gl.WithContext(ctx))

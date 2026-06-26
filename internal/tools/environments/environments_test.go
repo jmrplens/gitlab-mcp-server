@@ -1097,3 +1097,387 @@ func environmentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	}
 	return byTool
 }
+
+// ---------------------------------------------------------------------------
+// 1:1 audit — nested output sub-objects and additive input fields
+// ---------------------------------------------------------------------------.
+
+// envFullJSON is a full single-environment API response exercising every
+// documented 1:1 field: scalar (auto_stop_setting, kubernetes_namespace,
+// flux_resource_path) and nested objects (cluster_agent, last_deployment with
+// its deployable+pipeline+user+commit+runner) as documented in
+// doc/api/environments.md "Retrieve an environment".
+const envFullJSON = `{
+	"id":7,"name":"production","slug":"production","state":"available","tier":"production",
+	"description":"Prod","external_url":"https://prod.example.com",
+	"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-06-15T12:00:00Z",
+	"auto_stop_at":"2026-12-31T23:59:59Z","auto_stop_setting":"with_action",
+	"kubernetes_namespace":"prod-ns","flux_resource_path":"flux/prod",
+	"cluster_agent":{
+		"id":11,"name":"prod-agent","created_at":"2025-12-01T00:00:00Z","created_by_user_id":3,
+		"config_project":{"id":99,"description":"Agent cfg","name":"cfg","name_with_namespace":"grp / cfg","path":"cfg","path_with_namespace":"grp/cfg","created_at":"2025-11-01T00:00:00Z"}
+	},
+	"last_deployment":{
+		"id":501,"iid":12,"ref":"main","sha":"abc123","status":"success",
+		"created_at":"2026-06-15T11:00:00Z",
+		"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","avatar_url":"https://av","web_url":"https://u"},
+		"deployable":{
+			"id":900,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,
+			"coverage":88.5,"created_at":"2026-06-15T10:55:00Z","started_at":"2026-06-15T10:56:00Z",
+			"finished_at":"2026-06-15T11:00:00Z","duration":240,
+			"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","web_url":"https://u","created_at":"2025-01-01T00:00:00Z","bio":"bio text","location":"Earth","public_email":"d@x","organization":"Acme"},
+			"commit":{"id":"abc123def","short_id":"abc123","title":"Deploy fix","message":"Deploy fix\n","author_name":"Dev","author_email":"dev@x","authored_date":"2026-06-15T10:00:00Z","committer_name":"Dev","committer_email":"dev@x","committed_date":"2026-06-15T10:00:00Z","created_at":"2026-06-15T10:00:00Z","parent_ids":["p1"]},
+			"pipeline":{"id":700,"sha":"abc123","ref":"main","status":"success","web_url":"https://pipe"},
+			"runner":{"id":55,"description":"shared-runner","name":"runner-1","is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}
+		}
+	}
+}`
+
+// TestEnvironmentGet_FullNestedObjects verifies that Get surfaces every additive
+// 1:1 field and nested sub-object faithfully from the API response.
+func TestEnvironmentGet_FullNestedObjects(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/7" {
+			testutil.RespondJSON(w, http.StatusOK, envFullJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	if out.AutoStopSetting != "with_action" {
+		t.Errorf("AutoStopSetting = %q, want with_action", out.AutoStopSetting)
+	}
+	if out.KubernetesNamespace != "prod-ns" {
+		t.Errorf("KubernetesNamespace = %q, want prod-ns", out.KubernetesNamespace)
+	}
+	if out.FluxResourcePath != "flux/prod" {
+		t.Errorf("FluxResourcePath = %q, want flux/prod", out.FluxResourcePath)
+	}
+
+	assertClusterAgent(t, out.ClusterAgent)
+	assertLastDeployment(t, out.LastDeployment)
+}
+
+// assertClusterAgent validates the fully populated cluster_agent sub-object.
+func assertClusterAgent(t *testing.T, ca *ClusterAgentOutput) {
+	t.Helper()
+	if ca == nil {
+		t.Fatal("ClusterAgent is nil")
+	}
+	if ca.ID != 11 || ca.Name != "prod-agent" || ca.CreatedByUserID != 3 || ca.CreatedAt == "" {
+		t.Errorf("ClusterAgent = %#v", ca)
+	}
+	if ca.ConfigProject == nil || ca.ConfigProject.ID != 99 ||
+		ca.ConfigProject.PathWithNamespace != "grp/cfg" || ca.ConfigProject.CreatedAt == "" {
+		t.Errorf("ConfigProject = %#v", ca.ConfigProject)
+	}
+}
+
+// assertLastDeployment validates the fully populated last_deployment sub-object,
+// including its user, deployable, and pipeline references.
+func assertLastDeployment(t *testing.T, ld *DeploymentOutput) {
+	t.Helper()
+	if ld == nil {
+		t.Fatal("LastDeployment is nil")
+	}
+	wantLD := DeploymentOutput{ID: 501, IID: 12, Ref: "main", SHA: "abc123", Status: "success"}
+	if ld.ID != wantLD.ID || ld.IID != wantLD.IID || ld.Ref != wantLD.Ref || ld.SHA != wantLD.SHA || ld.Status != wantLD.Status {
+		t.Errorf("LastDeployment = %#v", ld)
+	}
+	if ld.CreatedAt == "" {
+		t.Error("LastDeployment created_at empty")
+	}
+	if u := ld.User; u == nil || u.ID != 4 || u.Username != "deployer" || u.State != "active" || u.WebURL != "https://u" {
+		t.Errorf("LastDeployment.User = %#v", ld.User)
+	}
+	assertDeployable(t, ld.Deployable)
+}
+
+// assertDeployable validates the deployable job sub-object and its documented
+// user, commit, pipeline, and runner references.
+func assertDeployable(t *testing.T, dep *DeployableOutput) {
+	t.Helper()
+	if dep == nil {
+		t.Fatal("Deployable is nil")
+	}
+	if dep.ID != 900 || dep.Status != "success" || dep.Stage != "deploy" || dep.Name != "deploy-prod" {
+		t.Errorf("Deployable identity = %#v", dep)
+	}
+	if dep.Coverage != 88.5 || dep.Duration != 240 {
+		t.Errorf("Deployable metrics = %#v", dep)
+	}
+	if dep.CreatedAt == "" || dep.StartedAt == "" || dep.FinishedAt == "" {
+		t.Error("Deployable timestamps empty")
+	}
+	assertDeployableUser(t, dep.User)
+	assertDeployableCommit(t, dep.Commit)
+	assertDeployablePipeline(t, dep.Pipeline)
+	assertDeployableRunner(t, dep.Runner)
+}
+
+// assertDeployableUser validates the documented deployable.user subset.
+func assertDeployableUser(t *testing.T, u *DeployableUserOutput) {
+	t.Helper()
+	if u == nil || u.ID != 4 || u.Username != "deployer" || u.Bio != "bio text" ||
+		u.Location != "Earth" || u.PublicEmail != "d@x" || u.Organization != "Acme" || u.CreatedAt == "" {
+		t.Errorf("Deployable.User = %#v", u)
+	}
+}
+
+// assertDeployableCommit validates the documented deployable.commit subset.
+func assertDeployableCommit(t *testing.T, c *DeployableCommitOutput) {
+	t.Helper()
+	if c == nil || c.ID != "abc123def" || c.ShortID != "abc123" || c.Title != "Deploy fix" ||
+		c.AuthorEmail != "dev@x" || c.CommittedDate == "" || len(c.ParentIDs) != 1 || c.ParentIDs[0] != "p1" {
+		t.Errorf("Deployable.Commit = %#v", c)
+	}
+}
+
+// assertDeployablePipeline validates the documented deployable.pipeline subset.
+func assertDeployablePipeline(t *testing.T, p *DeployablePipelineOutput) {
+	t.Helper()
+	if p == nil || p.ID != 700 || p.WebURL != "https://pipe" || p.SHA != "abc123" || p.Ref != "main" || p.Status != "success" {
+		t.Errorf("Deployable.Pipeline = %#v", p)
+	}
+}
+
+// assertDeployableRunner validates the documented deployable.runner subset.
+func assertDeployableRunner(t *testing.T, r *DeployableRunnerOutput) {
+	t.Helper()
+	if r == nil || r.ID != 55 || r.Name != "runner-1" || !r.IsShared ||
+		r.RunnerType != "instance_type" || !r.Online || r.Status != "online" {
+		t.Errorf("Deployable.Runner = %#v", r)
+	}
+}
+
+// TestEnvironmentGet_NilNestedObjects verifies that absent nested objects map to
+// nil pointers (no panic, no empty structs) when the API omits them.
+func TestEnvironmentGet_NilNestedObjects(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/8" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":8,"name":"review","slug":"review","state":"available"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 8})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ClusterAgent != nil {
+		t.Errorf("ClusterAgent = %#v, want nil", out.ClusterAgent)
+	}
+	if out.LastDeployment != nil {
+		t.Errorf("LastDeployment = %#v, want nil", out.LastDeployment)
+	}
+}
+
+// TestEnvironmentGet_DeploymentWithoutDeployable verifies a deployment whose
+// deployable carries no identity (zero id, empty name) maps to a nil Deployable.
+func TestEnvironmentGet_DeploymentWithoutDeployable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/9" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":9,"name":"staging","slug":"staging","state":"available",
+				"last_deployment":{"id":1,"ref":"main","status":"running"}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 9})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.LastDeployment == nil || out.LastDeployment.ID != 1 {
+		t.Fatalf("LastDeployment = %#v", out.LastDeployment)
+	}
+	if out.LastDeployment.Deployable != nil {
+		t.Errorf("Deployable = %#v, want nil", out.LastDeployment.Deployable)
+	}
+	if out.LastDeployment.User != nil {
+		t.Errorf("User = %#v, want nil", out.LastDeployment.User)
+	}
+}
+
+// TestEnvironmentGet_DeployableWithoutNestedRefs verifies a deployable that has
+// identity but omits its user, commit, and runner references maps each to a nil
+// pointer (covering the nil-guard branches of the deployable converters).
+func TestEnvironmentGet_DeployableWithoutNestedRefs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":10,"name":"qa","slug":"qa","state":"available",
+				"last_deployment":{"id":2,"ref":"main","status":"success",
+					"deployable":{"id":3,"name":"deploy-qa","status":"success"}}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	dep := out.LastDeployment.Deployable
+	if dep == nil || dep.ID != 3 {
+		t.Fatalf("Deployable = %#v", dep)
+	}
+	if dep.User != nil {
+		t.Errorf("Deployable.User = %#v, want nil", dep.User)
+	}
+	if dep.Commit != nil {
+		t.Errorf("Deployable.Commit = %#v, want nil", dep.Commit)
+	}
+	if dep.Runner != nil {
+		t.Errorf("Deployable.Runner = %#v, want nil", dep.Runner)
+	}
+}
+
+// TestEnvironmentList_OrderBySortKeyset verifies that List forwards order_by,
+// sort, pagination=keyset, and page_token to the GitLab API query string.
+func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"production","slug":"production","state":"available"}]`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID: "42",
+		OrderBy:   "name",
+		Sort:      "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "tok42",
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok42"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestEnvironmentCreate_NewOptionFields verifies that Create forwards the
+// additive cluster_agent_id, kubernetes_namespace, flux_resource_path, and
+// auto_stop_setting options to the GitLab API.
+func TestEnvironmentCreate_NewOptionFields(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			buf := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(buf)
+			body = string(buf)
+			testutil.RespondJSON(w, http.StatusCreated, envFullJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	agentID := int64(11)
+	out, err := Create(context.Background(), client, CreateInput{
+		ProjectID:           "42",
+		Name:                "production",
+		ClusterAgentID:      &agentID,
+		KubernetesNamespace: "prod-ns",
+		FluxResourcePath:    "flux/prod",
+		AutoStopSetting:     "with_action",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("request body %q missing %q", body, want)
+		}
+	}
+	if out.ClusterAgent == nil || out.ClusterAgent.ID != 11 {
+		t.Errorf("ClusterAgent = %#v", out.ClusterAgent)
+	}
+}
+
+// TestEnvironmentUpdate_NewOptionFields verifies that Update forwards the
+// additive cluster_agent_id, kubernetes_namespace, flux_resource_path, and
+// auto_stop_setting options to the GitLab API.
+func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			buf := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(buf)
+			body = string(buf)
+			testutil.RespondJSON(w, http.StatusOK, envFullJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	agentID := int64(11)
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:           "42",
+		EnvironmentID:       7,
+		ClusterAgentID:      &agentID,
+		KubernetesNamespace: "prod-ns",
+		FluxResourcePath:    "flux/prod",
+		AutoStopSetting:     "with_action",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("request body %q missing %q", body, want)
+		}
+	}
+}
+
+// TestActionSpecs_UpdateDeleteMetadata verifies the 1:1 R-META metadata for the
+// previously generic-flagged update and delete environment tools: specific
+// usage, non-toolname aliases, related actions, and a "Returns:/See also:"
+// individual-tool description.
+func TestActionSpecs_UpdateDeleteMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := environmentSpecsByTool(t, ActionSpecs(client))
+
+	for _, tt := range []struct {
+		tool        string
+		wantInUsage string
+		wantInDesc  []string
+	}{
+		{"gitlab_environment_update", "Update an existing environment", []string{"Returns:", "See also:", "gitlab_environment_get"}},
+		{"gitlab_environment_delete", "Delete an environment", []string{"Returns:", "See also:", "gitlab_environment_stop"}},
+	} {
+		spec := byTool[tt.tool]
+		if !strings.Contains(spec.Usage, tt.wantInUsage) {
+			t.Errorf("%s usage = %q, want substring %q", tt.tool, spec.Usage, tt.wantInUsage)
+		}
+		if strings.Contains(spec.Usage, "Use to execute") {
+			t.Errorf("%s usage still generic: %q", tt.tool, spec.Usage)
+		}
+		for _, a := range spec.Aliases {
+			if a == tt.tool {
+				t.Errorf("%s aliases still contain only the tool name: %v", tt.tool, spec.Aliases)
+			}
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s has empty RelatedActions", tt.tool)
+		}
+		for _, w := range tt.wantInDesc {
+			if !strings.Contains(spec.IndividualTool.Description, w) {
+				t.Errorf("%s description = %q, want substring %q", tt.tool, spec.IndividualTool.Description, w)
+			}
+		}
+	}
+}

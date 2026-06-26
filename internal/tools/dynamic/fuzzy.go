@@ -12,6 +12,13 @@ const (
 	fuzzyMaxDistance         = 2
 	fuzzyMinTokenLen         = 3
 	fuzzyResourceSignalBoost = 20
+	// fuzzyDomainResourceBoost rewards entries whose entire domain name (the core
+	// resource, e.g. "merge request") is fuzzy-covered by the query. This breaks
+	// ties between the core resource domain and niche multi-word actions in other
+	// domains that merely contain the resource words inside a longer action id
+	// (e.g. environment.deployment_merge_requests), so a bare "merge request[y]"
+	// query ranks merge_request.* above the deployment-scoped action.
+	fuzzyDomainResourceBoost = 12
 )
 
 type fuzzyCandidateMode int
@@ -44,7 +51,7 @@ func fuzzyScoreEntry(entry actionEntry, terms []searchTerm) int {
 		return 0
 	}
 
-	return totalScore*matchedCount/len(terms) + resourceBoost
+	return totalScore*matchedCount/len(terms) + resourceBoost + fuzzyDomainResourceMatchBoost(entry, terms)
 }
 
 func fuzzyScoreEntryWithoutExplanation(entry actionEntry, terms []searchTerm) (int, ScoringExplanation) {
@@ -56,13 +63,47 @@ func fuzzyTermMatchesResourceSignal(entry actionEntry, raw, alternative string) 
 	return termMatchesResourceSignal(raw, document) || termMatchesResourceSignal(alternative, document)
 }
 
+// fuzzyDomainResourceMatchBoost rewards entries whose entire domain (resource)
+// name is fuzzy-covered by the query terms. A query like "merge request[y]" names
+// the merge_request resource directly, so its domain words ("merge", "request")
+// are each fuzzy-matched by a query term. Niche cross-domain actions such as
+// environment.deployment_merge_requests only contain those words deep inside a
+// longer action id while their own domain ("environment") is absent from the
+// query, so they do not earn the boost. This keeps core resource domains ranked
+// above multi-word actions for bare resource queries without overriding exact
+// matches (the boost is small relative to exact-identifier scores).
+func fuzzyDomainResourceMatchBoost(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if len(document.DomainWords) == 0 {
+		return 0
+	}
+	for _, domainWord := range document.DomainWords {
+		if !anyTermFuzzyMatchesToken(terms, domainWord) {
+			return 0
+		}
+	}
+	return fuzzyDomainResourceBoost
+}
+
+func anyTermFuzzyMatchesToken(terms []searchTerm, token string) bool {
+	candidate := []string{token}
+	for _, term := range terms {
+		for _, alternative := range term.Alternatives {
+			if fuzzyTokenScore(alternative, candidate) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func fuzzyScoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, ScoringExplanation) {
 	totalScore, matchedCount, minRequired, resourceBoost, reasons := fuzzyScoreCore(entry, terms, true)
 	if matchedCount == 0 || matchedCount < minRequired {
 		return 0, ScoringExplanation{}
 	}
 
-	score := totalScore*matchedCount/len(terms) + resourceBoost
+	score := totalScore*matchedCount/len(terms) + resourceBoost + fuzzyDomainResourceMatchBoost(entry, terms)
 	return score, ScoringExplanation{
 		TotalScore:    score,
 		MatchedTerms:  matchedCount,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -38,9 +37,14 @@ type UnpublishPagesInput struct {
 type ListAllDomainsInput struct{}
 
 // ListDomainsInput defines parameters for listing Pages domains for a project.
+// It supports offset and keyset pagination (page_token/pagination) plus
+// order_by/sort to mirror the keyset-capable [gl.ListPagesDomainsOptions].
 type ListDomainsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetDomainInput defines parameters for getting a single Pages domain.
@@ -111,7 +115,6 @@ type DomainOutput struct {
 	AutoSslEnabled   bool              `json:"auto_ssl_enabled"`
 	URL              string            `json:"url"`
 	ProjectID        int64             `json:"project_id"`
-	ProjectPath      string            `json:"project_path,omitempty"`
 	Verified         bool              `json:"verified"`
 	VerificationCode string            `json:"verification_code"`
 	EnabledUntil     string            `json:"enabled_until,omitempty"`
@@ -228,11 +231,13 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 		return ListDomainsOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 
-	opts := &gl.ListPagesDomainsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListPagesDomainsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	domains, resp, err := client.GL().PagesDomains.ListPagesDomains(string(input.ProjectID), opts, gl.WithContext(ctx))
@@ -246,9 +251,7 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for _, d := range domains {
-		do := toDomainOutput(d)
-		setProjectPathFromInput(&do, input.ProjectID)
-		out.Domains = append(out.Domains, do)
+		out.Domains = append(out.Domains, toDomainOutput(d))
 	}
 
 	return out, nil
@@ -270,9 +273,7 @@ func GetDomain(ctx context.Context, client *gitlabclient.Client, input GetDomain
 			"verify domain with gitlab_pages_domain_list; the domain may have been removed")
 	}
 
-	out := toDomainOutput(domain)
-	setProjectPathFromInput(&out, input.ProjectID)
-	return out, nil
+	return toDomainOutput(domain), nil
 }
 
 // CreateDomain adds a new custom domain to a project's Pages
@@ -306,9 +307,7 @@ func CreateDomain(ctx context.Context, client *gitlabclient.Client, input Create
 			"domain must be a valid FQDN and not in use by another project; certificate and key must be PEM-encoded matching pair when provided; auto_ssl_enabled requires DNS A/AAAA record pointing to GitLab Pages; requires Maintainer role")
 	}
 
-	out := toDomainOutput(domain)
-	setProjectPathFromInput(&out, input.ProjectID)
-	return out, nil
+	return toDomainOutput(domain), nil
 }
 
 // UpdateDomain updates the auto-SSL flag and/or custom certificate
@@ -339,9 +338,7 @@ func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input Update
 			"certificate and key must be PEM-encoded matching pair when provided; cannot set both auto_ssl_enabled and a custom certificate; requires Maintainer role")
 	}
 
-	out := toDomainOutput(domain)
-	setProjectPathFromInput(&out, input.ProjectID)
-	return out, nil
+	return toDomainOutput(domain), nil
 }
 
 // DeleteDomain removes a custom Pages domain from a project via the
@@ -428,23 +425,11 @@ func toDomainOutput(d *gl.PagesDomain) DomainOutput {
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// projectDisplay returns a human-readable project identifier,
-// preferring the full path (for example "group/project") over a
-// numeric ID. Used by the Markdown formatters.
-func projectDisplay(path string, id int64) string {
-	if path != "" {
-		return path
-	}
+// projectDisplay returns a human-readable project identifier from the
+// numeric project ID returned by the GitLab Pages domains API. Used by
+// the Markdown formatters.
+func projectDisplay(id int64) string {
 	return fmt.Sprintf("#%d", id)
-}
-
-// setProjectPathFromInput copies the caller-supplied project
-// identifier into [DomainOutput.ProjectPath] when the input looks
-// like a path (contains a '/'). Numeric IDs are left as IDs.
-func setProjectPathFromInput(out *DomainOutput, input toolutil.StringOrInt) {
-	if strings.Contains(string(input), "/") {
-		out.ProjectPath = string(input)
-	}
 }
 
 // ---------------------------------------------------------------------------

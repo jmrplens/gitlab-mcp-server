@@ -38,6 +38,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 // Client wraps the official GitLab API client with project-specific configuration.
@@ -47,10 +48,12 @@ type Client struct {
 	inner   *gl.Client
 	baseURL string
 
-	// enterprise indicates whether the GitLab instance is Premium/Ultimate.
-	// Used to select EE-specific API queries (e.g. GraphQL branch rules with
-	// approval rules, code owner approval, external status checks).
-	enterprise atomic.Bool
+	// tier holds the resolved GitLab licensing tier (Free/Premium/Ultimate).
+	// IsEnterprise() derives the legacy Premium/Ultimate notion from it. Stored
+	// as an int32 via atomic for lock-free reads in the hot path. Used to select
+	// EE-specific API queries (e.g. GraphQL branch rules with approval rules,
+	// code owner approval, external status checks).
+	tier atomic.Int32
 
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
@@ -80,11 +83,26 @@ const healthTimeout = 10 * time.Second
 // GitLabDotComHost is the canonical host for GitLab SaaS-only features.
 const GitLabDotComHost = "gitlab.com"
 
-// SetEnterprise marks the client as connected to a Premium/Ultimate instance.
-func (c *Client) SetEnterprise(v bool) { c.enterprise.Store(v) }
+// SetTier records the resolved GitLab licensing tier for this client.
+func (c *Client) SetTier(t edition.Tier) { c.tier.Store(int32(t)) } //nolint:gosec // edition.Tier is a small bounded enum (Free/Premium/Ultimate)
 
-// IsEnterprise reports whether the GitLab instance is Premium/Ultimate.
-func (c *Client) IsEnterprise() bool { return c.enterprise.Load() }
+// Tier returns the resolved GitLab licensing tier for this client.
+func (c *Client) Tier() edition.Tier { return edition.Tier(c.tier.Load()) }
+
+// SetEnterprise marks the client as connected to a Premium/Ultimate instance.
+// It sets the tier to Premium when v is true and Free when v is false; callers
+// needing the Premium/Ultimate distinction should use [Client.SetTier].
+func (c *Client) SetEnterprise(v bool) {
+	if v {
+		c.SetTier(edition.Premium)
+		return
+	}
+	c.SetTier(edition.Free)
+}
+
+// IsEnterprise reports whether the GitLab instance is Premium/Ultimate, derived
+// from the resolved tier (tier >= Premium).
+func (c *Client) IsEnterprise() bool { return c.Tier().IsEnterprise() }
 
 // IsGitLabDotCom reports whether the client is configured for GitLab.com.
 func (c *Client) IsGitLabDotCom() bool {
@@ -116,7 +134,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
 	}
-	c.SetEnterprise(cfg.Enterprise)
+	c.SetTier(cfg.Tier)
 
 	sdkHTTPClient := &http.Client{
 		Transport: &dotUnescapeTransport{
@@ -330,6 +348,33 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	c.SetEnterprise(*versionInfo.Enterprise)
 	slog.Info("detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
 	return *versionInfo.Enterprise
+}
+
+// DetectTier resolves the GitLab licensing tier from the instance license and
+// stores it on the client. It calls the License API (GET /license, admin-only
+// on self-managed) and maps the returned plan to a tier via
+// [edition.TierFromPlan].
+//
+// When the license cannot be retrieved (non-admin token, CE/Free instance, or
+// any API error) or reports no plan, it falls back to [edition.Free]. The
+// resolved tier is stored and returned.
+func (c *Client) DetectTier(ctx context.Context) edition.Tier {
+	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
+	if err != nil {
+		slog.Debug("failed to detect GitLab tier from license, falling back to free",
+			"error", err)
+		c.SetTier(edition.Free)
+		return edition.Free
+	}
+	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
+		slog.Debug("GitLab license reported no plan, falling back to free")
+		c.SetTier(edition.Free)
+		return edition.Free
+	}
+	tier := edition.TierFromPlan(lic.Plan)
+	c.SetTier(tier)
+	slog.Info("detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
+	return tier
 }
 
 // gitLabVersionInfo captures the subset of /api/v4/version needed for health

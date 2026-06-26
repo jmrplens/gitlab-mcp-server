@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -261,6 +263,158 @@ func TestToOutput_NilUser(t *testing.T) {
 	}
 	if out.Username != "" {
 		t.Errorf("expected empty username for nil user, got %q", out.Username)
+	}
+}
+
+// TestList_KeysetPaginationAndSort verifies that List forwards keyset
+// pagination (pagination, page_token), ordering (order_by, sort), and offset
+// pagination (page, per_page) to the enterprise_users query string.
+func TestList_KeysetPaginationAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/42/enterprise_users" {
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "cursor-99")
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "desc")
+			testutil.AssertQueryParam(t, r, "per_page", "50")
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		GroupID:               toolutil.StringOrInt("42"),
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-99"},
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(out.Users))
+	}
+}
+
+// TestToOutput_FullUser verifies that toOutput mirrors every top-level gl.User
+// field and the nested identities, SCIM identities, custom attributes, and
+// created_by sub-objects, including ISOTime, RFC3339, and net.IP formatting.
+func TestToOutput_FullUser(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":10,"username":"alice","email":"alice@example.com","name":"Alice",
+				"state":"active","web_url":"https://gitlab.example.com/alice",
+				"avatar_url":"https://gitlab.example.com/a.png","bio":"hi","bot":false,
+				"location":"NYC","public_email":"pub@example.com","skype":"sk","linkedin":"li",
+				"twitter":"tw","website_url":"https://alice.dev","organization":"ACME",
+				"job_title":"Eng","extern_uid":"ext-1","provider":"ldap","theme_id":2,
+				"last_activity_on":"2026-06-01","color_scheme_id":3,"is_admin":true,
+				"is_auditor":true,"can_create_group":true,"can_create_project":true,
+				"can_create_organization":true,"projects_limit":100,
+				"current_sign_in_at":"2026-06-02T08:00:00Z","current_sign_in_ip":"10.0.0.1",
+				"last_sign_in_at":"2026-05-01T08:00:00Z","last_sign_in_ip":"10.0.0.2",
+				"confirmed_at":"2026-01-02T00:00:00Z","two_factor_enabled":true,"note":"vip",
+				"identities":[{"provider":"ldap","extern_uid":"ext-1"}],
+				"scim_identities":[{"extern_uid":"scim-1","group_id":42,"active":true}],
+				"external":true,"private_profile":true,
+				"shared_runners_minutes_limit":500,"extra_shared_runners_minutes_limit":100,
+				"using_license_seat":true,
+				"custom_attributes":[{"key":"dept","value":"eng"}],
+				"namespace_id":7,"locked":true,
+				"created_by":{"id":1,"username":"admin","name":"Admin","state":"active","web_url":"https://gitlab.example.com/admin","created_at":"2025-01-01T00:00:00Z"},
+				"created_at":"2026-01-01T00:00:00Z"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{GroupID: toolutil.StringOrInt("42"), UserID: 10})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"avatar_url", out.AvatarURL, "https://gitlab.example.com/a.png"},
+		{"bio", out.Bio, "hi"},
+		{"location", out.Location, "NYC"},
+		{"public_email", out.PublicEmail, "pub@example.com"},
+		{"skype", out.Skype, "sk"},
+		{"linkedin", out.Linkedin, "li"},
+		{"twitter", out.Twitter, "tw"},
+		{"website_url", out.WebsiteURL, "https://alice.dev"},
+		{"organization", out.Organization, "ACME"},
+		{"job_title", out.JobTitle, "Eng"},
+		{"extern_uid", out.ExternUID, "ext-1"},
+		{"provider", out.Provider, "ldap"},
+		{"theme_id", out.ThemeID, int64(2)},
+		{"last_activity_on", out.LastActivityOn, "2026-06-01"},
+		{"color_scheme_id", out.ColorSchemeID, int64(3)},
+		{"is_auditor", out.IsAuditor, true},
+		{"can_create_group", out.CanCreateGroup, true},
+		{"can_create_project", out.CanCreateProject, true},
+		{"can_create_organization", out.CanCreateOrganization, true},
+		{"projects_limit", out.ProjectsLimit, int64(100)},
+		{"current_sign_in_at", out.CurrentSignInAt, "2026-06-02T08:00:00Z"},
+		{"current_sign_in_ip", out.CurrentSignInIP, "10.0.0.1"},
+		{"last_sign_in_at", out.LastSignInAt, "2026-05-01T08:00:00Z"},
+		{"last_sign_in_ip", out.LastSignInIP, "10.0.0.2"},
+		{"confirmed_at", out.ConfirmedAt, "2026-01-02T00:00:00Z"},
+		{"note", out.Note, "vip"},
+		{"private_profile", out.PrivateProfile, true},
+		{"shared_runners_minutes_limit", out.SharedRunnersMinutesLimit, int64(500)},
+		{"extra_shared_runners_minutes_limit", out.ExtraSharedRunnersMinutesLimit, int64(100)},
+		{"using_license_seat", out.UsingLicenseSeat, true},
+		{"namespace_id", out.NamespaceID, int64(7)},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, c.got, c.want)
+		}
+	}
+
+	if len(out.Identities) != 1 || out.Identities[0].Provider != "ldap" || out.Identities[0].ExternUID != "ext-1" {
+		t.Errorf("identities mismatch: %+v", out.Identities)
+	}
+	if len(out.SCIMIdentities) != 1 || out.SCIMIdentities[0].ExternUID != "scim-1" || out.SCIMIdentities[0].GroupID != 42 || !out.SCIMIdentities[0].Active {
+		t.Errorf("scim_identities mismatch: %+v", out.SCIMIdentities)
+	}
+	if len(out.CustomAttributes) != 1 || out.CustomAttributes[0].Key != "dept" || out.CustomAttributes[0].Value != "eng" {
+		t.Errorf("custom_attributes mismatch: %+v", out.CustomAttributes)
+	}
+	if out.CreatedBy == nil || out.CreatedBy.Username != "admin" || out.CreatedBy.CreatedAt != "2025-01-01T00:00:00Z" {
+		t.Errorf("created_by mismatch: %+v", out.CreatedBy)
+	}
+}
+
+// TestToOutput_NestedConvertersSkipNilAndEmpty verifies that the nested
+// converters return nil for empty input and skip nil slice elements, and that
+// toBasicUserOutput returns nil for a nil created_by with no created_at.
+func TestToOutput_NestedConvertersSkipNilAndEmpty(t *testing.T) {
+	if got := toIdentityOutputs(nil); got != nil {
+		t.Errorf("toIdentityOutputs(nil) = %v, want nil", got)
+	}
+	if got := toIdentityOutputs([]*gl.UserIdentity{nil}); got != nil {
+		t.Errorf("toIdentityOutputs([nil]) = %v, want nil", got)
+	}
+	if got := toSCIMIdentityOutputs([]*gl.SCIMIdentity{nil}); got != nil {
+		t.Errorf("toSCIMIdentityOutputs([nil]) = %v, want nil", got)
+	}
+	if got := toCustomAttributeOutputs([]*gl.CustomAttribute{nil}); got != nil {
+		t.Errorf("toCustomAttributeOutputs([nil]) = %v, want nil", got)
+	}
+	if got := toBasicUserOutput(nil); got != nil {
+		t.Errorf("toBasicUserOutput(nil) = %v, want nil", got)
+	}
+	if got := toBasicUserOutput(&gl.BasicUser{ID: 5}); got == nil || got.CreatedAt != "" {
+		t.Errorf("toBasicUserOutput with nil created_at = %+v, want non-nil with empty created_at", got)
 	}
 }
 

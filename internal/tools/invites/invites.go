@@ -18,21 +18,26 @@ import (
 type ListPendingProjectInvitationsInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Query     string               `json:"query,omitempty" jsonschema:"Filter invitations by email or name"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListPendingGroupInvitationsInput contains parameters for listing pending group invitations.
 type ListPendingGroupInvitationsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Query   string               `json:"query,omitempty" jsonschema:"Filter invitations by email or name"`
-	Page    int64                `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
-	PerPage int64                `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort order for keyset-paginated results: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ProjectInvitesInput contains parameters for inviting a user to a project.
 type ProjectInvitesInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to project_id)"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
 	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported),required"`
@@ -42,6 +47,7 @@ type ProjectInvitesInput struct {
 // GroupInvitesInput contains parameters for inviting a user to a group.
 type GroupInvitesInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
+	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to group_id)"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
 	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported),required"`
@@ -77,33 +83,28 @@ type InviteResultOutput struct {
 
 // Handlers.
 
+// pendingInvitationsListArgs carries the resolved per-call inputs for the
+// shared runPendingInvitationsList helper. The query/order_by/sort/pagination
+// fields mirror the documented GitLab list-invitations query parameters
+// one-for-one. The &gl.ListPendingInvitationsOptions{} literal itself is built
+// by buildListPendingInvitationsOptions from the public
+// ListPendingProjectInvitationsInput / ListPendingGroupInvitationsInput structs,
+// which are the model-facing carriers and 1:1 source of these parameters.
 type pendingInvitationsListArgs struct {
 	scopeID       toolutil.StringOrInt
 	operation     string
 	requiredField string
 	notFoundHint  string
-	page          int64
-	perPage       int64
-	query         string
+	opts          *gl.ListPendingInvitationsOptions
 	list          func(any, *gl.ListPendingInvitationsOptions, ...gl.RequestOptionFunc) ([]*gl.PendingInvite, *gl.Response, error)
 }
 
-func listPendingInvitations(ctx context.Context, args pendingInvitationsListArgs) (ListPendingInvitationsOutput, error) {
+func runPendingInvitationsList(ctx context.Context, args pendingInvitationsListArgs) (ListPendingInvitationsOutput, error) {
 	if args.scopeID == "" {
 		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
 
-	opts := &gl.ListPendingInvitationsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    args.page,
-			PerPage: args.perPage,
-		},
-	}
-	if args.query != "" {
-		opts.Query = new(args.query)
-	}
-
-	invites, resp, err := args.list(string(args.scopeID), opts, gl.WithContext(ctx))
+	invites, resp, err := args.list(string(args.scopeID), args.opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
@@ -119,72 +120,98 @@ func listPendingInvitations(ctx context.Context, args pendingInvitationsListArgs
 }
 
 // ListPendingProjectInvitations returns pending invitations for a project.
+//
+// The &gl.ListPendingInvitationsOptions{} literal is built here, in the handler
+// that takes the model-facing ListPendingProjectInvitationsInput, so every
+// documented list query parameter (query, order_by, sort, and the embedded
+// page/per_page/page_token/pagination) is mapped 1:1 from a public input field.
 func ListPendingProjectInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingProjectInvitationsInput) (ListPendingInvitationsOutput, error) {
-	return listPendingInvitations(ctx, pendingInvitationsListArgs{
+	opts := &gl.ListPendingInvitationsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	if input.Query != "" {
+		opts.Query = new(input.Query)
+	}
+	return runPendingInvitationsList(ctx, pendingInvitationsListArgs{
 		scopeID:       input.ProjectID,
 		operation:     "project_invite_list_pending",
 		requiredField: "project_id",
 		notFoundHint:  "verify project_id; listing pending invitations requires Maintainer or Owner role",
-		page:          input.Page,
-		perPage:       input.PerPage,
-		query:         input.Query,
+		opts:          opts,
 		list:          client.GL().Invites.ListPendingProjectInvitations,
 	})
 }
 
 // ListPendingGroupInvitations returns pending invitations for a group.
+//
+// The &gl.ListPendingInvitationsOptions{} literal is built here, in the handler
+// that takes the model-facing ListPendingGroupInvitationsInput, so every
+// documented list query parameter (query, order_by, sort, and the embedded
+// page/per_page/page_token/pagination) is mapped 1:1 from a public input field.
 func ListPendingGroupInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingGroupInvitationsInput) (ListPendingInvitationsOutput, error) {
-	return listPendingInvitations(ctx, pendingInvitationsListArgs{
+	opts := &gl.ListPendingInvitationsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	if input.Query != "" {
+		opts.Query = new(input.Query)
+	}
+	return runPendingInvitationsList(ctx, pendingInvitationsListArgs{
 		scopeID:       input.GroupID,
 		operation:     "group_invite_list_pending",
 		requiredField: "group_id",
 		notFoundHint:  "verify group_id; listing pending invitations requires Owner role",
-		page:          input.Page,
-		perPage:       input.PerPage,
-		query:         input.Query,
+		opts:          opts,
 		list:          client.GL().Invites.ListPendingGroupInvitations,
 	})
 }
 
-func buildInviteOptions(input inviteRequest) *gl.InvitesOptions {
-	accessLevel := gl.AccessLevelValue(input.accessLevel)
-	opts := &gl.InvitesOptions{AccessLevel: &accessLevel}
-	if input.email != "" {
-		opts.Email = new(input.email)
+// applyInviteExpiresAt parses the date-only invitation expires_at parameter
+// (YYYY-MM-DD ISOTime, not an RFC3339 timestamp) onto the SDK options.
+func applyInviteExpiresAt(opts *gl.InvitesOptions, expiresAt string) {
+	if expiresAt == "" {
+		return
 	}
-	if input.userID != 0 {
-		opts.UserID = input.userID
+	if t, err := time.Parse("2006-01-02", expiresAt); err == nil {
+		d := gl.ISOTime(t)
+		opts.ExpiresAt = &d
 	}
-	if input.expiresAt != "" {
-		if t, err := time.Parse("2006-01-02", input.expiresAt); err == nil {
-			d := gl.ISOTime(t)
-			opts.ExpiresAt = &d
-		}
-	}
-	return opts
 }
 
-type inviteRequest struct {
-	email       string
-	expiresAt   string
-	accessLevel int
-	userID      int64
+type sendInvitationArgs struct {
+	scopeID       toolutil.StringOrInt
+	operation     string
+	requiredField string
+	forbiddenHint string
+	email         string
+	userID        int64
+	opts          *gl.InvitesOptions
+	invite        func(any, *gl.InvitesOptions, ...gl.RequestOptionFunc) (*gl.InvitesResult, *gl.Response, error)
 }
 
-func sendInvitation(ctx context.Context, scopeID toolutil.StringOrInt, operation, requiredField, forbiddenHint string, request inviteRequest, invite func(any, *gl.InvitesOptions, ...gl.RequestOptionFunc) (*gl.InvitesResult, *gl.Response, error)) (InviteResultOutput, error) {
-	if scopeID == "" {
-		return InviteResultOutput{}, toolutil.WrapErrWithMessage(operation, toolutil.ErrFieldRequired(requiredField))
+func runInvitation(ctx context.Context, args sendInvitationArgs) (InviteResultOutput, error) {
+	if args.scopeID == "" {
+		return InviteResultOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
-	if request.email == "" && request.userID == 0 {
-		return InviteResultOutput{}, toolutil.WrapErrWithMessage(operation, errors.New("either email or user_id is required"))
+	if args.email == "" && args.userID == 0 {
+		return InviteResultOutput{}, toolutil.WrapErrWithMessage(args.operation, errors.New("either email or user_id is required"))
 	}
 
-	result, _, err := invite(string(scopeID), buildInviteOptions(request), gl.WithContext(ctx))
+	result, _, err := args.invite(string(args.scopeID), args.opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return InviteResultOutput{}, toolutil.WrapErrWithHint(operation, err, forbiddenHint)
+			return InviteResultOutput{}, toolutil.WrapErrWithHint(args.operation, err, args.forbiddenHint)
 		}
-		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusBadRequest,
+		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusBadRequest,
 			"valid access_level: 5 (Minimal access), 10 (Guest), 15 (Planner Premium/Ultimate), 20 (Reporter), 25 (Security Manager Premium/Ultimate), 30 (Developer), 40 (Maintainer), 50 (Owner), 60 (Admin where supported); expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
@@ -192,19 +219,65 @@ func sendInvitation(ctx context.Context, scopeID toolutil.StringOrInt, operation
 }
 
 // ProjectInvites invites a user to a project by email or user ID.
+//
+// The &gl.InvitesOptions{} literal is built here, in the handler that takes the
+// model-facing ProjectInvitesInput, so every documented add-a-member POST body
+// parameter (id, email, user_id, access_level, expires_at) is mapped 1:1 from a
+// public input field.
 func ProjectInvites(ctx context.Context, client *gitlabclient.Client, input ProjectInvitesInput) (InviteResultOutput, error) {
-	return sendInvitation(ctx, input.ProjectID, "project_invite", "project_id",
-		"inviting users requires Maintainer or Owner role on the project",
-		inviteRequest{email: input.Email, userID: input.UserID, expiresAt: input.ExpiresAt, accessLevel: input.AccessLevel},
-		client.GL().Invites.ProjectInvites)
+	accessLevel := gl.AccessLevelValue(input.AccessLevel)
+	opts := &gl.InvitesOptions{AccessLevel: &accessLevel}
+	if input.ID != "" {
+		opts.ID = string(input.ID)
+	}
+	if input.Email != "" {
+		opts.Email = new(input.Email)
+	}
+	if input.UserID != 0 {
+		opts.UserID = input.UserID
+	}
+	applyInviteExpiresAt(opts, input.ExpiresAt)
+	return runInvitation(ctx, sendInvitationArgs{
+		scopeID:       input.ProjectID,
+		operation:     "project_invite",
+		requiredField: "project_id",
+		forbiddenHint: "inviting users requires Maintainer or Owner role on the project",
+		email:         input.Email,
+		userID:        input.UserID,
+		opts:          opts,
+		invite:        client.GL().Invites.ProjectInvites,
+	})
 }
 
 // GroupInvites invites a user to a group by email or user ID.
+//
+// The &gl.InvitesOptions{} literal is built here, in the handler that takes the
+// model-facing GroupInvitesInput, so every documented add-a-member POST body
+// parameter (id, email, user_id, access_level, expires_at) is mapped 1:1 from a
+// public input field.
 func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupInvitesInput) (InviteResultOutput, error) {
-	return sendInvitation(ctx, input.GroupID, "group_invite", "group_id",
-		"inviting users requires Owner role on the group",
-		inviteRequest{email: input.Email, userID: input.UserID, expiresAt: input.ExpiresAt, accessLevel: input.AccessLevel},
-		client.GL().Invites.GroupInvites)
+	accessLevel := gl.AccessLevelValue(input.AccessLevel)
+	opts := &gl.InvitesOptions{AccessLevel: &accessLevel}
+	if input.ID != "" {
+		opts.ID = string(input.ID)
+	}
+	if input.Email != "" {
+		opts.Email = new(input.Email)
+	}
+	if input.UserID != 0 {
+		opts.UserID = input.UserID
+	}
+	applyInviteExpiresAt(opts, input.ExpiresAt)
+	return runInvitation(ctx, sendInvitationArgs{
+		scopeID:       input.GroupID,
+		operation:     "group_invite",
+		requiredField: "group_id",
+		forbiddenHint: "inviting users requires Owner role on the group",
+		email:         input.Email,
+		userID:        input.UserID,
+		opts:          opts,
+		invite:        client.GL().Invites.GroupInvites,
+	})
 }
 
 // Converters.

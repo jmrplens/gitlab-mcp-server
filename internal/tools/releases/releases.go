@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -25,41 +23,45 @@ type CreateInput struct {
 	Ref         string               `json:"ref,omitempty"         jsonschema:"Branch or commit SHA to create tag from when tag_name does not exist; include this when the prompt says ref/from ref"`
 	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release"`
 	TagMessage  string               `json:"tag_message,omitempty" jsonschema:"Message to use for the annotated tag (creates annotated tag instead of lightweight)"`
+	Assets      *AssetsInput         `json:"assets,omitempty"      jsonschema:"Asset links to attach to the release at creation time"`
 }
 
-// AssetSourceOutput represents a single release asset source (auto-generated archive).
-type AssetSourceOutput struct {
-	Format string `json:"format"`
-	URL    string `json:"url"`
+// AssetsInput mirrors gl.ReleaseAssetsOptions: the assets attached when
+// creating a release.
+type AssetsInput struct {
+	Links []AssetLinkInput `json:"links,omitempty" jsonschema:"Asset links to attach to the release"`
 }
 
-// EvidenceOutput represents a release evidence record.
-type EvidenceOutput struct {
-	SHA         string `json:"sha"`
-	Filepath    string `json:"filepath"`
-	CollectedAt string `json:"collected_at,omitempty"`
+// AssetLinkInput mirrors gl.ReleaseAssetLinkOptions: a single release asset
+// link supplied at creation time.
+type AssetLinkInput struct {
+	Name            string `json:"name,omitempty"              jsonschema:"Name of the asset link as shown in the release"`
+	URL             string `json:"url,omitempty"               jsonschema:"URL of the asset"`
+	FilePath        string `json:"filepath,omitempty"          jsonschema:"Deprecated relative path; prefer direct_asset_path"`
+	DirectAssetPath string `json:"direct_asset_path,omitempty" jsonschema:"Relative path to direct asset link (e.g. /binaries/app.zip)"`
+	LinkType        string `json:"link_type,omitempty"         jsonschema:"Asset link type: other (default), runbook, image, or package"`
 }
 
-// Output represents a GitLab release.
+// Output represents a GitLab release. Nested sub-objects (author, commit,
+// assets, _links, milestones, evidences) mirror the corresponding client-go
+// types field-for-field per the 1:1 audit policy. See shapes.go.
 type Output struct {
 	toolutil.HintableOutput
-	TagName         string                `json:"tag_name"`
-	Name            string                `json:"name"`
-	Description     string                `json:"description"`
-	DescriptionHTML string                `json:"description_html,omitempty"`
-	CreatedAt       string                `json:"created_at"`
-	ReleasedAt      string                `json:"released_at"`
-	Author          string                `json:"author,omitempty"`
-	CommitSHA       string                `json:"commit_sha,omitempty"`
-	UpcomingRelease bool                  `json:"upcoming_release,omitempty"`
-	Milestones      []string              `json:"milestones,omitempty"`
-	CommitPath      string                `json:"commit_path,omitempty"`
-	TagPath         string                `json:"tag_path,omitempty"`
-	AssetsCount     int64                 `json:"assets_count,omitempty"`
-	AssetsSources   []AssetSourceOutput   `json:"assets_sources,omitempty"`
-	AssetsLinks     []releaselinks.Output `json:"assets_links,omitempty"`
-	Evidences       []EvidenceOutput      `json:"evidences,omitempty"`
-	WebURL          string                `json:"web_url,omitempty"`
+	TagName         string             `json:"tag_name"`
+	Name            string             `json:"name"`
+	Description     string             `json:"description"`
+	DescriptionHTML string             `json:"description_html,omitempty"`
+	CreatedAt       string             `json:"created_at"`
+	ReleasedAt      string             `json:"released_at"`
+	Author          *AuthorOutput      `json:"author,omitempty"`
+	Commit          *CommitOutput      `json:"commit,omitempty"`
+	UpcomingRelease bool               `json:"upcoming_release,omitempty"`
+	Milestones      []*MilestoneOutput `json:"milestones,omitempty"`
+	CommitPath      string             `json:"commit_path,omitempty"`
+	TagPath         string             `json:"tag_path,omitempty"`
+	Assets          *AssetsOutput      `json:"assets,omitempty"`
+	Evidences       []*EvidenceOutput  `json:"evidences,omitempty"`
+	Links           *LinksOutput       `json:"_links,omitempty"`
 }
 
 // UpdateInput defines parameters for updating a release.
@@ -91,10 +93,12 @@ type GetLatestInput struct {
 
 // ListInput defines parameters for listing releases.
 type ListInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Order by field (released_at, created_at)"`
-	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	ProjectID              toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy                string               `json:"order_by,omitempty" jsonschema:"Order by field (released_at, created_at)"`
+	Sort                   string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	IncludeHTMLDescription bool                 `json:"include_html_description,omitempty" jsonschema:"Include the description_html field rendered from the Markdown description"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput holds a list of releases.
@@ -105,69 +109,30 @@ type ListOutput struct {
 }
 
 // ToOutput converts a GitLab API [gl.Release] to the MCP tool output
-// format, formatting timestamps as RFC 3339 strings.
+// format, formatting timestamps as RFC 3339 strings. Nested objects (author,
+// commit, assets, _links, milestones, evidences) are mirrored via the
+// converters in shapes.go.
 func ToOutput(r *gl.Release) Output {
 	out := Output{
 		TagName:         r.TagName,
 		Name:            r.Name,
 		Description:     r.Description,
 		DescriptionHTML: r.DescriptionHTML,
-		Author:          r.Author.Username,
+		Author:          authorOutput(r.Author),
+		Commit:          commitOutput(r.Commit),
 		UpcomingRelease: r.UpcomingRelease,
 		CommitPath:      r.CommitPath,
 		TagPath:         r.TagPath,
-		AssetsCount:     r.Assets.Count,
-	}
-	if editURL := r.Links.EditURL; editURL != "" {
-		out.WebURL = strings.TrimSuffix(editURL, "/edit")
-	}
-	if r.Commit.ID != "" {
-		out.CommitSHA = r.Commit.ID
-	}
-	if len(r.Milestones) > 0 {
-		ms := make([]string, len(r.Milestones))
-		for i, m := range r.Milestones {
-			ms[i] = m.Title
-		}
-		out.Milestones = ms
+		Assets:          assetsOutput(r.Assets),
+		Milestones:      milestoneOutputs(r.Milestones),
+		Evidences:       evidenceOutputs(r.Evidences),
+		Links:           linksOutput(r.Links),
 	}
 	if r.CreatedAt != nil {
 		out.CreatedAt = r.CreatedAt.Format(time.RFC3339)
 	}
 	if r.ReleasedAt != nil {
 		out.ReleasedAt = r.ReleasedAt.Format(time.RFC3339)
-	}
-	if len(r.Assets.Sources) > 0 {
-		sources := make([]AssetSourceOutput, len(r.Assets.Sources))
-		for i, s := range r.Assets.Sources {
-			sources[i] = AssetSourceOutput{Format: s.Format, URL: s.URL}
-		}
-		out.AssetsSources = sources
-	}
-	if len(r.Assets.Links) > 0 {
-		links := make([]releaselinks.Output, len(r.Assets.Links))
-		for i, l := range r.Assets.Links {
-			links[i] = releaselinks.Output{
-				ID:             l.ID,
-				Name:           l.Name,
-				URL:            l.URL,
-				DirectAssetURL: l.DirectAssetURL,
-				External:       l.External,
-				LinkType:       string(l.LinkType),
-			}
-		}
-		out.AssetsLinks = links
-	}
-	if len(r.Evidences) > 0 {
-		evidences := make([]EvidenceOutput, len(r.Evidences))
-		for i, e := range r.Evidences {
-			ev := EvidenceOutput{SHA: e.SHA, Filepath: e.Filepath}
-			if e.CollectedAt != nil {
-				ev.CollectedAt = e.CollectedAt.Format(time.RFC3339)
-			}
-			evidences[i] = ev
-		}
-		out.Evidences = evidences
 	}
 	return out
 }
@@ -199,6 +164,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.TagMessage != "" {
 		opts.TagMessage = new(input.TagMessage)
 	}
+	opts.Assets = assetsOptions(input.Assets)
 	r, _, err := client.GL().Releases.CreateRelease(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		switch {
@@ -312,12 +278,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	if input.IncludeHTMLDescription {
+		opts.IncludeHTMLDescription = new(true)
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	releases, resp, err := client.GL().Releases.ListReleases(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("releaseList", err, http.StatusNotFound,

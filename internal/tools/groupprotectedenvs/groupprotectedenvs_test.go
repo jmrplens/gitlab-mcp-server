@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -74,6 +75,25 @@ func TestList(t *testing.T) {
 				testutil.RespondJSON(w, http.StatusOK, `[]`)
 			}),
 			wantCount: 0,
+		},
+		{
+			name: "forwards order_by, sort and keyset pagination query params",
+			input: ListInput{
+				GroupID:               "mygroup",
+				OrderBy:               "name",
+				Sort:                  "desc",
+				KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+			},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				q := r.URL.Query()
+				if q.Get("order_by") != "name" || q.Get("sort") != "desc" ||
+					q.Get("pagination") != "keyset" || q.Get("page_token") != "42" {
+					t.Errorf("query = %q, missing order_by/sort/keyset params", r.URL.RawQuery)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[`+fullEnvJSON+`]`)
+			}),
+			wantCount: 1,
+			wantName:  "production",
 		},
 		{
 			name:  "returns error on API 500",

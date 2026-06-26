@@ -15,7 +15,10 @@ import (
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	PackageManager string               `json:"package_manager,omitempty" jsonschema:"Filter by package manager (bundler, composer, conan, go, gradle, maven, npm, nuget, pip, pipenv, pnpm, yarn, sbt, setuptools)"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset-paginated results: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // CreateExportInput defines parameters for creating a dependency list export.
@@ -126,11 +129,12 @@ func ListDeps(ctx context.Context, client *gitlabclient.Client, input ListInput)
 		pm := gl.DependencyPackageManagerValue(input.PackageManager)
 		opts.PackageManager = []*gl.DependencyPackageManagerValue{&pm}
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	deps, resp, err := client.GL().Dependencies.ListProjectDependencies(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -19,8 +20,10 @@ type ListInput struct {
 	Search       string `json:"search,omitempty" jsonschema:"Filter namespaces by search term"`
 	OwnedOnly    bool   `json:"owned_only,omitempty" jsonschema:"If true return only namespaces owned by the authenticated user"`
 	TopLevelOnly bool   `json:"top_level_only,omitempty" jsonschema:"If true return only top-level namespaces"`
-	Page         int64  `json:"page,omitempty" jsonschema:"Page number for pagination (default 1)"`
-	PerPage      int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
+	OrderBy      string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort         string `json:"sort,omitempty" jsonschema:"Sort direction for keyset-paginated results (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a namespace by ID.
@@ -53,9 +56,12 @@ type Output struct {
 	AvatarURL                   string `json:"avatar_url,omitempty"`
 	WebURL                      string `json:"web_url,omitempty"`
 	MembersCountWithDescendants int64  `json:"members_count_with_descendants,omitempty"`
-	BillableMembersCount        int64  `json:"billable_members_count,omitempty"`
-	Plan                        string `json:"plan,omitempty"`
-	Trial                       bool   `json:"trial,omitempty"`
+	BillableMembersCount        int64  `json:"billable_members_count,omitempty" tier:"premium"`
+	Plan                        string `json:"plan,omitempty" tier:"premium"`
+	TrialEndsOn                 string `json:"trial_ends_on,omitempty" tier:"premium"`
+	Trial                       bool   `json:"trial,omitempty" tier:"premium"`
+	MaxSeatsUsed                *int64 `json:"max_seats_used,omitempty"`
+	SeatsInUse                  *int64 `json:"seats_in_use,omitempty"`
 }
 
 // ListOutput represents a paginated list of namespaces.
@@ -76,11 +82,13 @@ type ExistsOutput struct {
 
 // List returns a paginated list of namespaces visible to the user.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListNamespacesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    input.Page,
-			PerPage: input.PerPage,
-		},
+	opts := &gl.ListNamespacesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Search != "" {
 		opts.Search = new(input.Search)
@@ -190,9 +198,14 @@ func toOutput(ns *gl.Namespace) Output {
 		BillableMembersCount:        ns.BillableMembersCount,
 		Plan:                        ns.Plan,
 		Trial:                       ns.Trial,
+		MaxSeatsUsed:                ns.MaxSeatsUsed,
+		SeatsInUse:                  ns.SeatsInUse,
 	}
 	if ns.AvatarURL != nil {
 		o.AvatarURL = *ns.AvatarURL
+	}
+	if ns.TrialEndsOn != nil {
+		o.TrialEndsOn = time.Time(*ns.TrialEndsOn).Format("2006-01-02")
 	}
 	return o
 }

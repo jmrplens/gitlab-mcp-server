@@ -13,7 +13,7 @@ func FormatPATMarkdown(out PATOutput) string {
 	fmt.Fprintf(&sb, "## Personal Access Token: %s (ID: %d)\n\n", out.Name, out.ID)
 	sb.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, "| **User ID** | %d |\n", out.UserID)
-	fmt.Fprintf(&sb, "| **State** | %s |\n", out.State)
+	fmt.Fprintf(&sb, "| **Active** | %t |\n", out.Active)
 	fmt.Fprintf(&sb, "| **Revoked** | %t |\n", out.Revoked)
 	if len(out.Scopes) > 0 {
 		fmt.Fprintf(&sb, "| **Scopes** | %s |\n", strings.Join(out.Scopes, ", "))
@@ -36,12 +36,12 @@ func FormatPATListMarkdown(out PATListOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Personal Access Tokens (%d)\n\n", len(out.Tokens))
 	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("| ID | Name | User ID | State | Revoked | Scopes | Expires At |\n")
+	sb.WriteString("| ID | Name | User ID | Active | Revoked | Scopes | Expires At |\n")
 	sb.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, t := range out.Tokens {
 		scopes := strings.Join(t.Scopes, ", ")
-		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %t | %s | %s |\n",
-			t.ID, t.Name, t.UserID, t.State, t.Revoked, scopes, t.ExpiresAt)
+		fmt.Fprintf(&sb, "| %d | %s | %d | %t | %t | %s | %s |\n",
+			t.ID, t.Name, t.UserID, t.Active, t.Revoked, scopes, t.ExpiresAt)
 	}
 	sb.WriteString(toolutil.FormatPagination(out.Pagination))
 	return sb.String()
@@ -53,14 +53,15 @@ func FormatSSHKeyMarkdown(out SSHKeyOutput) string {
 	fmt.Fprintf(&sb, "## SSH Key: %s (ID: %d)\n\n", out.Title, out.ID)
 	sb.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, "| **User ID** | %d |\n", out.UserID)
-	key := out.Key
-	if len(key) > 60 {
-		key = key[:57] + "..."
+	if out.UsageType != "" {
+		fmt.Fprintf(&sb, "| **Usage Type** | %s |\n", out.UsageType)
 	}
-	fmt.Fprintf(&sb, "| **Key** | `%s` |\n", key)
 	fmt.Fprintf(&sb, "| **Created At** | %s |\n", out.CreatedAt)
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&sb, "| **Expires At** | %s |\n", out.ExpiresAt)
+	}
+	if out.LastUsedAt != "" {
+		fmt.Fprintf(&sb, "| **Last Used At** | %s |\n", out.LastUsedAt)
 	}
 	return sb.String()
 }

@@ -4,6 +4,9 @@
 # GPG secret keys (NEVER commit private keys)
 keys/*.secret.asc
 
+# Doc-grounded tier auditor cache (regenerable fetched GitLab API docs)
+cmd/audit_edition_tier/.doccache/
+
 # Go build artifacts
 bin/
 dist/

@@ -698,7 +698,7 @@ func TestList_UsersWithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 20})
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -951,7 +951,7 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{Page: 1, PerPage: 20})
+	out, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1055,14 +1055,13 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}))
 
 	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:     42,
-		Action:     "created",
-		TargetType: "Issue",
-		Before:     "2026-12-31",
-		After:      "2026-01-01",
-		Sort:       "desc",
-		Page:       1,
-		PerPage:    20,
+		UserID:          42,
+		Action:          "created",
+		TargetType:      "Issue",
+		Before:          "2026-12-31",
+		After:           "2026-01-01",
+		Sort:            "desc",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

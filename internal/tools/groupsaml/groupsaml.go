@@ -59,40 +59,57 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 // SAMLUserOutput represents a SAML-provisioned user of a top-level group. The
 // GitLab saml_users endpoint returns the standard user object, so this mirrors
-// the canonical user representation (users.Output) field-for-field. The groups
+// the canonical user representation (gl.User) field-for-field. The groups
 // sub-packages cannot import each other (zero import cycles), so the shape is
 // replicated here rather than shared.
 type SAMLUserOutput struct {
-	ID               int64                `json:"id"`
-	Username         string               `json:"username"`
-	Email            string               `json:"email"`
-	Name             string               `json:"name"`
-	State            string               `json:"state"`
-	WebURL           string               `json:"web_url"`
-	AvatarURL        string               `json:"avatar_url"`
-	IsAdmin          bool                 `json:"is_admin"`
-	Bot              bool                 `json:"bot"`
-	Bio              string               `json:"bio,omitempty"`
-	Location         string               `json:"location,omitempty"`
-	JobTitle         string               `json:"job_title,omitempty"`
-	Organization     string               `json:"organization,omitempty"`
-	CreatedAt        string               `json:"created_at,omitempty"`
-	PublicEmail      string               `json:"public_email,omitempty"`
-	WebsiteURL       string               `json:"website_url,omitempty"`
-	LastActivityOn   string               `json:"last_activity_on,omitempty"`
-	TwoFactorEnabled bool                 `json:"two_factor_enabled"`
-	External         bool                 `json:"external"`
-	Locked           bool                 `json:"locked"`
-	PrivateProfile   bool                 `json:"private_profile"`
-	CurrentSignInAt  string               `json:"current_sign_in_at,omitempty"`
-	ProjectsLimit    int64                `json:"projects_limit"`
-	CanCreateProject bool                 `json:"can_create_project"`
-	CanCreateGroup   bool                 `json:"can_create_group"`
-	Note             string               `json:"note,omitempty"`
-	UsingLicenseSeat bool                 `json:"using_license_seat"`
-	ThemeID          int64                `json:"theme_id,omitempty"`
-	ColorSchemeID    int64                `json:"color_scheme_id,omitempty"`
-	SCIMIdentities   []SCIMIdentityOutput `json:"scim_identities,omitempty"`
+	ID                             int64                   `json:"id"`
+	Username                       string                  `json:"username"`
+	Email                          string                  `json:"email"`
+	Name                           string                  `json:"name"`
+	State                          string                  `json:"state"`
+	WebURL                         string                  `json:"web_url"`
+	AvatarURL                      string                  `json:"avatar_url"`
+	IsAdmin                        bool                    `json:"is_admin"`
+	IsAuditor                      bool                    `json:"is_auditor"`
+	Bot                            bool                    `json:"bot"`
+	Bio                            string                  `json:"bio,omitempty"`
+	Location                       string                  `json:"location,omitempty"`
+	JobTitle                       string                  `json:"job_title,omitempty"`
+	Organization                   string                  `json:"organization,omitempty"`
+	Skype                          string                  `json:"skype,omitempty"`
+	Linkedin                       string                  `json:"linkedin,omitempty"`
+	Twitter                        string                  `json:"twitter,omitempty"`
+	Provider                       string                  `json:"provider,omitempty"`
+	ExternUID                      string                  `json:"extern_uid,omitempty"`
+	CreatedAt                      string                  `json:"created_at,omitempty"`
+	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
+	PublicEmail                    string                  `json:"public_email,omitempty"`
+	WebsiteURL                     string                  `json:"website_url,omitempty"`
+	LastActivityOn                 string                  `json:"last_activity_on,omitempty"`
+	TwoFactorEnabled               bool                    `json:"two_factor_enabled"`
+	External                       bool                    `json:"external"`
+	Locked                         bool                    `json:"locked"`
+	PrivateProfile                 bool                    `json:"private_profile"`
+	CurrentSignInAt                string                  `json:"current_sign_in_at,omitempty"`
+	CurrentSignInIP                string                  `json:"current_sign_in_ip,omitempty"`
+	LastSignInAt                   string                  `json:"last_sign_in_at,omitempty"`
+	LastSignInIP                   string                  `json:"last_sign_in_ip,omitempty"`
+	ProjectsLimit                  int64                   `json:"projects_limit"`
+	CanCreateProject               bool                    `json:"can_create_project"`
+	CanCreateGroup                 bool                    `json:"can_create_group"`
+	CanCreateOrganization          bool                    `json:"can_create_organization"`
+	Note                           string                  `json:"note,omitempty"`
+	UsingLicenseSeat               bool                    `json:"using_license_seat"`
+	ThemeID                        int64                   `json:"theme_id,omitempty"`
+	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
+	NamespaceID                    int64                   `json:"namespace_id,omitempty"`
+	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty"`
+	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty"`
+	Identities                     []UserIdentityOutput    `json:"identities,omitempty"`
+	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
+	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
+	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
 }
 
 // SCIMIdentityOutput represents a SCIM identity associated with a SAML user.
@@ -102,45 +119,99 @@ type SCIMIdentityOutput struct {
 	Active    bool   `json:"active"`
 }
 
+// UserIdentityOutput represents a linked external identity (provider, extern_uid).
+type UserIdentityOutput struct {
+	Provider  string `json:"provider"`
+	ExternUID string `json:"extern_uid"`
+}
+
+// CustomAttributeOutput represents a single custom attribute key/value pair.
+type CustomAttributeOutput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// BasicUserOutput mirrors gl.BasicUser for the created_by reference.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
 // toSAMLUserOutput maps a GitLab API user into the MCP output, mirroring the
-// users domain conversion so every standard user field is surfaced 1:1.
+// canonical gl.User representation so every standard user field is surfaced 1:1.
 func toSAMLUserOutput(u *gl.User) SAMLUserOutput {
 	out := SAMLUserOutput{
-		ID:               u.ID,
-		Username:         u.Username,
-		Email:            u.Email,
-		Name:             u.Name,
-		State:            u.State,
-		WebURL:           u.WebURL,
-		AvatarURL:        u.AvatarURL,
-		IsAdmin:          u.IsAdmin,
-		Bot:              u.Bot,
-		Bio:              u.Bio,
-		Location:         u.Location,
-		JobTitle:         u.JobTitle,
-		Organization:     u.Organization,
-		PublicEmail:      u.PublicEmail,
-		WebsiteURL:       u.WebsiteURL,
-		TwoFactorEnabled: u.TwoFactorEnabled,
-		External:         u.External,
-		Locked:           u.Locked,
-		PrivateProfile:   u.PrivateProfile,
-		ProjectsLimit:    u.ProjectsLimit,
-		CanCreateProject: u.CanCreateProject,
-		CanCreateGroup:   u.CanCreateGroup,
-		Note:             u.Note,
-		UsingLicenseSeat: u.UsingLicenseSeat,
-		ThemeID:          u.ThemeID,
-		ColorSchemeID:    u.ColorSchemeID,
+		ID:                             u.ID,
+		Username:                       u.Username,
+		Email:                          u.Email,
+		Name:                           u.Name,
+		State:                          u.State,
+		WebURL:                         u.WebURL,
+		AvatarURL:                      u.AvatarURL,
+		IsAdmin:                        u.IsAdmin,
+		IsAuditor:                      u.IsAuditor,
+		Bot:                            u.Bot,
+		Bio:                            u.Bio,
+		Location:                       u.Location,
+		JobTitle:                       u.JobTitle,
+		Organization:                   u.Organization,
+		Skype:                          u.Skype,
+		Linkedin:                       u.Linkedin,
+		Twitter:                        u.Twitter,
+		Provider:                       u.Provider,
+		ExternUID:                      u.ExternUID,
+		PublicEmail:                    u.PublicEmail,
+		WebsiteURL:                     u.WebsiteURL,
+		TwoFactorEnabled:               u.TwoFactorEnabled,
+		External:                       u.External,
+		Locked:                         u.Locked,
+		PrivateProfile:                 u.PrivateProfile,
+		ProjectsLimit:                  u.ProjectsLimit,
+		CanCreateProject:               u.CanCreateProject,
+		CanCreateGroup:                 u.CanCreateGroup,
+		CanCreateOrganization:          u.CanCreateOrganization,
+		Note:                           u.Note,
+		UsingLicenseSeat:               u.UsingLicenseSeat,
+		ThemeID:                        u.ThemeID,
+		ColorSchemeID:                  u.ColorSchemeID,
+		NamespaceID:                    u.NamespaceID,
+		SharedRunnersMinutesLimit:      u.SharedRunnersMinutesLimit,
+		ExtraSharedRunnersMinutesLimit: u.ExtraSharedRunnersMinutesLimit,
 	}
 	if u.CreatedAt != nil {
 		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)
+	}
+	if u.ConfirmedAt != nil {
+		out.ConfirmedAt = u.ConfirmedAt.Format(time.RFC3339)
 	}
 	if u.LastActivityOn != nil {
 		out.LastActivityOn = time.Time(*u.LastActivityOn).Format(toolutil.DateFormatISO)
 	}
 	if u.CurrentSignInAt != nil {
 		out.CurrentSignInAt = u.CurrentSignInAt.Format(time.RFC3339)
+	}
+	if u.CurrentSignInIP != nil {
+		out.CurrentSignInIP = u.CurrentSignInIP.String()
+	}
+	if u.LastSignInAt != nil {
+		out.LastSignInAt = u.LastSignInAt.Format(time.RFC3339)
+	}
+	if u.LastSignInIP != nil {
+		out.LastSignInIP = u.LastSignInIP.String()
+	}
+	for _, identity := range u.Identities {
+		if identity == nil {
+			continue
+		}
+		out.Identities = append(out.Identities, UserIdentityOutput{
+			Provider:  identity.Provider,
+			ExternUID: identity.ExternUID,
+		})
 	}
 	for _, identity := range u.SCIMIdentities {
 		if identity == nil {
@@ -151,6 +222,29 @@ func toSAMLUserOutput(u *gl.User) SAMLUserOutput {
 			GroupID:   identity.GroupID,
 			Active:    identity.Active,
 		})
+	}
+	for _, attr := range u.CustomAttributes {
+		if attr == nil {
+			continue
+		}
+		out.CustomAttributes = append(out.CustomAttributes, CustomAttributeOutput{
+			Key:   attr.Key,
+			Value: attr.Value,
+		})
+	}
+	if u.CreatedBy != nil {
+		created := &BasicUserOutput{
+			ID:        u.CreatedBy.ID,
+			Username:  u.CreatedBy.Username,
+			Name:      u.CreatedBy.Name,
+			State:     u.CreatedBy.State,
+			AvatarURL: u.CreatedBy.AvatarURL,
+			WebURL:    u.CreatedBy.WebURL,
+		}
+		if u.CreatedBy.CreatedAt != nil {
+			created.CreatedAt = u.CreatedBy.CreatedAt.Format(time.RFC3339)
+		}
+		out.CreatedBy = created
 	}
 	return out
 }
@@ -171,7 +265,10 @@ type SAMLUsersListInput struct {
 	Blocked       *bool  `json:"blocked,omitempty" jsonschema:"Limit to blocked users only"`
 	CreatedAfter  string `json:"created_after,omitempty" jsonschema:"Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
 	CreatedBefore string `json:"created_before,omitempty" jsonschema:"Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)"`
+	OrderBy       string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id, name, username, created_at)"`
+	Sort          string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // SAMLUsersList retrieves the users provisioned via SAML SSO for a top-level group.
@@ -180,11 +277,12 @@ func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLU
 		return SAMLUsersListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := &gl.ListSAMLUsersOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Search != "" {
 		opts.Search = new(input.Search)

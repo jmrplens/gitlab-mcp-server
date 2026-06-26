@@ -4,7 +4,9 @@ package groupsaml
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -16,33 +18,77 @@ import (
 )
 
 // TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
-// standard user field, formats the three timestamp fields, and skips nil SCIM
-// identity pointers while mapping valid ones.
+// standard user field, formats all timestamp and IP fields, maps the identities,
+// scim_identities, custom_attributes, and created_by sub-objects, and skips nil
+// slice element pointers while mapping valid ones.
 func TestToSAMLUserOutput_AllFields(t *testing.T) {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	confirmed := time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)
 	lastAct := gl.ISOTime(time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC))
 	signIn := time.Date(2026, 1, 4, 5, 6, 7, 0, time.UTC)
+	lastSignIn := time.Date(2026, 1, 3, 5, 6, 7, 0, time.UTC)
+	creatorCreated := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	curIP := net.ParseIP("203.0.113.7")
+	lastIP := net.ParseIP("203.0.113.8")
 	u := &gl.User{
 		ID: 7, Username: "jdoe", Email: "j@example.com", Name: "Jane Doe", State: "active",
-		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, Bot: false,
+		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, IsAuditor: true, Bot: false,
 		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
+		Skype: "sk", Linkedin: "li", Twitter: "tw", Provider: "saml", ExternUID: "ext-uid-7",
 		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
 		TwoFactorEnabled: true, External: false, Locked: false, PrivateProfile: true,
-		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true,
+		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true, CanCreateOrganization: true,
 		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
-		CreatedAt: &created, LastActivityOn: &lastAct, CurrentSignInAt: &signIn,
-		SCIMIdentities: []*gl.SCIMIdentity{nil, {ExternUID: "ext-1", GroupID: 9, Active: true}},
+		NamespaceID: 88, SharedRunnersMinutesLimit: 400, ExtraSharedRunnersMinutesLimit: 100,
+		CreatedAt: &created, ConfirmedAt: &confirmed, LastActivityOn: &lastAct,
+		CurrentSignInAt: &signIn, CurrentSignInIP: &curIP,
+		LastSignInAt: &lastSignIn, LastSignInIP: &lastIP,
+		Identities:       []*gl.UserIdentity{nil, {Provider: "saml", ExternUID: "id-1"}},
+		SCIMIdentities:   []*gl.SCIMIdentity{nil, {ExternUID: "ext-1", GroupID: 9, Active: true}},
+		CustomAttributes: []*gl.CustomAttribute{nil, {Key: "dept", Value: "eng"}},
+		CreatedBy:        &gl.BasicUser{ID: 1, Username: "admin", Name: "Admin", State: "active", AvatarURL: "https://x/admin.png", WebURL: "https://x/admin", CreatedAt: &creatorCreated},
 	}
-	out := toSAMLUserOutput(u)
+	want := SAMLUserOutput{
+		ID: 7, Username: "jdoe", Email: "j@example.com", Name: "Jane Doe", State: "active",
+		WebURL: "https://x/jdoe", AvatarURL: "https://x/a.png", IsAdmin: true, IsAuditor: true,
+		Bio: "bio", Location: "loc", JobTitle: "Eng", Organization: "Org",
+		Skype: "sk", Linkedin: "li", Twitter: "tw", Provider: "saml", ExternUID: "ext-uid-7",
+		PublicEmail: "pub@example.com", WebsiteURL: "https://jdoe.dev",
+		TwoFactorEnabled: true, PrivateProfile: true,
+		ProjectsLimit: 50, CanCreateProject: true, CanCreateGroup: true, CanCreateOrganization: true,
+		Note: "vip", UsingLicenseSeat: true, ThemeID: 2, ColorSchemeID: 3,
+		NamespaceID: 88, SharedRunnersMinutesLimit: 400, ExtraSharedRunnersMinutesLimit: 100,
+		CreatedAt:        created.Format(time.RFC3339),
+		ConfirmedAt:      confirmed.Format(time.RFC3339),
+		LastActivityOn:   "2026-01-03",
+		CurrentSignInAt:  signIn.Format(time.RFC3339),
+		CurrentSignInIP:  "203.0.113.7",
+		LastSignInAt:     lastSignIn.Format(time.RFC3339),
+		LastSignInIP:     "203.0.113.8",
+		Identities:       []UserIdentityOutput{{Provider: "saml", ExternUID: "id-1"}},
+		SCIMIdentities:   []SCIMIdentityOutput{{ExternUID: "ext-1", GroupID: 9, Active: true}},
+		CustomAttributes: []CustomAttributeOutput{{Key: "dept", Value: "eng"}},
+		CreatedBy: &BasicUserOutput{
+			ID: 1, Username: "admin", Name: "Admin", State: "active",
+			AvatarURL: "https://x/admin.png", WebURL: "https://x/admin",
+			CreatedAt: creatorCreated.Format(time.RFC3339),
+		},
+	}
+	if out := toSAMLUserOutput(u); !reflect.DeepEqual(out, want) {
+		t.Errorf("toSAMLUserOutput mismatch:\n got %+v\nwant %+v", out, want)
+	}
+}
 
-	if out.ID != 7 || out.Username != "jdoe" || !out.IsAdmin || out.ProjectsLimit != 50 {
-		t.Errorf("scalar fields not mapped: %+v", out)
+// TestToSAMLUserOutput_NilOptionals verifies the converter leaves optional
+// pointer-backed fields zero-valued when the upstream user omits them, and that
+// created_by stays nil.
+func TestToSAMLUserOutput_NilOptionals(t *testing.T) {
+	out := toSAMLUserOutput(&gl.User{ID: 1, Username: "min"})
+	if out.ConfirmedAt != "" || out.CurrentSignInIP != "" || out.LastSignInAt != "" || out.LastSignInIP != "" {
+		t.Errorf("expected empty optional time/IP fields, got %+v", out)
 	}
-	if out.CreatedAt == "" || out.LastActivityOn == "" || out.CurrentSignInAt == "" {
-		t.Errorf("timestamp fields not formatted: created=%q last=%q signin=%q", out.CreatedAt, out.LastActivityOn, out.CurrentSignInAt)
-	}
-	if len(out.SCIMIdentities) != 1 || out.SCIMIdentities[0].ExternUID != "ext-1" {
-		t.Errorf("expected one mapped SCIM identity (nil skipped), got %+v", out.SCIMIdentities)
+	if out.CreatedBy != nil || out.Identities != nil || out.CustomAttributes != nil {
+		t.Errorf("expected nil slices/created_by, got %+v", out)
 	}
 }
 
@@ -123,19 +169,22 @@ func TestSAMLUsersList_AllFilters(t *testing.T) {
 
 	active, blocked := true, false
 	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{
-		GroupID:         "mygroup",
-		Search:          "jane",
-		Username:        "jdoe",
-		Active:          &active,
-		Blocked:         &blocked,
-		CreatedAfter:    "2026-01-01T00:00:00Z",
-		CreatedBefore:   "2026-12-31T23:59:59Z",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		GroupID:               "mygroup",
+		Search:                "jane",
+		Username:              "jdoe",
+		Active:                &active,
+		Blocked:               &blocked,
+		CreatedAfter:          "2026-01-01T00:00:00Z",
+		CreatedBefore:         "2026-12-31T23:59:59Z",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 5},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "created_after=", "created_before=", "page=2", "per_page=5"} {
+	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "created_after=", "created_before=", "page=2", "per_page=5", "order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok-123"} {
 		if !strings.Contains(query, want) {
 			t.Errorf("query %q missing %q", query, want)
 		}

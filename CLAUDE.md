@@ -20,17 +20,18 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1028 self-managed Enterprise/Premium; 1034 on GitLab.com Enterprise/Premium with Orbit                     |
-| Meta-mode tools           | 32 base / 48 self-managed enterprise / 49 GitLab.com Enterprise (Orbit)                                    |
+| MCP Tools (individual)    | By instance tier: ~861 Free/CE; ~998 Premium; ~1061 Ultimate (self-managed) / ~1067 on GitLab.com Ultimate with Orbit |
+| Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 44 Ultimate                                                       |
+| Meta-mode tools           | 32 base (Free/CE) / 48 self-managed Ultimate / 49 GitLab.com Ultimate (Orbit)                              |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 3 (progress, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 723 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 342 test files under `internal/tools/`                                                                       |
-| Go packages               | 211 total; 175 under `internal/tools/...`                                                                    |
+| Source files (tools)      | 757 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 360 test files under `internal/tools/`                                                                       |
+| Go packages               | 221 total; 175 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
@@ -43,18 +44,22 @@ gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
 │   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
+│   ├── audit_action_coverage/   # Audits client-go SDK endpoints with no MCP action (R-ACTION; 1:1 audit)
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_meta_schema/       # Audits meta-tool schema generation
+│   ├── audit_metadata_completeness/ # Audits ActionSpec discovery-metadata gaps (R-META; 1:1 audit)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_output/            # Audits MCP tool output quality
+│   ├── audit_struct_completeness/ # Audits MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT; 1:1 audit)
 │   ├── audit_test_names/        # Audits test function naming convention compliance
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces
 │   ├── audit_tools/             # Audits MCP tool metadata violations
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── find_dupes/              # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
+│   ├── gen_1to1_backlog/        # Merges the three 1:1-audit gap streams into plan/1to1-backlog.json
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
@@ -68,7 +73,7 @@ gitlab-mcp-server/
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 176 internal/tools packages
+│   ├── tools/                   # Tool orchestration layer + 175 internal/tools packages
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
@@ -285,7 +290,8 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
 | `AUTO_UPDATE_TIMEOUT`    | No       | Startup/background update timeout (`60s` default, range 5s–10m) |
-| `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition (`false` default) |
+| `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
+| `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
@@ -301,7 +307,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
-| `--enterprise`        | `false` | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL pool entry when GitLab reports edition |
+| `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
 | `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
@@ -479,7 +485,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages, 1028 self-managed tools / 1034 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~861 Free/CE, ~998 Premium, ~1061 Ultimate self-managed, ~1067 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
@@ -514,7 +520,7 @@ Find combines canonical `domain.action` IDs, domain/action names, aliases, natur
 
 ### Enterprise tool gating
 
-`GITLAB_ENTERPRISE` controls access to GitLab Premium/Ultimate features in stdio mode. In HTTP mode, the `--enterprise` flag explicitly forces the Premium/Ultimate catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition. The catalog effect is the same in individual and meta-tool modes:
+`GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes:
 
 **Individual mode** (`TOOL_SURFACE=individual`; legacy `META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 

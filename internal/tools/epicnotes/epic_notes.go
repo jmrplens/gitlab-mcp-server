@@ -34,7 +34,7 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
                 nodes {
                   id
                   body
-                  author { username }
+                  author { id name username webUrl avatarUrl }
                   system
                   createdAt
                   updatedAt
@@ -55,7 +55,7 @@ mutation($noteableId: NoteableID!, $body: String!) {
     note {
       id
       body
-      author { username }
+      author { id name username webUrl avatarUrl }
       system
       createdAt
       updatedAt
@@ -71,7 +71,7 @@ mutation($id: NoteID!, $body: String!) {
     note {
       id
       body
-      author { username }
+      author { id name username webUrl avatarUrl }
       system
       createdAt
       updatedAt
@@ -102,9 +102,15 @@ type gqlNoteNode struct {
 	UpdatedAt *string       `json:"updatedAt"`
 }
 
-// gqlNoteAuthor represents the author of a note.
+// gqlNoteAuthor represents the author of a note as selected from the GraphQL
+// User type. Per the 1:1 audit policy every selected field is surfaced on the
+// canonical author output object.
 type gqlNoteAuthor struct {
-	Username string `json:"username"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Username  string `json:"username"`
+	WebURL    string `json:"webUrl"`
+	AvatarURL string `json:"avatarUrl"`
 }
 
 // gqlNoteNodes holds a list of note nodes.
@@ -163,11 +169,13 @@ type gqlDestroyNotePayload struct {
 	Errors []string `json:"errors"`
 }
 
-// nodeToOutput converts a GraphQL note node to the MCP output format.
+// nodeToOutput converts a GraphQL note node to the MCP output format. Per the
+// locked canonical-key convention it surfaces the full author object on the
+// canonical `author` key.
 func nodeToOutput(n gqlNoteNode) Output {
 	out := Output{
 		Body:   n.Body,
-		Author: n.Author.Username,
+		Author: noteAuthorOutput(n.Author),
 		System: n.System,
 	}
 	if _, id, err := toolutil.ParseGID(n.ID); err == nil {
@@ -223,15 +231,18 @@ type DeleteInput struct {
 	NoteID   int64  `json:"note_id"   jsonschema:"ID of the note to delete,required"`
 }
 
-// Output represents a note (comment) on an epic.
+// Output represents a note (comment) on an epic. Per the locked canonical-key
+// convention the full *NoteUserOutput author object is surfaced on the canonical
+// `author` key. Only fields the Work Items GraphQL notes widget actually returns
+// are populated (no invented output scalars per the 1:1 audit policy).
 type Output struct {
 	toolutil.HintableOutput
-	ID        int64  `json:"id"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	System    bool   `json:"system"`
+	ID        int64           `json:"id"`
+	Body      string          `json:"body"`
+	Author    *NoteUserOutput `json:"author,omitempty"`
+	CreatedAt string          `json:"created_at"`
+	UpdatedAt string          `json:"updated_at,omitempty"`
+	System    bool            `json:"system"`
 }
 
 // ListOutput holds a paginated list of epic notes.

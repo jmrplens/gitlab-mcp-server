@@ -13,13 +13,19 @@ import (
 
 // ListInput holds pagination parameters for listing all project storage moves.
 type ListInput struct {
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
+	Sort    string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListForProjectInput holds parameters for listing storage moves for a specific project.
 type ListForProjectInput struct {
-	ProjectID int64 `json:"project_id" jsonschema:"Numeric ID of the project,required"`
+	ProjectID int64  `json:"project_id"         jsonschema:"Numeric ID of the project,required"`
+	OrderBy   string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id). Only applies when pagination='keyset'."`
+	Sort      string `json:"sort,omitempty"     jsonschema:"Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'."`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // IDInput holds parameters for getting a single storage move by ID.
@@ -57,10 +63,15 @@ type Output struct {
 }
 
 // ProjectOutput represents the project associated with a storage move.
+// It mirrors gitlab.RepositoryProject 1:1.
 type ProjectOutput struct {
-	ID                int64  `json:"id"`
-	Name              string `json:"name"`
-	PathWithNamespace string `json:"path_with_namespace"`
+	ID                int64      `json:"id"`
+	Description       string     `json:"description,omitempty"`
+	Name              string     `json:"name"`
+	NameWithNamespace string     `json:"name_with_namespace,omitempty"`
+	Path              string     `json:"path,omitempty"`
+	PathWithNamespace string     `json:"path_with_namespace"`
+	CreatedAt         *time.Time `json:"created_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of project storage moves.
@@ -82,11 +93,13 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 		return ListOutput{}, err
 	}
 
-	opts := gl.RetrieveAllProjectStorageMovesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(in.Page),
-			PerPage: int64(in.PerPage),
-		},
+	opts := gl.RetrieveAllProjectStorageMovesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	if in.OrderBy != "" {
+		opts.OrderBy = in.OrderBy
+	}
+	if in.Sort != "" {
+		opts.Sort = in.Sort
 	}
 	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -111,11 +124,13 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 
-	opts := gl.RetrieveAllProjectStorageMovesOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(in.Page),
-			PerPage: int64(in.PerPage),
-		},
+	opts := gl.RetrieveAllProjectStorageMovesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	if in.OrderBy != "" {
+		opts.OrderBy = in.OrderBy
+	}
+	if in.Sort != "" {
+		opts.Sort = in.Sort
 	}
 	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject(in.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -219,8 +234,12 @@ func toOutput(m *gl.ProjectRepositoryStorageMove) Output {
 	if m.Project != nil {
 		o.Project = &ProjectOutput{
 			ID:                m.Project.ID,
+			Description:       m.Project.Description,
 			Name:              m.Project.Name,
+			NameWithNamespace: m.Project.NameWithNamespace,
+			Path:              m.Project.Path,
 			PathWithNamespace: m.Project.PathWithNamespace,
+			CreatedAt:         m.Project.CreatedAt,
 		}
 	}
 	return o

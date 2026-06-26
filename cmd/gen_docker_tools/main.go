@@ -36,6 +36,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -102,13 +103,13 @@ func run(args []string, stdout io.Writer) error {
 
 	switch {
 	case *individual:
-		tools.RegisterAll(server, client, true)
+		tools.RegisterAll(server, client, edition.Ultimate)
 	case *enterprise:
-		if registerErr := tools.RegisterAllMeta(server, client, true); registerErr != nil {
+		if registerErr := tools.RegisterAllMeta(server, client, edition.Ultimate); registerErr != nil {
 			return fmt.Errorf("register meta tools: %w", registerErr)
 		}
 	default:
-		if registerErr := tools.RegisterAllMeta(server, client, false); registerErr != nil {
+		if registerErr := tools.RegisterAllMeta(server, client, edition.Free); registerErr != nil {
 			return fmt.Errorf("register meta tools: %w", registerErr)
 		}
 	}

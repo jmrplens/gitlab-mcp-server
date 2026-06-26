@@ -4,6 +4,7 @@ package epicdiscussions
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,6 +12,73 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// TestActionSpecs_DiscoveryMetadata asserts every epic discussion individual
+// tool carries action-specific discovery metadata (R-META; 1:1 audit): a
+// non-generic Usage string, natural-language aliases, canonical group.* related
+// actions, parameter guidance, and a Returns:/See also: description.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	tools := []string{
+		"gitlab_list_epic_discussions",
+		"gitlab_get_epic_discussion",
+		"gitlab_create_epic_discussion",
+		"gitlab_add_epic_discussion_note",
+		"gitlab_update_epic_discussion_note",
+		"gitlab_delete_epic_discussion_note",
+	}
+
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			assertEpicDiscussionMetadata(t, tool, byTool[tool])
+		})
+	}
+}
+
+// assertEpicDiscussionMetadata checks that a single epic discussion spec carries
+// the full R-META discovery surface.
+func assertEpicDiscussionMetadata(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute epicdiscussions domain action.") {
+		t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: expected RelatedActions, got none", tool)
+	}
+	for _, ra := range spec.RelatedActions {
+		if !strings.HasPrefix(ra, "group.") {
+			t.Errorf("%s: RelatedAction %q is not a canonical group.* id", tool, ra)
+		}
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Errorf("%s: expected ParameterGuidance, got none", tool)
+	}
+	if spec.Edition != "premium" {
+		t.Errorf("%s: expected premium edition gate, got %q", tool, spec.Edition)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+	}
+}
+
+// TestDecorateEpicDiscussionMeta_DefaultFallback covers the defensive default
+// branch of decorateEpicDiscussionMeta, exercised when an unknown individual
+// tool name is passed.
+func TestDecorateEpicDiscussionMeta_DefaultFallback(t *testing.T) {
+	var options toolutil.ActionSpecOptions
+	decorateEpicDiscussionMeta(&options, "gitlab_unknown_tool")
+	if options.Usage == "" {
+		t.Error("expected fallback Usage to be set")
+	}
+	if len(options.RelatedActions) == 0 {
+		t.Error("expected fallback RelatedActions to be set")
+	}
+}
 
 // TestActionSpecs_DeleteNoteError validates the DeleteNoteError route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.

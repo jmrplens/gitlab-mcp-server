@@ -1039,3 +1039,134 @@ func ciVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string
 	}
 	return byTool
 }
+
+// ---------------------------------------------------------------------------
+// List — keyset pagination, order_by, sort (1:1 audit)
+// ---------------------------------------------------------------------------.
+
+// TestCIVariableList_KeysetOrderBySort verifies that List forwards the order_by,
+// sort, pagination, and page_token query parameters to the GitLab API, mirroring
+// the embedded gitlab.ListOptions of ListProjectVariablesOptions.
+func TestCIVariableList_KeysetOrderBySort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/variables" && r.Method == http.MethodGet {
+			q := r.URL.Query()
+			if q.Get("order_by") != "key" {
+				t.Errorf("order_by = %q, want key", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok123" {
+				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"key":"VAR_A","value":"a","variable_type":"env_var","environment_scope":"*"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		OrderBy:               "key",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Variables) != 1 {
+		t.Fatalf("expected 1 variable, got %d", len(out.Variables))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Filter nested object precedence (1:1 audit, mirrors gitlab.VariableFilter)
+// ---------------------------------------------------------------------------.
+
+// TestCIVariableGet_FilterObject verifies the nested filter object selects the
+// environment-scoped variable and takes precedence over the flat shorthand.
+func TestCIVariableGet_FilterObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodGet {
+			if r.URL.Query().Get("filter[environment_scope]") != testEnvScope {
+				t.Errorf("filter[environment_scope] = %q, want %q", r.URL.Query().Get("filter[environment_scope]"), testEnvScope)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"key":"DB_URL","value":"x","variable_type":"env_var","environment_scope":"production"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		ProjectID:        "10",
+		Key:              "DB_URL",
+		EnvironmentScope: "staging", // overridden by the nested filter
+		Filter:           &Filter{EnvironmentScope: testEnvScope},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.EnvironmentScope != testEnvScope {
+		t.Errorf(fmtEnvironmentScope, out.EnvironmentScope, testEnvScope)
+	}
+}
+
+// TestCIVariableUpdate_FilterObject verifies Update forwards the nested filter
+// object as the environment-scope selector.
+func TestCIVariableUpdate_FilterObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodPut {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			filter, ok := body["filter"].(map[string]any)
+			if !ok || filter["environment_scope"] != testEnvScope {
+				t.Errorf("filter = %v, want environment_scope=%q", body["filter"], testEnvScope)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"key":"DB_URL","value":"y","variable_type":"env_var","environment_scope":"production"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "10",
+		Key:       "DB_URL",
+		Value:     "y",
+		Filter:    &Filter{EnvironmentScope: testEnvScope},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.EnvironmentScope != testEnvScope {
+		t.Errorf(fmtEnvironmentScope, out.EnvironmentScope, testEnvScope)
+	}
+}
+
+// TestCIVariableDelete_FilterObject verifies Delete forwards the nested filter
+// object as the environment-scope selector.
+func TestCIVariableDelete_FilterObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodDelete {
+			if r.URL.Query().Get("filter[environment_scope]") != testEnvScope {
+				t.Errorf("filter[environment_scope] = %q, want %q", r.URL.Query().Get("filter[environment_scope]"), testEnvScope)
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	if err := Delete(context.Background(), client, DeleteInput{
+		ProjectID: "10",
+		Key:       "DB_URL",
+		Filter:    &Filter{EnvironmentScope: testEnvScope},
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}

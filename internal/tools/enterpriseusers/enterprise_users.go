@@ -24,7 +24,10 @@ type ListInput struct {
 	CreatedAfter  string               `json:"created_after,omitempty"  jsonschema:"Filter users created after this date (ISO 8601)"`
 	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Filter users created before this date (ISO 8601)"`
 	TwoFactor     string               `json:"two_factor,omitempty"     jsonschema:"Filter by 2FA status: enabled or disabled"`
+	OrderBy       string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort          string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput holds parameters for getting a single enterprise user.
@@ -46,21 +49,94 @@ type DeleteInput struct {
 	HardDelete *bool                `json:"hard_delete,omitempty" jsonschema:"Permanently delete user instead of soft delete"`
 }
 
-// Output represents an enterprise user.
+// Output mirrors the top-level fields of gl.User returned by the GitLab
+// group_enterprise_users endpoints. Enterprise-user endpoints return full
+// User objects, so this shape reflects gl.User as completely as practical:
+// every top-level scalar plus the nested identities, SCIM identities, custom
+// attributes, and created_by sub-objects.
 type Output struct {
 	toolutil.HintableOutput
-	ID               int64  `json:"id"`
-	Username         string `json:"username"`
-	Name             string `json:"name"`
-	Email            string `json:"email"`
-	State            string `json:"state"`
-	WebURL           string `json:"web_url"`
-	IsAdmin          bool   `json:"is_admin"`
-	Bot              bool   `json:"bot"`
-	TwoFactorEnabled bool   `json:"two_factor_enabled"`
-	External         bool   `json:"external"`
-	Locked           bool   `json:"locked"`
-	CreatedAt        string `json:"created_at,omitempty"`
+	ID                             int64                   `json:"id"`
+	Username                       string                  `json:"username"`
+	Email                          string                  `json:"email"`
+	Name                           string                  `json:"name"`
+	State                          string                  `json:"state"`
+	WebURL                         string                  `json:"web_url"`
+	AvatarURL                      string                  `json:"avatar_url,omitempty"`
+	Bio                            string                  `json:"bio,omitempty"`
+	Bot                            bool                    `json:"bot"`
+	Location                       string                  `json:"location,omitempty"`
+	PublicEmail                    string                  `json:"public_email,omitempty"`
+	Skype                          string                  `json:"skype,omitempty"`
+	Linkedin                       string                  `json:"linkedin,omitempty"`
+	Twitter                        string                  `json:"twitter,omitempty"`
+	WebsiteURL                     string                  `json:"website_url,omitempty"`
+	Organization                   string                  `json:"organization,omitempty"`
+	JobTitle                       string                  `json:"job_title,omitempty"`
+	ExternUID                      string                  `json:"extern_uid,omitempty"`
+	Provider                       string                  `json:"provider,omitempty"`
+	ThemeID                        int64                   `json:"theme_id,omitempty"`
+	LastActivityOn                 string                  `json:"last_activity_on,omitempty"`
+	ColorSchemeID                  int64                   `json:"color_scheme_id,omitempty"`
+	IsAdmin                        bool                    `json:"is_admin"`
+	IsAuditor                      bool                    `json:"is_auditor"`
+	CanCreateGroup                 bool                    `json:"can_create_group"`
+	CanCreateProject               bool                    `json:"can_create_project"`
+	CanCreateOrganization          bool                    `json:"can_create_organization"`
+	ProjectsLimit                  int64                   `json:"projects_limit"`
+	CurrentSignInAt                string                  `json:"current_sign_in_at,omitempty"`
+	CurrentSignInIP                string                  `json:"current_sign_in_ip,omitempty"`
+	LastSignInAt                   string                  `json:"last_sign_in_at,omitempty"`
+	LastSignInIP                   string                  `json:"last_sign_in_ip,omitempty"`
+	ConfirmedAt                    string                  `json:"confirmed_at,omitempty"`
+	TwoFactorEnabled               bool                    `json:"two_factor_enabled"`
+	Note                           string                  `json:"note,omitempty"`
+	Identities                     []IdentityOutput        `json:"identities,omitempty"`
+	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
+	External                       bool                    `json:"external"`
+	PrivateProfile                 bool                    `json:"private_profile"`
+	SharedRunnersMinutesLimit      int64                   `json:"shared_runners_minutes_limit,omitempty"`
+	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty"`
+	UsingLicenseSeat               bool                    `json:"using_license_seat"`
+	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
+	NamespaceID                    int64                   `json:"namespace_id,omitempty"`
+	Locked                         bool                    `json:"locked"`
+	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
+	CreatedAt                      string                  `json:"created_at,omitempty"`
+}
+
+// IdentityOutput mirrors gl.UserIdentity, a provider/extern_uid pair linking a
+// user to an external authentication source.
+type IdentityOutput struct {
+	Provider  string `json:"provider"`
+	ExternUID string `json:"extern_uid"`
+}
+
+// SCIMIdentityOutput mirrors gl.SCIMIdentity, a SCIM provisioning identity for
+// an enterprise user.
+type SCIMIdentityOutput struct {
+	ExternUID string `json:"extern_uid"`
+	GroupID   int64  `json:"group_id"`
+	Active    bool   `json:"active"`
+}
+
+// CustomAttributeOutput mirrors gl.CustomAttribute, a key/value custom
+// attribute attached to a user.
+type CustomAttributeOutput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// BasicUserOutput mirrors gl.BasicUser, the compact user object referenced by
+// gl.User.CreatedBy.
+type BasicUserOutput struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // ListOutput holds the list response.
@@ -75,17 +151,133 @@ func toOutput(u *gl.User) Output {
 		return Output{}
 	}
 	o := Output{
-		ID:               u.ID,
-		Username:         u.Username,
-		Name:             u.Name,
-		Email:            u.Email,
-		State:            u.State,
-		WebURL:           u.WebURL,
-		IsAdmin:          u.IsAdmin,
-		Bot:              u.Bot,
-		TwoFactorEnabled: u.TwoFactorEnabled,
-		External:         u.External,
-		Locked:           u.Locked,
+		ID:                             u.ID,
+		Username:                       u.Username,
+		Email:                          u.Email,
+		Name:                           u.Name,
+		State:                          u.State,
+		WebURL:                         u.WebURL,
+		AvatarURL:                      u.AvatarURL,
+		Bio:                            u.Bio,
+		Bot:                            u.Bot,
+		Location:                       u.Location,
+		PublicEmail:                    u.PublicEmail,
+		Skype:                          u.Skype,
+		Linkedin:                       u.Linkedin,
+		Twitter:                        u.Twitter,
+		WebsiteURL:                     u.WebsiteURL,
+		Organization:                   u.Organization,
+		JobTitle:                       u.JobTitle,
+		ExternUID:                      u.ExternUID,
+		Provider:                       u.Provider,
+		ThemeID:                        u.ThemeID,
+		ColorSchemeID:                  u.ColorSchemeID,
+		IsAdmin:                        u.IsAdmin,
+		IsAuditor:                      u.IsAuditor,
+		CanCreateGroup:                 u.CanCreateGroup,
+		CanCreateProject:               u.CanCreateProject,
+		CanCreateOrganization:          u.CanCreateOrganization,
+		ProjectsLimit:                  u.ProjectsLimit,
+		TwoFactorEnabled:               u.TwoFactorEnabled,
+		Note:                           u.Note,
+		External:                       u.External,
+		PrivateProfile:                 u.PrivateProfile,
+		SharedRunnersMinutesLimit:      u.SharedRunnersMinutesLimit,
+		ExtraSharedRunnersMinutesLimit: u.ExtraSharedRunnersMinutesLimit,
+		UsingLicenseSeat:               u.UsingLicenseSeat,
+		NamespaceID:                    u.NamespaceID,
+		Locked:                         u.Locked,
+		Identities:                     toIdentityOutputs(u.Identities),
+		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
+		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
+		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
+	}
+	if u.CreatedAt != nil {
+		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
+	}
+	if u.LastActivityOn != nil {
+		o.LastActivityOn = time.Time(*u.LastActivityOn).Format(toolutil.DateFormatISO)
+	}
+	if u.CurrentSignInAt != nil {
+		o.CurrentSignInAt = u.CurrentSignInAt.Format(time.RFC3339)
+	}
+	if u.LastSignInAt != nil {
+		o.LastSignInAt = u.LastSignInAt.Format(time.RFC3339)
+	}
+	if u.ConfirmedAt != nil {
+		o.ConfirmedAt = u.ConfirmedAt.Format(time.RFC3339)
+	}
+	if u.CurrentSignInIP != nil {
+		o.CurrentSignInIP = u.CurrentSignInIP.String()
+	}
+	if u.LastSignInIP != nil {
+		o.LastSignInIP = u.LastSignInIP.String()
+	}
+	return o
+}
+
+func toIdentityOutputs(identities []*gl.UserIdentity) []IdentityOutput {
+	if len(identities) == 0 {
+		return nil
+	}
+	out := make([]IdentityOutput, 0, len(identities))
+	for _, id := range identities {
+		if id == nil {
+			continue
+		}
+		out = append(out, IdentityOutput{Provider: id.Provider, ExternUID: id.ExternUID})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
+	if len(identities) == 0 {
+		return nil
+	}
+	out := make([]SCIMIdentityOutput, 0, len(identities))
+	for _, id := range identities {
+		if id == nil {
+			continue
+		}
+		out = append(out, SCIMIdentityOutput{ExternUID: id.ExternUID, GroupID: id.GroupID, Active: id.Active})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make([]CustomAttributeOutput, 0, len(attrs))
+	for _, a := range attrs {
+		if a == nil {
+			continue
+		}
+		out = append(out, CustomAttributeOutput{Key: a.Key, Value: a.Value})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	if u == nil {
+		return nil
+	}
+	o := &BasicUserOutput{
+		ID:        u.ID,
+		Username:  u.Username,
+		Name:      u.Name,
+		State:     u.State,
+		AvatarURL: u.AvatarURL,
+		WebURL:    u.WebURL,
 	}
 	if u.CreatedAt != nil {
 		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
@@ -101,8 +293,13 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if in.GroupID.String() == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	opts := &gl.ListEnterpriseUsersOptions{
-		ListOptions: gl.ListOptions{Page: int64(in.Page), PerPage: int64(in.PerPage)},
+	opts := &gl.ListEnterpriseUsersOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	if in.OrderBy != "" {
+		opts.OrderBy = in.OrderBy
+	}
+	if in.Sort != "" {
+		opts.Sort = in.Sort
 	}
 	if in.Username != "" {
 		opts.Username = in.Username

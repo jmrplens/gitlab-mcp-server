@@ -40,6 +40,16 @@ const (
 	fmtAuthorWant         = "Author = %q, want %q"
 )
 
+// authorName returns the username of a commit author user object, or the empty
+// string when the author is absent. Used for concise test assertions after the
+// author field migrated from a plain string to *BasicUserOutput.
+func authorName(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
 // TestCommitCreate_SingleFile verifies that Create creates a commit with
 // a single file action and returns the correct short ID, title, and web URL.
 // The mock returns HTTP 201 with complete commit metadata.
@@ -320,6 +330,7 @@ func TestCommitList_CancelledContext(t *testing.T) {
 func TestCommitGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
+			testutil.AssertQueryParam(t, r, "stats", "true")
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":"abc123def456789",
 				"short_id":"abc123de",
@@ -327,9 +338,16 @@ func TestCommitGet_Success(t *testing.T) {
 				"message":"feat: add main.go\n\nDetailed description",
 				"author_name":"Test User",
 				"author_email":"test@example.com",
+				"authored_date":"2026-03-01T10:00:00Z",
 				"committed_date":"2026-03-02T10:00:00Z",
+				"created_at":"2026-03-02T10:00:00Z",
 				"web_url":"https://gitlab.example.com/-/commit/abc123def456789",
 				"parent_ids":["parent1","parent2"],
+				"project_id":42,
+				"status":"success",
+				"trailers":{"Signed-off-by":"x"},
+				"extended_trailers":{"Signed-off-by":"x"},
+				"last_pipeline":{"id":9,"iid":2,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc","name":"p","web_url":"u"},
 				"stats":{"additions":10,"deletions":2,"total":12}
 			}`)
 			return
@@ -340,6 +358,7 @@ func TestCommitGet_Success(t *testing.T) {
 	out, err := Get(context.Background(), client, GetInput{
 		ProjectID: "42",
 		SHA:       testSHA,
+		Stats:     true,
 	})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
@@ -352,6 +371,21 @@ func TestCommitGet_Success(t *testing.T) {
 	}
 	if len(out.ParentIDs) != 2 {
 		t.Errorf("len(ParentIDs) = %d, want 2", len(out.ParentIDs))
+	}
+	if out.AuthoredDate == "" || out.CreatedAt == "" {
+		t.Errorf("AuthoredDate/CreatedAt not mapped: %q %q", out.AuthoredDate, out.CreatedAt)
+	}
+	if out.ProjectID != 42 {
+		t.Errorf("out.ProjectID = %d, want 42", out.ProjectID)
+	}
+	if out.Status != "success" {
+		t.Errorf("out.Status = %q, want success", out.Status)
+	}
+	if out.Trailers["Signed-off-by"] != "x" || out.ExtendedTrailers["Signed-off-by"] != "x" {
+		t.Errorf("trailers not mapped: %v %v", out.Trailers, out.ExtendedTrailers)
+	}
+	if out.LastPipeline == nil || out.LastPipeline.ID != 9 || out.LastPipeline.IID != 2 || out.LastPipeline.Source != "push" {
+		t.Errorf("LastPipeline = %+v, want full mapping", out.LastPipeline)
 	}
 	if out.Stats == nil {
 		t.Fatal("out.Stats is nil, want non-nil")
@@ -489,6 +523,10 @@ func TestGetRefs_EmptyProjectID(t *testing.T) {
 func TestGetComments_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/comments" {
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "asc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "c1")
 			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -508,9 +546,15 @@ func TestGetComments_Success(t *testing.T) {
 	out, err := GetComments(context.Background(), client, CommentsInput{
 		ProjectID: "42",
 		SHA:       testSHA,
+		OrderBy:   "id",
+		Sort:      "asc",
 		PaginationInput: toolutil.PaginationInput{
 			Page:    2,
 			PerPage: 10,
+		},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "c1",
 		},
 	})
 	if err != nil {
@@ -523,8 +567,11 @@ func TestGetComments_Success(t *testing.T) {
 	if c.Note != "Looks good!" {
 		t.Errorf("Note = %q, want %q", c.Note, "Looks good!")
 	}
-	if c.Author != testReviewer {
-		t.Errorf(fmtAuthorWant, c.Author, testReviewer)
+	if c.Author == nil || c.Author.Username != testReviewer {
+		t.Errorf(fmtAuthorWant, authorName(c.Author), testReviewer)
+	}
+	if c.Author == nil || c.Author.Name != "Reviewer One" {
+		t.Errorf("Author.Name = %v, want %q", c.Author, "Reviewer One")
 	}
 	if c.Path != testFileMainGo {
 		t.Errorf("Path = %q, want %q", c.Path, testFileMainGo)
@@ -560,8 +607,8 @@ func TestPostComment_Success(t *testing.T) {
 	if out.Note != "LGTM" {
 		t.Errorf("Note = %q, want %q", out.Note, "LGTM")
 	}
-	if out.Author != "dev1" {
-		t.Errorf(fmtAuthorWant, out.Author, "dev1")
+	if out.Author == nil || out.Author.Username != "dev1" {
+		t.Errorf(fmtAuthorWant, authorName(out.Author), "dev1")
 	}
 }
 
@@ -589,6 +636,15 @@ func TestPostComment_EmptyProjectID(t *testing.T) {
 func TestGetStatuses_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/statuses" {
+			testutil.AssertQueryParam(t, r, "ref", "main")
+			testutil.AssertQueryParam(t, r, "stage", "test")
+			testutil.AssertQueryParam(t, r, "name", "build")
+			testutil.AssertQueryParam(t, r, "pipeline_id", "5")
+			testutil.AssertQueryParam(t, r, "all", "true")
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "asc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "s1")
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 				{
 					"id":1,
@@ -598,7 +654,8 @@ func TestGetStatuses_Success(t *testing.T) {
 					"name":"build",
 					"target_url":"https://ci.example.com/1",
 					"description":"Build passed",
-					"allow_failure":false
+					"allow_failure":false,
+					"author":{"username":"ci-bot","name":"CI Bot"}
 				}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
@@ -606,7 +663,21 @@ func TestGetStatuses_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := GetStatuses(context.Background(), client, StatusesInput{ProjectID: "42", SHA: testSHA})
+	out, err := GetStatuses(context.Background(), client, StatusesInput{
+		ProjectID:  "42",
+		SHA:        testSHA,
+		Ref:        "main",
+		Stage:      "test",
+		Name:       "build",
+		PipelineID: 5,
+		All:        true,
+		OrderBy:    "id",
+		Sort:       "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "s1",
+		},
+	})
 	if err != nil {
 		t.Fatalf("GetStatuses() unexpected error: %v", err)
 	}
@@ -619,6 +690,9 @@ func TestGetStatuses_Success(t *testing.T) {
 	}
 	if s.Name != "build" {
 		t.Errorf("Name = %q, want %q", s.Name, "build")
+	}
+	if s.Author == nil || s.Author.Username != "ci-bot" {
+		t.Errorf("Author = %v, want ci-bot", s.Author)
 	}
 }
 
@@ -868,6 +942,159 @@ func TestGetGPGSignature_Success(t *testing.T) {
 	}
 	if out.KeyUserName != "Test User" {
 		t.Errorf("KeyUserName = %q, want %q", out.KeyUserName, "Test User")
+	}
+}
+
+// TestGetGPGSignature_PGPSuperset verifies that GetGPGSignature surfaces the
+// documented-but-not-in-SDK superset fields (signature_type, commit_source) for a
+// PGP-signed commit via the raw REST fetch.
+func TestGetGPGSignature_PGPSuperset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"PGP",
+				"verification_status":"verified",
+				"gpg_key_id":1,
+				"gpg_key_primary_keyid":"8254AAB3FBD54AC9",
+				"gpg_key_user_name":"John Doe",
+				"gpg_key_user_email":"johndoe@example.com",
+				"gpg_key_subkey_id":null,
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.SignatureType != "PGP" {
+		t.Errorf("SignatureType = %q, want %q", out.SignatureType, "PGP")
+	}
+	if out.CommitSource != "gitaly" {
+		t.Errorf("CommitSource = %q, want %q", out.CommitSource, "gitaly")
+	}
+	if out.Key != nil || out.X509Certificate != nil {
+		t.Errorf("expected nil SSH/X509 objects for PGP signature, got key=%v x509=%v", out.Key, out.X509Certificate)
+	}
+}
+
+// TestGetGPGSignature_SSH verifies that GetGPGSignature decodes the documented
+// SSH `key` sub-object (absent from gl.GPGSignature) via the raw REST superset.
+func TestGetGPGSignature_SSH(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"SSH",
+				"verification_status":"verified",
+				"key":{
+					"id":11,
+					"title":"Key",
+					"created_at":"2023-05-08T09:12:38.503Z",
+					"expires_at":"2024-05-07T00:00:00.000Z",
+					"key":"ssh-ed25519 AAAAC3 MyKey",
+					"usage_type":"auth_and_signing"
+				},
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.SignatureType != "SSH" {
+		t.Errorf("SignatureType = %q, want %q", out.SignatureType, "SSH")
+	}
+	if out.Key == nil {
+		t.Fatal("expected non-nil SSH key object")
+	}
+	if out.Key.ID != 11 || out.Key.UsageType != "auth_and_signing" {
+		t.Errorf("SSH key = %+v, want id=11 usage_type=auth_and_signing", out.Key)
+	}
+}
+
+// TestGetGPGSignature_X509 verifies that GetGPGSignature decodes the documented
+// X.509 `x509_certificate` sub-object (and nested x509_issuer), neither of which
+// exists in gl.GPGSignature, via the raw REST superset.
+func TestGetGPGSignature_X509(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type":"X509",
+				"verification_status":"unverified",
+				"x509_certificate":{
+					"id":1,
+					"subject":"CN=gitlab@example.org,OU=Example,O=World",
+					"subject_key_identifier":"BC:BC:BC",
+					"email":"gitlab@example.org",
+					"serial_number":278969561018901340486471282831158785578,
+					"certificate_status":"good",
+					"x509_issuer":{
+						"id":1,
+						"subject":"CN=PKI,OU=Example,O=World",
+						"crl_url":"http://example.com/pki.crl"
+					}
+				},
+				"commit_source":"gitaly"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.X509Certificate == nil {
+		t.Fatal("expected non-nil X509 certificate object")
+	}
+	if out.X509Certificate.Email != "gitlab@example.org" {
+		t.Errorf("X509 email = %q, want %q", out.X509Certificate.Email, "gitlab@example.org")
+	}
+	if out.X509Certificate.SerialNumber.String() != "278969561018901340486471282831158785578" {
+		t.Errorf("X509 serial = %q, want big integer", out.X509Certificate.SerialNumber.String())
+	}
+	if out.X509Certificate.X509Issuer == nil || out.X509Certificate.X509Issuer.CRLURL != "http://example.com/pki.crl" {
+		t.Errorf("X509 issuer = %+v, want crl_url set", out.X509Certificate.X509Issuer)
+	}
+}
+
+// TestGetGPGSignature_VersionTolerance verifies that GetGPGSignature degrades
+// gracefully on older GitLab instances whose signature response predates the
+// signature_type/commit_source/key/x509_certificate fields: the raw-fetch
+// superset decodes the legacy PGP-only body and omits the absent fields.
+func TestGetGPGSignature_VersionTolerance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
+			// Legacy body: only the SDK-known PGP fields, no superset fields.
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"gpg_key_id":7,
+				"gpg_key_primary_keyid":"LEGACYKEY",
+				"gpg_key_user_name":"Old User",
+				"gpg_key_user_email":"old@example.com",
+				"verification_status":"verified"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGPGSignature(context.Background(), client, GPGSignatureInput{ProjectID: "42", SHA: testSHA})
+	if err != nil {
+		t.Fatalf("GetGPGSignature() unexpected error: %v", err)
+	}
+	if out.VerificationStatus != "verified" || out.KeyPrimaryKeyID != "LEGACYKEY" {
+		t.Errorf("legacy PGP fields not decoded: %+v", out)
+	}
+	if out.SignatureType != "" || out.CommitSource != "" || out.Key != nil || out.X509Certificate != nil {
+		t.Errorf("expected superset fields to be absent on legacy response, got %+v", out)
 	}
 }
 
@@ -1230,12 +1457,16 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 		ProjectID:     "42",
 		Branch:        "feat",
 		CommitMessage: "t",
+		StartBranch:   "main",
 		StartSHA:      testSHA,
+		StartProject:  "grp/src",
 		AuthorEmail:   "a@t.com",
 		AuthorName:    "Author",
+		Stats:         true,
 		Force:         true,
 		Actions: []Action{
 			{Action: actionCreate, FilePath: "f.go", Content: "x", LastCommitID: "prev1"},
+			{Action: "move", FilePath: "new.go", PreviousPath: "old.go", Encoding: "base64", ExecuteFilemode: true},
 		},
 	})
 	if err != nil {
@@ -1244,7 +1475,7 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	if out.ShortID != "opt1" {
 		t.Errorf(fmtOutShortIDWant, out.ShortID, "opt1")
 	}
-	for _, want := range []string{"start_sha", "author_email", "author_name", "force", "actions"} {
+	for _, want := range []string{"start_branch", "start_sha", "start_project", "author_email", "author_name", "stats", "force", "actions", "previous_path", "encoding", "execute_filemode"} {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing field %q", want)
 		}
@@ -1277,11 +1508,17 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 		testutil.AssertQueryParam(t, r, "until", "2026-12-31T23:59:59Z")
 		testutil.AssertQueryParam(t, r, "path", "src/")
 		testutil.AssertQueryParam(t, r, "author", "Alice")
+		testutil.AssertQueryParam(t, r, "all", "true")
 		testutil.AssertQueryParam(t, r, "with_stats", "true")
 		testutil.AssertQueryParam(t, r, "first_parent", "true")
+		testutil.AssertQueryParam(t, r, "trailers", "true")
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "asc")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok1")
 		testutil.AssertQueryParam(t, r, "page", "2")
 		testutil.AssertQueryParam(t, r, "per_page", "25")
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a","short_id":"a","title":"t","committed_date":"2026-01-01T00:00:00Z","web_url":"u","stats":{"additions":5,"deletions":2,"total":7}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":"a","short_id":"a","title":"t","committed_date":"2026-01-01T00:00:00Z","web_url":"u","stats":{"additions":5,"deletions":2,"total":7},"trailers":{"Signed-off-by":"a"},"extended_trailers":{"Signed-off-by":"a"},"last_pipeline":{"id":7,"status":"success","ref":"main","web_url":"p","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z"}}]`)
 	}
 }
 
@@ -1298,11 +1535,19 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 		Until:       "2026-12-31T23:59:59Z",
 		Path:        "src/",
 		Author:      "Alice",
+		All:         true,
 		WithStats:   true,
 		FirstParent: true,
+		Trailers:    true,
+		OrderBy:     "id",
+		Sort:        "asc",
 		PaginationInput: toolutil.PaginationInput{
 			Page:    2,
 			PerPage: 25,
+		},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "tok1",
 		},
 	})
 	if err != nil {
@@ -1311,8 +1556,21 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 	if len(out.Commits) != 1 {
 		t.Fatalf("len(Commits) = %d, want 1", len(out.Commits))
 	}
-	if out.Commits[0].Stats == nil {
+	c := out.Commits[0]
+	if c.Stats == nil {
 		t.Error("expected Stats to be non-nil")
+	}
+	if c.Trailers["Signed-off-by"] != "a" {
+		t.Errorf("Trailers = %v, want Signed-off-by=a", c.Trailers)
+	}
+	if c.ExtendedTrailers["Signed-off-by"] != "a" {
+		t.Errorf("ExtendedTrailers = %v, want Signed-off-by=a", c.ExtendedTrailers)
+	}
+	if c.LastPipeline == nil || c.LastPipeline.ID != 7 || c.LastPipeline.Status != "success" {
+		t.Errorf("LastPipeline = %+v, want ID 7 status success", c.LastPipeline)
+	}
+	if c.LastPipeline.CreatedAt == "" || c.LastPipeline.UpdatedAt == "" {
+		t.Errorf("LastPipeline timestamps not mapped: %+v", c.LastPipeline)
 	}
 }
 
@@ -1326,6 +1584,10 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 			if q.Get("unidiff") != "true" {
 				t.Errorf("expected unidiff=true, got %q", q.Get("unidiff"))
 			}
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "desc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "d1")
 			testutil.AssertQueryParam(t, r, "page", "3")
 			testutil.AssertQueryParam(t, r, "per_page", "10")
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1338,9 +1600,15 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 		ProjectID: "42",
 		SHA:       "abc",
 		Unidiff:   true,
+		OrderBy:   "id",
+		Sort:      "desc",
 		PaginationInput: toolutil.PaginationInput{
 			Page:    3,
 			PerPage: 10,
+		},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "d1",
 		},
 	})
 	if err != nil {
@@ -1358,6 +1626,10 @@ func TestGetRefs_WithType(t *testing.T) {
 			if q.Get("type") != "tag" {
 				t.Errorf("expected type=tag, got %q", q.Get("type"))
 			}
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "asc")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "r1")
 			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.AssertQueryParam(t, r, "per_page", "5")
 			testutil.RespondJSON(w, http.StatusOK, `[{"type":"tag","name":"v1.0"}]`)
@@ -1370,9 +1642,15 @@ func TestGetRefs_WithType(t *testing.T) {
 		ProjectID: "42",
 		SHA:       "abc",
 		Type:      "tag",
+		OrderBy:   "id",
+		Sort:      "asc",
 		PaginationInput: toolutil.PaginationInput{
 			Page:    2,
 			PerPage: 5,
+		},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{
+			Pagination: "keyset",
+			PageToken:  "r1",
 		},
 	})
 	if err != nil {
@@ -1518,8 +1796,8 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	if out.Coverage != 95.5 {
 		t.Errorf("Coverage = %f, want 95.5", out.Coverage)
 	}
-	if out.Author != "bot" {
-		t.Errorf(fmtAuthorWant, out.Author, "bot")
+	if out.Author == nil || out.Author.Username != "bot" {
+		t.Errorf(fmtAuthorWant, authorName(out.Author), "bot")
 	}
 	if out.CreatedAt == "" {
 		t.Error("CreatedAt is empty")
@@ -1736,7 +2014,7 @@ func TestFormatDetailMarkdown(t *testing.T) {
 		AuthorName:  "Bob",
 		AuthorEmail: "b@t.com",
 		ParentIDs:   []string{"p1", "p2"},
-		Stats:       &StatsOutput{Additions: 10, Deletions: 3, Total: 13},
+		Stats:       &CommitStatsOutput{Additions: 10, Deletions: 3, Total: 13},
 		WebURL:      "https://example.com",
 	}
 	md := FormatDetailMarkdown(c)
@@ -1851,8 +2129,8 @@ func TestFormatRefsMarkdown_Empty(t *testing.T) {
 func TestFormatCommentsMarkdown(t *testing.T) {
 	out := CommentsOutput{
 		Comments: []CommentOutput{
-			{Author: "dev", Note: "LGTM", Path: testFileMainGo, Line: 10},
-			{Author: "bot", Note: "OK"},
+			{Author: &BasicUserOutput{Username: "dev"}, Note: "LGTM", Path: testFileMainGo, Line: 10},
+			{Author: &BasicUserOutput{Username: "bot"}, Note: "OK"},
 		},
 	}
 	md := FormatCommentsMarkdown(out)
@@ -1885,7 +2163,7 @@ func TestFormatCommentsMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentMarkdown(t *testing.T) {
-	c := CommentOutput{Author: "dev", Note: "Nice!", Path: testFileMainGo, Line: 5}
+	c := CommentOutput{Author: &BasicUserOutput{Username: "dev"}, Note: "Nice!", Path: testFileMainGo, Line: 5}
 	md := FormatCommentMarkdown(c)
 	if !strings.Contains(md, "Commit Comment") {
 		t.Error(errExpHeader)
@@ -1902,7 +2180,7 @@ func TestFormatCommentMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentMarkdown_NoPath(t *testing.T) {
-	c := CommentOutput{Author: "dev", Note: "OK"}
+	c := CommentOutput{Author: &BasicUserOutput{Username: "dev"}, Note: "OK"}
 	md := FormatCommentMarkdown(c)
 	if strings.Contains(md, "Path") {
 		t.Error("should not show Path when empty")
@@ -2013,7 +2291,7 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 		VerificationStatus: "verified",
 	}
 	md := FormatGPGSignatureMarkdown(sig)
-	if !strings.Contains(md, "GPG Signature") {
+	if !strings.Contains(md, "Commit Signature") {
 		t.Error(errExpHeader)
 	}
 	if !strings.Contains(md, "verified") {
@@ -2021,6 +2299,44 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "ABC123") {
 		t.Error("expected key ID")
+	}
+}
+
+// TestFormatGPGSignatureMarkdown_SSH verifies the signature Markdown formatter
+// renders SSH-signature details (type, key title, usage) for an SSH-signed
+// commit and omits the PGP key-user block.
+func TestFormatGPGSignatureMarkdown_SSH(t *testing.T) {
+	sig := GPGSignatureOutput{
+		SignatureType:      "SSH",
+		VerificationStatus: "verified",
+		CommitSource:       "gitaly",
+		Key:                &SSHSignatureKey{ID: 11, Title: "MyKey", UsageType: "auth_and_signing"},
+	}
+	md := FormatGPGSignatureMarkdown(sig)
+	for _, want := range []string{"SSH", "verified", "MyKey", "auth_and_signing", "gitaly"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected Markdown to contain %q\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatGPGSignatureMarkdown_X509 verifies the signature Markdown formatter
+// renders X.509-certificate details (subject, email) for an X.509-signed commit.
+func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
+	sig := GPGSignatureOutput{
+		SignatureType:      "X509",
+		VerificationStatus: "unverified",
+		X509Certificate: &X509CertificateOutput{
+			ID:      1,
+			Subject: "CN=gitlab@example.org,OU=Example,O=World",
+			Email:   "gitlab@example.org",
+		},
+	}
+	md := FormatGPGSignatureMarkdown(sig)
+	for _, want := range []string{"X509", "unverified", "CN=gitlab@example.org", "gitlab@example.org"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("expected Markdown to contain %q\n%s", want, md)
+		}
 	}
 }
 
@@ -2173,8 +2489,8 @@ func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
 		Author: gl.Author{Name: "John"},
 	}
 	out := commentToOutput(c)
-	if out.Author != "John" {
-		t.Errorf("Author = %q, want %q", out.Author, "John")
+	if out.Author == nil || out.Author.Name != "John" {
+		t.Errorf("Author = %v, want Name %q", out.Author, "John")
 	}
 }
 
@@ -2372,4 +2688,73 @@ func commitSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]too
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestUserDisplay verifies userDisplay prefers username, falls back to the
+// display name, and renders an em dash for absent or empty authors.
+func TestUserDisplay(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *BasicUserOutput
+		want string
+	}{
+		{"nil author", nil, "—"},
+		{"username preferred", &BasicUserOutput{Username: "u", Name: "N"}, "u"},
+		{"name fallback", &BasicUserOutput{Name: "Only Name"}, "Only Name"},
+		{"empty user", &BasicUserOutput{}, "—"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := userDisplay(tt.in); got != tt.want {
+				t.Errorf("userDisplay(%+v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAuthorToOutput verifies authorToOutput maps a populated gl.Author to a
+// full user object and returns nil for a zero-valued author.
+func TestAuthorToOutput(t *testing.T) {
+	if got := authorToOutput(gl.Author{}); got != nil {
+		t.Errorf("authorToOutput(empty) = %+v, want nil", got)
+	}
+	ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	out := authorToOutput(gl.Author{ID: 7, Username: "dev", Name: "Dev", Email: "d@e", State: "active", Blocked: true, CreatedAt: &ts})
+	if out == nil || out.ID != 7 || out.Username != "dev" || out.Email != "d@e" || out.State != "active" || !out.Blocked || out.CreatedAt == "" {
+		t.Errorf("authorToOutput full = %+v, want fully mapped", out)
+	}
+}
+
+// TestPipelineInfoToOutput_Nil verifies pipelineInfoToOutput returns nil when
+// the commit has no associated pipeline.
+func TestPipelineInfoToOutput_Nil(t *testing.T) {
+	if got := pipelineInfoToOutput(nil); got != nil {
+		t.Errorf("pipelineInfoToOutput(nil) = %+v, want nil", got)
+	}
+}
+
+// TestCommitActionSpecs_DiscoveryMetadata verifies every individual commit tool
+// carries an R-META description containing both a "Returns:" and a "See also:"
+// section, plus natural-language aliases beyond the canonical tool name.
+func TestCommitActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "{}")
+	}))
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") {
+				t.Errorf("%s description missing 'Returns:': %q", spec.Name, desc)
+			}
+			if !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description missing 'See also:': %q", spec.Name, desc)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s has no RelatedActions", spec.Name)
+			}
+			if len(spec.Aliases) < 2 {
+				t.Errorf("%s has too few aliases: %v", spec.Name, spec.Aliases)
+			}
+		})
+	}
 }

@@ -43,6 +43,51 @@ func TestSAMLUsersMetadata_Discoverability(t *testing.T) {
 	}
 }
 
+// TestSAMLLinkGetDeleteMetadata_Discoverability locks in the non-generic
+// discovery metadata for gitlab_group_saml_link_get and
+// gitlab_group_saml_link_delete: an action-specific Usage, distinctive
+// natural-language aliases beyond the tool name, canonical RelatedActions,
+// and an IndividualTool.Description in "Returns: … See also: …" form.
+func TestSAMLLinkGetDeleteMetadata_Discoverability(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupSAMLSpecsByTool(t, ActionSpecs(client))
+
+	cases := []struct {
+		tool    string
+		related string
+	}{
+		{"gitlab_group_saml_link_get", "group.saml_link_list"},
+		{"gitlab_group_saml_link_delete", "group.saml_link_get"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			spec, ok := byTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing %s spec", tc.tool)
+			}
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute") ||
+				strings.Contains(spec.Usage, "Manage a group's SAML group links and SAML-provisioned users") {
+				t.Errorf("%s has generic/empty Usage: %q", tc.tool, spec.Usage)
+			}
+			if !samlAliasHas(spec.Aliases, "saml") {
+				t.Errorf("%s aliases %v missing a 'saml' phrase", tc.tool, spec.Aliases)
+			}
+			if slices.Contains(spec.Aliases, tc.tool) || len(spec.Aliases) < 2 {
+				t.Errorf("%s aliases must be distinctive beyond the tool name, got %v", tc.tool, spec.Aliases)
+			}
+			if !slices.Contains(spec.RelatedActions, tc.related) {
+				t.Errorf("%s related %v missing %s", tc.tool, spec.RelatedActions, tc.related)
+			}
+			if !strings.Contains(spec.IndividualTool.Description, "Returns:") ||
+				!strings.Contains(spec.IndividualTool.Description, "See also") {
+				t.Errorf("%s description missing Returns/See also form: %q", tc.tool, spec.IndividualTool.Description)
+			}
+		})
+	}
+}
+
 func samlAliasHas(aliases []string, sub string) bool {
 	for _, a := range aliases {
 		if strings.Contains(a, sub) {

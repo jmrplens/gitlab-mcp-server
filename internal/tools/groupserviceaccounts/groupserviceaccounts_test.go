@@ -345,6 +345,61 @@ func TestListPATs(t *testing.T) {
 			wantCount: 0,
 		},
 		{
+			name: "passes order_by, sort, filters and date params",
+			input: ListPATInput{
+				GroupID:          "mygroup",
+				ServiceAccountID: 42,
+				OrderBy:          "created_at",
+				Sort:             "desc",
+				Revoked:          new(true),
+				UserID:           7,
+				Search:           "deploy",
+				State:            "active",
+				CreatedAfter:     "2026-01-01T00:00:00Z",
+				CreatedBefore:    "2026-12-31T00:00:00Z",
+				ExpiresAfter:     "2026-02-01",
+				ExpiresBefore:    "2026-11-30",
+				LastUsedAfter:    "2026-03-01T00:00:00Z",
+				LastUsedBefore:   "2026-10-01T00:00:00Z",
+			},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "order_by", "created_at")
+				testutil.AssertQueryParam(t, r, "sort", "desc")
+				testutil.AssertQueryParam(t, r, "revoked", "true")
+				testutil.AssertQueryParam(t, r, "user_id", "7")
+				testutil.AssertQueryParam(t, r, "search", "deploy")
+				testutil.AssertQueryParam(t, r, "state", "active")
+				testutil.AssertQueryParam(t, r, "expires_after", "2026-02-01")
+				testutil.AssertQueryParam(t, r, "expires_before", "2026-11-30")
+				testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"t","scopes":["api"],"user_id":7,"active":true,"revoked":true}]`)
+			},
+			wantCount: 1,
+		},
+		{
+			name:  "passes keyset pagination params",
+			input: ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"}},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertQueryParam(t, r, "pagination", "keyset")
+				testutil.AssertQueryParam(t, r, "page_token", "100")
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			},
+			wantCount: 0,
+		},
+		{
+			name:       "returns error on invalid expires_after",
+			input:      ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, ExpiresAfter: "not-a-date"},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "invalid expires_after format",
+		},
+		{
+			name:       "returns error on invalid expires_before",
+			input:      ListPATInput{GroupID: "mygroup", ServiceAccountID: 42, ExpiresBefore: "not-a-date"},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "invalid expires_before format",
+		},
+		{
 			name:       "returns error when group_id is empty",
 			input:      ListPATInput{ServiceAccountID: 42},
 			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
@@ -570,6 +625,94 @@ func TestRevokePAT(t *testing.T) {
 	}
 }
 
+// TestRotatePAT validates the RotatePAT handler covering success with and
+// without an explicit expires_at, all validation branches, invalid date format,
+// and API errors. It asserts the rotated token value is surfaced in the output.
+func TestRotatePAT(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      RotatePATInput
+		handler    http.HandlerFunc
+		wantErr    bool
+		wantToken  string
+		errContain string
+	}{
+		{
+			name:  "rotates PAT with expires_at",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10, ExpiresAt: "2026-12-31"},
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, pathServiceAccount42PAT+"/10/rotate")
+				testutil.RespondJSON(w, http.StatusOK, `{"id":11,"name":"tok","scopes":["api"],"user_id":42,"active":true,"revoked":false,"token":"glpat-rotated","expires_at":"2026-12-31"}`)
+			},
+			wantToken: "glpat-rotated",
+		},
+		{
+			name:  "rotates PAT without expires_at",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":12,"name":"tok","scopes":["api"],"user_id":42,"active":true,"revoked":false,"token":"glpat-new"}`)
+			},
+			wantToken: "glpat-new",
+		},
+		{
+			name:       "returns error when group_id is empty",
+			input:      RotatePATInput{ServiceAccountID: 42, TokenID: 10},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "group_id",
+		},
+		{
+			name:       "returns error when service_account_id is zero",
+			input:      RotatePATInput{GroupID: "mygroup", TokenID: 10},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "service_account_id",
+		},
+		{
+			name:       "returns error when token_id is zero",
+			input:      RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "token_id",
+		},
+		{
+			name:       "returns error for invalid expires_at format",
+			input:      RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10, ExpiresAt: "not-a-date"},
+			handler:    func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) },
+			wantErr:    true,
+			errContain: "invalid expires_at format",
+		},
+		{
+			name:  "returns error on API failure",
+			input: RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 10},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"rotation error"}`)
+			},
+			wantErr:    true,
+			errContain: "rotate service account PAT",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			out, err := RotatePAT(context.Background(), client, tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("RotatePAT() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContain)
+				}
+				return
+			}
+			if out.Token != tt.wantToken {
+				t.Errorf("Token = %q, want %q", out.Token, tt.wantToken)
+			}
+		})
+	}
+}
+
 // TestToPATOutput_TimeFields verifies the ToPATOutput_TimeFields handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -577,7 +720,7 @@ func TestToPATOutput_TimeFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathServiceAccount42PAT {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id":5,"name":"t1","scopes":["api"],"user_id":42,"active":true,"revoked":false,"created_at":"2026-06-15T10:30:00Z","expires_at":"2026-01-15"}
+				{"id":5,"name":"t1","scopes":["api"],"user_id":42,"active":true,"revoked":false,"created_at":"2026-06-15T10:30:00Z","last_used_at":"2026-06-20T08:00:00Z","expires_at":"2026-01-15"}
 			]`)
 			return
 		}
@@ -600,6 +743,9 @@ func TestToPATOutput_TimeFields(t *testing.T) {
 	}
 	if tok.ExpiresAt != "" && !strings.Contains(tok.ExpiresAt, "2026") {
 		t.Errorf("ExpiresAt = %q, want year 2026", tok.ExpiresAt)
+	}
+	if tok.LastUsedAt == "" {
+		t.Error("LastUsedAt should not be empty when API returns last_used_at")
 	}
 }
 
@@ -748,10 +894,11 @@ func TestFormatPATMarkdownString(t *testing.T) {
 		out := PATOutput{
 			ID: 1, Name: "tok", Active: true, Scopes: []string{"api"},
 			UserID: 42, CreatedAt: "2026-01-01T00:00:00Z",
-			ExpiresAt: "2026-12-31", Token: "secret",
+			LastUsedAt: "2026-06-20T08:00:00Z",
+			ExpiresAt:  "2026-12-31", Token: "secret",
 		}
 		md := FormatPATMarkdownString(out)
-		for _, want := range []string{"tok", "api", "secret", "2026-12-31", "2026-01-01"} {
+		for _, want := range []string{"tok", "api", "secret", "2026-12-31", "2026-01-01", "2026-06-20", "Last Used"} {
 			if !strings.Contains(md, want) {
 				t.Errorf("FormatPATMarkdownString missing %q:\n%s", want, md)
 			}

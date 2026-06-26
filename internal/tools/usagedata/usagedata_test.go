@@ -243,10 +243,11 @@ func TestTrackEvent(t *testing.T) {
 	nsID := int64(1)
 	projID := int64(2)
 	out, err := TrackEvent(t.Context(), client, TrackEventInput{
-		Event:          "test_event",
-		SendToSnowplow: &boolTrue,
-		NamespaceID:    &nsID,
-		ProjectID:      &projID,
+		Event:                "test_event",
+		SendToSnowplow:       &boolTrue,
+		NamespaceID:          &nsID,
+		ProjectID:            &projID,
+		AdditionalProperties: map[string]string{"label": "value"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -282,7 +283,7 @@ func TestTrackEvents(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	out, err := TrackEvents(t.Context(), client, TrackEventsInput{
 		Events: []TrackEventInput{
-			{Event: "event_1"},
+			{Event: "event_1", AdditionalProperties: map[string]string{"label": "value"}},
 			{Event: "event_2"},
 		},
 	})

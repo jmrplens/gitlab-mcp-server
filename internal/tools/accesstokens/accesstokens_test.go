@@ -2006,3 +2006,166 @@ func accessTokenSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 	}
 	return byTool
 }
+
+// TestProjectList_WithOrderingAndKeyset verifies that ProjectList forwards the
+// order_by, sort, and keyset pagination parameters to the GitLab API.
+func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathProjectTokens {
+			q := r.URL.Query()
+			if q.Get("order_by") != "created_at" {
+				t.Errorf("expected order_by=created_at, got %s", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("expected sort=desc, got %s", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "abc" {
+				t.Errorf("expected page_token=abc, got %s", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+	}))
+
+	_, err := ProjectList(context.Background(), client, ProjectListInput{
+		ProjectID:             "42",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGroupList_WithAllFilters verifies that GroupList forwards every list
+// filter (search, revoked, date filters, sort, keyset) to the GitLab API.
+func TestGroupList_WithAllFilters(t *testing.T) {
+	revoked := true
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroupTokens {
+			q := r.URL.Query()
+			checks := map[string]string{
+				"search":           "ci-bot",
+				"revoked":          "true",
+				"created_after":    "2024-01-01",
+				"created_before":   "2024-12-31",
+				"expires_after":    "2025-01-01",
+				"expires_before":   "2025-12-31",
+				"last_used_after":  "2024-06-01",
+				"last_used_before": "2024-06-30",
+				"order_by":         "created_at",
+				"sort":             "created_desc",
+				"pagination":       "keyset",
+				"page_token":       "xyz",
+			}
+			for key, want := range checks {
+				if got := q.Get(key); got != want {
+					t.Errorf("expected %s=%s, got %s", key, want, got)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+	}))
+
+	_, err := GroupList(context.Background(), client, GroupListInput{
+		GroupID:               "10",
+		Search:                "ci-bot",
+		Revoked:               &revoked,
+		CreatedAfter:          "2024-01-01",
+		CreatedBefore:         "2024-12-31",
+		ExpiresAfter:          "2025-01-01",
+		ExpiresBefore:         "2025-12-31",
+		LastUsedAfter:         "2024-06-01",
+		LastUsedBefore:        "2024-06-30",
+		OrderBy:               "created_at",
+		Sort:                  "created_desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "xyz"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestGroupList_InvalidDateFilter verifies that GroupList returns a parse error
+// when a date filter is not in YYYY-MM-DD format, without calling the API.
+func TestGroupList_InvalidDateFilter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("API should not be called when date filter is invalid")
+	}))
+
+	_, err := GroupList(context.Background(), client, GroupListInput{
+		GroupID:      "10",
+		CreatedAfter: "not-a-date",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid created_after, got nil")
+	}
+}
+
+// TestPersonalList_WithAllFilters verifies that PersonalList forwards every list
+// filter (revoked, date filters, sort, keyset) to the GitLab API.
+func TestPersonalList_WithAllFilters(t *testing.T) {
+	revoked := false
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/personal_access_tokens" {
+			q := r.URL.Query()
+			checks := map[string]string{
+				"revoked":          "false",
+				"created_after":    "2024-01-01",
+				"created_before":   "2024-12-31",
+				"expires_after":    "2025-01-01",
+				"expires_before":   "2025-12-31",
+				"last_used_after":  "2024-06-01",
+				"last_used_before": "2024-06-30",
+				"order_by":         "created_at",
+				"sort":             "name_asc",
+				"pagination":       "keyset",
+				"page_token":       "pat-cursor",
+			}
+			for key, want := range checks {
+				if got := q.Get(key); got != want {
+					t.Errorf("expected %s=%s, got %s", key, want, got)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+	}))
+
+	_, err := PersonalList(context.Background(), client, PersonalListInput{
+		Revoked:               &revoked,
+		CreatedAfter:          "2024-01-01",
+		CreatedBefore:         "2024-12-31",
+		ExpiresAfter:          "2025-01-01",
+		ExpiresBefore:         "2025-12-31",
+		LastUsedAfter:         "2024-06-01",
+		LastUsedBefore:        "2024-06-30",
+		OrderBy:               "created_at",
+		Sort:                  "name_asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "pat-cursor"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestPersonalList_InvalidDateFilter verifies that PersonalList returns a parse
+// error when a date filter is malformed, without calling the API.
+func TestPersonalList_InvalidDateFilter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("API should not be called when date filter is invalid")
+	}))
+
+	_, err := PersonalList(context.Background(), client, PersonalListInput{LastUsedBefore: "31-12-2024"})
+	if err == nil {
+		t.Fatal("expected error for invalid last_used_before, got nil")
+	}
+}

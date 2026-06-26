@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -27,40 +28,113 @@ const (
 	fmtCodeFenceEnd = "\n```\n"
 )
 
+// applyScope maps the input scope status strings onto the SDK
+// ListJobsOptions.Scope ([]BuildStateValue under the url tag scope[]),
+// leaving Scope nil when no statuses were requested.
+func applyScope(opts *gl.ListJobsOptions, scope []string) {
+	if len(scope) == 0 {
+		return
+	}
+	scopes := make([]gl.BuildStateValue, len(scope))
+	for i, s := range scope {
+		scopes[i] = gl.BuildStateValue(s)
+	}
+	opts.Scope = &scopes
+}
+
+// applyListOpts copies offset, keyset, and ordering parameters onto the
+// embedded gl.ListOptions of a ListJobsOptions, setting only the values the
+// caller supplied.
+func applyListOpts(opts *gl.ListJobsOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
+	toolutil.ApplyListOptions(&opts.ListOptions, page, keyset)
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
+
+// rawListJobs issues a raw REST GET against a jobs list path, decoding the full
+// documented response (including the SDK-missing archived/source/runner_manager
+// and runner extras) into a slice of [jobAPI]. The supplied opts encode scope,
+// include_retried, and pagination via their url struct tags, and the returned
+// gl.Response preserves the pagination headers for [toolutil.PaginationFromResponse].
+func rawListJobs(ctx context.Context, client *gitlabclient.Client, path string, opts *gl.ListJobsOptions) ([]*jobAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var jobs []*jobAPI
+	resp, err := client.GL().Do(req, &jobs)
+	return jobs, resp, err
+}
+
+// rawGetJob issues a raw REST GET against a single-job path, decoding the full
+// documented response into a [jobAPI].
+func rawGetJob(ctx context.Context, client *gitlabclient.Client, path string) (*jobAPI, *gl.Response, error) {
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var job jobAPI
+	resp, err := client.GL().Do(req, &job)
+	return &job, resp, err
+}
+
+// rawJobsOutput maps a slice of raw-fetch jobs and the response pagination into
+// a [ListOutput].
+func rawJobsOutput(jobs []*jobAPI, resp *gl.Response) ListOutput {
+	out := make([]Output, len(jobs))
+	for i, j := range jobs {
+		out[i] = toOutputAPI(j)
+	}
+	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}
+}
+
 // ListInput defines parameters for listing jobs in a pipeline.
 type ListInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
 	PipelineID     int64                `json:"pipeline_id"              jsonschema:"Pipeline ID to list jobs for,required"`
 	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single CI/CD job.
 type Output struct {
 	toolutil.HintableOutput
-	ID                int64    `json:"id"`
-	Name              string   `json:"name"`
-	Stage             string   `json:"stage"`
-	Status            string   `json:"status"`
-	Ref               string   `json:"ref"`
-	Tag               bool     `json:"tag"`
-	AllowFailure      bool     `json:"allow_failure"`
-	Duration          float64  `json:"duration"`
-	QueuedDuration    float64  `json:"queued_duration"`
-	FailureReason     string   `json:"failure_reason,omitempty"`
-	WebURL            string   `json:"web_url"`
-	PipelineID        int64    `json:"pipeline_id"`
-	CreatedAt         string   `json:"created_at"`
-	StartedAt         string   `json:"started_at,omitempty"`
-	FinishedAt        string   `json:"finished_at,omitempty"`
-	ArtifactsExpireAt string   `json:"artifacts_expire_at,omitempty"`
-	UserUsername      string   `json:"user_username,omitempty"`
-	RunnerID          int64    `json:"runner_id,omitempty"`
-	Coverage          float64  `json:"coverage,omitempty"`
-	TagList           []string `json:"tag_list,omitempty"`
-	ErasedAt          string   `json:"erased_at,omitempty"`
-	CommitSHA         string   `json:"commit_sha,omitempty"`
+	ID                int64                `json:"id"`
+	Name              string               `json:"name"`
+	Stage             string               `json:"stage"`
+	Status            string               `json:"status"`
+	Ref               string               `json:"ref"`
+	Tag               bool                 `json:"tag"`
+	AllowFailure      bool                 `json:"allow_failure"`
+	Duration          float64              `json:"duration"`
+	QueuedDuration    float64              `json:"queued_duration"`
+	FailureReason     string               `json:"failure_reason,omitempty"`
+	WebURL            string               `json:"web_url"`
+	CreatedAt         string               `json:"created_at"`
+	StartedAt         string               `json:"started_at,omitempty"`
+	FinishedAt        string               `json:"finished_at,omitempty"`
+	ArtifactsExpireAt string               `json:"artifacts_expire_at,omitempty"`
+	Coverage          float64              `json:"coverage,omitempty"`
+	TagList           []string             `json:"tag_list,omitempty"`
+	ErasedAt          string               `json:"erased_at,omitempty"`
+	Archived          bool                 `json:"archived,omitempty"`
+	Source            string               `json:"source,omitempty"`
+	Commit            *CommitObject        `json:"commit,omitempty"`
+	Pipeline          *PipelineObject      `json:"pipeline,omitempty"`
+	Project           *ProjectObject       `json:"project,omitempty"`
+	Runner            *RunnerObject        `json:"runner,omitempty"`
+	RunnerManager     *RunnerManagerObject `json:"runner_manager,omitempty"`
+	User              *UserObject          `json:"user,omitempty"`
+	Artifacts         []ArtifactObject     `json:"artifacts,omitempty"`
+	ArtifactsFile     *ArtifactsFileObject `json:"artifacts_file,omitempty"`
 }
 
 // ListOutput holds a paginated list of jobs.
@@ -86,34 +160,22 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListJobsOptions{}
-	if len(input.Scope) > 0 {
-		scopes := make([]gl.BuildStateValue, len(input.Scope))
-		for i, s := range input.Scope {
-			scopes[i] = gl.BuildStateValue(s)
-		}
-		opts.Scope = &scopes
-	}
+	applyScope(opts, input.Scope)
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
-	jobs, resp, err := client.GL().Jobs.ListPipelineJobs(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
+	path := fmt.Sprintf("projects/%s/pipelines/%d/jobs", gl.PathEscape(string(input.ProjectID)), input.PipelineID)
+	jobs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobList", err, http.StatusNotFound,
 			"verify pipeline_id with gitlab_pipeline_list and that you have Reporter+ role on the project")
 	}
 
-	out := make([]Output, len(jobs))
-	for i, j := range jobs {
-		out[i] = ToOutput(j)
-	}
-	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return rawJobsOutput(jobs, resp), nil
 }
 
 // GetInput defines parameters for retrieving a single job.
@@ -136,12 +198,16 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrRequiredInt64("jobGet", "job_id")
 	}
 
-	j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API. A single
+	// unmarshal is naturally tolerant of older instances that omit these fields.
+	path := fmt.Sprintf("projects/%s/jobs/%d", gl.PathEscape(string(input.ProjectID)), input.JobID)
+	j, _, err := rawGetJob(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("jobGet", err, http.StatusNotFound,
 			"verify job_id with gitlab_job_list \u2014 job_id is the global database ID, not the per-pipeline index")
 	}
-	return ToOutput(j), nil
+	return toOutputAPI(j), nil
 }
 
 // TraceInput defines parameters for retrieving a job's trace log.
@@ -275,8 +341,10 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 }
 
 // ToOutput converts a GitLab API [gl.Job] into the package's [Output],
-// formatting timestamps as RFC 3339 strings and flattening the
-// embedded pipeline, runner, user, and commit references.
+// formatting timestamps as RFC 3339 strings and surfacing the embedded
+// commit, pipeline, project, runner, user, and artifact sub-objects on
+// their canonical keys (nested objects trimmed to the documented Jobs API
+// field set per doc/api/jobs.md).
 func ToOutput(j *gl.Job) Output {
 	out := Output{
 		ID:             j.ID,
@@ -290,9 +358,15 @@ func ToOutput(j *gl.Job) Output {
 		QueuedDuration: j.QueuedDuration,
 		FailureReason:  j.FailureReason,
 		WebURL:         j.WebURL,
-		PipelineID:     j.Pipeline.ID,
 		Coverage:       j.Coverage,
 		TagList:        j.TagList,
+		Commit:         commitObject(j.Commit),
+		Pipeline:       pipelineObject(j.Pipeline),
+		Project:        projectObject(j.Project),
+		Runner:         runnerObject(j.Runner),
+		User:           userObject(j.User),
+		Artifacts:      artifactObjects(j.Artifacts),
+		ArtifactsFile:  artifactsFileObject(j.ArtifactsFile),
 	}
 	if j.CreatedAt != nil {
 		out.CreatedAt = j.CreatedAt.Format(time.RFC3339)
@@ -306,17 +380,8 @@ func ToOutput(j *gl.Job) Output {
 	if j.ArtifactsExpireAt != nil {
 		out.ArtifactsExpireAt = j.ArtifactsExpireAt.Format(time.RFC3339)
 	}
-	if j.User != nil {
-		out.UserUsername = j.User.Username
-	}
-	if j.Runner.ID != 0 {
-		out.RunnerID = j.Runner.ID
-	}
 	if j.ErasedAt != nil {
 		out.ErasedAt = j.ErasedAt.Format(time.RFC3339)
-	}
-	if j.Commit != nil {
-		out.CommitSHA = j.Commit.ID
 	}
 	return out
 }
@@ -338,7 +403,10 @@ type ListProjectInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
 	Scope          []string             `json:"scope,omitempty"          jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, waiting_for_resource, manual"`
 	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried jobs in the response"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProject retrieves a paginated list of all CI/CD jobs in a project
@@ -353,62 +421,57 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, errors.New("jobListProject: project_id is required")
 	}
 	opts := &gl.ListJobsOptions{}
-	if len(input.Scope) > 0 {
-		scopes := make([]gl.BuildStateValue, len(input.Scope))
-		for i, s := range input.Scope {
-			scopes[i] = gl.BuildStateValue(s)
-		}
-		opts.Scope = &scopes
-	}
+	applyScope(opts, input.Scope)
 	if input.IncludeRetried {
 		opts.IncludeRetried = new(true)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
-	jbs, resp, err := client.GL().Jobs.ListProjectJobs(string(input.ProjectID), opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented archived/source/runner_manager and runner
+	// extras (absent from gl.Job) are surfaced 1:1 with the Jobs API.
+	path := fmt.Sprintf("projects/%s/jobs", gl.PathEscape(string(input.ProjectID)))
+	jbs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobListProject", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get and that you have Reporter+ role")
 	}
-	out := make([]Output, len(jbs))
-	for i, j := range jbs {
-		out[i] = ToOutput(j)
-	}
-	return ListOutput{Jobs: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return rawJobsOutput(jbs, resp), nil
 }
 
 // BridgeListInput defines parameters for listing pipeline bridge (trigger) jobs.
 type BridgeListInput struct {
-	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
-	PipelineID int64                `json:"pipeline_id" jsonschema:"Pipeline ID to list bridge jobs for,required"`
-	Scope      []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, manual"`
+	ProjectID      toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
+	PipelineID     int64                `json:"pipeline_id" jsonschema:"Pipeline ID to list bridge jobs for,required"`
+	Scope          []string             `json:"scope,omitempty" jsonschema:"Filter by job status: created, pending, running, failed, success, canceled, skipped, manual"`
+	IncludeRetried bool                 `json:"include_retried,omitempty" jsonschema:"Include retried bridge jobs in the response"`
+	OrderBy        string               `json:"order_by,omitempty"        jsonschema:"Column to order keyset-paginated results by"`
+	Sort           string               `json:"sort,omitempty"            jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // BridgeOutput represents a pipeline bridge (trigger) job.
 type BridgeOutput struct {
-	ID                 int64   `json:"id"`
-	Name               string  `json:"name"`
-	Stage              string  `json:"stage"`
-	Status             string  `json:"status"`
-	Ref                string  `json:"ref"`
-	Tag                bool    `json:"tag"`
-	AllowFailure       bool    `json:"allow_failure"`
-	Duration           float64 `json:"duration"`
-	QueuedDuration     float64 `json:"queued_duration"`
-	FailureReason      string  `json:"failure_reason,omitempty"`
-	WebURL             string  `json:"web_url"`
-	Coverage           float64 `json:"coverage,omitempty"`
-	UserUsername       string  `json:"user_username,omitempty"`
-	CreatedAt          string  `json:"created_at"`
-	StartedAt          string  `json:"started_at,omitempty"`
-	FinishedAt         string  `json:"finished_at,omitempty"`
-	DownstreamPipeline int64   `json:"downstream_pipeline_id,omitempty"`
+	ID                 int64               `json:"id"`
+	Name               string              `json:"name"`
+	Stage              string              `json:"stage"`
+	Status             string              `json:"status"`
+	Ref                string              `json:"ref"`
+	Tag                bool                `json:"tag"`
+	AllowFailure       bool                `json:"allow_failure"`
+	Duration           float64             `json:"duration"`
+	QueuedDuration     float64             `json:"queued_duration"`
+	FailureReason      string              `json:"failure_reason,omitempty"`
+	WebURL             string              `json:"web_url"`
+	Coverage           float64             `json:"coverage,omitempty"`
+	CreatedAt          string              `json:"created_at"`
+	StartedAt          string              `json:"started_at,omitempty"`
+	FinishedAt         string              `json:"finished_at,omitempty"`
+	ErasedAt           string              `json:"erased_at,omitempty"`
+	Commit             *CommitObject       `json:"commit,omitempty"`
+	Pipeline           *PipelineInfoObject `json:"pipeline,omitempty"`
+	User               *UserObject         `json:"user,omitempty"`
+	DownstreamPipeline *PipelineInfoObject `json:"downstream_pipeline,omitempty"`
 }
 
 // BridgeListOutput holds a paginated list of bridge jobs.
@@ -419,25 +482,28 @@ type BridgeListOutput struct {
 }
 
 // BridgeToOutput converts a GitLab API [gl.Bridge] into the package's
-// [BridgeOutput], formatting timestamps as RFC 3339 strings and
-// flattening the embedded user and downstream pipeline references.
+// [BridgeOutput], formatting timestamps as RFC 3339 strings and surfacing
+// the embedded commit, pipeline, user, and downstream_pipeline sub-objects
+// on their canonical keys (nested objects trimmed to the documented Jobs API
+// field set per doc/api/jobs.md).
 func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 	out := BridgeOutput{
-		ID:             b.ID,
-		Name:           b.Name,
-		Stage:          b.Stage,
-		Status:         b.Status,
-		Ref:            b.Ref,
-		Tag:            b.Tag,
-		AllowFailure:   b.AllowFailure,
-		Duration:       b.Duration,
-		QueuedDuration: b.QueuedDuration,
-		FailureReason:  b.FailureReason,
-		WebURL:         b.WebURL,
-		Coverage:       b.Coverage,
-	}
-	if b.User != nil {
-		out.UserUsername = b.User.Username
+		ID:                 b.ID,
+		Name:               b.Name,
+		Stage:              b.Stage,
+		Status:             b.Status,
+		Ref:                b.Ref,
+		Tag:                b.Tag,
+		AllowFailure:       b.AllowFailure,
+		Duration:           b.Duration,
+		QueuedDuration:     b.QueuedDuration,
+		FailureReason:      b.FailureReason,
+		WebURL:             b.WebURL,
+		Coverage:           b.Coverage,
+		Commit:             commitObject(b.Commit),
+		Pipeline:           pipelineInfoValueObject(b.Pipeline),
+		User:               userObject(b.User),
+		DownstreamPipeline: pipelineInfoObject(b.DownstreamPipeline),
 	}
 	if b.CreatedAt != nil {
 		out.CreatedAt = b.CreatedAt.Format(time.RFC3339)
@@ -448,8 +514,8 @@ func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 	if b.FinishedAt != nil {
 		out.FinishedAt = b.FinishedAt.Format(time.RFC3339)
 	}
-	if b.DownstreamPipeline != nil {
-		out.DownstreamPipeline = b.DownstreamPipeline.ID
+	if b.ErasedAt != nil {
+		out.ErasedAt = b.ErasedAt.Format(time.RFC3339)
 	}
 	return out
 }
@@ -469,19 +535,11 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 		return BridgeListOutput{}, toolutil.ErrRequiredInt64("jobListBridges", "pipeline_id")
 	}
 	opts := &gl.ListJobsOptions{}
-	if len(input.Scope) > 0 {
-		scopes := make([]gl.BuildStateValue, len(input.Scope))
-		for i, s := range input.Scope {
-			scopes[i] = gl.BuildStateValue(s)
-		}
-		opts.Scope = &scopes
+	applyScope(opts, input.Scope)
+	if input.IncludeRetried {
+		opts.IncludeRetried = new(true)
 	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
 	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -706,12 +764,13 @@ func KeepArtifacts(ctx context.Context, client *gitlabclient.Client, input Actio
 
 // PlayInput defines parameters for running a manual job with optional variables.
 type PlayInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	JobID     int64                `json:"job_id"     jsonschema:"Job ID to run,required"`
-	Variables []JobVariableInput   `json:"variables,omitempty" jsonschema:"Job variables to pass"`
+	ProjectID              toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	JobID                  int64                `json:"job_id"     jsonschema:"Job ID to run,required"`
+	JobVariablesAttributes []JobVariableInput   `json:"job_variables_attributes,omitempty" jsonschema:"Job variables to inject into the manual job run"`
 }
 
-// JobVariableInput represents a variable to pass when playing a job.
+// JobVariableInput represents a variable to pass when playing a job. It mirrors
+// gl.JobVariableOptions (key/value/variable_type).
 type JobVariableInput struct {
 	Key          string `json:"key"           jsonschema:"Variable key,required"`
 	Value        string `json:"value"         jsonschema:"Variable value"`
@@ -733,9 +792,9 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 		return Output{}, toolutil.ErrRequiredInt64("jobPlay", "job_id")
 	}
 	opts := &gl.PlayJobOptions{}
-	if len(input.Variables) > 0 {
-		vars := make([]*gl.JobVariableOptions, len(input.Variables))
-		for i, v := range input.Variables {
+	if len(input.JobVariablesAttributes) > 0 {
+		vars := make([]*gl.JobVariableOptions, len(input.JobVariablesAttributes))
+		for i, v := range input.JobVariablesAttributes {
 			jv := &gl.JobVariableOptions{
 				Key:   new(v.Key),
 				Value: new(v.Value),

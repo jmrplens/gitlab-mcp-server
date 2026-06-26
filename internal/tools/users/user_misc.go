@@ -1,9 +1,12 @@
 package users
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -28,6 +31,66 @@ func CurrentUserStatus(ctx context.Context, client *gitlabclient.Client, _ Curre
 	return toStatusOutput(s), nil
 }
 
+// UploadCurrentUserAvatarInput defines parameters for uploading the current
+// authenticated user's avatar. Exactly one of FilePath or ContentBase64 must be
+// provided. There is no user identifier: the GitLab endpoint always targets the
+// token's own user (PUT /user/avatar).
+type UploadCurrentUserAvatarInput struct {
+	Filename      string `json:"filename" jsonschema:"Avatar filename (e.g. avatar.png),required"`
+	FilePath      string `json:"file_path,omitempty" jsonschema:"Absolute path to a local image file on the MCP server filesystem. Alternative to content_base64 for files too large to base64-encode. Only one of file_path or content_base64 should be provided."`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"Base64-encoded image content. Only one of file_path or content_base64 should be provided."`
+}
+
+// UploadCurrentUserAvatar uploads or replaces the avatar for the current
+// authenticated user. Accepts either file_path (local file) or content_base64
+// (base64-encoded string), mirroring the project avatar upload tool.
+func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, input UploadCurrentUserAvatarInput) (Output, error) {
+	if err := ctx.Err(); err != nil {
+		return Output{}, err
+	}
+	if input.Filename == "" {
+		return Output{}, errors.New("upload_user_avatar: filename is required")
+	}
+
+	hasFilePath := input.FilePath != ""
+	hasBase64 := input.ContentBase64 != ""
+
+	if hasFilePath && hasBase64 {
+		return Output{}, errors.New("upload_user_avatar: provide either file_path or content_base64, not both")
+	}
+	if !hasFilePath && !hasBase64 {
+		return Output{}, errors.New("upload_user_avatar: either file_path or content_base64 is required")
+	}
+
+	var reader io.Reader
+	if hasFilePath {
+		cfg := toolutil.GetUploadConfig()
+		f, _, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
+		if err != nil {
+			return Output{}, fmt.Errorf("upload_user_avatar: %w", err)
+		}
+		defer f.Close()
+		reader = f
+	} else {
+		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
+		if err != nil {
+			return Output{}, fmt.Errorf("upload_user_avatar: invalid base64 content: %w", err)
+		}
+		reader = bytes.NewReader(decoded)
+	}
+
+	u, _, err := client.GL().Users.UploadAvatar(reader, input.Filename, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("upload_user_avatar", err,
+				"avatar must be JPG/PNG/GIF and under 200 KB; verify filename has a valid image extension")
+		}
+		return Output{}, toolutil.WrapErrWithStatusHint("upload_user_avatar", err, http.StatusUnauthorized,
+			"verify your token is valid with the api scope; the avatar is set for the token's own user")
+	}
+	return toOutput(u), nil
+}
+
 // UserActivityOutput represents a user activity entry.
 type UserActivityOutput struct {
 	Username       string `json:"username"`
@@ -43,8 +106,10 @@ type UserActivitiesOutput struct {
 // GetUserActivitiesInput holds parameters for listing user activities (admin only).
 type GetUserActivitiesInput struct {
 	From    string `json:"from,omitempty" jsonschema:"Only activities after this date (YYYY-MM-DD)"`
-	Page    int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetUserActivities retrieves user activity entries (admin only).
@@ -53,9 +118,9 @@ func GetUserActivities(ctx context.Context, client *gitlabclient.Client, input G
 		return UserActivitiesOutput{}, err
 	}
 
-	opts := &gl.GetUserActivitiesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.GetUserActivitiesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.From != "" {
 		d := gl.ISOTime(parseDate(input.From))
 		opts.From = &d
@@ -99,8 +164,10 @@ type UserMembershipsOutput struct {
 type GetUserMembershipsInput struct {
 	UserID  int64  `json:"user_id" jsonschema:"The ID of the user,required"`
 	Type    string `json:"type,omitempty" jsonschema:"Filter by membership type: Project or Namespace"`
-	Page    int64  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (max 100)"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort order for keyset pagination: asc or desc"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetUserMemberships retrieves a user's project and group memberships.
@@ -112,9 +179,9 @@ func GetUserMemberships(ctx context.Context, client *gitlabclient.Client, input 
 		return UserMembershipsOutput{}, err
 	}
 
-	opts := &gl.GetUserMembershipOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.GetUserMembershipOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Type != "" {
 		opts.Type = new(input.Type)
 	}

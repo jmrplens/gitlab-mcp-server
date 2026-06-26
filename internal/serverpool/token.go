@@ -26,7 +26,7 @@ var serverManagedRequestOptions = []requestOptionAlias{
 	{name: "META_TOOLS", headers: []string{"META_TOOLS", "META-TOOLS"}, deprecated: true},
 	{name: "TOOL_SURFACE", headers: []string{"TOOL_SURFACE", "TOOL-SURFACE"}},
 	{name: "META_PARAM_SCHEMA", headers: []string{"META_PARAM_SCHEMA", "META-PARAM-SCHEMA"}},
-	{name: "GITLAB_ENTERPRISE", headers: []string{"GITLAB_ENTERPRISE", "GITLAB-ENTERPRISE", "ENTERPRISE"}},
+	{name: "GITLAB_TIER", headers: []string{"GITLAB_TIER", "GITLAB-TIER", "TIER"}},
 	{name: "GITLAB_READ_ONLY", headers: []string{"GITLAB_READ_ONLY", "GITLAB-READ-ONLY", "READ-ONLY"}},
 	{name: "GITLAB_SAFE_MODE", headers: []string{"GITLAB_SAFE_MODE", "GITLAB-SAFE-MODE", "SAFE-MODE"}},
 	{name: "EMBEDDED_RESOURCES", headers: []string{"EMBEDDED_RESOURCES", "EMBEDDED-RESOURCES"}},

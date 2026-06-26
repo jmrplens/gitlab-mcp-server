@@ -6,12 +6,21 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// assertQueryParam fails the test when query parameter key does not equal want.
+func assertQueryParam(t *testing.T, q url.Values, key, want string) {
+	t.Helper()
+	if got := q.Get(key); got != want {
+		t.Errorf("expected %s=%s, got %q", key, want, got)
+	}
+}
 
 const (
 	// pathGroupLabels identifies the path group labels constant used by this package.
@@ -509,6 +518,57 @@ func TestList_WithPaginationParams(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 2 {
 		t.Errorf("TotalPages = %d, want 2", out.Pagination.TotalPages)
+	}
+}
+
+// TestList_WithKeysetAndSort verifies that keyset pagination parameters,
+// order_by, sort, and the archived filter are forwarded to the GitLab API.
+func TestList_WithKeysetAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathGroupLabels {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		assertQueryParam(t, q, "pagination", "keyset")
+		assertQueryParam(t, q, "page_token", "cursor-42")
+		assertQueryParam(t, q, "order_by", "name")
+		assertQueryParam(t, q, "sort", "desc")
+		assertQueryParam(t, q, "archived", "true")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	archived := true
+	_, err := List(context.Background(), client, ListInput{
+		GroupID:               "10",
+		OrderBy:               "name",
+		Sort:                  "desc",
+		Archived:              &archived,
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-42"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+}
+
+// TestList_ArchivedFalse verifies the archived filter forwards a false value
+// (omit-for-both semantics live in the schema; an explicit false is sent).
+func TestList_ArchivedFalse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGroupLabels {
+			if got := r.URL.Query().Get("archived"); got != "false" {
+				t.Errorf("expected archived=false, got %q", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	archived := false
+	_, err := List(context.Background(), client, ListInput{GroupID: "10", Archived: &archived})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
 	}
 }
 

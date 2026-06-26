@@ -66,3 +66,41 @@ func TestFatalInitialProviderError_IgnoresModelBehaviorFailures(t *testing.T) {
 		t.Fatalf("fatalInitialProviderError() error = %v, want nil for task-level failures", err)
 	}
 }
+
+// TestIsRetriableModelOutputFailure verifies that only malformed model tool-call
+// output (empty/invalid arguments) is treated as retriable, while successes and
+// genuine wrong-choice / execution failures are not.
+func TestIsRetriableModelOutputFailure(t *testing.T) {
+	withModelError := func(content string) taskResult {
+		r := taskResult{}
+		r.Trace.Events = []traceEvent{{Kind: "model_error", Content: content, IsError: true}}
+		return r
+	}
+	cases := []struct {
+		name   string
+		result taskResult
+		want   bool
+	}{
+		{"invalid args", withModelError("gitlab_execute_action tool call call_1 " + markerInvalidToolArgs + ": invalid character '<'"), true},
+		{"empty args", withModelError("gitlab_execute_action tool call call_1 " + markerEmptyToolArgs), true},
+		{"success not retried", taskResult{FinalSuccess: true}, false},
+		{"wrong choice not retried", func() taskResult {
+			r := taskResult{}
+			r.Notes = []string{"expected action issue.create but model called issue.list"}
+			r.Trace.Events = []traceEvent{{Kind: "validation", Content: "action mismatch"}}
+			return r
+		}(), false},
+		{"gitlab execution error not retried", func() taskResult {
+			r := taskResult{}
+			r.Trace.Events = []traceEvent{{Kind: "tool_result", Content: "404 Project Not Found", IsError: true}}
+			return r
+		}(), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRetriableModelOutputFailure(tc.result); got != tc.want {
+				t.Fatalf("isRetriableModelOutputFailure() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

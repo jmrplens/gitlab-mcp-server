@@ -15,12 +15,15 @@ import (
 // ListInput defines parameters for listing to-do items.
 type ListInput struct {
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 	Action    string `json:"action,omitempty"     jsonschema:"Filter by action: assigned, mentioned, build_failed, marked, approval_required, directly_addressed"`
 	AuthorID  int64  `json:"author_id,omitempty"  jsonschema:"Filter by author user ID"`
 	ProjectID int64  `json:"project_id,omitempty" jsonschema:"Filter by project ID"`
 	GroupID   int64  `json:"group_id,omitempty"   jsonschema:"Filter by group ID"`
 	State     string `json:"state,omitempty"      jsonschema:"Filter by state: pending or done (default: pending)"`
 	Type      string `json:"type,omitempty"       jsonschema:"Filter by target type: Issue, MergeRequest, DesignManagement::Design, AlertManagement::Alert"`
+	OrderBy   string `json:"order_by,omitempty"   jsonschema:"Order results by field (e.g. id, created_at). Combine with sort."`
+	Sort      string `json:"sort,omitempty"       jsonschema:"Sort direction: asc or desc."`
 }
 
 // MarkDoneInput defines parameters for marking a single to-do item as done.
@@ -31,18 +34,21 @@ type MarkDoneInput struct {
 // MarkAllDoneInput defines parameters for marking all to-do items as done.
 type MarkAllDoneInput struct{}
 
-// Output represents a single to-do item.
+// Output represents a single to-do item. It mirrors gl.Todo: action_name and
+// target_type carry the SDK enum types, and the project/author/target
+// sub-objects are surfaced in full per the 1:1 audit policy (no flattened
+// scalar duplicates).
 type Output struct {
-	ID          int64  `json:"id"`
-	ActionName  string `json:"action_name"`
-	TargetType  string `json:"target_type"`
-	TargetTitle string `json:"target_title"`
-	TargetURL   string `json:"target_url"`
-	Body        string `json:"body,omitempty"`
-	State       string `json:"state"`
-	ProjectName string `json:"project_name,omitempty"`
-	AuthorName  string `json:"author_name,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
+	ID         int64             `json:"id"`
+	Project    *BasicProjectOut  `json:"project,omitempty"`
+	Author     *BasicUserOut     `json:"author,omitempty"`
+	ActionName gl.TodoAction     `json:"action_name"`
+	TargetType gl.TodoTargetType `json:"target_type"`
+	Target     *TodoTargetOut    `json:"target,omitempty"`
+	TargetURL  string            `json:"target_url"`
+	Body       string            `json:"body,omitempty"`
+	State      string            `json:"state"`
+	CreatedAt  string            `json:"created_at,omitempty"`
 }
 
 // ListOutput holds a paginated list of to-do items.
@@ -69,20 +75,14 @@ type MarkAllDoneOutput struct {
 func toOutput(t *gl.Todo) Output {
 	out := Output{
 		ID:         t.ID,
-		ActionName: string(t.ActionName),
-		TargetType: string(t.TargetType),
+		Project:    basicProjectOut(t.Project),
+		Author:     basicUserOut(t.Author),
+		ActionName: t.ActionName,
+		TargetType: t.TargetType,
+		Target:     todoTargetOut(t.Target),
 		TargetURL:  t.TargetURL,
 		Body:       t.Body,
 		State:      t.State,
-	}
-	if t.Target != nil {
-		out.TargetTitle = t.Target.Title
-	}
-	if t.Project != nil {
-		out.ProjectName = t.Project.Name
-	}
-	if t.Author != nil {
-		out.AuthorName = t.Author.Username
 	}
 	if t.CreatedAt != nil {
 		out.CreatedAt = t.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -97,11 +97,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := &gl.ListTodosOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Action != "" {
 		action := gl.TodoAction(input.Action)

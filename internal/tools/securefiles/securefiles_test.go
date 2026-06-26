@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -267,7 +268,10 @@ func TestList_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "3", PrevPage: "1"},
 		)
 	}))
-	out, err := List(t.Context(), client, ListInput{ProjectID: "1", Page: 2, PerPage: 2})
+	out, err := List(t.Context(), client, ListInput{
+		ProjectID:       "1",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -311,5 +315,138 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
+	}
+}
+
+// fullSecureFileJSON is a secure file response with every SDK field populated,
+// including the nested certificate metadata (issuer/subject/expires_at).
+const fullSecureFileJSON = `{
+	"id": 7,
+	"name": "cert.cer",
+	"checksum": "deadbeef",
+	"checksum_algorithm": "sha256",
+	"created_at": "2024-01-02T03:04:05Z",
+	"expires_at": "2025-01-02T03:04:05Z",
+	"metadata": {
+		"id": "00:11:22",
+		"issuer": {"C": "US", "O": "Acme", "CN": "Acme Root CA", "OU": "Sec"},
+		"subject": {"C": "US", "O": "Acme", "CN": "service.example.com", "OU": "Eng", "UID": "u-1"},
+		"expires_at": "2026-06-01T00:00:00Z"
+	}
+}`
+
+// TestShow_FullMetadata verifies Show maps every SecureFile field including the
+// nested certificate metadata sub-object (issuer, subject, expires_at).
+func TestShow_FullMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/secure_files/7" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, fullSecureFileJSON)
+	}))
+	out, err := Show(t.Context(), client, ShowInput{ProjectID: "1", FileID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.CreatedAt == nil || !out.CreatedAt.Equal(time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)) {
+		t.Errorf("CreatedAt = %v, want 2024-01-02T03:04:05Z", out.CreatedAt)
+	}
+	if out.ExpiresAt == nil || !out.ExpiresAt.Equal(time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)) {
+		t.Errorf("ExpiresAt = %v, want 2025-01-02T03:04:05Z", out.ExpiresAt)
+	}
+	if out.Metadata == nil {
+		t.Fatal("expected non-nil Metadata")
+	}
+	if out.Metadata.ID != "00:11:22" {
+		t.Errorf("Metadata.ID = %q, want 00:11:22", out.Metadata.ID)
+	}
+	wantIssuer := SecureFileIssuer{C: "US", O: "Acme", CN: "Acme Root CA", OU: "Sec"}
+	if out.Metadata.Issuer != wantIssuer {
+		t.Errorf("Issuer = %+v, want %+v", out.Metadata.Issuer, wantIssuer)
+	}
+	wantSubject := SecureFileSubject{C: "US", O: "Acme", CN: "service.example.com", OU: "Eng", UID: "u-1"}
+	if out.Metadata.Subject != wantSubject {
+		t.Errorf("Subject = %+v, want %+v", out.Metadata.Subject, wantSubject)
+	}
+	if out.Metadata.ExpiresAt == nil || !out.Metadata.ExpiresAt.Equal(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("Metadata.ExpiresAt = %v, want 2026-06-01T00:00:00Z", out.Metadata.ExpiresAt)
+	}
+}
+
+// TestList_KeysetPagination verifies List forwards keyset pagination
+// (order_by, sort, pagination, page_token) onto the request query string.
+func TestList_KeysetPagination(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/secure_files" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := List(t.Context(), client, ListInput{
+		ProjectID:             "1",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=42"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestFormatShowMarkdown_FullMetadata verifies the detail markdown renders the
+// timestamps (non-nil branch) and the certificate metadata section.
+func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
+	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	mdExpires := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	md := FormatShowMarkdown(SecureFileItem{
+		ID:                7,
+		Name:              "cert.cer",
+		Checksum:          "deadbeef",
+		ChecksumAlgorithm: "sha256",
+		CreatedAt:         &created,
+		ExpiresAt:         &expires,
+		Metadata: &SecureFileMetadata{
+			ID:        "00:11:22",
+			Issuer:    SecureFileIssuer{CN: "Acme Root CA"},
+			Subject:   SecureFileSubject{CN: "service.example.com"},
+			ExpiresAt: &mdExpires,
+		},
+	})
+	for _, want := range []string{
+		"2024-01-02T03:04:05Z", "2025-01-02T03:04:05Z", "Certificate Metadata",
+		"00:11:22", "Acme Root CA", "service.example.com", "2026-06-01T00:00:00Z",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
+// Expires At column, including the "—" placeholder for files without expiry.
+func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
+	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{
+		{ID: 1, Name: "a.pem", ChecksumAlgorithm: "sha256", ExpiresAt: &expires},
+		{ID: 2, Name: "b.pem", ChecksumAlgorithm: "sha256"},
+	}})
+	if !strings.Contains(md, "Expires At") {
+		t.Errorf("missing Expires At header:\n%s", md)
+	}
+	if !strings.Contains(md, "2025-01-02T03:04:05Z") {
+		t.Errorf("missing rendered expiry:\n%s", md)
+	}
+	if !strings.Contains(md, "—") {
+		t.Errorf("missing placeholder for absent expiry:\n%s", md)
 	}
 }

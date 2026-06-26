@@ -53,10 +53,14 @@ func toItem(m *gl.BroadcastMessage) MessageItem {
 
 // List.
 
-// ListInput is the input for listing broadcast messages.
+// ListInput is the input for listing broadcast messages. It mirrors
+// v2.ListBroadcastMessagesOptions (which embeds v2.ListOptions), exposing
+// offset and keyset pagination plus order_by/sort ordering controls.
 type ListInput struct {
-	Page    int64 `json:"page,omitempty" jsonschema:"Page number"`
-	PerPage int64 `json:"per_page,omitempty" jsonschema:"Items per page"`
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, created_at, updated_at)"`
+	Sort    string `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListOutput is the output for listing broadcast messages.
@@ -68,9 +72,9 @@ type ListOutput struct {
 
 // List retrieves all broadcast messages.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListBroadcastMessagesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.ListBroadcastMessagesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
 	msgs, resp, err := client.GL().BroadcastMessage.ListBroadcastMessages(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -86,6 +90,21 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Messages:   items,
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}, nil
+}
+
+// applyOrderSort copies non-empty order_by/sort values onto opts. It mirrors
+// the order_by and sort fields embedded in v2.ListBroadcastMessagesOptions via
+// v2.ListOptions.
+func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
+	if opts == nil {
+		return
+	}
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
 }
 
 // Get.

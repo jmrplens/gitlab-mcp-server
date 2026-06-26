@@ -30,6 +30,8 @@ Environment overrides:
   EVAL_SURFACE_CASE_SET     Case set to run: ce, enterprise, or all. Defaults to ce for CE runtime and enterprise for Enterprise runtime.
   EVAL_SURFACE_FIXTURE_SMOKE Set true to prepare and smoke-test fixtures for selected presets without model calls.
   EVAL_SURFACE_PUBLISH_DOCS Set false to skip README/docs publication for full multi-preset runs.
+  EVAL_SURFACE_TOLERATE_MODEL_FAILURES Set true to record genuine per-task model failures without blocking docs publish (harness/validation failures still block).
+  EVAL_SURFACE_TASK         Comma-separated task IDs to run within the preset (passes --task), e.g. MT-110 or MS-038. Use for targeted re-tests of specific cases.
   EVAL_SURFACE_OUT_ROOT     Artifact root (default: dist/evaluation/surfaces).
   EVAL_SURFACE_RUN_DIR      Exact artifact directory for this run.
   EVAL_SURFACE_TIMESTAMP    UTC-like timestamp used in names.
@@ -135,6 +137,14 @@ fi
 enterprise=false
 if bool_enabled "${EVAL_SURFACE_ENTERPRISE:-${ENTERPRISE:-}}"; then
   enterprise=true
+fi
+# When set, genuine per-task model failures (process_ok report_failed) are recorded
+# in the report but do not block docs publication. Harness/validation failures
+# (process_failed) still block. Lets a multi-model comparison publish even when a
+# weaker model hard-fails a task.
+tolerate_model_failures=0
+if bool_enabled "${EVAL_SURFACE_TOLERATE_MODEL_FAILURES:-${TOLERATE_MODEL_FAILURES:-}}"; then
+  tolerate_model_failures=1
 fi
 if [[ "$requested_preset" == docker-enterprise-* ]]; then
   enterprise=true
@@ -291,7 +301,11 @@ retry_setup_gitlab() {
 run_evaluator() {
   local name="$1"
   shift
-  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false "$@"
+  local task_args=()
+  if [[ -n "${EVAL_SURFACE_TASK:-}" ]]; then
+    task_args=(--task "$EVAL_SURFACE_TASK")
+  fi
+  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false "${task_args[@]}" "$@"
 }
 
 run_fixture_smoke() {
@@ -463,7 +477,11 @@ for preset in "${presets[@]}"; do
       printf '%s: process_ok report_clean\n' "$preset" | tee -a "$status_file"
     else
       printf '%s: process_ok report_failed\n' "$preset" | tee -a "$status_file"
-      preset_status=1
+      if [[ "$tolerate_model_failures" == "1" ]]; then
+        printf '%s: report_failed tolerated (EVAL_SURFACE_TOLERATE_MODEL_FAILURES set); recorded but not blocking publish\n' "$preset" | tee -a "$status_file"
+      else
+        preset_status=1
+      fi
     fi
   else
     printf '%s: process_failed report_unknown\n' "$preset" | tee -a "$status_file"

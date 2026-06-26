@@ -487,7 +487,8 @@ func TestListProject_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID: "10", Page: 1, PerPage: 2,
+		ProjectID:       "10",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -497,6 +498,40 @@ func TestListProject_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 3 {
 		t.Errorf("TotalPages = %d, want 3", out.Pagination.TotalPages)
+	}
+}
+
+// TestListProject_WithKeyset verifies that ListProject forwards keyset
+// pagination and ordering parameters (order_by, sort, pagination, page_token)
+// to the GitLab API query string.
+// The mock GitLab API at /api/v4/projects/10/deploy_tokens (GET) responds with HTTP OK.
+// It asserts each keyset query parameter is propagated onto the request URL.
+func TestListProject_WithKeyset(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/10/deploy_tokens" {
+			query = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"tok1","username":"u","scopes":["read_repository"]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListProject(context.Background(), client, ListProjectInput{
+		ProjectID:             "10",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.DeployTokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
+	}
+	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=5"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
 	}
 }
 
@@ -563,7 +598,8 @@ func TestListGroup_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID: "5", Page: 2, PerPage: 1,
+		GroupID:         "5",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -573,6 +609,40 @@ func TestListGroup_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 3 {
 		t.Errorf("TotalPages = %d, want 3", out.Pagination.TotalPages)
+	}
+}
+
+// TestListGroup_WithKeyset verifies that ListGroup forwards keyset pagination
+// and ordering parameters (order_by, sort, pagination, page_token) to the
+// GitLab API query string.
+// The mock GitLab API at /api/v4/groups/5/deploy_tokens (GET) responds with HTTP OK.
+// It asserts each keyset query parameter is propagated onto the request URL.
+func TestListGroup_WithKeyset(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/5/deploy_tokens" {
+			query = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"grp-tok","username":"u","scopes":["read_repository"]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListGroup(context.Background(), client, ListGroupInput{
+		GroupID:               "5",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "3"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.DeployTokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(out.DeployTokens))
+	}
+	for _, want := range []string{"order_by=id", "sort=asc", "pagination=keyset", "page_token=3"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
 	}
 }
 

@@ -167,6 +167,58 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestMemberRoleOptions_UnknownActionKeepsGenericDefaults verifies that an
+// action name with no entry in memberRoleActionMeta falls through to the
+// generic catalog defaults (no panic, generic Usage, single alias).
+func TestMemberRoleOptions_UnknownActionKeepsGenericDefaults(t *testing.T) {
+	opts := memberRoleOptions("nonexistent_action", "gitlab_unknown_member_role")
+	if opts.Usage != "Use to execute memberroles domain action." {
+		t.Fatalf("Usage = %q, want generic default", opts.Usage)
+	}
+	if len(opts.Aliases) != 1 || opts.Aliases[0] != "gitlab_unknown_member_role" {
+		t.Fatalf("Aliases = %v, want only the individual tool name", opts.Aliases)
+	}
+	if len(opts.RelatedActions) != 0 {
+		t.Fatalf("RelatedActions = %v, want none", opts.RelatedActions)
+	}
+	if len(opts.ParameterGuidance) != 0 {
+		t.Fatalf("ParameterGuidance = %v, want none", opts.ParameterGuidance)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Fatalf("Description = %q, want empty", opts.IndividualTool.Description)
+	}
+}
+
+// TestMemberRoleActionMeta_AllActionsHaveRichMetadata verifies every canonical
+// member role action carries non-generic Usage, natural-language Aliases, and a
+// "Returns: … See also: …" individual-tool description (1:1 audit R-META).
+func TestMemberRoleActionMeta_AllActionsHaveRichMetadata(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, memberRolesActionHandler()))
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if spec.Usage == "" || spec.Usage == "Use to execute memberroles domain action." {
+				t.Errorf("Usage = %q, want action-specific text", spec.Usage)
+			}
+			hasNLAlias := false
+			for _, a := range spec.Aliases {
+				if !strings.HasPrefix(a, "gitlab_") {
+					hasNLAlias = true
+					break
+				}
+			}
+			if !hasNLAlias {
+				t.Errorf("Aliases = %v, want at least one natural-language alias", spec.Aliases)
+			}
+			if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
+				t.Errorf("Description = %q, want Returns:/See also: structure", spec.IndividualTool.Description)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("RelatedActions empty for %s", spec.IndividualTool.Name)
+			}
+		})
+	}
+}
+
 func memberRolesActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path

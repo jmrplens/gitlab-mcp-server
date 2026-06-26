@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -25,9 +27,9 @@ const fmtUnexpErr = "unexpected error: %v"
 var groupBoardJSON = `{
 	"id": 1,
 	"name": "Development",
-	"group": {"id": 42, "name": "mygroup"},
-	"milestone": {"id": 5, "title": "v1.0"},
-	"labels": [{"name": "bug"}, {"name": "feature"}],
+	"group": {"id": 42, "name": "mygroup", "path": "mygroup", "full_path": "mygroup", "visibility": "private", "web_url": "https://gitlab.example.com/groups/mygroup", "created_at": "2026-01-01T00:00:00Z"},
+	"milestone": {"id": 5, "title": "v1.0", "state": "active", "created_at": "2026-01-01T00:00:00Z", "due_date": "2026-03-01"},
+	"labels": [{"id": 1, "name": "bug", "priority": 1}, {"id": 2, "name": "feature"}],
 	"lists": [
 		{"id": 10, "label": {"id": 20, "name": "To Do"}, "position": 0, "max_issue_count": 10}
 	]
@@ -36,15 +38,18 @@ var groupBoardJSON = `{
 // groupBoardListJSON stores the package-level group board list JSON state.
 var groupBoardListJSON = `[` + groupBoardJSON + `]`
 
-// boardListItemJSON stores the package-level board list item JSON state.
+// boardListItemJSON stores the package-level board list item JSON state. It
+// carries every gl.BoardList sub-object (assignee, iteration, label with
+// priority, milestone) so the converter and shape branches are fully exercised.
 var boardListItemJSON = `{
 	"id": 10,
-	"label": {"id": 20, "name": "To Do"},
+	"label": {"id": 20, "name": "To Do", "color": "#ff0000", "priority": 3, "is_project_label": false, "archived": false},
 	"position": 0,
 	"max_issue_count": 10,
 	"max_issue_weight": 50,
-	"assignee": {"id": 3, "username": "alice"},
-	"milestone": {"id": 7, "title": "sprint-1"}
+	"assignee": {"id": 3, "name": "Alice", "username": "alice"},
+	"iteration": {"id": 9, "iid": 1, "title": "Iteration 1", "state": 1, "due_date": "2026-01-15", "start_date": "2026-01-01"},
+	"milestone": {"id": 7, "title": "sprint-1", "due_date": "2026-02-01", "expired": false}
 }`
 
 // boardListsArrayJSON stores the package-level board lists array JSON state.
@@ -75,8 +80,8 @@ func TestListGroupBoards_Success(t *testing.T) {
 	if out.Boards[0].Name != "Development" {
 		t.Errorf("name = %q, want %q", out.Boards[0].Name, "Development")
 	}
-	if out.Boards[0].GroupID != 42 {
-		t.Errorf("group_id = %d, want 42", out.Boards[0].GroupID)
+	if out.Boards[0].Group == nil || out.Boards[0].Group.ID != 42 {
+		t.Errorf("group = %+v, want id 42", out.Boards[0].Group)
 	}
 }
 
@@ -108,8 +113,8 @@ func TestGetGroupBoard_Success(t *testing.T) {
 	if out.Name != "Development" {
 		t.Errorf("name = %q, want %q", out.Name, "Development")
 	}
-	if out.MilestoneTitle != "v1.0" {
-		t.Errorf("milestone = %q, want %q", out.MilestoneTitle, "v1.0")
+	if out.Milestone == nil || out.Milestone.Title != "v1.0" {
+		t.Errorf("milestone = %+v, want title v1.0", out.Milestone)
 	}
 	if len(out.Labels) != 2 {
 		t.Errorf("labels count = %d, want 2", len(out.Labels))
@@ -186,7 +191,7 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 
 	out, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{
 		GroupID: toolutil.StringOrInt("42"), BoardID: 1, Name: "Updated",
-		Labels: "bug", AssigneeID: 3, MilestoneID: 5, Weight: 2,
+		Labels: []string{"bug"}, AssigneeID: 3, MilestoneID: 5, Weight: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -264,8 +269,8 @@ func TestListGroupBoardLists_Success(t *testing.T) {
 	if len(out.Lists) != 1 {
 		t.Fatalf("expected 1 list, got %d", len(out.Lists))
 	}
-	if out.Lists[0].LabelName != "To Do" {
-		t.Errorf("label = %q, want %q", out.Lists[0].LabelName, "To Do")
+	if out.Lists[0].Label == nil || out.Lists[0].Label.Name != "To Do" {
+		t.Errorf("label = %+v, want name To Do", out.Lists[0].Label)
 	}
 }
 
@@ -298,14 +303,14 @@ func TestGetGroupBoardList_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.LabelName != "To Do" {
-		t.Errorf("label = %q, want %q", out.LabelName, "To Do")
+	if out.Label == nil || out.Label.Name != "To Do" {
+		t.Errorf("label = %+v, want name To Do", out.Label)
 	}
-	if out.AssigneeUser != "alice" {
-		t.Errorf("assignee = %q, want %q", out.AssigneeUser, "alice")
+	if out.Assignee == nil || out.Assignee.Username != "alice" {
+		t.Errorf("assignee = %+v, want username alice", out.Assignee)
 	}
-	if out.MilestoneTitle != "sprint-1" {
-		t.Errorf("milestone = %q, want %q", out.MilestoneTitle, "sprint-1")
+	if out.Milestone == nil || out.Milestone.Title != "sprint-1" {
+		t.Errorf("milestone = %+v, want title sprint-1", out.Milestone)
 	}
 }
 
@@ -346,8 +351,8 @@ func TestCreateGroupBoardList_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.LabelName != "Priority" {
-		t.Errorf("label = %q, want %q", out.LabelName, "Priority")
+	if out.Label == nil || out.Label.Name != "Priority" {
+		t.Errorf("label = %+v, want name Priority", out.Label)
 	}
 }
 
@@ -452,14 +457,12 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGroupBoardMarkdown(t *testing.T) {
 	out := GroupBoardOutput{
-		ID:             1,
-		Name:           "Dev Board",
-		GroupName:      "mygroup",
-		GroupID:        42,
-		MilestoneTitle: "v1.0",
-		MilestoneID:    5,
-		Labels:         []string{"bug", "feature"},
-		Lists:          []BoardListOutput{{ID: 10, LabelName: "To Do", Position: 0}},
+		ID:        1,
+		Name:      "Dev Board",
+		Group:     &GroupRefOutput{ID: 42, Name: "mygroup"},
+		Milestone: &MilestoneOutput{ID: 5, Title: "v1.0"},
+		Labels:    []*LabelDetailsOutput{{ID: 1, Name: "bug"}, {ID: 2, Name: "feature"}},
+		Lists:     []BoardListOutput{{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0}},
 	}
 	md := FormatGroupBoardMarkdown(out)
 	if !strings.Contains(md, "Dev Board") {
@@ -485,8 +488,8 @@ func TestFormatGroupBoardMarkdown(t *testing.T) {
 func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	out := ListGroupBoardsOutput{
 		Boards: []GroupBoardOutput{
-			{ID: 1, Name: "Board A", GroupName: "grp"},
-			{ID: 2, Name: "Board B", GroupName: "grp"},
+			{ID: 1, Name: "Board A", Group: &GroupRefOutput{ID: 1, Name: "grp"}, Milestone: &MilestoneOutput{ID: 3, Title: "M1"}},
+			{ID: 2, Name: "Board B", Group: &GroupRefOutput{ID: 1, Name: "grp"}},
 		},
 	}
 	md := FormatListGroupBoardsMarkdown(out)
@@ -501,13 +504,11 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
-		LabelName:      "Priority",
-		LabelID:        5,
+		Label:          &LabelOutput{Name: "Priority"},
 		Position:       0,
-		AssigneeUser:   "dev1",
-		AssigneeID:     3,
-		MilestoneTitle: "sprint-1",
-		MilestoneID:    7,
+		Assignee:       &BoardListAssigneeOutput{ID: 3, Username: "dev1"},
+		Iteration:      &IterationOutput{ID: 9, Title: "Iteration 1"},
+		Milestone:      &MilestoneOutput{ID: 7, Title: "sprint-1"},
 		MaxIssueCount:  10,
 		MaxIssueWeight: 50,
 	}
@@ -517,6 +518,9 @@ func TestFormatBoardListMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "dev1") {
 		t.Errorf("markdown missing assignee")
+	}
+	if !strings.Contains(md, "Iteration 1") {
+		t.Errorf("markdown missing iteration")
 	}
 	if !strings.Contains(md, "sprint-1") {
 		t.Errorf("markdown missing milestone")
@@ -861,8 +865,8 @@ func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
 	if out.ID != 99 {
 		t.Errorf("ID = %d, want 99 (fallback to first element)", out.ID)
 	}
-	if out.LabelName != "Fallback" {
-		t.Errorf("LabelName = %q, want %q", out.LabelName, "Fallback")
+	if out.Label == nil || out.Label.Name != "Fallback" {
+		t.Errorf("label = %+v, want name Fallback", out.Label)
 	}
 }
 
@@ -981,8 +985,8 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
-			{ID: 10, LabelName: "To Do", Position: 0, MaxIssueCount: 5, MaxIssueWeight: 20},
-			{ID: 11, LabelName: "Doing", Position: 1, MaxIssueCount: 3, MaxIssueWeight: 15},
+			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5, MaxIssueWeight: 20},
+			{ID: 11, Label: &LabelOutput{Name: "Doing"}, Position: 1, MaxIssueCount: 3, MaxIssueWeight: 15},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -1001,5 +1005,222 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	md := FormatListBoardListsMarkdown(ListBoardListsOutput{})
 	if !strings.Contains(md, "## Board Lists") {
 		t.Error("markdown missing header")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Keyset/order_by/sort and nil-shape coverage
+// ---------------------------------------------------------------------------.
+
+// TestListGroupBoards_OrderBySortKeyset verifies that order_by, sort, and keyset
+// pagination parameters are forwarded as GitLab query parameters.
+// It asserts the underlying request carries the expected query string.
+func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
+	mux := http.NewServeMux()
+	var gotQuery string
+	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, groupBoardListJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{
+		GroupID: toolutil.StringOrInt("42"), OrderBy: "created_at", Sort: "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=100"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestListGroupBoardLists_OrderBySortKeyset verifies that order_by, sort, and
+// keyset pagination parameters are forwarded for the board-list list endpoint.
+// It asserts the underlying request carries the expected query string.
+func TestListGroupBoardLists_OrderBySortKeyset(t *testing.T) {
+	mux := http.NewServeMux()
+	var gotQuery string
+	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, boardListsArrayJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{
+		GroupID: toolutil.StringOrInt("42"), BoardID: 1, OrderBy: "position", Sort: "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=position", "sort=asc", "pagination=keyset", "page_token=5"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestShapeConverters_NilInputs verifies that the shape converters return nil for
+// nil SDK inputs and that nil sub-objects are skipped in slices.
+// It asserts each helper handles the nil/empty path without panicking.
+func TestShapeConverters_NilInputs(t *testing.T) {
+	if groupRefOutput(nil) != nil {
+		t.Error("groupRefOutput(nil) != nil")
+	}
+	if milestoneOutput(nil) != nil {
+		t.Error("milestoneOutput(nil) != nil")
+	}
+	if labelOutput(nil) != nil {
+		t.Error("labelOutput(nil) != nil")
+	}
+	if boardListAssigneeOutput(nil) != nil {
+		t.Error("boardListAssigneeOutput(nil) != nil")
+	}
+	if iterationOutput(nil) != nil {
+		t.Error("iterationOutput(nil) != nil")
+	}
+	if groupLabelOutputs(nil) != nil {
+		t.Error("groupLabelOutputs(nil) != nil")
+	}
+	// A slice with a nil element skips it but still returns the valid one.
+	if got := groupLabelOutputs([]*gl.GroupLabel{nil, {ID: 7, Name: "kept"}}); len(got) != 1 || got[0].Name != "kept" {
+		t.Errorf("groupLabelOutputs nil-skip = %+v, want one 'kept' label", got)
+	}
+}
+
+// TestMarkdownHelpers_NilFallbacks verifies the nil-fallback paths of the
+// markdown sub-object accessors return empty strings.
+// It asserts board lists/boards with absent sub-objects render without panic.
+func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
+	if got := boardListLabelName(BoardListOutput{ID: 1}); got != "" {
+		t.Errorf("boardListLabelName(no label) = %q, want empty", got)
+	}
+	if got := groupName(nil); got != "" {
+		t.Errorf("groupName(nil) = %q, want empty", got)
+	}
+	if got := milestoneTitle(nil); got != "" {
+		t.Errorf("milestoneTitle(nil) = %q, want empty", got)
+	}
+	// A board with a nil group/milestone and a label-less list must still render.
+	md := FormatGroupBoardMarkdown(GroupBoardOutput{
+		ID: 1, Name: "Plain", Labels: []*LabelDetailsOutput{nil},
+		Lists: []BoardListOutput{{ID: 9, Position: 0}},
+	})
+	if !strings.Contains(md, "Plain") {
+		t.Errorf("markdown missing board name:\n%s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Documented-but-SDK-missing field surfacing (raw-fetch superset) tests
+// ---------------------------------------------------------------------------.
+
+// premiumGroupBoardJSON carries the documented Premium/Ultimate group-board
+// fields that gl.GroupIssueBoard omits: hide_backlog_list, hide_closed_list,
+// assignee and weight. It is used to assert the raw-superset fetch path surfaces
+// them on the canonical json keys.
+const premiumGroupBoardJSON = `{
+	"id": 1,
+	"name": "new_name",
+	"hide_backlog_list": true,
+	"hide_closed_list": true,
+	"group": {"id": 5, "name": "Documentcloud", "web_url": "http://example.com/groups/documentcloud"},
+	"milestone": {"id": 44, "iid": 1, "group_id": 5, "title": "Group Milestone", "state": "active", "web_url": "http://example.com/m/1"},
+	"assignee": {"id": 1, "name": "Administrator", "username": "root", "state": "active", "avatar_url": "https://gravatar/x", "web_url": "http://example.com/root"},
+	"labels": [{"id": 11, "name": "GroupLabel", "color": "#428BCA", "description": ""}],
+	"weight": 4
+}`
+
+// TestGetGroupBoard_SurfacesDocumentedPremiumFields verifies that the raw-fetch
+// superset path surfaces the documented hide_backlog_list, hide_closed_list,
+// assignee and weight fields that client-go's gl.GroupIssueBoard omits.
+func TestGetGroupBoard_SurfacesDocumentedPremiumFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/5/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, premiumGroupBoardJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: toolutil.StringOrInt("5"), BoardID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.HideBacklogList || !out.HideClosedList {
+		t.Errorf("hide flags = (%v, %v), want (true, true)", out.HideBacklogList, out.HideClosedList)
+	}
+	if out.Weight != 4 {
+		t.Errorf("weight = %d, want 4", out.Weight)
+	}
+	if out.Assignee == nil || out.Assignee.Username != "root" || out.Assignee.State != "active" {
+		t.Errorf("assignee = %+v, want username root state active", out.Assignee)
+	}
+	if out.Milestone == nil || out.Milestone.GroupID != 5 {
+		t.Errorf("milestone group_id = %+v, want 5", out.Milestone)
+	}
+	if len(out.Labels) != 1 || out.Labels[0].ID != 11 || out.Labels[0].Color != "#428BCA" {
+		t.Errorf("labels = %+v, want one GroupLabel with color", out.Labels)
+	}
+}
+
+// TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent verifies that a
+// response WITHOUT the SDK-missing documented fields (older / Free-tier GitLab)
+// decodes successfully with those fields at their zero value and omitted from
+// the envelope, never failing the tool.
+func TestGetGroupBoard_VersionTolerantWhenPremiumFieldsAbsent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		// Minimal Free-tier shape: no hide_*_list, assignee or weight keys.
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Development","group":{"id":42,"name":"mygroup"}}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: toolutil.StringOrInt("42"), BoardID: 1})
+	if err != nil {
+		t.Fatalf("tool must not fail when documented premium fields are absent: %v", err)
+	}
+	if out.HideBacklogList || out.HideClosedList || out.Weight != 0 || out.Assignee != nil {
+		t.Errorf("absent fields should be zero/nil, got hide=(%v,%v) weight=%d assignee=%+v",
+			out.HideBacklogList, out.HideClosedList, out.Weight, out.Assignee)
+	}
+
+	// The omitempty assignee/weight keys must not appear in the marshaled envelope.
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	js := string(raw)
+	if strings.Contains(js, `"assignee"`) || strings.Contains(js, `"weight"`) {
+		t.Errorf("absent assignee/weight must be omitted from envelope: %s", js)
+	}
+}
+
+// TestListGroupBoards_SurfacesDocumentedPremiumFields verifies the list handler's
+// raw-fetch superset path surfaces hide_*_list/assignee/weight per board.
+func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/5/boards", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+premiumGroupBoardJSON+`]`,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{GroupID: toolutil.StringOrInt("5")})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Boards) != 1 || out.Boards[0].Weight != 4 || !out.Boards[0].HideBacklogList {
+		t.Errorf("board[0] = %+v, want weight 4 and hide_backlog_list true", out.Boards)
+	}
+}
+
+// TestBasicUserOutput_Nil verifies the assignee converter returns nil for a nil
+// input (the Free-tier / no-assignee case).
+func TestBasicUserOutput_Nil(t *testing.T) {
+	if got := basicUserOutput(nil); got != nil {
+		t.Errorf("basicUserOutput(nil) = %+v, want nil", got)
 	}
 }

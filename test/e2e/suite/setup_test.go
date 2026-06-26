@@ -25,6 +25,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -91,17 +92,20 @@ type resourceSnapshot struct {
 func TestMain(m *testing.M) {
 	configureE2EStartupEnvironment()
 
-	envEnterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
+	requestedTier, _ := edition.ParseTier(os.Getenv("GITLAB_TIER"))
+	// The Docker e2e harness toggles EE fixtures via GITLAB_ENTERPRISE; honor it
+	// as a legacy alias for requesting the enterprise tier.
+	envEnterprise := requestedTier.IsEnterprise() ||
+		strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
 	glClient := mustE2EGitLabClient()
-	// Detect the actual GitLab edition from /api/v4/version. The
-	// GITLAB_ENTERPRISE env var is the *requested* mode (used as the
-	// default when detection fails), but the real edition is what
-	// controls whether EE features work end-to-end. When the env asks
-	// for EE but GitLab reports CE, downgrade the flag so EE tests
-	// skip rather than fail with 404s on protected envs, epics, etc.
-	enterprise := envEnterprise && glClient.DetectEnterprise(context.Background(), envEnterprise)
+	// Detect the actual GitLab tier from the instance license. The GITLAB_TIER
+	// env var is the *requested* mode, but the real tier is what controls
+	// whether EE features work end-to-end. When the env asks for EE but GitLab
+	// reports CE/Free, downgrade so EE tests skip rather than fail with 404s on
+	// protected envs, epics, etc.
+	enterprise := envEnterprise && glClient.DetectTier(context.Background()).IsEnterprise()
 	if envEnterprise && !enterprise {
-		log.Printf("e2e: GITLAB_ENTERPRISE=true but GitLab /api/v4/version reports enterprise=false; running EE tests as CE")
+		log.Printf("e2e: GITLAB_TIER requested enterprise but GitLab license reports free; running EE tests as CE")
 	}
 	username := mustE2EUsername(glClient)
 	runtime := startE2ERuntime(glClient, enterprise)
@@ -172,7 +176,7 @@ func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOpt
 
 func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		resources.Register(server, glClient)
 		resources.RegisterWorkflowGuides(server)
 		return nil
@@ -181,7 +185,7 @@ func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool
 
 func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		return tools.RegisterAllMeta(server, glClient, enterprise)
+		return tools.RegisterAllMeta(server, glClient, edition.TierForEnterprise(enterprise))
 	}
 }
 
@@ -202,14 +206,14 @@ func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) f
 
 func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		return nil
 	}
 }
 
 func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, enterprise)
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		tools.WrapMutatingToolsForSafeMode(server)
 		return nil
 	}

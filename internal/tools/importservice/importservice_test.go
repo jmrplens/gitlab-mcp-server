@@ -500,6 +500,66 @@ func TestFormatGitHubImport_WithHumanStatus(t *testing.T) {
 	}
 }
 
+// TestImportFromGitHub_WithOptionalStages verifies that the optional_stages
+// nested object is serialized into the request body and that the additive
+// refs_url / import_warning response fields are mapped onto the output.
+// The mock GitLab API at /api/v4/import/github (POST) captures the request
+// body and responds with HTTP Created including the additive fields.
+func TestImportFromGitHub_WithOptionalStages(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/github" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"my-repo","full_path":"ns/my-repo","full_name":"ns / my-repo","refs_url":"https://gitlab.example.com/ns/my-repo/refs","import_source":"github.com/user/repo","import_status":"scheduled","import_warning":"some collaborators could not be mapped"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	enabled := true
+	out, err := ImportFromGitHub(t.Context(), client, ImportFromGitHubInput{
+		PersonalAccessToken: testGHPToken,
+		RepoID:              12345,
+		TargetNamespace:     testNamespace,
+		OptionalStages: &GitHubOptionalStagesInput{
+			SingleEndpointNotesImport: &enabled,
+			AttachmentsImport:         &enabled,
+			CollaboratorsImport:       &enabled,
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"optional_stages", "single_endpoint_notes_import", "attachments_import", "collaborators_import"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing field %q; body=%s", want, capturedBody)
+		}
+	}
+	if out.RefsURL != "https://gitlab.example.com/ns/my-repo/refs" {
+		t.Errorf("expected refs_url to be mapped, got %q", out.RefsURL)
+	}
+	if out.ImportWarning != "some collaborators could not be mapped" {
+		t.Errorf("expected import_warning to be mapped, got %q", out.ImportWarning)
+	}
+}
+
+// TestFormatGitHubImport_WithImportWarning verifies the GitHubImport Markdown
+// formatter renders the additive import_warning row when present.
+func TestFormatGitHubImport_WithImportWarning(t *testing.T) {
+	out := &GitHubImportOutput{
+		ID: 1, Name: testMyRepoName, FullPath: "ns/my-repo",
+		ImportSource: "github.com/user/repo", ImportStatus: "scheduled",
+		ImportWarning: "partial import",
+	}
+	md := FormatGitHubImport(out)
+	if !strings.Contains(md, "Import Warning") || !strings.Contains(md, "partial import") {
+		t.Errorf("expected import warning row in output, got:\n%s", md)
+	}
+}
+
 // TestFormatCancelledImport verifies the CancelledImport Markdown formatter for a representative cancelledimport input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.

@@ -13,6 +13,21 @@ import (
 // hintVerifyGroupBadgeID is the 404 hint shared by group badge tools.
 const hintVerifyGroupBadgeID = "verify badge_id with gitlab_list_group_badges"
 
+// applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
+// setting only the values the caller supplied. These fields drive keyset
+// ordering for the badge list endpoints.
+func applyOrderSort(opts *gl.ListOptions, orderBy, sort string) {
+	if opts == nil {
+		return
+	}
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
+
 // BadgeItem represents a badge in output.
 type BadgeItem struct {
 	ID               int64  `json:"id"`
@@ -52,12 +67,16 @@ func groupBadgeToItem(b *gl.GroupBadge) BadgeItem {
 
 // Project Badges.
 
-// ListProjectInput is the input for listing project badges.
+// ListProjectInput is the input for listing project badges. Name maps onto
+// gl.ListProjectBadgesOptions; OrderBy/Sort/pagination/page_token map onto the
+// embedded gl.ListOptions and enable keyset pagination.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Name      string               `json:"name,omitempty" jsonschema:"Filter by badge name"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Items per page"`
+	Name      string               `json:"name,omitempty"     jsonschema:"Filter by badge name"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListProjectOutput is the output for listing project badges.
@@ -67,11 +86,21 @@ type ListProjectOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// mapBadges converts a slice of API badges into output items using the supplied
+// per-badge mapper, preallocating to the source length.
+func mapBadges[T any](badges []T, conv func(T) BadgeItem) []BadgeItem {
+	items := make([]BadgeItem, 0, len(badges))
+	for _, b := range badges {
+		items = append(items, conv(b))
+	}
+	return items
+}
+
 // ListProject returns all badges for a project.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListProjectOutput, error) {
-	opts := &gl.ListProjectBadgesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.ListProjectBadgesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
@@ -80,12 +109,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListProjectOutput{}, toolutil.WrapErrWithStatusHint("list_project_badges", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
-	items := make([]BadgeItem, 0, len(badges))
-	for _, b := range badges {
-		items = append(items, projectBadgeToItem(b))
-	}
 	return ListProjectOutput{
-		Badges:     items,
+		Badges:     mapBadges(badges, projectBadgeToItem),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}, nil
 }
@@ -247,12 +272,16 @@ func PreviewProject(ctx context.Context, client *gitlabclient.Client, input Prev
 
 // Group Badges.
 
-// ListGroupInput is the input for listing group badges.
+// ListGroupInput is the input for listing group badges. Name maps onto
+// gl.ListGroupBadgesOptions; OrderBy/Sort/pagination/page_token map onto the
+// embedded gl.ListOptions and enable keyset pagination.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Name    string               `json:"name,omitempty" jsonschema:"Filter by badge name"`
-	Page    int64                `json:"page,omitempty" jsonschema:"Page number"`
-	PerPage int64                `json:"per_page,omitempty" jsonschema:"Items per page"`
+	Name    string               `json:"name,omitempty"     jsonschema:"Filter by badge name"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by for keyset pagination (e.g. id, name)"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupOutput is the output for listing group badges.
@@ -264,9 +293,9 @@ type ListGroupOutput struct {
 
 // ListGroup returns all badges for a group.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListGroupOutput, error) {
-	opts := &gl.ListGroupBadgesOptions{
-		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
-	}
+	opts := &gl.ListGroupBadgesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
@@ -275,12 +304,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("list_group_badges", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get")
 	}
-	items := make([]BadgeItem, 0, len(badges))
-	for _, b := range badges {
-		items = append(items, groupBadgeToItem(b))
-	}
 	return ListGroupOutput{
-		Badges:     items,
+		Badges:     mapBadges(badges, groupBadgeToItem),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}, nil
 }

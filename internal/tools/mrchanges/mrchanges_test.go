@@ -755,6 +755,188 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
+// TestMRChangesGet_PaginationAndOptions verifies that Get forwards offset
+// pagination, keyset pagination, order_by, sort, and unidiff as query
+// parameters to the GitLab Merge Request Diffs API, and that the new
+// collapsed/too_large diff flags are surfaced in the output.
+func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/diffs") {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"big.go","new_path":"big.go","diff":"","new_file":false,"deleted_file":false,"collapsed":true,"too_large":true}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		ProjectID:             "42",
+		MRIID:                 1,
+		Unidiff:               true,
+		OrderBy:               "id",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+	})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	for _, want := range []string{"unidiff=true", "order_by=id", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=tok123"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+	if len(out.Changes) != 1 {
+		t.Fatalf("len(Changes) = %d, want 1", len(out.Changes))
+	}
+	if !out.Changes[0].Collapsed || !out.Changes[0].TooLarge {
+		t.Errorf("Collapsed=%v TooLarge=%v, want both true", out.Changes[0].Collapsed, out.Changes[0].TooLarge)
+	}
+}
+
+// TestListDiffVersions_PaginationAndOptions verifies ListDiffVersions forwards
+// offset, keyset, order_by, and sort parameters to the diff versions endpoint.
+func TestListDiffVersions_PaginationAndOptions(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/versions") {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListDiffVersions(context.Background(), client, DiffVersionsListInput{
+		ProjectID:             "42",
+		MRIID:                 1,
+		OrderBy:               "id",
+		Sort:                  "asc",
+		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 25},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cur9"},
+	})
+	if err != nil {
+		t.Fatalf("ListDiffVersions() unexpected error: %v", err)
+	}
+	for _, want := range []string{"order_by=id", "sort=asc", "page=3", "per_page=25", "pagination=keyset", "page_token=cur9"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("query %q missing %q", gotQuery, want)
+		}
+	}
+}
+
+// TestGetDiffVersion_FullCommitFields verifies that diffVersionToOutput surfaces
+// every gl.Commit field (the full C-IMPORTS commit mirror), including authored/
+// committed dates, status, and stats.
+func TestGetDiffVersion_FullCommitFields(t *testing.T) {
+	const body = `{
+      "id":2,"head_commit_sha":"jkl012","base_commit_sha":"mno345","start_commit_sha":"pqr678",
+      "created_at":"2026-01-16T10:00:00Z","merge_request_id":1,"state":"collected","real_size":"5",
+      "commits":[
+        {"id":"jkl012abc","short_id":"jkl012a","title":"Fix bug","author_name":"Dev","author_email":"dev@example.com",
+         "authored_date":"2026-01-16T08:00:00Z","committer_name":"Comm","committer_email":"comm@example.com",
+         "committed_date":"2026-01-16T08:30:00Z","created_at":"2026-01-16T09:00:00Z","message":"Fix bug\n",
+         "parent_ids":["p1","p2"],"status":"success","project_id":42,"web_url":"https://gitlab.example.com/c/jkl012abc",
+         "trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":"Dev"},
+         "stats":{"additions":10,"deletions":2,"total":12}}
+      ],
+      "diffs":[]
+    }`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/versions/2") {
+			testutil.RespondJSON(w, http.StatusOK, body)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetDiffVersion(context.Background(), client, DiffVersionGetInput{ProjectID: "42", MRIID: 1, VersionID: 2})
+	if err != nil {
+		t.Fatalf("GetDiffVersion() unexpected error: %v", err)
+	}
+	if len(out.Commits) != 1 {
+		t.Fatalf("len(Commits) = %d, want 1", len(out.Commits))
+	}
+	c := out.Commits[0]
+	if c.AuthorEmail != "dev@example.com" {
+		t.Errorf("AuthorEmail = %q, want dev@example.com", c.AuthorEmail)
+	}
+	if c.CommitterName != "Comm" || c.CommitterEmail != "comm@example.com" {
+		t.Errorf("Committer = %q/%q", c.CommitterName, c.CommitterEmail)
+	}
+	if c.AuthoredDate == "" || c.CommittedDate == "" {
+		t.Errorf("dates empty: authored=%q committed=%q", c.AuthoredDate, c.CommittedDate)
+	}
+	if c.Status != "success" {
+		t.Errorf("Status = %q, want success", c.Status)
+	}
+	if c.ProjectID != 42 {
+		t.Errorf("ProjectID = %d, want 42", c.ProjectID)
+	}
+	if len(c.ParentIDs) != 2 {
+		t.Errorf("ParentIDs = %v, want 2 entries", c.ParentIDs)
+	}
+	if c.WebURL == "" {
+		t.Error("WebURL empty")
+	}
+	if c.Trailers["Signed-off-by"] != "Dev" {
+		t.Errorf("Trailers = %v", c.Trailers)
+	}
+	if c.Stats == nil || c.Stats.Additions != 10 || c.Stats.Deletions != 2 || c.Stats.Total != 12 {
+		t.Errorf("Stats = %+v", c.Stats)
+	}
+}
+
+// TestMRChangeActionSpecs_Metadata verifies the R-META discovery metadata:
+// each MR-changes action has non-generic Usage, natural-language aliases beyond
+// the tool name, canonical RelatedActions, and a "Returns: … See also: …"
+// individual-tool description.
+func TestMRChangeActionSpecs_Metadata(t *testing.T) {
+	specs := ActionSpecs(nil)
+	if len(specs) != 4 {
+		t.Fatalf("len(specs) = %d, want 4", len(specs))
+	}
+	for _, spec := range specs {
+		name := spec.IndividualTool.Name
+		if strings.HasPrefix(strings.ToLower(spec.Usage), "use to execute") {
+			t.Errorf("%s: generic Usage %q", name, spec.Usage)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty RelatedActions", name)
+		}
+		nlAliases := 0
+		for _, a := range spec.Aliases {
+			if a != name && !strings.HasPrefix(a, "gitlab_") {
+				nlAliases++
+			}
+		}
+		if nlAliases == 0 {
+			t.Errorf("%s: no natural-language aliases (aliases=%v)", name, spec.Aliases)
+		}
+		desc := spec.IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s: weak description %q", name, desc)
+		}
+		if len(spec.ParameterGuidance) == 0 {
+			t.Errorf("%s: empty ParameterGuidance", name)
+		}
+	}
+}
+
+// TestDecorateMRChangeMeta_UnknownTool verifies decorateMRChangeMeta leaves the
+// base options untouched for an unrecognized individual tool name.
+func TestDecorateMRChangeMeta_UnknownTool(t *testing.T) {
+	opts := mrChangeOptions("gitlab_unknown_tool")
+	decorateMRChangeMeta(&opts, "gitlab_unknown_tool")
+	if !strings.HasPrefix(opts.Usage, "Use to execute") {
+		t.Errorf("Usage changed for unknown tool: %q", opts.Usage)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description set for unknown tool: %q", opts.IndividualTool.Description)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.

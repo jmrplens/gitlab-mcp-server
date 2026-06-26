@@ -480,3 +480,270 @@ func TestEnabledEvents_AllEvents(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Hook sub-operation tests: custom headers, URL variables, test, resend.
+// ---------------------------------------------------------------------------.
+
+// TestSetHookCustomHeader_Success verifies the PUT custom_headers request body/path.
+func TestSetHookCustomHeader_Success(t *testing.T) {
+	var gotBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/99/hooks/10/custom_headers/X-Token" {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = string(body)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := SetHookCustomHeader(context.Background(), client, SetHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: "X-Token", Value: "secret"}); err != nil {
+		t.Fatalf("SetHookCustomHeader() unexpected error: %v", err)
+	}
+	if !strings.Contains(gotBody, "secret") {
+		t.Fatalf("request body missing value: %s", gotBody)
+	}
+}
+
+// TestSetHookCustomHeader_Guards verifies required-input guards.
+func TestSetHookCustomHeader_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []SetHookCustomHeaderInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := SetHookCustomHeader(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestSetHookCustomHeaderOutput_Success verifies the void wrapper confirmation.
+func TestSetHookCustomHeaderOutput_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	out, err := SetHookCustomHeaderOutput(context.Background(), client, SetHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: "X-Token", Value: "v"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "success" || !strings.Contains(out.Message, "X-Token") {
+		t.Fatalf("unexpected output: %+v", out)
+	}
+}
+
+// TestDeleteHookCustomHeader_Success verifies the DELETE custom_headers request.
+func TestDeleteHookCustomHeader_Success(t *testing.T) {
+	var hit bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/99/hooks/10/custom_headers/X-Token" {
+			hit = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := DeleteHookCustomHeader(context.Background(), client, DeleteHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: "X-Token"}); err != nil {
+		t.Fatalf("DeleteHookCustomHeader() unexpected error: %v", err)
+	}
+	if !hit {
+		t.Fatal("expected DELETE request")
+	}
+}
+
+// TestDeleteHookCustomHeader_Guards verifies required-input guards.
+func TestDeleteHookCustomHeader_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []DeleteHookCustomHeaderInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := DeleteHookCustomHeader(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestSetHookURLVariable_Success verifies the PUT url_variables request.
+func TestSetHookURLVariable_Success(t *testing.T) {
+	var gotBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/99/hooks/10/url_variables/env" {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = string(body)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := SetHookURLVariable(context.Background(), client, SetHookURLVariableInput{GroupID: "99", HookID: 10, Key: "env", Value: "prod"}); err != nil {
+		t.Fatalf("SetHookURLVariable() unexpected error: %v", err)
+	}
+	if !strings.Contains(gotBody, "prod") {
+		t.Fatalf("request body missing value: %s", gotBody)
+	}
+}
+
+// TestSetHookURLVariable_Guards verifies required-input guards.
+func TestSetHookURLVariable_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []SetHookURLVariableInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := SetHookURLVariable(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestSetHookURLVariableOutput_Success verifies the void wrapper confirmation.
+func TestSetHookURLVariableOutput_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	out, err := SetHookURLVariableOutput(context.Background(), client, SetHookURLVariableInput{GroupID: "99", HookID: 10, Key: "env", Value: "v"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "success" || !strings.Contains(out.Message, "env") {
+		t.Fatalf("unexpected output: %+v", out)
+	}
+}
+
+// TestDeleteHookURLVariable_Success verifies the DELETE url_variables request.
+func TestDeleteHookURLVariable_Success(t *testing.T) {
+	var hit bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/99/hooks/10/url_variables/env" {
+			hit = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := DeleteHookURLVariable(context.Background(), client, DeleteHookURLVariableInput{GroupID: "99", HookID: 10, Key: "env"}); err != nil {
+		t.Fatalf("DeleteHookURLVariable() unexpected error: %v", err)
+	}
+	if !hit {
+		t.Fatal("expected DELETE request")
+	}
+}
+
+// TestDeleteHookURLVariable_Guards verifies required-input guards.
+func TestDeleteHookURLVariable_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []DeleteHookURLVariableInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := DeleteHookURLVariable(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestTestHook_Success verifies the POST test/{trigger} request.
+func TestTestHook_Success(t *testing.T) {
+	var hit bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/hooks/10/test/push_events" {
+			hit = true
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := TestHook(context.Background(), client, TestHookInput{GroupID: "99", HookID: 10, Trigger: "push_events"}); err != nil {
+		t.Fatalf("TestHook() unexpected error: %v", err)
+	}
+	if !hit {
+		t.Fatal("expected POST test request")
+	}
+}
+
+// TestTestHook_Guards verifies required-input guards.
+func TestTestHook_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []TestHookInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := TestHook(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestTestHookOutput_Success verifies the void wrapper confirmation.
+func TestTestHookOutput_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	out, err := TestHookOutput(context.Background(), client, TestHookInput{GroupID: "99", HookID: 10, Trigger: "push_events"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "success" || !strings.Contains(out.Message, "push_events") {
+		t.Fatalf("unexpected output: %+v", out)
+	}
+}
+
+// TestResendHookEvent_Success verifies the POST events/{id}/resend request.
+func TestResendHookEvent_Success(t *testing.T) {
+	var hit bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/hooks/10/events/5/resend" {
+			hit = true
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if err := ResendHookEvent(context.Background(), client, ResendHookEventInput{GroupID: "99", HookID: 10, HookEventID: 5}); err != nil {
+		t.Fatalf("ResendHookEvent() unexpected error: %v", err)
+	}
+	if !hit {
+		t.Fatal("expected POST resend request")
+	}
+}
+
+// TestResendHookEvent_Guards verifies required-input guards.
+func TestResendHookEvent_Guards(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	cases := []ResendHookEventInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
+	for i, in := range cases {
+		if err := ResendHookEvent(context.Background(), client, in); err == nil {
+			t.Errorf("case %d: expected error", i)
+		}
+	}
+}
+
+// TestResendHookEventOutput_Success verifies the void wrapper confirmation.
+func TestResendHookEventOutput_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	out, err := ResendHookEventOutput(context.Background(), client, ResendHookEventInput{GroupID: "99", HookID: 10, HookEventID: 5})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "success" || !strings.Contains(out.Message, "5") {
+		t.Fatalf("unexpected output: %+v", out)
+	}
+}
+
+// TestHookSubOps_CanceledContext verifies each hook sub-op honors a canceled context.
+func TestHookSubOps_CanceledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := SetHookCustomHeader(ctx, client, SetHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: "k", Value: "v"}); err == nil {
+		t.Error("SetHookCustomHeader: expected context error")
+	}
+	if err := DeleteHookCustomHeader(ctx, client, DeleteHookCustomHeaderInput{GroupID: "99", HookID: 10, Key: "k"}); err == nil {
+		t.Error("DeleteHookCustomHeader: expected context error")
+	}
+	if err := SetHookURLVariable(ctx, client, SetHookURLVariableInput{GroupID: "99", HookID: 10, Key: "k", Value: "v"}); err == nil {
+		t.Error("SetHookURLVariable: expected context error")
+	}
+	if err := DeleteHookURLVariable(ctx, client, DeleteHookURLVariableInput{GroupID: "99", HookID: 10, Key: "k"}); err == nil {
+		t.Error("DeleteHookURLVariable: expected context error")
+	}
+	if err := TestHook(ctx, client, TestHookInput{GroupID: "99", HookID: 10, Trigger: "push_events"}); err == nil {
+		t.Error("TestHook: expected context error")
+	}
+	if err := ResendHookEvent(ctx, client, ResendHookEventInput{GroupID: "99", HookID: 10, HookEventID: 5}); err == nil {
+		t.Error("ResendHookEvent: expected context error")
+	}
+}

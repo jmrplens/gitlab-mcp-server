@@ -3,6 +3,7 @@ package pipelines
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -30,6 +31,7 @@ type ListInput struct {
 	UpdatedAfter  string               `json:"updated_after,omitempty" jsonschema:"Return pipelines updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
 	UpdatedBefore string               `json:"updated_before,omitempty" jsonschema:"Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single pipeline in the list response.
@@ -93,12 +95,7 @@ func buildListOpts(input ListInput) *gl.ListProjectPipelinesOptions {
 	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
 	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
 	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	return opts
 }
 
@@ -157,40 +154,28 @@ type GetInput struct {
 // DetailOutput represents a single pipeline with full details.
 type DetailOutput struct {
 	toolutil.HintableOutput
-	ID             int64         `json:"id"`
-	IID            int64         `json:"iid"`
-	ProjectID      int64         `json:"project_id"`
-	Status         string        `json:"status"`
-	Source         string        `json:"source"`
-	Ref            string        `json:"ref"`
-	SHA            string        `json:"sha"`
-	BeforeSHA      string        `json:"before_sha,omitempty"`
-	Name           string        `json:"name"`
-	Tag            bool          `json:"tag"`
-	YamlErrors     string        `json:"yaml_errors,omitempty"`
-	Duration       int64         `json:"duration"`
-	QueuedDuration int64         `json:"queued_duration"`
-	Coverage       string        `json:"coverage,omitempty"`
-	DetailedStatus *StatusOutput `json:"detailed_status,omitempty"`
-	WebURL         string        `json:"web_url"`
-	CreatedAt      string        `json:"created_at"`
-	UpdatedAt      string        `json:"updated_at"`
-	StartedAt      string        `json:"started_at,omitempty"`
-	FinishedAt     string        `json:"finished_at,omitempty"`
-	CommittedAt    string        `json:"committed_at,omitempty"`
-	UserUsername   string        `json:"user_username,omitempty"`
-}
-
-// StatusOutput represents the detailed status of a pipeline.
-type StatusOutput struct {
-	Icon        string `json:"icon"`
-	Text        string `json:"text"`
-	Label       string `json:"label"`
-	Group       string `json:"group"`
-	Tooltip     string `json:"tooltip"`
-	HasDetails  bool   `json:"has_details"`
-	DetailsPath string `json:"details_path,omitempty"`
-	Favicon     string `json:"favicon,omitempty"`
+	ID             int64            `json:"id"`
+	IID            int64            `json:"iid"`
+	ProjectID      int64            `json:"project_id"`
+	Status         string           `json:"status"`
+	Source         string           `json:"source"`
+	Ref            string           `json:"ref"`
+	SHA            string           `json:"sha"`
+	BeforeSHA      string           `json:"before_sha,omitempty"`
+	Name           string           `json:"name"`
+	Tag            bool             `json:"tag"`
+	YamlErrors     string           `json:"yaml_errors,omitempty"`
+	Duration       int64            `json:"duration"`
+	QueuedDuration int64            `json:"queued_duration"`
+	Coverage       string           `json:"coverage,omitempty"`
+	User           *BasicUserOutput `json:"user,omitempty"`
+	DetailedStatus *StatusOutput    `json:"detailed_status,omitempty"`
+	WebURL         string           `json:"web_url"`
+	CreatedAt      string           `json:"created_at"`
+	UpdatedAt      string           `json:"updated_at"`
+	StartedAt      string           `json:"started_at,omitempty"`
+	FinishedAt     string           `json:"finished_at,omitempty"`
+	CommittedAt    string           `json:"committed_at,omitempty"`
 }
 
 // Get retrieves a single pipeline by ID from a GitLab project.
@@ -247,21 +232,8 @@ func DetailToOutput(p *gl.Pipeline) DetailOutput {
 	if p.CommittedAt != nil {
 		out.CommittedAt = p.CommittedAt.Format(time.RFC3339)
 	}
-	if p.User != nil {
-		out.UserUsername = p.User.Username
-	}
-	if p.DetailedStatus != nil {
-		out.DetailedStatus = &StatusOutput{
-			Icon:        p.DetailedStatus.Icon,
-			Text:        p.DetailedStatus.Text,
-			Label:       p.DetailedStatus.Label,
-			Group:       p.DetailedStatus.Group,
-			Tooltip:     p.DetailedStatus.Tooltip,
-			HasDetails:  p.DetailedStatus.HasDetails,
-			DetailsPath: p.DetailedStatus.DetailsPath,
-			Favicon:     p.DetailedStatus.Favicon,
-		}
-	}
+	out.User = basicUserOutput(p.User)
+	out.DetailedStatus = detailedStatusOutput(p.DetailedStatus)
 	return out
 }
 
@@ -515,9 +487,28 @@ func GetTestReportSummary(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 // GetLatestInput defines parameters for getting the latest pipeline.
+//
+// The /latest endpoint itself only accepts ref. The additional filters below
+// mirror gl.ListProjectPipelinesOptions and apply to the keyset-paginated list
+// fallback used when /latest is forbidden (users without Maintainer+ role).
 type GetLatestInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Ref       string               `json:"ref,omitempty" jsonschema:"Branch or tag name to filter by (defaults to the default branch)"`
+	ProjectID     toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Ref           string               `json:"ref,omitempty"           jsonschema:"Branch or tag name to filter by (defaults to the default branch)"`
+	Scope         string               `json:"scope,omitempty"         jsonschema:"Filter by scope (running, pending, finished, branches, tags). Applies to the list fallback."`
+	Status        string               `json:"status,omitempty"        jsonschema:"Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled). Applies to the list fallback."`
+	Source        string               `json:"source,omitempty"        jsonschema:"Filter by source (push, web, trigger, schedule, api, external, pipeline, chat, merge_request_event). Applies to the list fallback."`
+	SHA           string               `json:"sha,omitempty"           jsonschema:"Filter by commit SHA. Applies to the list fallback."`
+	Name          string               `json:"name,omitempty"          jsonschema:"Filter by pipeline name. Applies to the list fallback."`
+	Username      string               `json:"username,omitempty"      jsonschema:"Filter by username that triggered the pipeline. Applies to the list fallback."`
+	YamlErrors    bool                 `json:"yaml_errors,omitempty"   jsonschema:"Return only pipelines with YAML errors. Applies to the list fallback."`
+	OrderBy       string               `json:"order_by,omitempty"      jsonschema:"Order by field (id, status, ref, updated_at, user_id). Applies to the list fallback."`
+	Sort          string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc). Applies to the list fallback."`
+	CreatedAfter  string               `json:"created_after,omitempty" jsonschema:"Return pipelines created after date (ISO 8601 format). Applies to the list fallback."`
+	CreatedBefore string               `json:"created_before,omitempty" jsonschema:"Return pipelines created before date (ISO 8601 format). Applies to the list fallback."`
+	UpdatedAfter  string               `json:"updated_after,omitempty" jsonschema:"Return pipelines updated after date (ISO 8601 format). Applies to the list fallback."`
+	UpdatedBefore string               `json:"updated_before,omitempty" jsonschema:"Return pipelines updated before date (ISO 8601 format). Applies to the list fallback."`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetLatest retrieves the latest pipeline for a project, optionally filtered by ref.
@@ -544,15 +535,37 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	return DetailToOutput(p), nil
 }
 
-// getLatestFallback lists pipelines sorted desc with per_page=1 to find the latest.
+// getLatestFallback lists pipelines (keyset-capable, defaulting to the single
+// most recent pipeline) to find the latest when the /latest endpoint is
+// forbidden. It honors every filter on GetLatestInput by reusing buildListOpts.
 func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input GetLatestInput) (DetailOutput, error) {
-	listOpts := &gl.ListProjectPipelinesOptions{
-		Sort:    new("desc"),
-		OrderBy: new("id"),
+	listOpts := buildListOpts(ListInput{
+		ProjectID:             input.ProjectID,
+		Scope:                 input.Scope,
+		Status:                input.Status,
+		Source:                input.Source,
+		Ref:                   input.Ref,
+		SHA:                   input.SHA,
+		Name:                  input.Name,
+		Username:              input.Username,
+		YamlErrors:            input.YamlErrors,
+		OrderBy:               input.OrderBy,
+		Sort:                  input.Sort,
+		CreatedAfter:          input.CreatedAfter,
+		CreatedBefore:         input.CreatedBefore,
+		UpdatedAfter:          input.UpdatedAfter,
+		UpdatedBefore:         input.UpdatedBefore,
+		PaginationInput:       input.PaginationInput,
+		KeysetPaginationInput: input.KeysetPaginationInput,
+	})
+	if listOpts.OrderBy == nil {
+		listOpts.OrderBy = new("id")
 	}
-	listOpts.PerPage = 1
-	if input.Ref != "" {
-		listOpts.Ref = new(input.Ref)
+	if listOpts.Sort == nil {
+		listOpts.Sort = new("desc")
+	}
+	if listOpts.PerPage == 0 {
+		listOpts.PerPage = 1
 	}
 	pipelines, _, err := client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), listOpts, gl.WithContext(ctx))
 	if err != nil {
@@ -573,6 +586,7 @@ type CreateInput struct {
 	ProjectID toolutil.StringOrInt  `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Ref       string                `json:"ref"        jsonschema:"Branch or tag name to run the pipeline for"`
 	Variables []VariableOptionInput `json:"variables,omitempty" jsonschema:"Pipeline variables to set"`
+	Inputs    map[string]any        `json:"inputs,omitempty" jsonschema:"Pipeline input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs."`
 }
 
 // VariableOptionInput represents a variable to pass when creating a pipeline.
@@ -610,6 +624,14 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		opts.Variables = &vars
 	}
+	if len(input.Inputs) > 0 {
+		inputs, err := buildPipelineInputs(input.Inputs)
+		if err != nil {
+			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCreate", err,
+				"pipeline inputs must be string, number, boolean, or array of strings")
+		}
+		opts.Inputs = inputs
+	}
 	p, _, err := client.GL().Pipelines.CreatePipeline(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 400) {
@@ -619,6 +641,43 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCreate", err)
 	}
 	return DetailToOutput(p), nil
+}
+
+// buildPipelineInputs converts a JSON-decoded inputs map into the SDK's
+// type-safe gl.PipelineInputsOption. JSON numbers decode to float64 and JSON
+// arrays to []any; both are normalized to the SDK's supported value types
+// (string, float64, bool, []string). An unsupported value type returns an error.
+func buildPipelineInputs(raw map[string]any) (gl.PipelineInputsOption, error) {
+	inputs := make(gl.PipelineInputsOption, len(raw))
+	for name, value := range raw {
+		switch v := value.(type) {
+		case string:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case bool:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case float64:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case int:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case int64:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case []string:
+			inputs[name] = gl.NewPipelineInputValue(v)
+		case []any:
+			strs := make([]string, 0, len(v))
+			for _, e := range v {
+				s, ok := e.(string)
+				if !ok {
+					return nil, fmt.Errorf("input %q: array elements must be strings", name)
+				}
+				strs = append(strs, s)
+			}
+			inputs[name] = gl.NewPipelineInputValue(strs)
+		default:
+			return nil, fmt.Errorf("input %q: unsupported value type %T", name, value)
+		}
+	}
+	return inputs, nil
 }
 
 // UpdateMetadataInput defines parameters for updating pipeline metadata.

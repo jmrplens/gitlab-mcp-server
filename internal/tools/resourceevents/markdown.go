@@ -15,7 +15,7 @@ func FormatLabelEventsMarkdown(out ListLabelEventsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Label Events\n\n| ID | Action | Label | User | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, e.Label.Name, e.Username, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, labelName(e.Label), eventUsername(e.User), toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down label events by date or action")
 	return sb.String()
@@ -27,8 +27,8 @@ func FormatLabelEventMarkdown(out LabelEventOutput) string {
 	fmt.Fprintf(&sb, "## Label Event #%d\n\n", out.ID)
 	sb.WriteString(fmtPropertyValueTableHeader)
 	fmt.Fprintf(&sb, fmtActionRow, out.Action)
-	fmt.Fprintf(&sb, "| Label | %s |\n", out.Label.Name)
-	fmt.Fprintf(&sb, fmtUserRow, out.Username)
+	fmt.Fprintf(&sb, "| Label | %s |\n", labelName(out.Label))
+	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
 	toolutil.WriteHints(&sb, "Use `gitlab_list_label_events` to see all label changes")
@@ -43,7 +43,7 @@ func FormatMilestoneEventsMarkdown(out ListMilestoneEventsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Milestone Events\n\n| ID | Action | Milestone | User | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, e.MilestoneTitle, e.Username, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, milestoneTitle(e.Milestone), eventUsername(e.User), toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down milestone events by date or action")
 	return sb.String()
@@ -55,8 +55,8 @@ func FormatMilestoneEventMarkdown(out MilestoneEventOutput) string {
 	fmt.Fprintf(&sb, "## Milestone Event #%d\n\n", out.ID)
 	sb.WriteString(fmtPropertyValueTableHeader)
 	fmt.Fprintf(&sb, fmtActionRow, out.Action)
-	fmt.Fprintf(&sb, "| Milestone | %s (ID: %d) |\n", out.MilestoneTitle, out.MilestoneID)
-	fmt.Fprintf(&sb, fmtUserRow, out.Username)
+	fmt.Fprintf(&sb, "| Milestone | %s (ID: %d) |\n", milestoneTitle(out.Milestone), milestoneID(out.Milestone))
+	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
 	toolutil.WriteHints(&sb, "Use `gitlab_list_milestone_events` to see all milestone changes")
@@ -71,7 +71,7 @@ func FormatStateEventsMarkdown(out ListStateEventsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## State Events\n\n| ID | State | User | Resource | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s #%d | %s |\n", e.ID, e.State, e.Username, e.ResourceType, e.ResourceID, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s #%d | %s |\n", e.ID, e.State, eventUsername(e.User), e.ResourceType, e.ResourceID, toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down state events by date or action")
 	return sb.String()
@@ -83,7 +83,7 @@ func FormatStateEventMarkdown(out StateEventOutput) string {
 	fmt.Fprintf(&sb, "## State Event #%d\n\n", out.ID)
 	sb.WriteString(fmtPropertyValueTableHeader)
 	fmt.Fprintf(&sb, "| State | %s |\n", out.State)
-	fmt.Fprintf(&sb, fmtUserRow, out.Username)
+	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
 	toolutil.WriteHints(&sb, "Use `gitlab_list_state_events` to see all state changes")
@@ -98,7 +98,7 @@ func FormatIterationEventsMarkdown(out ListIterationEventsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Iteration Events\n\n| ID | Action | Iteration | User | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, e.Iteration.Title, e.Username, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, fmtEventTableRow, e.ID, e.Action, iterationTitle(e.Iteration), eventUsername(e.User), toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down iteration events by date or action")
 	return sb.String()
@@ -110,8 +110,8 @@ func FormatIterationEventMarkdown(out IterationEventOutput) string {
 	fmt.Fprintf(&sb, "## Iteration Event #%d\n\n", out.ID)
 	sb.WriteString(fmtPropertyValueTableHeader)
 	fmt.Fprintf(&sb, fmtActionRow, out.Action)
-	fmt.Fprintf(&sb, "| Iteration | %s (ID: %d) |\n", out.Iteration.Title, out.Iteration.ID)
-	fmt.Fprintf(&sb, fmtUserRow, out.Username)
+	fmt.Fprintf(&sb, "| Iteration | %s (ID: %d) |\n", iterationTitle(out.Iteration), iterationID(out.Iteration))
+	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
 	toolutil.WriteHints(&sb, "Use `gitlab_issue_iteration_event_list` to see all iteration changes")
@@ -126,10 +126,58 @@ func FormatWeightEventsMarkdown(out ListWeightEventsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Weight Events\n\n| ID | Weight | User | Resource | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, "| %d | %d | %s | %s #%d | %s |\n", e.ID, e.Weight, e.Username, e.ResourceType, e.ResourceID, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, "| %d | %d | %s | %s #%d | %s |\n", e.ID, e.Weight, eventUsername(e.User), e.ResourceType, e.ResourceID, toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down weight events by date")
 	return sb.String()
+}
+
+// eventUsername returns the username of an event's user, or "" when absent.
+func eventUsername(u *EventUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
+// labelName returns a label event label's name, or "" when absent.
+func labelName(l *LabelEventLabelOutput) string {
+	if l == nil {
+		return ""
+	}
+	return l.Name
+}
+
+// milestoneTitle returns a milestone's title, or "" when absent.
+func milestoneTitle(m *MilestoneOutput) string {
+	if m == nil {
+		return ""
+	}
+	return m.Title
+}
+
+// milestoneID returns a milestone's id, or 0 when absent.
+func milestoneID(m *MilestoneOutput) int64 {
+	if m == nil {
+		return 0
+	}
+	return m.ID
+}
+
+// iterationTitle returns an iteration's title, or "" when absent.
+func iterationTitle(it *IterationOutput) string {
+	if it == nil {
+		return ""
+	}
+	return it.Title
+}
+
+// iterationID returns an iteration's id, or 0 when absent.
+func iterationID(it *IterationOutput) int64 {
+	if it == nil {
+		return 0
+	}
+	return it.ID
 }
 
 func init() {

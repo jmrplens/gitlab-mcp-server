@@ -715,3 +715,74 @@ func TestMarkdownHints_Outputs(t *testing.T) {
 		}
 	})
 }
+
+// TestActionSpecs_Metadata verifies that each CI/CD Catalog individual tool
+// carries non-generic discovery metadata (1:1 audit R-META): an action-
+// specific Usage that does not fall back to the package placeholder,
+// distinctive natural-language Aliases beyond the tool name, canonical
+// RelatedActions, and an individual-tool Description in "Returns: … See
+// also: …" form.
+func TestActionSpecs_Metadata(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{})
+	client := testutil.NewTestClient(t, handler)
+
+	specByTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	for _, name := range []string{"gitlab_list_catalog_resources", "gitlab_get_catalog_resource"} {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := specByTool[name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", name)
+			}
+			assertNonGenericMeta(t, name, spec)
+		})
+	}
+}
+
+// assertNonGenericMeta asserts that the given CI/CD Catalog spec carries
+// action-specific Usage, distinctive natural-language Aliases, canonical
+// RelatedActions, and a "Returns: … See also: …" individual-tool description.
+func assertNonGenericMeta(t *testing.T, name string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute cicatalog domain action") {
+		t.Fatalf("%s: expected action-specific Usage, got %q", name, spec.Usage)
+	}
+	if len(spec.Aliases) < 2 {
+		t.Fatalf("%s: expected distinctive natural-language aliases, got %v", name, spec.Aliases)
+	}
+	for _, alias := range spec.Aliases {
+		if alias == name {
+			t.Fatalf("%s: aliases must not echo the tool name, got %v", name, spec.Aliases)
+		}
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Fatalf("%s: expected canonical RelatedActions", name)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Fatalf("%s: description must contain 'Returns:' and 'See also:', got %q", name, desc)
+	}
+}
+
+// TestDecorateCatalogMeta_UnknownTool covers the no-op branch of
+// decorateCatalogMeta: an individual tool not present in catalogActionMeta
+// must leave the supplied options untouched.
+func TestDecorateCatalogMeta_UnknownTool(t *testing.T) {
+	options := toolutil.ActionSpecOptions{
+		Usage:          "untouched",
+		Aliases:        []string{"untouched"},
+		RelatedActions: []string{"untouched"},
+		IndividualTool: toolutil.IndividualToolSpec{Description: "untouched"},
+	}
+	decorateCatalogMeta(&options, "gitlab_not_a_catalog_tool")
+
+	if options.Usage != "untouched" ||
+		len(options.Aliases) != 1 || options.Aliases[0] != "untouched" ||
+		len(options.RelatedActions) != 1 || options.RelatedActions[0] != "untouched" ||
+		options.IndividualTool.Description != "untouched" {
+		t.Fatalf("decorateCatalogMeta mutated options for unknown tool: %+v", options)
+	}
+}

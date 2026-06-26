@@ -157,6 +157,74 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata verifies every MR approval action carries
+// non-generic discovery metadata (Usage, natural-language Aliases, canonical
+// RelatedActions, and a "Returns: … See also: …" individual-tool description)
+// per the 1:1 audit R-META requirement, and that the parameter guidance only
+// references real input-schema fields.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := approvalSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, approvalActionHandler())))
+
+	wantTools := []string{
+		"gitlab_mr_approval_state", "gitlab_mr_approval_rules", "gitlab_mr_approval_config",
+		"gitlab_mr_approval_reset", "gitlab_mr_approval_rule_create",
+		"gitlab_mr_approval_rule_update", "gitlab_mr_approval_rule_delete",
+	}
+	for _, tool := range wantTools {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("missing spec for %s", tool)
+			}
+			assertRichDiscoveryMeta(t, tool, spec)
+		})
+	}
+}
+
+// assertRichDiscoveryMeta asserts that an action spec carries non-generic
+// Usage, natural-language aliases, canonical related actions, parameter
+// guidance, and a Returns/See-also individual-tool description.
+func assertRichDiscoveryMeta(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute mrapprovals domain action.") {
+		t.Errorf("%s Usage is generic or empty: %q", tool, spec.Usage)
+	}
+	if len(spec.Aliases) == 0 {
+		t.Errorf("%s has no aliases", tool)
+	}
+	for _, a := range spec.Aliases {
+		if a == tool {
+			t.Errorf("%s alias list still contains the tool name placeholder", tool)
+		}
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s has no related actions", tool)
+	}
+	for _, r := range spec.RelatedActions {
+		if !strings.Contains(r, ".") {
+			t.Errorf("%s related action %q is not a canonical domain.action id", tool, r)
+		}
+	}
+	desc := spec.IndividualTool.Description
+	if desc == "" || !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("%s individual description missing Returns/See also: %q", tool, desc)
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Errorf("%s has no parameter guidance", tool)
+	}
+}
+
+// TestDecorateApprovalMeta_UnknownToolNoOp verifies decorateApprovalMeta leaves
+// the generic options untouched for an individual tool without a metadata entry.
+func TestDecorateApprovalMeta_UnknownToolNoOp(t *testing.T) {
+	options := approvalOptions("gitlab_unknown_tool")
+	before := options.Usage
+	decorateApprovalMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != before {
+		t.Errorf("decorateApprovalMeta mutated Usage for unknown tool: %q", options.Usage)
+	}
+}
+
 func approvalActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path

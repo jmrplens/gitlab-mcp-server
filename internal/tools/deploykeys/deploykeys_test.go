@@ -1240,7 +1240,8 @@ func TestListProject_WithPagination(t *testing.T) {
 	}))
 
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID: "1", Page: 2, PerPage: 2,
+		ProjectID:       "1",
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1275,7 +1276,8 @@ func TestListUserProject_WithPagination(t *testing.T) {
 	}))
 
 	out, err := ListUserProject(context.Background(), client, ListUserProjectInput{
-		UserID: "42", Page: 1, PerPage: 10,
+		UserID:          "42",
+		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1383,4 +1385,94 @@ func deployKeySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// ---------------------------------------------------------------------------
+// Ordering & keyset pagination — forwarded query parameters
+// ---------------------------------------------------------------------------.
+
+// TestListProject_OrderingAndKeyset verifies ListProject forwards order_by,
+// sort, pagination=keyset, and page_token to the GitLab API.
+func TestListProject_OrderingAndKeyset(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/deploy_keys" {
+			query = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"k","key":"ssh-rsa A"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListProject(context.Background(), client, ListProjectInput{
+		ProjectID:             "1",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
+	}
+}
+
+// TestListAll_OrderingAndKeyset verifies ListAll forwards order_by, sort,
+// pagination=keyset, and page_token to the GitLab API.
+func TestListAll_OrderingAndKeyset(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/deploy_keys" {
+			query = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"k","key":"ssh-rsa A"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListAll(context.Background(), client, ListAllInput{
+		OrderBy:               "title",
+		Sort:                  "asc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=title", "sort=asc", "pagination=keyset", "page_token=tok"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
+	}
+}
+
+// TestListUserProject_OrderingAndKeyset verifies ListUserProject forwards
+// order_by, sort, pagination=keyset, and page_token to the GitLab API.
+func TestListUserProject_OrderingAndKeyset(t *testing.T) {
+	var query string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/project_deploy_keys" {
+			query = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"k","key":"ssh-rsa A"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListUserProject(context.Background(), client, ListUserProjectInput{
+		UserID:                "42",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=tok"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("query %q missing %q", query, want)
+		}
+	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -532,12 +533,14 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 }
 
 const (
-	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
-	expectedBaseDynamicCatalogActions = 870
+	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
+	// dynamic catalog actions. 864 = 865 −1 group_milestone_burndown gated to
+	// Premium (burndown_events endpoint is Premium/Ultimate). See cmd/audit_edition_tier.
+	expectedBaseDynamicCatalogActions = 864
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1032
+	expectedEnterpriseDynamicCatalogActions = 1065
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1038
+	expectedGitLabComEnterpriseCatalogActions = 1071
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.
@@ -561,6 +564,110 @@ func TestActionCatalog_BaselineCountsDoNotRegress(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestActionCatalog_PremiumTierHidesUltimate verifies the central tier filter
+// gates Ultimate-only groups out of a Premium instance while keeping Premium
+// groups. A Premium catalog must sit strictly between Free and Ultimate.
+func TestActionCatalog_PremiumTierHidesUltimate(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	ultimate := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+
+	if free.CountActions() >= premium.CountActions() || premium.CountActions() >= ultimate.CountActions() {
+		t.Fatalf("expected free < premium < ultimate, got %d, %d, %d",
+			free.CountActions(), premium.CountActions(), ultimate.CountActions())
+	}
+	// Ultimate-only groups are absent at Premium; Premium groups are present.
+	if _, ok := premium.Group("gitlab_vulnerability"); ok {
+		t.Error("gitlab_vulnerability (Ultimate) must not appear on a Premium instance")
+	}
+	if _, ok := ultimate.Group("gitlab_vulnerability"); !ok {
+		t.Error("gitlab_vulnerability (Ultimate) must appear on an Ultimate instance")
+	}
+	if _, ok := premium.Group("gitlab_geo"); !ok {
+		t.Error("gitlab_geo (Premium) must appear on a Premium instance")
+	}
+	if _, ok := free.Group("gitlab_geo"); ok {
+		t.Error("gitlab_geo (Premium) must not appear on a Free instance")
+	}
+}
+
+// TestCentralTierFilter_Invariants is a doc-grounded structural guardrail on the
+// central tier filter. It asserts the filter's defining invariants directly from
+// the catalog (no reliance on description text): a Free instance exposes no
+// action carrying a paid Edition, a Premium instance exposes no Ultimate-only
+// action, and a curated set of landmark actions land in exactly the right tiers.
+func TestCentralTierFilter_Invariants(t *testing.T) {
+	free := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Free, IncludeMCP: true})
+	premium := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Premium, IncludeMCP: true})
+	ultimate := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+
+	// Invariant 1: a Free catalog contains no action with a paid Edition.
+	for _, a := range free.Actions() {
+		if edition.TierFromEdition(a.Edition) != edition.Free {
+			t.Errorf("Free catalog leaks paid action %s (Edition=%q)", a.ID, a.Edition)
+		}
+	}
+	// Invariant 2: a Premium catalog contains no Ultimate-only action.
+	for _, a := range premium.Actions() {
+		if edition.TierFromEdition(a.Edition) == edition.Ultimate {
+			t.Errorf("Premium catalog leaks Ultimate action %s (Edition=%q)", a.ID, a.Edition)
+		}
+	}
+
+	// Landmark actions: canonical IDs that must resolve to a specific tier. These
+	// encode the audited Wave 1/2 decisions (see cmd/audit_edition_tier).
+	landmarks := []struct {
+		id        actioncatalog.ActionID
+		freeOK    bool // present on a Free instance
+		premiumOK bool // present on a Premium instance
+	}{
+		{"issue.list", true, true},                          // core, all tiers
+		{"merge_request.approval_config", true, true},       // basic approval state is Free
+		{"project.service_account_list", true, true},        // service accounts are Free
+		{"group.epic_list", false, true},                    // epics are Premium
+		{"merge_request.approval_rule_create", false, true}, // approval rules are Premium
+		{"vulnerability.list", false, false},                // Ultimate only
+		{"dependency.list", false, false},                   // Ultimate only
+		{"security_finding.list", false, false},             // Ultimate only
+	}
+	for _, lm := range landmarks {
+		if _, ok := free.Action(lm.id); ok != lm.freeOK {
+			t.Errorf("Free: action %s present=%v, want %v", lm.id, ok, lm.freeOK)
+		}
+		if _, ok := premium.Action(lm.id); ok != lm.premiumOK {
+			t.Errorf("Premium: action %s present=%v, want %v", lm.id, ok, lm.premiumOK)
+		}
+		if _, ok := ultimate.Action(lm.id); !ok {
+			t.Errorf("Ultimate: action %s must be present", lm.id)
+		}
+	}
+
+	// Field-level (Phase 3): issue.create exists in all tiers, but its Premium
+	// input fields (weight, epic_id) must be pruned from the Free schema and
+	// present on Premium/Ultimate.
+	for _, field := range []string{"weight", "epic_id"} {
+		if issueCreateHasInputProp(t, free, field) {
+			t.Errorf("Free issue.create schema must not advertise Premium field %q", field)
+		}
+		if !issueCreateHasInputProp(t, premium, field) {
+			t.Errorf("Premium issue.create schema must include field %q", field)
+		}
+	}
+}
+
+// issueCreateHasInputProp reports whether the issue.create action's input schema
+// in the catalog advertises the named property.
+func issueCreateHasInputProp(t *testing.T, catalog *actioncatalog.Catalog, prop string) bool {
+	t.Helper()
+	action, ok := catalog.Action("issue.create")
+	if !ok {
+		t.Fatal("issue.create missing from catalog")
+	}
+	props, _ := action.Route.InputSchema["properties"].(map[string]any)
+	_, has := props[prop]
+	return has
 }
 
 // TestActionSpecCoverage_AllCatalogRoutesClassified verifies ActionSpecCoverage when all catalog routes classified.

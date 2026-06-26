@@ -366,16 +366,56 @@ func TestListMetricImages_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{
-		ProjectID: "1",
-		AlertIID:  5,
-		Page:      2,
-		PerPage:   10,
+		ProjectID:       "1",
+		AlertIID:        5,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(out.Images) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(out.Images))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListMetricImages — keyset pagination + created_at mapping
+// ---------------------------------------------------------------------------.
+
+// TestListMetricImages_KeysetAndCreatedAt verifies that ListMetricImages
+// forwards keyset pagination parameters (order_by, sort, pagination, page_token)
+// to the GitLab API and that the SDK CreatedAt timestamp is mapped onto the
+// MCP output item in RFC3339 form.
+func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
+	var gotQuery string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/alert_management_alerts/5/metric_images" && r.Method == http.MethodGet {
+			gotQuery = r.URL.RawQuery
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"created_at":"2024-01-02T03:04:05Z","filename":"img.png","file_path":"/uploads/img.png","url":"https://example.com","url_text":"link"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{
+		ProjectID:             "1",
+		AlertIID:              5,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(out.Images))
+	}
+	if out.Images[0].CreatedAt != "2024-01-02T03:04:05Z" {
+		t.Errorf("expected created_at 2024-01-02T03:04:05Z, got %q", out.Images[0].CreatedAt)
+	}
+	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=42"} {
+		if !strings.Contains(gotQuery, want) {
+			t.Errorf("expected query to contain %q, got %q", want, gotQuery)
+		}
 	}
 }
 

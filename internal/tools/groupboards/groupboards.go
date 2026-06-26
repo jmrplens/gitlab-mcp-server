@@ -3,8 +3,8 @@ package groupboards
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -16,32 +16,41 @@ import (
 // Shared output types
 // ---------------------------------------------------------------------------.
 
-// GroupBoardOutput represents a GitLab group issue board.
+// GroupBoardOutput represents a GitLab group issue board. Nested objects
+// (group, milestone, assignee, labels, lists) mirror the documented
+// group_boards.md response sub-objects (see shapes.go). The hide_backlog_list,
+// hide_closed_list, assignee and weight fields are documented by the API but
+// absent from client-go's gl.GroupIssueBoard struct, so they are decoded via the
+// raw-superset fetch path (groupIssueBoardAPI) used by the read/create/update
+// handlers and stay version-tolerant (absent on older instances → zero value,
+// omitted from the envelope).
 type GroupBoardOutput struct {
 	toolutil.HintableOutput
-	ID             int64             `json:"id"`
-	Name           string            `json:"name"`
-	GroupID        int64             `json:"group_id,omitempty"`
-	GroupName      string            `json:"group_name,omitempty"`
-	MilestoneID    int64             `json:"milestone_id,omitempty"`
-	MilestoneTitle string            `json:"milestone_title,omitempty"`
-	Labels         []string          `json:"labels,omitempty"`
-	Lists          []BoardListOutput `json:"lists,omitempty"`
+	ID              int64                 `json:"id"`
+	Name            string                `json:"name"`
+	Group           *GroupRefOutput       `json:"group,omitempty"`
+	Milestone       *MilestoneOutput      `json:"milestone,omitempty" tier:"premium"`
+	Assignee        *BasicUserOutput      `json:"assignee,omitempty" tier:"premium"`
+	Weight          int64                 `json:"weight,omitempty" tier:"premium"`
+	Labels          []*LabelDetailsOutput `json:"labels,omitempty"`
+	HideBacklogList bool                  `json:"hide_backlog_list"`
+	HideClosedList  bool                  `json:"hide_closed_list"`
+	Lists           []BoardListOutput     `json:"lists,omitempty"`
 }
 
-// BoardListOutput represents a single list within a group board.
+// BoardListOutput represents a single list within a group board. Nested objects
+// (assignee, label, iteration, milestone) mirror the full client-go gl.BoardList
+// sub-objects per the 1:1 audit policy.
 type BoardListOutput struct {
 	toolutil.HintableOutput
-	ID             int64  `json:"id"`
-	LabelID        int64  `json:"label_id,omitempty"`
-	LabelName      string `json:"label_name,omitempty"`
-	Position       int64  `json:"position"`
-	MaxIssueCount  int64  `json:"max_issue_count,omitempty"`
-	MaxIssueWeight int64  `json:"max_issue_weight,omitempty"`
-	AssigneeID     int64  `json:"assignee_id,omitempty"`
-	AssigneeUser   string `json:"assignee_username,omitempty"`
-	MilestoneID    int64  `json:"milestone_id,omitempty"`
-	MilestoneTitle string `json:"milestone_title,omitempty"`
+	ID             int64                    `json:"id"`
+	Assignee       *BoardListAssigneeOutput `json:"assignee,omitempty" tier:"premium"`
+	Iteration      *IterationOutput         `json:"iteration,omitempty" tier:"premium"`
+	Label          *LabelOutput             `json:"label,omitempty"`
+	MaxIssueCount  int64                    `json:"max_issue_count,omitempty"`
+	MaxIssueWeight int64                    `json:"max_issue_weight,omitempty"`
+	Milestone      *MilestoneOutput         `json:"milestone,omitempty" tier:"premium"`
+	Position       int64                    `json:"position"`
 }
 
 // ListGroupBoardsOutput represents a paginated list of group boards.
@@ -59,27 +68,102 @@ type ListBoardListsOutput struct {
 }
 
 // ---------------------------------------------------------------------------
+// Raw REST superset types
+// ---------------------------------------------------------------------------.
+
+// groupIssueBoardAPI is a raw-fetch superset over client-go's gl.GroupIssueBoard.
+// It embeds the SDK struct (so every SDK-known field — id/name/group/milestone/
+// labels/lists — still decodes through the documented json keys) and adds the
+// documented hide_backlog_list, hide_closed_list, assignee and weight fields
+// that gl.GroupIssueBoard omits. Decoding is single-pass and naturally
+// version-tolerant: when these fields are absent from the response, they stay
+// the zero value and (for assignee/weight) are omitted from the MCP envelope.
+type groupIssueBoardAPI struct {
+	gl.GroupIssueBoard
+	HideBacklogList bool          `json:"hide_backlog_list"`
+	HideClosedList  bool          `json:"hide_closed_list"`
+	Assignee        *gl.BasicUser `json:"assignee"`
+	Weight          int64         `json:"weight"`
+}
+
+// rawListGroupBoards issues a raw REST GET for a group's issue boards, decoding
+// the full documented response (including each board's SDK-missing
+// hide_backlog_list/hide_closed_list/assignee/weight) into a slice of
+// [groupIssueBoardAPI]. The supplied opts encode pagination/order via their url
+// struct tags, and the returned gl.Response preserves pagination headers for
+// [toolutil.PaginationFromResponse].
+func rawListGroupBoards(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.ListGroupIssueBoardsOptions) ([]*groupIssueBoardAPI, *gl.Response, error) {
+	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
+	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var boards []*groupIssueBoardAPI
+	resp, err := client.GL().Do(req, &boards)
+	return boards, resp, err
+}
+
+// rawGetGroupBoard issues a raw REST GET for a single group issue board,
+// decoding the full documented response (including the SDK-missing
+// hide_backlog_list/hide_closed_list/assignee/weight) into a [groupIssueBoardAPI].
+func rawGetGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64) (*groupIssueBoardAPI, *gl.Response, error) {
+	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var board groupIssueBoardAPI
+	resp, err := client.GL().Do(req, &board)
+	return &board, resp, err
+}
+
+// rawCreateGroupBoard issues a raw REST POST creating a group issue board,
+// decoding the full documented response into a [groupIssueBoardAPI] so the
+// SDK-missing hide_*_list/assignee/weight fields are surfaced.
+func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.CreateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
+	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
+	req, err := client.GL().NewRequest(http.MethodPost, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var board groupIssueBoardAPI
+	resp, err := client.GL().Do(req, &board)
+	return &board, resp, err
+}
+
+// rawUpdateGroupBoard issues a raw REST PUT updating a group issue board,
+// decoding the full documented response into a [groupIssueBoardAPI] so the
+// SDK-missing hide_*_list/assignee/weight fields are surfaced.
+func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *gl.UpdateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
+	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
+	req, err := client.GL().NewRequest(http.MethodPut, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return nil, nil, err
+	}
+	var board groupIssueBoardAPI
+	resp, err := client.GL().Do(req, &board)
+	return &board, resp, err
+}
+
+// ---------------------------------------------------------------------------
 // Converters
 // ---------------------------------------------------------------------------.
 
-// convertGroupBoard maps a GitLab group issue board into MCP output.
-func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
+// convertGroupBoardAPI maps a raw-fetch group issue board (groupIssueBoardAPI
+// superset) into MCP output, surfacing the documented hide_backlog_list,
+// hide_closed_list, assignee and weight fields the client-go gl.GroupIssueBoard
+// struct omits.
+func convertGroupBoardAPI(b *groupIssueBoardAPI) GroupBoardOutput {
 	out := GroupBoardOutput{
-		ID:   b.ID,
-		Name: b.Name,
-	}
-	if b.Group != nil {
-		out.GroupID = b.Group.ID
-		out.GroupName = b.Group.Name
-	}
-	if b.Milestone != nil {
-		out.MilestoneID = b.Milestone.ID
-		out.MilestoneTitle = b.Milestone.Title
-	}
-	for _, lbl := range b.Labels {
-		if lbl != nil {
-			out.Labels = append(out.Labels, lbl.Name)
-		}
+		ID:              b.ID,
+		Name:            b.Name,
+		Group:           groupRefOutput(b.Group),
+		Milestone:       milestoneOutput(b.Milestone),
+		Assignee:        basicUserOutput(b.Assignee),
+		Weight:          b.Weight,
+		Labels:          groupLabelOutputs(b.Labels),
+		HideBacklogList: b.HideBacklogList,
+		HideClosedList:  b.HideClosedList,
 	}
 	for _, l := range b.Lists {
 		out.Lists = append(out.Lists, convertBoardList(l))
@@ -89,25 +173,16 @@ func convertGroupBoard(b *gl.GroupIssueBoard) GroupBoardOutput {
 
 // convertBoardList maps a GitLab board list into group board MCP output.
 func convertBoardList(l *gl.BoardList) BoardListOutput {
-	out := BoardListOutput{
+	return BoardListOutput{
 		ID:             l.ID,
-		Position:       l.Position,
+		Assignee:       boardListAssigneeOutput(l.Assignee),
+		Iteration:      iterationOutput(l.Iteration),
+		Label:          labelOutput(l.Label),
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,
+		Milestone:      milestoneOutput(l.Milestone),
+		Position:       l.Position,
 	}
-	if l.Label != nil {
-		out.LabelID = l.Label.ID
-		out.LabelName = l.Label.Name
-	}
-	if l.Assignee != nil {
-		out.AssigneeID = l.Assignee.ID
-		out.AssigneeUser = l.Assignee.Username
-	}
-	if l.Milestone != nil {
-		out.MilestoneID = l.Milestone.ID
-		out.MilestoneTitle = l.Milestone.Title
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +196,10 @@ func convertBoardList(l *gl.BoardList) BoardListOutput {
 // ListGroupBoardsInput represents input for listing group issue boards.
 type ListGroupBoardsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupBoards lists all issue boards for a group.
@@ -129,13 +207,18 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 	if input.GroupID == "" {
 		return ListGroupBoardsOutput{}, toolutil.WrapErrWithMessage("group_board_list", toolutil.ErrFieldRequired("group_id"))
 	}
-	opts := &gl.ListGroupIssueBoardsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupIssueBoardsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	boards, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoards(string(input.GroupID), opts, gl.WithContext(ctx))
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
+	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
+	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are
+	// surfaced.
+	boards, resp, err := rawListGroupBoards(ctx, client, string(input.GroupID), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListGroupBoardsOutput{}, toolutil.WrapErrWithHint("group_board_list", err,
@@ -146,7 +229,7 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 	}
 	out := ListGroupBoardsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, b := range boards {
-		out.Boards = append(out.Boards, convertGroupBoard(b))
+		out.Boards = append(out.Boards, convertGroupBoardAPI(b))
 	}
 	return out, nil
 }
@@ -165,12 +248,15 @@ func GetGroupBoard(ctx context.Context, client *gitlabclient.Client, input GetGr
 	if input.BoardID == 0 {
 		return GroupBoardOutput{}, toolutil.WrapErrWithMessage("group_board_get", toolutil.ErrFieldRequired("board_id"))
 	}
-	board, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
+	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
+	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are
+	// surfaced.
+	board, _, err := rawGetGroupBoard(ctx, client, string(input.GroupID), input.BoardID)
 	if err != nil {
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_get", err, http.StatusNotFound,
 			"board_id not found on this group \u2014 use gitlab_group_board_list to discover current board IDs")
 	}
-	return convertGroupBoard(board), nil
+	return convertGroupBoardAPI(board), nil
 }
 
 // CreateGroupBoardInput represents input for creating a group board.
@@ -190,7 +276,10 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 	opts := &gl.CreateGroupIssueBoardOptions{
 		Name: new(input.Name),
 	}
-	board, _, err := client.GL().GroupIssueBoards.CreateGroupIssueBoard(string(input.GroupID), opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
+	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are
+	// surfaced on the created board.
+	board, _, err := rawCreateGroupBoard(ctx, client, string(input.GroupID), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
@@ -203,7 +292,7 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_create", err, http.StatusNotFound,
 			"verify the group exists with gitlab_group_get")
 	}
-	return convertGroupBoard(board), nil
+	return convertGroupBoardAPI(board), nil
 }
 
 // UpdateGroupBoardInput represents input for updating a group board.
@@ -213,7 +302,7 @@ type UpdateGroupBoardInput struct {
 	Name        string               `json:"name,omitempty" jsonschema:"Board name"`
 	AssigneeID  int64                `json:"assignee_id,omitempty" jsonschema:"Assignee user ID"`
 	MilestoneID int64                `json:"milestone_id,omitempty" jsonschema:"Milestone ID"`
-	Labels      string               `json:"labels,omitempty" jsonschema:"Comma-separated board scope labels"`
+	Labels      []string             `json:"labels,omitempty" jsonschema:"Board scope labels"`
 	Weight      int64                `json:"weight,omitempty" jsonschema:"Board scope weight"`
 }
 
@@ -235,14 +324,17 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 	if input.MilestoneID != 0 {
 		opts.MilestoneID = new(input.MilestoneID)
 	}
-	if input.Labels != "" {
-		lbls := gl.LabelOptions(strings.Split(input.Labels, ","))
+	if len(input.Labels) > 0 {
+		lbls := gl.LabelOptions(input.Labels)
 		opts.Labels = &lbls
 	}
 	if input.Weight != 0 {
 		opts.Weight = new(input.Weight)
 	}
-	board, _, err := client.GL().GroupIssueBoards.UpdateIssueBoard(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
+	// Raw REST fetch so the documented hide_backlog_list/hide_closed_list/
+	// assignee/weight fields (absent from client-go's gl.GroupIssueBoard) are
+	// surfaced on the updated board.
+	board, _, err := rawUpdateGroupBoard(ctx, client, string(input.GroupID), input.BoardID, opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
@@ -255,7 +347,7 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_update", err, http.StatusNotFound,
 			"board_id not found \u2014 use gitlab_group_board_list to verify")
 	}
-	return convertGroupBoard(board), nil
+	return convertGroupBoardAPI(board), nil
 }
 
 // DeleteGroupBoardInput represents input for deleting a group board.
@@ -292,7 +384,10 @@ func DeleteGroupBoard(ctx context.Context, client *gitlabclient.Client, input De
 type ListGroupBoardListsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	BoardID int64                `json:"board_id" jsonschema:"Board ID,required"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort    string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupBoardLists lists all lists in a group board.
@@ -303,11 +398,13 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	if input.BoardID == 0 {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithMessage("group_board_list_list", toolutil.ErrFieldRequired("board_id"))
 	}
-	opts := &gl.ListGroupIssueBoardListsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListGroupIssueBoardListsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {

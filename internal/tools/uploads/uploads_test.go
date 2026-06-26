@@ -83,6 +83,61 @@ func TestProjectUpload_Success(t *testing.T) {
 	}
 }
 
+// TestProjectUpload_ID_Mapped verifies that Upload surfaces the documented id
+// attribute (GitLab 17.3+, MR 161160) from the create-upload response.
+func TestProjectUpload_ID_Mapped(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id": 5,
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "/-/project/1234/uploads/abc/dk.png",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 5 {
+		t.Errorf("out.ID = %d, want 5", out.ID)
+	}
+}
+
+// TestProjectUpload_ID_Omitted_VersionTolerance verifies that Upload tolerates
+// GitLab instances older than 17.3 that omit the id attribute: the field stays
+// zero and no error is raised, mirroring the omitempty version-tolerance policy.
+func TestProjectUpload_ID_Omitted_VersionTolerance(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "/-/project/1234/uploads/abc/dk.png",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 0 {
+		t.Errorf("out.ID = %d, want 0 when id omitted by older GitLab", out.ID)
+	}
+	if out.URL != "/uploads/abc/dk.png" {
+		t.Errorf("out.URL = %q, want mapped despite missing id", out.URL)
+	}
+}
+
 // TestProjectUpload_InvalidBase64 verifies that Upload returns an error
 // when the content_base64 field contains invalid base64 data. The mock should
 // never be called because validation occurs before the API request.
@@ -483,8 +538,8 @@ func TestProjectUploadList_Success(t *testing.T) {
 	if out.Uploads[0].Size != 1024 {
 		t.Errorf("Uploads[0].Size = %d, want 1024", out.Uploads[0].Size)
 	}
-	if out.Uploads[0].UploadedBy != "admin" {
-		t.Errorf("expected uploaded_by 'admin', got %q", out.Uploads[0].UploadedBy)
+	if out.Uploads[0].UploadedBy == nil || out.Uploads[0].UploadedBy.Username != "admin" {
+		t.Errorf("expected uploaded_by username 'admin', got %+v", out.Uploads[0].UploadedBy)
 	}
 	if out.Uploads[1].ID != 2 {
 		t.Errorf("Uploads[1].ID = %d, want 2", out.Uploads[1].ID)
@@ -495,8 +550,8 @@ func TestProjectUploadList_Success(t *testing.T) {
 	if out.Uploads[1].Size != 2048 {
 		t.Errorf("Uploads[1].Size = %d, want 2048", out.Uploads[1].Size)
 	}
-	if out.Uploads[1].UploadedBy != "" {
-		t.Errorf("expected empty uploaded_by for second upload, got %q", out.Uploads[1].UploadedBy)
+	if out.Uploads[1].UploadedBy != nil {
+		t.Errorf("expected nil uploaded_by for second upload, got %+v", out.Uploads[1].UploadedBy)
 	}
 }
 
@@ -638,7 +693,7 @@ func TestList_APIError(t *testing.T) {
 func TestList_WithTimestampAndUploader(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
-			`[{"id":1,"size":1024,"filename":"file.txt","created_at":"2026-01-01T00:00:00Z","uploaded_by":{"username":"admin"}}]`)
+			`[{"id":1,"size":1024,"filename":"file.txt","created_at":"2026-01-01T00:00:00Z","uploaded_by":{"id":7,"username":"admin","name":"Admin User","state":"active","avatar_url":"https://gitlab.example.com/avatar.png","web_url":"https://gitlab.example.com/admin"}}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -649,8 +704,17 @@ func TestList_WithTimestampAndUploader(t *testing.T) {
 	if len(out.Uploads) != 1 {
 		t.Fatalf("got %d uploads, want 1", len(out.Uploads))
 	}
-	if out.Uploads[0].UploadedBy != "admin" {
-		t.Errorf("UploadedBy = %q, want %q", out.Uploads[0].UploadedBy, "admin")
+	if out.Uploads[0].UploadedBy == nil {
+		t.Fatal("expected non-nil uploaded_by")
+	}
+	if out.Uploads[0].UploadedBy.Username != "admin" {
+		t.Errorf("UploadedBy.Username = %q, want %q", out.Uploads[0].UploadedBy.Username, "admin")
+	}
+	// uploaded_by is trimmed to the documented reference subset (id, name,
+	// username) per doc/api/project_markdown_uploads.md; state, avatar_url, and
+	// web_url are intentionally not surfaced even though the SDK supplies them.
+	if out.Uploads[0].UploadedBy.ID != 7 || out.Uploads[0].UploadedBy.Name != "Admin User" {
+		t.Errorf("UploadedBy fields not mapped to documented subset: %+v", out.Uploads[0].UploadedBy)
 	}
 	if out.Uploads[0].CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")
@@ -697,6 +761,96 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", UploadID: 5})
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+// TestDeleteBySecret_Success verifies DeleteBySecret issues a DELETE to the
+// /uploads/<secret>/<filename> path and returns no error on a 204 response.
+func TestDeleteBySecret_Success(t *testing.T) {
+	var gotMethod, gotPath string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{
+		ProjectID: "42",
+		Secret:    "abc123",
+		Filename:  "file.txt",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q, want DELETE", gotMethod)
+	}
+	if !strings.HasSuffix(gotPath, "/uploads/abc123/file.txt") {
+		t.Errorf("path = %q, want suffix /uploads/abc123/file.txt", gotPath)
+	}
+}
+
+// TestDeleteBySecret_MissingProjectID verifies DeleteBySecret rejects empty project_id.
+func TestDeleteBySecret_MissingProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{Secret: "abc123", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for missing project_id")
+	}
+}
+
+// TestDeleteBySecret_MissingSecret verifies DeleteBySecret rejects empty secret.
+func TestDeleteBySecret_MissingSecret(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for missing secret")
+	}
+}
+
+// TestDeleteBySecret_MissingFilename verifies DeleteBySecret rejects empty filename.
+func TestDeleteBySecret_MissingFilename(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123"})
+	if err == nil {
+		t.Fatal("expected error for missing filename")
+	}
+}
+
+// TestDeleteBySecret_APIError verifies DeleteBySecret wraps API failures.
+func TestDeleteBySecret_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	err := DeleteBySecret(context.Background(), client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123", Filename: "file.txt"})
+	if err == nil {
+		t.Fatal("expected error for API failure")
+	}
+	if !strings.Contains(err.Error(), "delete upload abc123/file.txt") {
+		t.Errorf("error = %v, want delete-by-secret context", err)
+	}
+}
+
+// TestDeleteBySecret_CancelledContext verifies DeleteBySecret returns early on a cancelled context.
+func TestDeleteBySecret_CancelledContext(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	ctx := testutil.CancelledCtx(t)
+	err := DeleteBySecret(ctx, client, DeleteBySecretInput{ProjectID: "42", Secret: "abc123", Filename: "file.txt"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
 	}
@@ -749,5 +903,102 @@ func TestProjectUpload_MissingProjectID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "project_id is required") {
 		t.Errorf("error = %q, want contains \"project_id is required\"", err.Error())
+	}
+}
+
+// TestList_KeysetPaginationParams verifies List forwards offset, keyset, and
+// ordering parameters as query parameters and maps pagination response headers.
+func TestList_KeysetPaginationParams(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"pagination": "keyset",
+			"page_token": "42",
+			"order_by":   "created_at",
+			"sort":       "desc",
+			"per_page":   "50",
+			"page":       "2",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("query %q = %q, want %q", k, got, want)
+			}
+		}
+		w.Header().Set("X-Next-Page", "3")
+		w.Header().Set("X-Page", "2")
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"size":1,"filename":"a.txt"}]`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Pagination.NextPage != 3 {
+		t.Errorf("Pagination.NextPage = %d, want 3", out.Pagination.NextPage)
+	}
+	if !out.Pagination.HasMore {
+		t.Error("expected HasMore true")
+	}
+}
+
+// TestFormatListMarkdown_Empty verifies the list formatter renders a header and
+// an explicit no-uploads line for an empty result set.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{})
+	if !strings.Contains(md, "Project Markdown Uploads (0)") {
+		t.Errorf("missing header: %q", md)
+	}
+	if !strings.Contains(md, "No uploads found.") {
+		t.Errorf("missing empty marker: %q", md)
+	}
+}
+
+// TestFormatListMarkdown_Populated verifies the list formatter emits a table row
+// with the uploader label and a pagination/hints block.
+func TestFormatListMarkdown_Populated(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Uploads: []ListItem{
+			{
+				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01",
+				UploadedBy: &UploadedByOutput{Username: "admin", Name: "Admin User"},
+			},
+		},
+	})
+	if !strings.Contains(md, "Project Markdown Uploads (1)") {
+		t.Errorf("missing header: %q", md)
+	}
+	if !strings.Contains(md, "Admin User (@admin)") {
+		t.Errorf("missing uploader label: %q", md)
+	}
+	if !strings.Contains(md, "a.png") {
+		t.Errorf("missing filename: %q", md)
+	}
+}
+
+// TestUploadedByLabel covers every rendering branch of uploadedByLabel.
+func TestUploadedByLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *UploadedByOutput
+		want string
+	}{
+		{"nil", nil, ""},
+		{"name_and_username", &UploadedByOutput{Name: "Admin User", Username: "admin"}, "Admin User (@admin)"},
+		{"username_only", &UploadedByOutput{Username: "admin"}, "@admin"},
+		{"name_only", &UploadedByOutput{Name: "Admin User"}, "Admin User"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := uploadedByLabel(tt.in); got != tt.want {
+				t.Errorf("uploadedByLabel = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

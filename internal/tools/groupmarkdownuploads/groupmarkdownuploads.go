@@ -14,19 +14,39 @@ import (
 
 // List.
 
-// ListInput represents input for listing group markdown uploads.
+// ListInput represents input for listing group markdown uploads. It mirrors
+// gl.ListMarkdownUploadsOptions (the embedded gl.ListOptions) including offset
+// and keyset pagination via order_by/sort/page_token.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"The ID or URL-encoded path of the group,required"`
-	Page    int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int64                `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// UploadItem represents a single markdown upload entry.
+// UploadedByOutput mirrors the short-user representation in a markdown
+// upload's uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User).
+//
+// Documented reference subset per doc/api/group_markdown_uploads.md: the
+// "List all uploads for a group" response documents only id, name, and
+// username inside uploaded_by. The SDK *gl.User embed additionally carries
+// state, avatar_url, and web_url; those are trimmed here to keep the nested
+// reference at documented depth.
+type UploadedByOutput struct {
+	ID       int64  `json:"id"`       // Documented reference subset per doc/api/group_markdown_uploads.md
+	Username string `json:"username"` // Documented reference subset per doc/api/group_markdown_uploads.md
+	Name     string `json:"name"`     // Documented reference subset per doc/api/group_markdown_uploads.md
+}
+
+// UploadItem represents a single markdown upload entry. It mirrors the canonical
+// keys of gl.MarkdownUpload (id, size, filename, created_at, uploaded_by).
 type UploadItem struct {
-	ID        int64  `json:"id"`
-	Size      int64  `json:"size"`
-	Filename  string `json:"filename"`
-	CreatedAt string `json:"created_at,omitempty"`
+	ID         int64             `json:"id"`
+	Size       int64             `json:"size"`
+	Filename   string            `json:"filename"`
+	CreatedAt  string            `json:"created_at,omitempty"`
+	UploadedBy *UploadedByOutput `json:"uploaded_by,omitempty"`
 }
 
 // ListOutput represents the output of listing group markdown uploads.
@@ -35,13 +55,27 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// uploadedByOutput maps an SDK *gl.User embed onto the short-user output shape.
+func uploadedByOutput(u *gl.User) *UploadedByOutput {
+	if u == nil {
+		return nil
+	}
+	return &UploadedByOutput{
+		ID:       u.ID,
+		Username: u.Username,
+		Name:     u.Name,
+	}
+}
+
 // List retrieves group markdown uploads.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*ListOutput, error) {
-	opts := &gl.ListMarkdownUploadsOptions{
-		ListOptions: gl.ListOptions{
-			Page:    input.Page,
-			PerPage: input.PerPage,
-		},
+	opts := &gl.ListMarkdownUploadsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	uploads, resp, err := client.GL().GroupMarkdownUploads.ListGroupMarkdownUploads(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -51,9 +85,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*L
 	items := make([]UploadItem, 0, len(uploads))
 	for _, u := range uploads {
 		item := UploadItem{
-			ID:       u.ID,
-			Size:     u.Size,
-			Filename: u.Filename,
+			ID:         u.ID,
+			Size:       u.Size,
+			Filename:   u.Filename,
+			UploadedBy: uploadedByOutput(u.UploadedBy),
 		}
 		if u.CreatedAt != nil {
 			item.CreatedAt = u.CreatedAt.String()
@@ -129,16 +164,33 @@ func FormatList(out *ListOutput) string {
 		return "No group markdown uploads found.\n"
 	}
 	var sb strings.Builder
-	sb.WriteString("| ID | Filename | Size | Created At |\n")
-	sb.WriteString("|---|---|---|---|\n")
+	sb.WriteString("| ID | Filename | Size | Created At | Uploaded By |\n")
+	sb.WriteString("|---|---|---|---|---|\n")
 	for _, u := range out.Uploads {
-		fmt.Fprintf(&sb, "| %d | %s | %d | %s |\n",
+		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
 			u.ID,
 			toolutil.EscapeMdTableCell(u.Filename),
 			u.Size,
-			toolutil.EscapeMdTableCell(u.CreatedAt))
+			toolutil.EscapeMdTableCell(u.CreatedAt),
+			toolutil.EscapeMdTableCell(uploadedByLabel(u.UploadedBy)))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
 	toolutil.WriteHints(&sb, "Use upload URLs in Markdown content to embed files")
 	return sb.String()
+}
+
+// uploadedByLabel renders a markdown upload's uploader as "name (@username)",
+// falling back gracefully when fields are empty or the user is absent.
+func uploadedByLabel(u *UploadedByOutput) string {
+	if u == nil {
+		return ""
+	}
+	switch {
+	case u.Name != "" && u.Username != "":
+		return fmt.Sprintf("%s (@%s)", u.Name, u.Username)
+	case u.Username != "":
+		return "@" + u.Username
+	default:
+		return u.Name
+	}
 }

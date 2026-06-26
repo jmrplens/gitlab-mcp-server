@@ -22,6 +22,9 @@ func FormatFeatureFlagMarkdown(out Output) string {
 	if out.UpdatedAt != "" {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(out.UpdatedAt))
 	}
+	if len(out.Scopes) > 0 {
+		fmt.Fprintf(&b, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(formatScopes(out.Scopes)))
+	}
 	if len(out.Strategies) > 0 {
 		b.WriteString("\n### Strategies\n\n")
 		b.WriteString("| ID | Name | Parameters | Scopes |\n|---|---|---|---|\n")

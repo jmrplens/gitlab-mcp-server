@@ -72,15 +72,19 @@ type ListAllInput struct{}
 // ListProjectInput represents parameters for listing project deploy tokens.
 type ListProjectInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int                  `json:"per_page,omitempty" jsonschema:"Results per page (max 100)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // ListGroupInput represents parameters for listing group deploy tokens.
 type ListGroupInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	Page    int                  `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage int                  `json:"per_page,omitempty" jsonschema:"Results per page (max 100)"`
+	OrderBy string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort    string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetProjectInput represents parameters for getting a project deploy token.
@@ -137,11 +141,27 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, _ ListAllInput) (
 			"listing all instance-level deploy tokens requires admin token")
 	}
 
+	return buildListOutput(tokens, resp), nil
+}
+
+// applyKeysetOrder copies keyset pagination plus order_by/sort onto gl.ListOptions.
+func applyKeysetOrder(opts *gl.ListOptions, page toolutil.PaginationInput, keyset toolutil.KeysetPaginationInput, orderBy, sort string) {
+	toolutil.ApplyListOptions(opts, page, keyset)
+	if orderBy != "" {
+		opts.OrderBy = orderBy
+	}
+	if sort != "" {
+		opts.Sort = sort
+	}
+}
+
+// buildListOutput assembles the paginated ListOutput from raw API tokens and response.
+func buildListOutput(tokens []*gl.DeployToken, resp *gl.Response) ListOutput {
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, t := range tokens {
 		out.DeployTokens = append(out.DeployTokens, toOutput(t))
 	}
-	return out, nil
+	return out
 }
 
 // ListProject lists deploy tokens for a project.
@@ -150,12 +170,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 
-	opts := &gl.ListProjectDeployTokensOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListProjectDeployTokensOptions{}
+	applyKeysetOrder(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
 	tokens, resp, err := client.GL().DeployTokens.ListProjectDeployTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -163,11 +179,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 			"listing project deploy tokens requires Maintainer role; verify project_id with gitlab_project_get")
 	}
 
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, t := range tokens {
-		out.DeployTokens = append(out.DeployTokens, toOutput(t))
-	}
-	return out, nil
+	return buildListOutput(tokens, resp), nil
 }
 
 // ListGroup lists deploy tokens for a group.
@@ -176,12 +188,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 
-	opts := &gl.ListGroupDeployTokensOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
-	}
+	opts := &gl.ListGroupDeployTokensOptions{}
+	applyKeysetOrder(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
 	tokens, resp, err := client.GL().DeployTokens.ListGroupDeployTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -189,11 +197,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 			"listing group deploy tokens requires Owner role; verify group_id with gitlab_group_get")
 	}
 
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, t := range tokens {
-		out.DeployTokens = append(out.DeployTokens, toOutput(t))
-	}
-	return out, nil
+	return buildListOutput(tokens, resp), nil
 }
 
 // GetProject retrieves a specific project deploy token.

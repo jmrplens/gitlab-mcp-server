@@ -176,7 +176,40 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"}]`)
 	}))
-	out, err := List(context.Background(), client, ListInput{Page: 2, PerPage: 5})
+	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Templates) != 1 {
+		t.Fatalf("len = %d, want 1", len(out.Templates))
+	}
+}
+
+// TestList_WithKeysetAndOrder verifies that List forwards order_by, sort, and
+// keyset pagination (pagination, page_token) to the GitLab API query string.
+// The mock asserts each query parameter is present before responding with HTTP OK.
+func TestList_WithKeysetAndOrder(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("order_by") != "name" {
+			t.Errorf("order_by = %q, want name", q.Get("order_by"))
+		}
+		if q.Get("sort") != "desc" {
+			t.Errorf("sort = %q, want desc", q.Get("sort"))
+		}
+		if q.Get("pagination") != "keyset" {
+			t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+		}
+		if q.Get("page_token") != "cursor123" {
+			t.Errorf("page_token = %q, want cursor123", q.Get("page_token"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"}]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{
+		OrderBy:               "name",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor123"},
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -213,6 +246,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if specByTool["gitlab_get_gitignore_template"].ParameterGuidance["key"].SemanticRole == "" {
 		t.Fatal("gitlab_get_gitignore_template should define key parameter guidance")
+	}
+	for _, tool := range []string{"gitlab_list_gitignore_templates", "gitlab_get_gitignore_template"} {
+		desc := specByTool[tool].IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s description missing Returns:/See also: form: %q", tool, desc)
+		}
 	}
 }
 

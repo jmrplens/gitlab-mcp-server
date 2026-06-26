@@ -7,9 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
@@ -27,9 +30,13 @@ type UploadInput struct {
 	ContentBase64 string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Only one of file_path or content_base64 should be provided."`
 }
 
-// UploadOutput contains the result of a file upload.
+// UploadOutput contains the result of a file upload. Fields mirror the
+// documented create-upload response (id, alt, url, full_path, markdown) per
+// doc/api/project_markdown_uploads.md. ID is omitempty because GitLab only
+// returns it from 17.3 onward (MR 161160); older instances omit it.
 type UploadOutput struct {
 	toolutil.HintableOutput
+	ID       int64  `json:"id,omitempty"`
 	Alt      string `json:"alt"`
 	URL      string `json:"url"`
 	FullPath string `json:"full_path"`
@@ -104,6 +111,7 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 	fullURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + uploaded.FullPath
 
 	return UploadOutput{
+		ID:       uploaded.ID,
 		Alt:      uploaded.Alt,
 		URL:      uploaded.URL,
 		FullPath: uploaded.FullPath,
@@ -114,24 +122,86 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 
 // Markdown Upload List/Delete.
 
-// ListInput defines input for listing a project's markdown uploads.
+// ListInput defines input for listing a project's markdown uploads. It mirrors
+// the offset and keyset pagination supported by the GitLab uploads list endpoint
+// (page/per_page plus order_by/sort/page_token for keyset traversal).
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"For keyset pagination, the column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: 'asc' or 'desc'"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// ListItem represents a single markdown upload entry.
+// UploadedByOutput mirrors the short-user representation in a markdown upload's
+// uploaded_by field (gl.MarkdownUpload.UploadedBy, a *gl.User). Per the list
+// response in doc/api/project_markdown_uploads.md, the nested uploaded_by object
+// documents only id, name, and username, so this is trimmed to that documented
+// reference subset even though the SDK *gl.User carries additional fields.
+// Documented reference subset per doc/api/project_markdown_uploads.md
+type UploadedByOutput struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+}
+
+// ListItem represents a single markdown upload entry. It mirrors the canonical
+// keys of gl.MarkdownUpload (id, size, filename, created_at, uploaded_by).
 type ListItem struct {
-	ID         int64  `json:"id"`
-	Size       int64  `json:"size"`
-	Filename   string `json:"filename"`
-	CreatedAt  string `json:"created_at,omitempty"`
-	UploadedBy string `json:"uploaded_by,omitempty"`
+	ID         int64             `json:"id"`
+	Size       int64             `json:"size"`
+	Filename   string            `json:"filename"`
+	CreatedAt  string            `json:"created_at,omitempty"`
+	UploadedBy *UploadedByOutput `json:"uploaded_by,omitempty"`
 }
 
 // ListOutput contains the list of markdown uploads for a project.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Uploads []ListItem `json:"uploads"`
+	Uploads    []ListItem                `json:"uploads"`
+	Pagination toolutil.PaginationOutput `json:"pagination"`
+}
+
+// uploadedByOutput maps an SDK *gl.User embed onto the short-user output shape.
+func uploadedByOutput(u *gl.User) *UploadedByOutput {
+	if u == nil {
+		return nil
+	}
+	return &UploadedByOutput{
+		ID:       u.ID,
+		Username: u.Username,
+		Name:     u.Name,
+	}
+}
+
+// listQueryParameters renders the offset, keyset, and ordering parameters as a
+// gl.RequestOptionFunc. The ListProjectMarkdownUploads SDK method has no options
+// struct, so pagination is applied via query parameters mirrored from a
+// gl.ListMarkdownUploadsOptions wired with toolutil.ApplyListOptions.
+func listQueryParameters(input ListInput) gl.RequestOptionFunc {
+	opts := &gl.ListMarkdownUploadsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+
+	q := url.Values{}
+	if opts.Page > 0 {
+		q.Set("page", strconv.FormatInt(opts.Page, 10))
+	}
+	if opts.PerPage > 0 {
+		q.Set("per_page", strconv.FormatInt(opts.PerPage, 10))
+	}
+	if opts.Pagination != "" {
+		q.Set("pagination", opts.Pagination)
+	}
+	if opts.PageToken != "" {
+		q.Set("page_token", opts.PageToken)
+	}
+	if input.OrderBy != "" {
+		q.Set("order_by", input.OrderBy)
+	}
+	if input.Sort != "" {
+		q.Set("sort", input.Sort)
+	}
+	return gl.WithKeysetPaginationParameters("?" + q.Encode())
 }
 
 // List lists all markdown uploads for a GitLab project.
@@ -143,7 +213,11 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("projectUploadList: project_id is required")
 	}
 
-	uploads, _, err := client.GL().ProjectMarkdownUploads.ListProjectMarkdownUploads(string(input.ProjectID))
+	uploads, resp, err := client.GL().ProjectMarkdownUploads.ListProjectMarkdownUploads(
+		string(input.ProjectID),
+		gl.WithContext(ctx),
+		listQueryParameters(input),
+	)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list uploads for project %s: %w", input.ProjectID, err)
 	}
@@ -151,20 +225,21 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	items := make([]ListItem, 0, len(uploads))
 	for _, u := range uploads {
 		item := ListItem{
-			ID:       u.ID,
-			Size:     u.Size,
-			Filename: u.Filename,
+			ID:         u.ID,
+			Size:       u.Size,
+			Filename:   u.Filename,
+			UploadedBy: uploadedByOutput(u.UploadedBy),
 		}
 		if u.CreatedAt != nil {
 			item.CreatedAt = u.CreatedAt.String()
 		}
-		if u.UploadedBy != nil {
-			item.UploadedBy = u.UploadedBy.Username
-		}
 		items = append(items, item)
 	}
 
-	return ListOutput{Uploads: items}, nil
+	return ListOutput{
+		Uploads:    items,
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}, nil
 }
 
 // DeleteInput defines input for deleting a project markdown upload.
@@ -188,6 +263,46 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadByID(string(input.ProjectID), input.UploadID)
 	if err != nil {
 		return fmt.Errorf("delete upload %d from project %s: %w", input.UploadID, input.ProjectID, err)
+	}
+
+	return nil
+}
+
+// DeleteBySecretInput defines input for deleting a project markdown upload
+// identified by its 32-character secret and filename, as returned in an
+// upload's url/markdown reference (/uploads/:secret/:filename).
+type DeleteBySecretInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	Secret    string               `json:"secret" jsonschema:"32-character upload secret from the upload URL (/uploads/<secret>/<filename>),required"`
+	Filename  string               `json:"filename" jsonschema:"Filename of the upload as it appears in the upload URL,required"`
+}
+
+// DeleteBySecret deletes a markdown upload from a GitLab project by its
+// secret and filename. This is the alternative to deleting by numeric
+// upload ID and matches the /uploads/:secret/:filename reference embedded
+// in an upload's Markdown link.
+func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input DeleteBySecretInput) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf(fmtContextCanceled, err)
+	}
+	if input.ProjectID == "" {
+		return errors.New("projectUploadDeleteBySecret: project_id is required")
+	}
+	if input.Secret == "" {
+		return errors.New("projectUploadDeleteBySecret: secret is required")
+	}
+	if input.Filename == "" {
+		return errors.New("projectUploadDeleteBySecret: filename is required")
+	}
+
+	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadBySecretAndFilename(
+		string(input.ProjectID),
+		input.Secret,
+		input.Filename,
+		gl.WithContext(ctx),
+	)
+	if err != nil {
+		return fmt.Errorf("delete upload %s/%s from project %s: %w", input.Secret, input.Filename, input.ProjectID, err)
 	}
 
 	return nil

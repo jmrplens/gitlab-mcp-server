@@ -59,11 +59,11 @@ func TestActionSpecs_CreateBatchGuidance(t *testing.T) {
 		t.Fatalf("links SemanticRole = %q, want release_asset_links", guidance.SemanticRole)
 	}
 	if !containsText(guidance.CommonConfusions, "direct_asset_path") {
-		t.Fatalf("links CommonConfusions = %v, want unsupported field warning", guidance.CommonConfusions)
+		t.Fatalf("links CommonConfusions = %v, want direct_asset_path guidance", guidance.CommonConfusions)
 	}
 	description := schemaPropertyDescription(t, spec.Route.InputSchema, "links")
-	if !strings.Contains(description, "supports only name, url, and link_type") {
-		t.Fatalf("links schema description = %q, want supported fields warning", description)
+	if !strings.Contains(description, "name, url, link_type, direct_asset_path") {
+		t.Fatalf("links schema description = %q, want full per-link field set", description)
 	}
 }
 

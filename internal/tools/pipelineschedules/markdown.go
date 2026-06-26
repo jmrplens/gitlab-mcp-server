@@ -26,8 +26,14 @@ func FormatOutputMarkdown(s Output) string {
 	if s.NextRunAt != "" {
 		fmt.Fprintf(&b, "| Next Run | %s |\n", toolutil.FormatTime(s.NextRunAt))
 	}
-	if s.OwnerName != "" {
-		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(s.OwnerName))
+	if s.Owner != nil && s.Owner.Username != "" {
+		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(s.Owner.Username))
+	}
+	if s.LastPipeline != nil {
+		// The documented `last_pipeline` reference has no web_url, so render the
+		// title as plain text (MdTitleLink emits no link for an empty URL).
+		fmt.Fprintf(&b, "| Last Pipeline | %s |\n",
+			toolutil.MdTitleLink(fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status), ""))
 	}
 	if s.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(s.CreatedAt))
@@ -55,8 +61,12 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Description | Ref | Cron | Active | Owner |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, s := range out.Schedules {
+		owner := ""
+		if s.Owner != nil {
+			owner = s.Owner.Username
+		}
 		fmt.Fprintf(&b, "| %d | %s | %s | `%s` | %t | %s |\n",
-			s.ID, toolutil.EscapeMdTableCell(s.Description), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Cron), s.Active, toolutil.EscapeMdTableCell(s.OwnerName))
+			s.ID, toolutil.EscapeMdTableCell(s.Description), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Cron), s.Active, toolutil.EscapeMdTableCell(owner))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

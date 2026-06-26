@@ -916,3 +916,116 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 		t.Errorf("pipe in key should be escaped:\n%s", md)
 	}
 }
+
+// ---------- Keyset pagination + filter object (1:1 audit) ----------.
+
+// TestList_OrderBySortPageToken verifies List forwards order_by, sort, and
+// page_token to the GitLab API, mirroring the embedded ListOptions of
+// gitlab.ListGroupVariablesOptions.
+func TestList_OrderBySortPageToken(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGroupVars {
+			q := r.URL.Query()
+			if q.Get("order_by") != "key" {
+				t.Errorf("order_by = %q, want key", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			if q.Get("page_token") != "next-page" {
+				t.Errorf("page_token = %q, want next-page", q.Get("page_token"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[`+varJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	in := ListInput{GroupID: "10", OrderBy: "key", Sort: "desc"}
+	in.PageToken = "next-page"
+	if _, err := List(context.Background(), client, in); err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+}
+
+// TestGet_FilterObjectPrecedence verifies the nested filter object wins over the
+// flat environment_scope shorthand (resolveScope precedence) on Get.
+func TestGet_FilterObjectPrecedence(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathVar1 {
+			if got := r.URL.Query().Get("filter[environment_scope]"); got != "production" {
+				t.Errorf("filter[environment_scope] = %q, want production", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, varJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		GroupID:          "10",
+		Key:              "MY_VAR",
+		EnvironmentScope: "staging",
+		Filter:           &Filter{EnvironmentScope: "production"},
+	})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.Key != "MY_VAR" {
+		t.Errorf("Key = %q, want MY_VAR", out.Key)
+	}
+}
+
+// TestUpdate_FilterObjectPrecedence verifies the nested filter object wins over
+// the flat environment_scope shorthand on Update.
+func TestUpdate_FilterObjectPrecedence(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathVar1 {
+			body := map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			filter, ok := body["filter"].(map[string]any)
+			if !ok || filter["environment_scope"] != "production" {
+				t.Fatalf("filter.environment_scope = %#v, want production", body["filter"])
+			}
+			testutil.RespondJSON(w, http.StatusOK, varJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		GroupID:          "10",
+		Key:              "MY_VAR",
+		Value:            "v",
+		EnvironmentScope: "staging",
+		Filter:           &Filter{EnvironmentScope: "production"},
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+}
+
+// TestDelete_FilterObjectPrecedence verifies the nested filter object wins over
+// the flat environment_scope shorthand on Delete.
+func TestDelete_FilterObjectPrecedence(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.Path == pathVar1 {
+			if got := r.URL.Query().Get("filter[environment_scope]"); got != "production" {
+				t.Errorf("filter[environment_scope] = %q, want production", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	err := Delete(context.Background(), client, DeleteInput{
+		GroupID:          "10",
+		Key:              "MY_VAR",
+		EnvironmentScope: "staging",
+		Filter:           &Filter{EnvironmentScope: "production"},
+	})
+	if err != nil {
+		t.Fatalf("Delete() unexpected error: %v", err)
+	}
+}

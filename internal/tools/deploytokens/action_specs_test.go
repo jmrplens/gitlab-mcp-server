@@ -4,6 +4,7 @@ package deploytokens
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -220,6 +221,72 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDeployTokenDescription_AllActions verifies that every deploy-token action
+// has a non-empty "Returns: … See also: …" individual-tool description and that
+// an unknown action name returns the empty default (1:1 audit R-META).
+func TestDeployTokenDescription_AllActions(t *testing.T) {
+	actions := []string{
+		"deploy_token_list_all",
+		"deploy_token_list_project",
+		"deploy_token_list_group",
+		"deploy_token_get_project",
+		"deploy_token_get_group",
+		"deploy_token_create_project",
+		"deploy_token_create_group",
+		"deploy_token_delete_project",
+		"deploy_token_delete_group",
+	}
+	for _, action := range actions {
+		desc := deployTokenDescription(action)
+		if desc == "" {
+			t.Errorf("action %q has empty description", action)
+		}
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("action %q description missing Returns/See also: %q", action, desc)
+		}
+	}
+	if got := deployTokenDescription("unknown_action"); got != "" {
+		t.Errorf("unknown action description = %q, want empty", got)
+	}
+}
+
+// TestDecorateDeployTokenMeta_PerAction verifies that every deploy-token action
+// receives an action-specific Usage and at least two distinctive
+// natural-language aliases beyond the canonical individual-tool name, and that
+// the decorator is a no-op for an action absent from the metadata map.
+func TestDecorateDeployTokenMeta_PerAction(t *testing.T) {
+	for action := range deployTokenActionMeta {
+		options := toolutil.ActionSpecOptions{
+			Aliases: []string{"gitlab_" + action},
+			Usage:   "placeholder",
+		}
+		decorateDeployTokenMeta(&options, action)
+
+		if options.Usage == "placeholder" || options.Usage == "" {
+			t.Errorf("action %q: Usage not decorated: %q", action, options.Usage)
+		}
+		distinctive := 0
+		for _, alias := range options.Aliases {
+			if alias != "gitlab_"+action {
+				distinctive++
+			}
+		}
+		if distinctive < 2 {
+			t.Errorf("action %q: want >=2 distinctive aliases, got %d (%v)", action, distinctive, options.Aliases)
+		}
+	}
+
+	// Unknown action: decorator must be a no-op (covers the !ok branch).
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{"gitlab_unknown"},
+		Usage:   "placeholder",
+	}
+	decorateDeployTokenMeta(&options, "unknown_action")
+	if options.Usage != "placeholder" || len(options.Aliases) != 1 {
+		t.Errorf("unknown action mutated options: usage=%q aliases=%v", options.Usage, options.Aliases)
 	}
 }
 

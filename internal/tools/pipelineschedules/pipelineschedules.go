@@ -3,6 +3,7 @@ package pipelineschedules
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -25,9 +26,12 @@ const (
 
 // ListInput contains parameters for listing pipeline schedules.
 type ListInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id"       jsonschema:"Project ID or URL-encoded path,required"`
-	Scope     string               `json:"scope,omitempty"  jsonschema:"Filter by scope: active or inactive"`
+	ProjectID toolutil.StringOrInt `json:"project_id"        jsonschema:"Project ID or URL-encoded path,required"`
+	Scope     string               `json:"scope,omitempty"   jsonschema:"Filter by scope: active or inactive"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. id)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort order for keyset pagination: asc or desc"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for retrieving a single pipeline schedule.
@@ -44,6 +48,7 @@ type CreateInput struct {
 	Cron         string               `json:"cron"                    jsonschema:"Cron expression (e.g. 0 1 * * *),required"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Cron timezone (e.g. UTC or America/New_York)"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Whether the schedule is active (default: true)"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to seed on the schedule; each entry has name and value"`
 }
 
 // UpdateInput contains parameters for editing a pipeline schedule.
@@ -55,6 +60,7 @@ type UpdateInput struct {
 	Cron         string               `json:"cron,omitempty"          jsonschema:"Updated cron expression"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Updated cron timezone"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Enable or disable the schedule"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to set on the schedule; each entry has name, value, and optional destroy"`
 }
 
 // DeleteInput contains parameters for deleting a pipeline schedule.
@@ -76,16 +82,19 @@ type RunInput struct {
 // Output represents a single pipeline schedule in MCP responses.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int    `json:"id"`
-	Description  string `json:"description"`
-	Ref          string `json:"ref"`
-	Cron         string `json:"cron"`
-	CronTimezone string `json:"cron_timezone"`
-	NextRunAt    string `json:"next_run_at,omitempty"`
-	Active       bool   `json:"active"`
-	OwnerName    string `json:"owner_name,omitempty"`
-	CreatedAt    string `json:"created_at,omitempty"`
-	UpdatedAt    string `json:"updated_at,omitempty"`
+	ID           int                 `json:"id"`
+	Description  string              `json:"description"`
+	Ref          string              `json:"ref"`
+	Cron         string              `json:"cron"`
+	CronTimezone string              `json:"cron_timezone"`
+	NextRunAt    string              `json:"next_run_at,omitempty"`
+	Active       bool                `json:"active"`
+	Owner        *OwnerOutput        `json:"owner,omitempty"`
+	LastPipeline *LastPipelineOutput `json:"last_pipeline,omitempty"`
+	Variables    []VariableObject    `json:"variables,omitempty"`
+	Inputs       []InputObject       `json:"inputs,omitempty"`
+	CreatedAt    string              `json:"created_at,omitempty"`
+	UpdatedAt    string              `json:"updated_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of pipeline schedules.
@@ -108,9 +117,10 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 		Cron:         s.Cron,
 		CronTimezone: s.CronTimezone,
 		Active:       s.Active,
-	}
-	if s.Owner != nil {
-		out.OwnerName = s.Owner.Username
+		Owner:        ownerOutput(s.Owner),
+		LastPipeline: lastPipelineOutput(s.LastPipeline),
+		Variables:    variableObjects(s.Variables),
+		Inputs:       inputObjects(s.Inputs),
 	}
 	if s.NextRunAt != nil {
 		out.NextRunAt = s.NextRunAt.Format(time.RFC3339)
@@ -122,6 +132,26 @@ func toOutput(s *gitlab.PipelineSchedule) Output {
 		out.UpdatedAt = s.UpdatedAt.Format(time.RFC3339)
 	}
 	return out
+}
+
+// rawGetSchedule issues a raw REST GET against a single pipeline schedule path,
+// decoding the documented superset (including the SDK-missing
+// `variables[].raw` boolean) into a [rawScheduleAPI]. The SDK
+// gl.PipelineSchedule wrapper drops `raw`, so this raw-fetch path is used for the
+// single-schedule reads that return the documented `variables[]` array. A single
+// Do(&superset) unmarshal naturally tolerates instances that omit `raw`, leaving
+// it at its zero value.
+func rawGetSchedule(ctx context.Context, client *gitlabclient.Client, projectID string, scheduleID int) (*rawScheduleAPI, error) {
+	path := fmt.Sprintf("projects/%s/pipeline_schedules/%d", gitlab.PathEscape(projectID), scheduleID)
+	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gitlab.RequestOptionFunc{gitlab.WithContext(ctx)})
+	if err != nil {
+		return nil, err
+	}
+	var s rawScheduleAPI
+	if _, err = client.GL().Do(req, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -137,11 +167,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	opts := &gitlab.ListPipelineSchedulesOptions{
-		ListOptions: gitlab.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gitlab.ListPipelineSchedulesOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Scope != "" {
 		scope := gitlab.PipelineScheduleScopeValue(input.Scope)
@@ -177,13 +209,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
-	s, _, err := client.GL().PipelineSchedules.GetPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), gitlab.WithContext(ctx))
+	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get pipeline schedule", err, http.StatusNotFound,
 			"verify schedule_id with gitlab_pipeline_schedule_list \u2014 schedule_id is the database ID, not a name")
 	}
 
-	return toOutput(s), nil
+	return toOutputAPI(s), nil
 }
 
 // Create creates resources for the pipelineschedules package.
@@ -214,6 +246,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.Active != nil {
 		opts.Active = input.Active
+	}
+	if len(input.Inputs) > 0 {
+		opts.Inputs = toPipelineInputs(input.Inputs)
 	}
 
 	s, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(string(input.ProjectID), opts, gitlab.WithContext(ctx))
@@ -260,6 +295,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Active != nil {
 		opts.Active = input.Active
+	}
+	if len(input.Inputs) > 0 {
+		opts.Inputs = toPipelineInputs(input.Inputs)
 	}
 
 	s, _, err := client.GL().PipelineSchedules.EditPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx))
@@ -325,13 +363,14 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 			hintVerifyScheduleID)
 	}
 
-	// Fetch the schedule after triggering to return current state
-	s, _, err := client.GL().PipelineSchedules.GetPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), gitlab.WithContext(ctx))
+	// Fetch the schedule after triggering to return current state, using the raw
+	// superset path so the documented variables[].raw field is preserved.
+	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("get pipeline schedule after run", err)
 	}
 
-	return toOutput(s), nil
+	return toOutputAPI(s), nil
 }
 
 // Take Ownership.
@@ -507,21 +546,30 @@ func DeleteVariable(ctx context.Context, client *gitlabclient.Client, input Dele
 
 // ListTriggeredPipelinesInput defines parameters for listing pipelines triggered by a schedule.
 type ListTriggeredPipelinesInput struct {
-	ProjectID  toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	ProjectID  toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	ScheduleID int                  `json:"schedule_id" jsonschema:"Pipeline schedule ID,required"`
-	Page       int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage    int64                `json:"per_page,omitempty" jsonschema:"Items per page (max 100)"`
+	OrderBy    string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. id)"`
+	Sort       string               `json:"sort,omitempty"     jsonschema:"Sort direction for triggered pipelines: asc or desc (default asc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
-// TriggeredPipelineOutput represents a pipeline triggered by a schedule.
+// TriggeredPipelineOutput is a documented reference subset per
+// doc/api/pipeline_schedules.md. It represents a pipeline triggered by a
+// schedule, limited to the fields the official "List all pipelines triggered by
+// a pipeline schedule" response documents: id, iid, project_id, status, source,
+// ref, sha, web_url, created_at, updated_at.
 type TriggeredPipelineOutput struct {
-	ID     int    `json:"id"`
-	IID    int    `json:"iid"`
-	Ref    string `json:"ref"`
-	SHA    string `json:"sha"`
-	Status string `json:"status"`
-	Source string `json:"source"`
-	WebURL string `json:"web_url"`
+	ID        int    `json:"id"`
+	IID       int    `json:"iid"`
+	ProjectID int    `json:"project_id"`
+	Ref       string `json:"ref"`
+	SHA       string `json:"sha"`
+	Status    string `json:"status"`
+	Source    string `json:"source"`
+	WebURL    string `json:"web_url"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // TriggeredPipelinesListOutput represents the paginated result of pipelines triggered by a schedule.
@@ -541,11 +589,12 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 	}
 
 	opts := &gitlab.ListPipelinesTriggeredByScheduleOptions{}
-	if input.Page > 0 {
-		opts.Page = input.Page
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
 	}
-	if input.PerPage > 0 {
-		opts.PerPage = input.PerPage
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 
 	pipelines, resp, err := client.GL().PipelineSchedules.ListPipelinesTriggeredBySchedule(
@@ -558,15 +607,23 @@ func ListTriggeredPipelines(ctx context.Context, client *gitlabclient.Client, in
 
 	items := make([]TriggeredPipelineOutput, 0, len(pipelines))
 	for _, p := range pipelines {
-		items = append(items, TriggeredPipelineOutput{
-			ID:     int(p.ID),
-			IID:    int(p.IID),
-			Ref:    p.Ref,
-			SHA:    p.SHA,
-			Status: p.Status,
-			Source: string(p.Source),
-			WebURL: p.WebURL,
-		})
+		item := TriggeredPipelineOutput{
+			ID:        int(p.ID),
+			IID:       int(p.IID),
+			ProjectID: int(p.ProjectID),
+			Ref:       p.Ref,
+			SHA:       p.SHA,
+			Status:    p.Status,
+			Source:    string(p.Source),
+			WebURL:    p.WebURL,
+		}
+		if p.CreatedAt != nil {
+			item.CreatedAt = p.CreatedAt.Format(time.RFC3339)
+		}
+		if p.UpdatedAt != nil {
+			item.UpdatedAt = p.UpdatedAt.Format(time.RFC3339)
+		}
+		items = append(items, item)
 	}
 
 	return TriggeredPipelinesListOutput{

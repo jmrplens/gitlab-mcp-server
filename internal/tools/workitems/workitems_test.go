@@ -6,6 +6,7 @@ package workitems
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -1691,6 +1692,51 @@ func TestListWorkItemTypes_WithOptions(t *testing.T) {
 	}
 	if out.Types[0].Name != "Issue" {
 		t.Errorf("Types[0].Name = %q, want Issue", out.Types[0].Name)
+	}
+}
+
+// TestListWorkItemTypes_BackwardPagination verifies that the last and before
+// cursor-pagination inputs are wired into the GraphQL request variables, mirroring
+// v2.ListWorkItemTypesOptions backward-paging arguments.
+func TestListWorkItemTypes_BackwardPagination(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"data": {
+				"namespace": {
+					"workItemTypes": {
+						"nodes": [
+							{"id":"gid://gitlab/WorkItems::Type/1","name":"Issue","enabled":true}
+						],
+						"pageInfo": {"hasNextPage":false,"hasPreviousPage":true,"endCursor":"","startCursor":"cursor-start"}
+					}
+				}
+			}
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
+		FullPath: testFullPath,
+		Last:     5,
+		Before:   "cursor-xyz",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Types) != 1 {
+		t.Fatalf("expected 1 type, got %d", len(out.Types))
+	}
+	if !strings.Contains(body, "cursor-xyz") {
+		t.Errorf("request body missing before cursor: %s", body)
+	}
+	if !strings.Contains(body, `"last":5`) && !strings.Contains(body, `"last": 5`) {
+		t.Errorf("request body missing last variable: %s", body)
+	}
+	if !out.Pagination.HasPreviousPage {
+		t.Errorf("expected HasPreviousPage = true")
 	}
 }
 

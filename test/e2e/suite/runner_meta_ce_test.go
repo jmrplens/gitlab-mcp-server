@@ -126,33 +126,48 @@ func TestMeta_Runner(t *testing.T) {
 			t.Logf("Runner managers: %d", len(out.Managers))
 		})
 
-		t.Run("ControllerList", func(t *testing.T) {
-			out, err := callToolOn[runnercontrollers.ListOutput](ctx, sess.meta, "gitlab_runner", map[string]any{
-				"action": "controller_list",
-				"params": map[string]any{},
-			})
-			// controller_list may return empty or 404 if no runners have controllers
-			if err != nil && !isHTTPStatus(err, 404) {
-				requireNoError(t, err, "controller list")
-			}
-			t.Logf("Runner controllers: %d", len(out.Controllers))
-		})
+		runRunnerControllerSubtests(ctx, t)
+	})
+}
 
-		t.Run("ControllerGet_Graceful404", func(t *testing.T) {
-			_, err := callToolOn[runnercontrollers.Output](ctx, sess.meta, "gitlab_runner", map[string]any{
-				"action": "controller_get",
-				"params": map[string]any{"controller_id": 999999},
-			})
-			// 404 is expected for a non-existent controller ID. If no error is
-			// returned the API has changed and this test needs to be updated.
-			if err == nil {
-				t.Fatal("controller_get for non-existent controller_id returned no error; expected 404")
-			}
-			if !isHTTPStatus(err, 404) {
-				requireNoError(t, err, "controller get")
-			}
-			t.Log("controller_get 404 handled gracefully")
+// runRunnerControllerSubtests exercises the Ultimate-only runner controller
+// actions, which the 3-tier gating removes from the CE catalog; each subtest
+// skips unless the session targets an Enterprise instance. Split out of
+// TestMeta_Runner to keep that test within the gocognit budget.
+func runRunnerControllerSubtests(ctx context.Context, t *testing.T) {
+	t.Helper()
+	t.Run("ControllerList", func(t *testing.T) {
+		if !sess.enterprise {
+			t.Skip("runner controllers are an Ultimate-only experimental API; gated off CE")
+		}
+		out, err := callToolOn[runnercontrollers.ListOutput](ctx, sess.meta, "gitlab_runner", map[string]any{
+			"action": "controller_list",
+			"params": map[string]any{},
 		})
+		// controller_list may return empty or 404 if no runners have controllers
+		if err != nil && !isHTTPStatus(err, 404) {
+			requireNoError(t, err, "controller list")
+		}
+		t.Logf("Runner controllers: %d", len(out.Controllers))
+	})
+
+	t.Run("ControllerGet_Graceful404", func(t *testing.T) {
+		if !sess.enterprise {
+			t.Skip("runner controllers are an Ultimate-only experimental API; gated off CE")
+		}
+		_, err := callToolOn[runnercontrollers.Output](ctx, sess.meta, "gitlab_runner", map[string]any{
+			"action": "controller_get",
+			"params": map[string]any{"controller_id": 999999},
+		})
+		// 404 is expected for a non-existent controller ID. If no error is
+		// returned the API has changed and this test needs to be updated.
+		if err == nil {
+			t.Fatal("controller_get for non-existent controller_id returned no error; expected 404")
+		}
+		if !isHTTPStatus(err, 404) {
+			requireNoError(t, err, "controller get")
+		}
+		t.Log("controller_get 404 handled gracefully")
 	})
 }
 

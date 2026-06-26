@@ -16,6 +16,86 @@ const (
 	awardEmojiHintVerifyWithNote = "Verify the award_id, note_id, iid, and project_id are correct"
 )
 
+// awardEmojiDescriptions maps each individual award-emoji tool name to its
+// "Returns: … See also: …" description (1:1 audit R-META). The table is shared
+// across the issue/MR/snippet resource and note variants to keep the
+// discovery-metadata wording consistent and DRY; awardEmojiDescription looks up
+// the entry an option builder should attach to IndividualTool.Description.
+//
+//nolint:lll // descriptions read better as single lines for grep/diffing.
+var awardEmojiDescriptions = map[string]string{
+	// Issue.
+	"gitlab_issue_emoji_list":   "List all emoji reactions on an issue. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_issue_emoji_get, gitlab_issue_emoji_create, gitlab_issue_get.",
+	"gitlab_issue_emoji_get":    "Get a single emoji reaction on an issue by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_delete.",
+	"gitlab_issue_emoji_create": "Add an emoji reaction to an issue. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_delete.",
+	"gitlab_issue_emoji_delete": "Remove an emoji reaction from an issue by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_issue_emoji_list, gitlab_issue_emoji_get.",
+	// Issue note.
+	"gitlab_issue_note_emoji_list":   "List all emoji reactions on an issue note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_issue_note_emoji_get, gitlab_issue_note_emoji_create, gitlab_issue_note_get.",
+	"gitlab_issue_note_emoji_get":    "Get a single emoji reaction on an issue note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_delete.",
+	"gitlab_issue_note_emoji_create": "Add an emoji reaction to an issue note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_delete.",
+	"gitlab_issue_note_emoji_delete": "Remove an emoji reaction from an issue note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_issue_note_emoji_list, gitlab_issue_note_emoji_get.",
+	// Merge request.
+	"gitlab_mr_emoji_list":   "List all emoji reactions on a merge request. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_mr_emoji_get, gitlab_mr_emoji_create, gitlab_mr_get.",
+	"gitlab_mr_emoji_get":    "Get a single emoji reaction on a merge request by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_delete.",
+	"gitlab_mr_emoji_create": "Add an emoji reaction to a merge request. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_delete.",
+	"gitlab_mr_emoji_delete": "Remove an emoji reaction from a merge request by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_mr_emoji_list, gitlab_mr_emoji_get.",
+	// Merge request note.
+	"gitlab_mr_note_emoji_list":   "List all emoji reactions on a merge request note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_mr_note_emoji_get, gitlab_mr_note_emoji_create, gitlab_mr_note_get.",
+	"gitlab_mr_note_emoji_get":    "Get a single emoji reaction on a merge request note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_delete.",
+	"gitlab_mr_note_emoji_create": "Add an emoji reaction to a merge request note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_delete.",
+	"gitlab_mr_note_emoji_delete": "Remove an emoji reaction from a merge request note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_mr_note_emoji_list, gitlab_mr_note_emoji_get.",
+	// Snippet.
+	"gitlab_snippet_emoji_list":   "List all emoji reactions on a project snippet. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_snippet_emoji_get, gitlab_snippet_emoji_create, gitlab_project_snippet_get.",
+	"gitlab_snippet_emoji_get":    "Get a single emoji reaction on a project snippet by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_delete.",
+	"gitlab_snippet_emoji_create": "Add an emoji reaction to a project snippet. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_delete.",
+	"gitlab_snippet_emoji_delete": "Remove an emoji reaction from a project snippet by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_snippet_emoji_list, gitlab_snippet_emoji_get.",
+	// Snippet note.
+	"gitlab_snippet_note_emoji_list":   "List all emoji reactions on a project snippet note (comment). Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_snippet_note_emoji_get, gitlab_snippet_note_emoji_create, gitlab_snippet_note_get.",
+	"gitlab_snippet_note_emoji_get":    "Get a single emoji reaction on a project snippet note by award id. Returns: the award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_delete.",
+	"gitlab_snippet_note_emoji_create": "Add an emoji reaction to a project snippet note. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_delete.",
+	"gitlab_snippet_note_emoji_delete": "Remove an emoji reaction from a project snippet note by award id. Returns: a success confirmation naming the award emoji. See also: gitlab_snippet_note_emoji_list, gitlab_snippet_note_emoji_get.",
+}
+
+// awardEmojiAliases maps each individual award-emoji tool name to its
+// distinctive natural-language aliases (1:1 audit: clear aliases_only_toolname).
+// Each entry adds 2-4 award-emoji/reaction phrasings unique to that tool so the
+// dynamic find surface can match reaction intents without colliding with other
+// domains. awardEmojiBaseOptions prepends the tool name and appends these.
+//
+//nolint:lll // alias lists read better as single lines for grep/diffing.
+var awardEmojiAliases = map[string][]string{
+	// Issue.
+	"gitlab_issue_emoji_list":   {"list issue reactions", "show emoji on issue", "issue award emojis"},
+	"gitlab_issue_emoji_get":    {"get issue reaction", "show one issue emoji", "fetch issue award emoji"},
+	"gitlab_issue_emoji_create": {"react to issue", "add emoji to issue", "award emoji on issue", "thumbs up issue"},
+	"gitlab_issue_emoji_delete": {"remove issue reaction", "unreact to issue", "delete issue emoji"},
+	// Issue note.
+	"gitlab_issue_note_emoji_list":   {"list issue comment reactions", "show emoji on issue note", "issue note award emojis"},
+	"gitlab_issue_note_emoji_get":    {"get issue comment reaction", "show one issue note emoji", "fetch issue note award emoji"},
+	"gitlab_issue_note_emoji_create": {"react to issue comment", "add emoji to issue note", "award emoji on issue comment"},
+	"gitlab_issue_note_emoji_delete": {"remove issue comment reaction", "unreact to issue note", "delete issue note emoji"},
+	// Merge request.
+	"gitlab_mr_emoji_list":   {"list merge request reactions", "show emoji on MR", "merge request award emojis"},
+	"gitlab_mr_emoji_get":    {"get merge request reaction", "show one MR emoji", "fetch MR award emoji"},
+	"gitlab_mr_emoji_create": {"react to merge request", "add emoji to MR", "award emoji on merge request", "thumbs up MR"},
+	"gitlab_mr_emoji_delete": {"remove merge request reaction", "unreact to MR", "delete MR emoji"},
+	// Merge request note.
+	"gitlab_mr_note_emoji_list":   {"list MR comment reactions", "show emoji on MR note", "merge request note award emojis"},
+	"gitlab_mr_note_emoji_get":    {"get MR comment reaction", "show one MR note emoji", "fetch MR note award emoji"},
+	"gitlab_mr_note_emoji_create": {"react to MR comment", "add emoji to MR note", "award emoji on MR comment"},
+	"gitlab_mr_note_emoji_delete": {"remove MR comment reaction", "unreact to MR note", "delete MR note emoji"},
+	// Snippet.
+	"gitlab_snippet_emoji_list":   {"list snippet reactions", "show emoji on snippet", "snippet award emojis"},
+	"gitlab_snippet_emoji_get":    {"get snippet reaction", "show one snippet emoji", "fetch snippet award emoji"},
+	"gitlab_snippet_emoji_create": {"react to snippet", "add emoji to snippet", "award emoji on snippet"},
+	"gitlab_snippet_emoji_delete": {"remove snippet reaction", "unreact to snippet", "delete snippet emoji"},
+	// Snippet note.
+	"gitlab_snippet_note_emoji_list":   {"list snippet comment reactions", "show emoji on snippet note", "snippet note award emojis"},
+	"gitlab_snippet_note_emoji_get":    {"get snippet comment reaction", "show one snippet note emoji", "fetch snippet note award emoji"},
+	"gitlab_snippet_note_emoji_create": {"react to snippet comment", "add emoji to snippet note", "award emoji on snippet comment"},
+	"gitlab_snippet_note_emoji_delete": {"remove snippet comment reaction", "unreact to snippet note", "delete snippet note emoji"},
+}
+
 // SnippetActionSpecs returns canonical specs for snippet award emoji actions.
 func SnippetActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -56,12 +136,24 @@ func issueEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 	return toolutil.NewDeleteActionSpec(name, route, issueEmojiOptions(individualTool))
 }
 
+// awardEmojiToolAliases returns the alias list for an individual award-emoji
+// tool: the tool name first (so exact-name lookups still match), followed by
+// its distinctive natural-language phrasings from awardEmojiAliases.
+func awardEmojiToolAliases(individualTool string) []string {
+	aliases := []string{individualTool}
+	return append(aliases, awardEmojiAliases[individualTool]...)
+}
+
 func awardEmojiBaseOptions(individualTool, ownerPackage string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Aliases:        []string{individualTool},
-		OpenWorld:      true,
-		OwnerPackage:   ownerPackage,
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:      awardEmojiToolAliases(individualTool),
+		OpenWorld:    true,
+		OwnerPackage: ownerPackage,
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: awardEmojiDescriptions[individualTool],
+		},
 	}
 }
 

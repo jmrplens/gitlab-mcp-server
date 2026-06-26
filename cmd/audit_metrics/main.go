@@ -24,6 +24,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -400,12 +401,12 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 
 	if meta {
-		if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
+		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
-		tools.RegisterAll(server, client, true)
+		tools.RegisterAll(server, client, edition.Ultimate)
 	}
 
 	return listToolsFromServer(server)

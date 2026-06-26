@@ -5,6 +5,7 @@ package releaselinks
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1057,5 +1058,138 @@ func mockReleaseLink(id int64, name, url, linkType string, external bool, direct
 		LinkType:       gl.LinkTypeValue(linkType),
 		External:       external,
 		DirectAssetURL: directURL,
+	}
+}
+
+// TestReleaseLinkCreate_DirectAssetPathAndFilePath verifies that Create
+// forwards direct_asset_path and the deprecated filepath to the GitLab API.
+func TestReleaseLinkCreate_DirectAssetPathAndFilePath(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
+			b, _ := io.ReadAll(r.Body)
+			body = string(b)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"other","external":false,"direct_asset_url":"https://example.com/x/releases/v1.2.0/downloads/bin"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{
+		ProjectID:       "42",
+		TagName:         testTagV120,
+		Name:            "Binary",
+		URL:             "https://example.com/bin",
+		DirectAssetPath: "/downloads/bin",
+		FilePath:        "/legacy/bin",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if out.ID != 10 {
+		t.Errorf(fmtWantID10, out.ID)
+	}
+	if !strings.Contains(body, "direct_asset_path") || !strings.Contains(body, "/downloads/bin") {
+		t.Errorf("request body = %q, want direct_asset_path", body)
+	}
+	if !strings.Contains(body, "filepath") || !strings.Contains(body, "/legacy/bin") {
+		t.Errorf("request body = %q, want filepath", body)
+	}
+}
+
+// TestReleaseLinkCreateBatch_DirectAssetPathAndFilePath verifies that
+// CreateBatch forwards per-entry direct_asset_path and filepath.
+func TestReleaseLinkCreateBatch_DirectAssetPathAndFilePath(t *testing.T) {
+	var bodies []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
+			b, _ := io.ReadAll(r.Body)
+			bodies = append(bodies, string(b))
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := CreateBatch(context.Background(), client, CreateBatchInput{
+		ProjectID: "42",
+		TagName:   testTagV120,
+		Links: []LinkEntry{
+			{Name: "a", URL: "https://a.com", DirectAssetPath: "/dap/a"},
+			{Name: "b", URL: "https://b.com", FilePath: "/fp/b"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateBatch() unexpected error: %v", err)
+	}
+	if len(out.Created) != 2 {
+		t.Fatalf("len(out.Created) = %d, want 2", len(out.Created))
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("len(bodies) = %d, want 2", len(bodies))
+	}
+	if !strings.Contains(bodies[0], "direct_asset_path") || !strings.Contains(bodies[0], "/dap/a") {
+		t.Errorf("body[0] = %q, want direct_asset_path", bodies[0])
+	}
+	if !strings.Contains(bodies[1], "filepath") || !strings.Contains(bodies[1], "/fp/b") {
+		t.Errorf("body[1] = %q, want filepath", bodies[1])
+	}
+}
+
+// TestReleaseLinkList_KeysetAndOrdering verifies that List forwards keyset
+// pagination, page_token, order_by, and sort query parameters.
+func TestReleaseLinkList_KeysetAndOrdering(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathReleaseLinks {
+			q := r.URL.Query()
+			if got := q.Get("pagination"); got != "keyset" {
+				t.Errorf("pagination = %q, want keyset", got)
+			}
+			if got := q.Get("page_token"); got != "abc123" {
+				t.Errorf("page_token = %q, want abc123", got)
+			}
+			if got := q.Get("order_by"); got != "created_at" {
+				t.Errorf("order_by = %q, want created_at", got)
+			}
+			if got := q.Get("sort"); got != "desc" {
+				t.Errorf("sort = %q, want desc", got)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"package","external":true}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:             "42",
+		TagName:               testTagV120,
+		OrderBy:               "created_at",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc123"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Links) != 1 {
+		t.Errorf("len(out.Links) = %d, want 1", len(out.Links))
+	}
+}
+
+// TestReleaseLinkDescriptions_RMeta verifies every release-link action exposes
+// a "Returns: … See also: …" individual-tool description (R-META; 1:1 audit).
+func TestReleaseLinkDescriptions_RMeta(t *testing.T) {
+	byTool := releaseLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, releaseLinksActionHandler())))
+	for _, name := range []string{
+		"gitlab_release_link_create",
+		"gitlab_release_link_create_batch",
+		"gitlab_release_link_get",
+		"gitlab_release_link_list",
+		"gitlab_release_link_update",
+		"gitlab_release_link_delete",
+	} {
+		desc := byTool[name].IndividualTool.Description
+		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+			t.Errorf("%s description = %q, want Returns:/See also: form", name, desc)
+		}
 	}
 }

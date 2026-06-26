@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 )
 
 // DefaultMaxFileSize and MaxFileSize define the default and upper bound for
@@ -111,17 +113,26 @@ const (
 
 // Config holds all configuration values for the MCP server.
 type Config struct {
-	GitLabURL            string
-	GitLabToken          string
-	SkipTLSVerify        bool
-	DisableRetries       bool // Disable GitLab client retries for unit tests.
-	MetaTools            bool
-	ToolSurface          string
-	CapabilitySurface    string
-	Enterprise           bool
-	AutoDetectEnterprise bool
-	ReadOnly             bool
-	SafeMode             bool
+	GitLabURL         string
+	GitLabToken       string
+	SkipTLSVerify     bool
+	DisableRetries    bool // Disable GitLab client retries for unit tests.
+	MetaTools         bool
+	ToolSurface       string
+	CapabilitySurface string
+
+	// Tier is the resolved GitLab licensing tier for this configuration.
+	// When TierExplicit is false it holds the conservative default
+	// (edition.Free); callers detect the real tier from the instance license.
+	Tier edition.Tier
+	// TierExplicit reports whether the tier was set explicitly via GITLAB_TIER
+	// (stdio) or --tier (HTTP). When true, no instance license check is
+	// performed and Tier is used verbatim. When false, the tier is detected
+	// per instance, falling back to edition.Free.
+	TierExplicit bool
+
+	ReadOnly bool
+	SafeMode bool
 
 	EmbeddedResources bool // Append EmbeddedResource content blocks to get_* tool results (default true)
 
@@ -152,6 +163,16 @@ type Config struct {
 	MetaParamSchema string
 }
 
+// Enterprise reports whether the resolved tier is an Enterprise (Premium or
+// Ultimate) tier. It derives the legacy binary "enterprise" notion from the
+// 3-tier model so positional gating continues to behave identically.
+func (c *Config) Enterprise() bool {
+	if c == nil {
+		return false
+	}
+	return c.Tier.IsEnterprise()
+}
+
 // ServerConfig is an immutable configuration snapshot used to build one MCP
 // server instance for a specific GitLab URL and credential principal.
 type ServerConfig struct {
@@ -159,14 +180,20 @@ type ServerConfig struct {
 	MetaTools         bool
 	ToolSurface       string
 	CapabilitySurface string
-	Enterprise        bool
-	ReadOnly          bool
-	SafeMode          bool
-	ExcludeTools      []string
-	TokenScopes       []string
-	RateLimitRPS      float64
-	RateLimitBurst    int
-	MetaParamSchema   string
+	// Tier is the resolved GitLab licensing tier for this pool entry. When the
+	// owning Config did not set the tier explicitly, the pool detects it per
+	// instance before building the server.
+	Tier edition.Tier
+	// TierExplicit mirrors Config.TierExplicit: when true the tier is used
+	// verbatim and the pool performs no per-instance license detection.
+	TierExplicit    bool
+	ReadOnly        bool
+	SafeMode        bool
+	ExcludeTools    []string
+	TokenScopes     []string
+	RateLimitRPS    float64
+	RateLimitBurst  int
+	MetaParamSchema string
 }
 
 // ServerConfig returns the server-scoped subset of Config. Callers may enrich
@@ -181,7 +208,8 @@ func (c *Config) ServerConfig() *ServerConfig {
 		MetaTools:         c.MetaTools,
 		ToolSurface:       c.ToolSurface,
 		CapabilitySurface: c.CapabilitySurface,
-		Enterprise:        c.Enterprise,
+		Tier:              c.Tier,
+		TierExplicit:      c.TierExplicit,
 		ReadOnly:          c.ReadOnly,
 		SafeMode:          c.SafeMode,
 		ExcludeTools:      slices.Clone(c.ExcludeTools),
@@ -189,6 +217,15 @@ func (c *Config) ServerConfig() *ServerConfig {
 		RateLimitBurst:    c.RateLimitBurst,
 		MetaParamSchema:   c.MetaParamSchema,
 	}
+}
+
+// Enterprise reports whether this server's resolved tier is an Enterprise
+// (Premium or Ultimate) tier, deriving the legacy binary notion from the tier.
+func (s *ServerConfig) Enterprise() bool {
+	if s == nil {
+		return false
+	}
+	return s.Tier.IsEnterprise()
 }
 
 // EnvFileName is the name of the env file where the setup wizard stores secrets.
@@ -212,6 +249,11 @@ func Load() (*Config, error) {
 	}
 
 	bools, err := loadBooleanEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	tier, tierExplicit, err := resolveTierEnv(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +303,8 @@ func Load() (*Config, error) {
 		MetaTools:          metaTools,
 		ToolSurface:        toolSurface,
 		CapabilitySurface:  capabilitySurface,
-		Enterprise:         bools.enterprise,
+		Tier:               tier,
+		TierExplicit:       tierExplicit,
 		ReadOnly:           bools.readOnly,
 		SafeMode:           bools.safeMode,
 		EmbeddedResources:  bools.embeddedResources,
@@ -291,7 +334,6 @@ func Load() (*Config, error) {
 
 type booleanEnv struct {
 	skipTLS           bool
-	enterprise        bool
 	readOnly          bool
 	safeMode          bool
 	embeddedResources bool
@@ -323,9 +365,6 @@ func loadBooleanEnv() (booleanEnv, error) {
 	if values.skipTLS, err = parseEnvBool("GITLAB_SKIP_TLS_VERIFY", false); err != nil {
 		return booleanEnv{}, err
 	}
-	if values.enterprise, err = parseEnvBool("GITLAB_ENTERPRISE", false); err != nil {
-		return booleanEnv{}, err
-	}
 	if values.readOnly, err = parseEnvBool("GITLAB_READ_ONLY", false); err != nil {
 		return booleanEnv{}, err
 	}
@@ -339,6 +378,61 @@ func loadBooleanEnv() (booleanEnv, error) {
 		return booleanEnv{}, err
 	}
 	return values, nil
+}
+
+// parseTierEnv resolves the GITLAB_TIER value into a tier and an "explicit"
+// flag. An empty value yields (edition.Free, false) so the caller knows to
+// detect the tier from the instance license. A non-empty value must be one of
+// free/ce/premium/ultimate (case-insensitive); it yields (tier, true), meaning
+// no license check is performed. An unrecognized value is an error.
+func parseTierEnv(value string) (tier edition.Tier, explicit bool, err error) {
+	if strings.TrimSpace(value) == "" {
+		return edition.Free, false, nil
+	}
+	parsed, ok := edition.ParseTier(value)
+	if !ok {
+		return edition.Free, false, fmt.Errorf(
+			"invalid GITLAB_TIER value: expected free, ce, premium, or ultimate, got %q", value)
+	}
+	return parsed, true, nil
+}
+
+// resolveTierEnv resolves the effective tier from GITLAB_TIER and the DEPRECATED
+// GITLAB_ENTERPRISE env vars. GITLAB_TIER wins. When GITLAB_TIER is unset, the
+// deprecated GITLAB_ENTERPRISE is honored for back-compat with existing configs:
+// true → ultimate, false → free (both explicit, so no license check). When neither
+// is set, returns (edition.Free, false) so the caller detects from the license.
+func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, explicit bool, err error) {
+	tier, explicit, err = parseTierEnv(tierValue)
+	if err != nil || explicit {
+		return tier, explicit, err
+	}
+	if raw := strings.TrimSpace(enterpriseValue); raw != "" {
+		enabled, perr := strconv.ParseBool(raw)
+		if perr != nil {
+			return edition.Free, false, fmt.Errorf(
+				"invalid GITLAB_ENTERPRISE value: expected true or false, got %q", raw)
+		}
+		if enabled {
+			return edition.Ultimate, true, nil
+		}
+		return edition.Free, true, nil
+	}
+	return edition.Free, false, nil
+}
+
+// LegacyEnterpriseEnvInUse reports whether the DEPRECATED GITLAB_ENTERPRISE env
+// var is the active tier source (GITLAB_TIER unset, GITLAB_ENTERPRISE set), so the
+// caller can emit a one-time deprecation warning pointing users to GITLAB_TIER.
+func LegacyEnterpriseEnvInUse(tierValue, enterpriseValue string) bool {
+	return strings.TrimSpace(tierValue) == "" && strings.TrimSpace(enterpriseValue) != ""
+}
+
+// ParseTierFlag resolves a CLI --tier flag value into a tier and an "explicit"
+// flag, mirroring [parseTierEnv]. It is exported for cmd/server HTTP-mode flag
+// handling.
+func ParseTierFlag(value string) (tier edition.Tier, explicit bool, err error) {
+	return parseTierEnv(value)
 }
 
 func parseEnvBool(name string, defaultValue bool) (bool, error) {

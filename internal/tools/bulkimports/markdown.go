@@ -117,8 +117,8 @@ func FormatGetEntityMarkdown(e EntitySummary) string {
 	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(e.UpdatedAt))
 	sb.WriteString("\n### Stats\n\n")
 	sb.WriteString("| Relation | Source | Fetched | Imported |\n|---|---|---|---|\n")
-	fmt.Fprintf(&sb, "| Labels | %d | %d | %d |\n", e.Stats.LabelsSource, e.Stats.LabelsFetched, e.Stats.LabelsImported)
-	fmt.Fprintf(&sb, "| Milestones | %d | %d | %d |\n", e.Stats.MilestonesSource, e.Stats.MilestonesFetched, e.Stats.MilestonesImported)
+	fmt.Fprintf(&sb, "| Labels | %d | %d | %d |\n", e.Stats.Labels.Source, e.Stats.Labels.Fetched, e.Stats.Labels.Imported)
+	fmt.Fprintf(&sb, "| Milestones | %d | %d | %d |\n", e.Stats.Milestones.Source, e.Stats.Milestones.Fetched, e.Stats.Milestones.Imported)
 	if e.HasFailures {
 		toolutil.WriteHints(&sb, "Failures detected — use gitlab_list_bulk_import_entity_failures for diagnostics")
 	}

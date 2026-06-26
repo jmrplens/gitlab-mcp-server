@@ -127,6 +127,72 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestApplyIntegrationMeta_KnownAndUnknown verifies the per-action discovery
+// metadata overlay. For a known individual tool the generic placeholder Usage,
+// the toolname-only alias, and the generic RelatedActions are replaced by the
+// purpose-specific values; for an unknown tool the shared defaults are
+// preserved unchanged. This exercises both the match and fallback branches of
+// applyIntegrationMeta.
+func TestApplyIntegrationMeta_KnownAndUnknown(t *testing.T) {
+	known := integrationOptions("gitlab_list_integrations", "desc")
+	if isGenericMetaUsage(known.Usage) {
+		t.Fatalf("known tool Usage still generic: %q", known.Usage)
+	}
+	if len(known.Aliases) < 2 {
+		t.Fatalf("known tool aliases not enriched: %+v", known.Aliases)
+	}
+	if known.Aliases[0] != "gitlab_list_integrations" {
+		t.Fatalf("known tool first alias = %q, want canonical tool name", known.Aliases[0])
+	}
+	for _, related := range known.RelatedActions {
+		if related == "project.get" {
+			t.Fatalf("known tool RelatedActions still generic: %+v", known.RelatedActions)
+		}
+	}
+
+	unknown := integrationOptions("gitlab_unknown_integration_tool", "desc")
+	if !isGenericMetaUsage(unknown.Usage) {
+		t.Fatalf("unknown tool Usage = %q, want generic default", unknown.Usage)
+	}
+	if len(unknown.Aliases) != 1 || unknown.Aliases[0] != "gitlab_unknown_integration_tool" {
+		t.Fatalf("unknown tool aliases = %+v, want toolname-only", unknown.Aliases)
+	}
+	if len(unknown.RelatedActions) != 1 || unknown.RelatedActions[0] != "project.get" {
+		t.Fatalf("unknown tool RelatedActions = %+v, want [project.get]", unknown.RelatedActions)
+	}
+}
+
+// TestGroupDatadogOptions_KnownAndUnknown verifies the group-Datadog option
+// builder leaves the edition at Free (group integration management is Free tier),
+// keeps the per-action metadata for known tools, and falls back to the generic
+// group.get RelatedActions for tools without metadata.
+func TestGroupDatadogOptions_KnownAndUnknown(t *testing.T) {
+	known := groupDatadogOptions("gitlab_get_group_datadog_integration", "desc")
+	if known.Edition != "" {
+		t.Fatalf("known group tool Edition = %q, want free (empty)", known.Edition)
+	}
+	if isGenericMetaUsage(known.Usage) {
+		t.Fatalf("known group tool Usage still generic: %q", known.Usage)
+	}
+	if len(known.RelatedActions) == 1 && known.RelatedActions[0] == "group.get" {
+		t.Fatalf("known group tool RelatedActions not enriched: %+v", known.RelatedActions)
+	}
+
+	unknown := groupDatadogOptions("gitlab_unknown_group_tool", "desc")
+	if unknown.Edition != "" {
+		t.Fatalf("unknown group tool Edition = %q, want free (empty)", unknown.Edition)
+	}
+	if len(unknown.RelatedActions) != 1 || unknown.RelatedActions[0] != "group.get" {
+		t.Fatalf("unknown group tool RelatedActions = %+v, want [group.get]", unknown.RelatedActions)
+	}
+}
+
+// isGenericMetaUsage reports whether the supplied Usage string is the generic
+// placeholder sentence flagged by the metadata-completeness audit.
+func isGenericMetaUsage(usage string) bool {
+	return usage == "" || usage == "Use to execute integrations domain action."
+}
+
 func integrationActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

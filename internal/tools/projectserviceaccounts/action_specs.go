@@ -39,9 +39,8 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 	options := toolutil.ActionSpecOptions{
 		Aliases:        projectServiceAccountAliases(actionName),
 		Tags:           projectServiceAccountTags(actionName),
-		Usage:          "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+		Usage:          "Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.",
 		RelatedActions: []string{"project.get", "project.members"},
-		Edition:        "premium",
 		OpenWorld:      true,
 		OwnerPackage:   "projectserviceaccounts",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: projectServiceAccountDescription(actionName)},

@@ -16,8 +16,10 @@ import (
 // ListInput is the input for listing freeze periods.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	Page      int64                `json:"page,omitempty" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page,omitempty" jsonschema:"Number of items per page"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput is the input for getting a single freeze period.
@@ -76,7 +78,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("freeze_period_list", toolutil.ErrFieldRequired("project_id"))
 	}
-	opts := &gl.ListFreezePeriodsOptions{ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage}}
+	opts := &gl.ListFreezePeriodsOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 	periods, resp, err := client.GL().FreezePeriods.ListFreezePeriods(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("freeze_period_list", err, http.StatusNotFound,

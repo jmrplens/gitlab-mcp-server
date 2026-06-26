@@ -16,10 +16,24 @@ func FormatOutputMarkdown(out Output) string {
 	if out.CommitID != "" {
 		fmt.Fprintf(&b, "- **Commit**: `%s`\n", out.CommitID)
 	}
+	if out.LineCode != "" {
+		fmt.Fprintf(&b, "- **Line Code**: `%s`\n", out.LineCode)
+	}
 	if out.DiscussionID != "" {
 		fmt.Fprintf(&b, "- **Discussion**: %s\n", out.DiscussionID)
 	}
 	fmt.Fprintf(&b, "- **Resolve Discussion**: %v\n", out.ResolveDiscussion)
+	if p := out.Position; p != nil {
+		path := p.NewPath
+		if path == "" {
+			path = p.OldPath
+		}
+		line := p.NewLine
+		if line == 0 {
+			line = p.OldLine
+		}
+		fmt.Fprintf(&b, "- **Position**: `%s` line %d\n", path, line)
+	}
 	fmt.Fprintf(&b, "\n### Body\n\n%s\n", toolutil.WrapGFMBody(out.Note))
 	toolutil.WriteHints(
 		&b,

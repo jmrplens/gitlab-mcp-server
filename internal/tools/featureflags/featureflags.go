@@ -2,8 +2,6 @@ package featureflags
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -50,6 +48,7 @@ type Output struct {
 	Version     string           `json:"version"`
 	CreatedAt   string           `json:"created_at,omitempty"`
 	UpdatedAt   string           `json:"updated_at,omitempty"`
+	Scopes      []ScopeOutput    `json:"scopes,omitempty"`
 	Strategies  []StrategyOutput `json:"strategies,omitempty"`
 }
 
@@ -94,7 +93,10 @@ type StrategyInput struct {
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Scope     string               `json:"scope,omitempty" jsonschema:"Filter by scope (enabled or disabled)"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (e.g. name, created_at, updated_at)"`
+	Sort      string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput contains parameters for getting a feature flag.
@@ -110,7 +112,7 @@ type CreateInput struct {
 	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
 	Version     string               `json:"version,omitempty" jsonschema:"Version of the feature flag (new_version_flag)"`
 	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  string               `json:"strategies,omitempty" jsonschema:"JSON array of strategy objects: [{name, parameters, scopes}]"`
+	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag; each has a name, optional parameters, and optional environment scopes"`
 }
 
 // UpdateInput contains parameters for updating a feature flag.
@@ -120,7 +122,7 @@ type UpdateInput struct {
 	NewName     string               `json:"new_name,omitempty" jsonschema:"New feature flag name"`
 	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
 	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  string               `json:"strategies,omitempty" jsonschema:"JSON array of strategy objects: [{id, name, parameters, scopes}]"`
+	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag; each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes"`
 }
 
 // DeleteInput contains parameters for deleting a feature flag.
@@ -138,11 +140,13 @@ func ListFeatureFlags(ctx context.Context, client *gitlabclient.Client, input Li
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.WrapErrWithMessage("feature_flag_list", toolutil.ErrFieldRequired("project_id"))
 	}
-	opts := &gl.ListProjectFeatureFlagOptions{
-		ListOptions: gl.ListOptions{
-			Page:    int64(input.Page),
-			PerPage: int64(input.PerPage),
-		},
+	opts := &gl.ListProjectFeatureFlagOptions{}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
 	}
 	if input.Scope != "" {
 		opts.Scope = new(input.Scope)
@@ -206,12 +210,8 @@ func CreateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input C
 	if input.Active != nil {
 		opts.Active = input.Active
 	}
-	if input.Strategies != "" {
-		strategies, err := parseStrategyInputs(input.Strategies)
-		if err != nil {
-			return Output{}, toolutil.WrapErrWithMessage("feature_flag_create", fmt.Errorf("invalid strategies JSON: %w", err))
-		}
-		opts.Strategies = toStrategyOptions(strategies)
+	if len(input.Strategies) > 0 {
+		opts.Strategies = toStrategyOptions(input.Strategies)
 	}
 	flag, _, err := client.GL().ProjectFeatureFlags.CreateProjectFeatureFlag(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -223,7 +223,7 @@ func CreateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input C
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("feature_flag_create", err,
-				"name may already exist or strategies JSON is malformed \u2014 valid strategy names: 'default', 'gradualRolloutUserId', 'userWithId', 'gitlabUserList', 'flexibleRollout'")
+				"name may already exist or a strategy is invalid \u2014 valid strategy names: 'default', 'gradualRolloutUserId', 'userWithId', 'gitlabUserList', 'flexibleRollout'")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("feature_flag_create", err)
 	}
@@ -248,12 +248,8 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 	if input.Active != nil {
 		opts.Active = input.Active
 	}
-	if input.Strategies != "" {
-		strategies, err := parseStrategyInputs(input.Strategies)
-		if err != nil {
-			return Output{}, toolutil.WrapErrWithMessage("feature_flag_update", fmt.Errorf("invalid strategies JSON: %w", err))
-		}
-		opts.Strategies = toStrategyOptions(strategies)
+	if len(input.Strategies) > 0 {
+		opts.Strategies = toStrategyOptions(input.Strategies)
 	}
 	flag, _, err := client.GL().ProjectFeatureFlags.UpdateProjectFeatureFlag(
 		string(input.ProjectID), input.Name, opts, gl.WithContext(ctx),
@@ -309,6 +305,15 @@ func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	if f.UpdatedAt != nil {
 		out.UpdatedAt = f.UpdatedAt.Format(time.RFC3339)
 	}
+	for _, sc := range f.Scopes {
+		if sc == nil {
+			continue
+		}
+		out.Scopes = append(out.Scopes, ScopeOutput{
+			ID:               sc.ID,
+			EnvironmentScope: sc.EnvironmentScope,
+		})
+	}
 	for _, s := range f.Strategies {
 		out.Strategies = append(out.Strategies, convertStrategy(s))
 	}
@@ -340,19 +345,11 @@ func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 }
 
 // ──────────────────────────────────────────────
-// Strategy parsing helpers
+// Strategy conversion helpers
 // ──────────────────────────────────────────────.
 
-// parseStrategyInputs handles parse strategy inputs and returns [[]StrategyInput].
-func parseStrategyInputs(jsonStr string) ([]StrategyInput, error) {
-	var strategies []StrategyInput
-	if err := json.Unmarshal([]byte(jsonStr), &strategies); err != nil {
-		return nil, err
-	}
-	return strategies, nil
-}
-
-// toStrategyOptions converts the GitLab API response to the tool output format.
+// toStrategyOptions converts typed strategy inputs into the client-go
+// FeatureFlagStrategyOptions shape used by create and update requests.
 func toStrategyOptions(strategies []StrategyInput) *[]*gl.FeatureFlagStrategyOptions {
 	opts := make([]*gl.FeatureFlagStrategyOptions, 0, len(strategies))
 	for _, s := range strategies {

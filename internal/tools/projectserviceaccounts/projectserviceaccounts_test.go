@@ -35,12 +35,14 @@ func TestList(t *testing.T) {
 	}{
 		{
 			name:  "returns accounts on success",
-			input: ListInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50}, OrderBy: "username", Sort: "desc"},
+			input: ListInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50}, KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "9"}, OrderBy: "username", Sort: "desc"},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, pathProjectServiceAccounts)
 				testutil.AssertQueryParam(t, r, "page", "2")
 				testutil.AssertQueryParam(t, r, "per_page", "50")
+				testutil.AssertQueryParam(t, r, "pagination", "keyset")
+				testutil.AssertQueryParam(t, r, "page_token", "9")
 				testutil.AssertQueryParam(t, r, "order_by", "username")
 				testutil.AssertQueryParam(t, r, "sort", "desc")
 				testutil.RespondJSON(w, http.StatusOK, projectServiceAccountsJSON)
@@ -211,6 +213,9 @@ func TestPATList(t *testing.T) {
 			testutil.AssertQueryParam(t, r, "search", "deploy")
 			testutil.AssertQueryParam(t, r, "state", "active")
 			testutil.AssertQueryParam(t, r, "sort", "created_desc")
+			testutil.AssertQueryParam(t, r, "order_by", "created_at")
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "55")
 			testutil.AssertQueryParam(t, r, "user_id", "7")
 			testutil.AssertQueryParam(t, r, "created_after", "2026-01-01T02:03:04Z")
 			testutil.AssertQueryParam(t, r, "created_before", "2026-01-02T00:00:00Z")
@@ -221,20 +226,22 @@ func TestPATList(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountPATsJSON)
 		}))
 		out, err := ListPATs(context.Background(), client, ListPATInput{
-			ProjectID:        "42",
-			ServiceAccountID: 7,
-			PaginationInput:  toolutil.PaginationInput{Page: 2, PerPage: 50},
-			CreatedAfter:     "2026-01-01T02:03:04Z",
-			CreatedBefore:    "2026-01-02",
-			ExpiresAfter:     "2026-01-01",
-			ExpiresBefore:    "2026-12-31",
-			LastUsedAfter:    "2026-01-03",
-			LastUsedBefore:   "2026-01-04T02:03:04Z",
-			Revoked:          &revoked,
-			UserID:           7,
-			Search:           "deploy",
-			Sort:             "created_desc",
-			State:            "active",
+			ProjectID:             "42",
+			ServiceAccountID:      7,
+			PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
+			KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "55"},
+			OrderBy:               "created_at",
+			CreatedAfter:          "2026-01-01T02:03:04Z",
+			CreatedBefore:         "2026-01-02",
+			ExpiresAfter:          "2026-01-01",
+			ExpiresBefore:         "2026-12-31",
+			LastUsedAfter:         "2026-01-03",
+			LastUsedBefore:        "2026-01-04T02:03:04Z",
+			Revoked:               &revoked,
+			UserID:                7,
+			Search:                "deploy",
+			Sort:                  "created_desc",
+			State:                 "active",
 		})
 		if err != nil {
 			t.Fatalf("ListPATs() unexpected error: %v", err)
@@ -566,8 +573,8 @@ func specsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.
 		if spec.OwnerPackage != "projectserviceaccounts" {
 			t.Fatalf("OwnerPackage for %s = %q, want projectserviceaccounts", spec.Name, spec.OwnerPackage)
 		}
-		if spec.Edition != "premium" {
-			t.Fatalf("Edition for %s = %q, want premium", spec.Name, spec.Edition)
+		if spec.Edition != "" {
+			t.Fatalf("Edition for %s = %q, want \"\" (Free)", spec.Name, spec.Edition)
 		}
 		byTool[spec.IndividualTool.Name] = spec
 	}

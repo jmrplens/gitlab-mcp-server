@@ -26,8 +26,8 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}))
 	specs := ActionSpecs(client)
 
-	if len(specs) != 7 {
-		t.Fatalf("len(ActionSpecs) = %d, want 7", len(specs))
+	if len(specs) != 8 {
+		t.Fatalf("len(ActionSpecs) = %d, want 8", len(specs))
 	}
 	for _, spec := range specs {
 		if spec.OwnerPackage != "groupserviceaccounts" {
@@ -93,6 +93,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		{"gitlab_group_service_account_pat_list", map[string]any{"group_id": "mygroup", "service_account_id": 42}},
 		{"gitlab_group_service_account_pat_create", map[string]any{"group_id": "mygroup", "service_account_id": 42, "name": "tok", "scopes": []any{"api"}}},
 		{"gitlab_group_service_account_pat_revoke", map[string]any{"group_id": "mygroup", "service_account_id": 42, "token_id": 10}},
+		{"gitlab_group_service_account_pat_rotate", map[string]any{"group_id": "mygroup", "service_account_id": 42, "token_id": 10}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

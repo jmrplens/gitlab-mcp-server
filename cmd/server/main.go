@@ -54,6 +54,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -94,8 +95,8 @@ type httpConfig struct {
 	metaToolsSet       bool
 	toolSurface        string
 	capabilitySurface  string
-	enterprise         bool
-	enterpriseSet      bool
+	tier               string
+	tierSet            bool
 	readOnly           bool
 	safeMode           bool
 	embeddedResources  bool
@@ -175,7 +176,7 @@ func main() {
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", false, "Legacy boolean tool selector; prefer --tool-surface")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
-	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
+	flag.StringVar(&hcfg.tier, "tier", "", "Force licensing tier (free, ce, premium, ultimate); omit to detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
 	flag.BoolVar(&hcfg.safeMode, "safe-mode", false, "Intercept mutating tools and return a preview instead of executing")
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
@@ -198,8 +199,8 @@ func main() {
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
-		case "enterprise":
-			hcfg.enterpriseSet = true
+		case "tier":
+			hcfg.tierSet = true
 		case "meta-tools":
 			hcfg.metaToolsSet = true
 		}
@@ -226,7 +227,13 @@ func main() {
 			exitProcess(1)
 			return
 		}
-		runToolSearch(toolSearch, toolSurface, hcfg.enterprise)
+		searchTier, _, tierErr := resolveHTTPTier(&hcfg)
+		if tierErr != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", tierErr)
+			exitProcess(1)
+			return
+		}
+		runToolSearch(toolSearch, toolSurface, searchTier)
 		return
 	}
 
@@ -299,7 +306,7 @@ FLAGS
 	-tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
-  -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
+  -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
   -read-only                Expose only read-only tools (default false)
   -safe-mode                Intercept mutating tools and return a preview instead of executing
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
@@ -326,7 +333,7 @@ ENVIRONMENT VARIABLES (stdio mode)
 	META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   META_PARAM_SCHEMA         Meta-tool input schema: opaque|compact|full (default opaque)
-  GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
+  GITLAB_TIER               Force licensing tier: free|ce|premium|ultimate; omit to detect from license
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
   GITLAB_SAFE_MODE          Intercept mutating tools and return a preview (default false)
   EMBEDDED_RESOURCES        Embed canonical MCP resource links in get_* results (default true)
@@ -426,7 +433,11 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if err != nil {
 		return fmt.Errorf("parse tool surface: %w", err)
 	}
-	cfg := configFromHTTPFlags(hcfg, toolSurface, metaTools)
+	tier, tierExplicit, err := resolveHTTPTier(hcfg)
+	if err != nil {
+		return err
+	}
+	cfg := configFromHTTPFlags(hcfg, toolSurface, metaTools, tier, tierExplicit)
 	if validationErr := validateHTTPRuntimeConfig(cfg); validationErr != nil {
 		return validationErr
 	}
@@ -457,34 +468,47 @@ func normalizeFixedGitLabURL(hcfg *httpConfig) error {
 	return nil
 }
 
-func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool) *config.Config {
+// resolveHTTPTier resolves the --tier flag into a tier and an explicit flag.
+// When --tier is unset the tier is detected per pool entry (explicit=false).
+func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
+	if !hcfg.tierSet || strings.TrimSpace(hcfg.tier) == "" {
+		return edition.Free, false, nil
+	}
+	tier, explicit, err := config.ParseTierFlag(hcfg.tier)
+	if err != nil {
+		return edition.Free, false, fmt.Errorf("invalid --tier: %w", err)
+	}
+	return tier, explicit, nil
+}
+
+func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
-		GitLabURL:            hcfg.gitlabURL,
-		SkipTLSVerify:        hcfg.skipTLSVerify,
-		MetaTools:            metaTools,
-		ToolSurface:          toolSurface,
-		CapabilitySurface:    hcfg.capabilitySurface,
-		Enterprise:           hcfg.enterprise,
-		AutoDetectEnterprise: !hcfg.enterpriseSet,
-		ReadOnly:             hcfg.readOnly,
-		SafeMode:             hcfg.safeMode,
-		EmbeddedResources:    hcfg.embeddedResources,
-		ExcludeTools:         config.ParseCSV(hcfg.excludeTools),
-		IgnoreScopes:         hcfg.ignoreScopes,
-		MaxHTTPClients:       hcfg.maxHTTPClients,
-		SessionTimeout:       hcfg.sessionTimeout,
-		RevalidateInterval:   hcfg.revalidateInterval,
-		UploadMaxFileSize:    config.DefaultMaxFileSize,
-		AutoUpdate:           hcfg.autoUpdate,
-		AutoUpdateRepo:       hcfg.autoUpdateRepo,
-		AutoUpdateInterval:   hcfg.autoUpdateInterval,
-		AutoUpdateTimeout:    hcfg.autoUpdateTimeout,
-		AuthMode:             hcfg.authMode,
-		OAuthCacheTTL:        hcfg.oauthCacheTTL,
-		TrustedProxyHeader:   hcfg.trustedProxyHeader,
-		RateLimitRPS:         hcfg.rateLimitRPS,
-		RateLimitBurst:       hcfg.rateLimitBurst,
-		MetaParamSchema:      hcfg.metaParamSchema,
+		GitLabURL:          hcfg.gitlabURL,
+		SkipTLSVerify:      hcfg.skipTLSVerify,
+		MetaTools:          metaTools,
+		ToolSurface:        toolSurface,
+		CapabilitySurface:  hcfg.capabilitySurface,
+		Tier:               tier,
+		TierExplicit:       tierExplicit,
+		ReadOnly:           hcfg.readOnly,
+		SafeMode:           hcfg.safeMode,
+		EmbeddedResources:  hcfg.embeddedResources,
+		ExcludeTools:       config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:       hcfg.ignoreScopes,
+		MaxHTTPClients:     hcfg.maxHTTPClients,
+		SessionTimeout:     hcfg.sessionTimeout,
+		RevalidateInterval: hcfg.revalidateInterval,
+		UploadMaxFileSize:  config.DefaultMaxFileSize,
+		AutoUpdate:         hcfg.autoUpdate,
+		AutoUpdateRepo:     hcfg.autoUpdateRepo,
+		AutoUpdateInterval: hcfg.autoUpdateInterval,
+		AutoUpdateTimeout:  hcfg.autoUpdateTimeout,
+		AuthMode:           hcfg.authMode,
+		OAuthCacheTTL:      hcfg.oauthCacheTTL,
+		TrustedProxyHeader: hcfg.trustedProxyHeader,
+		RateLimitRPS:       hcfg.rateLimitRPS,
+		RateLimitBurst:     hcfg.rateLimitBurst,
+		MetaParamSchema:    hcfg.metaParamSchema,
 	}
 }
 
@@ -589,6 +613,7 @@ func runStdio(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	logLegacyMetaToolsDeprecation(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	logLegacyEnterpriseEnvDeprecation(os.Getenv("GITLAB_TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
@@ -629,8 +654,18 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
-	// Detect PAT scopes for scope-based tool filtering.
+	// Resolve the licensing tier. When the operator pinned it explicitly via
+	// GITLAB_TIER, use it verbatim (no license check). Otherwise detect it from
+	// the instance license, falling back to Free.
 	serverCfg := cfg.ServerConfig()
+	if cfg.TierExplicit || !client.IsInitialized() {
+		client.SetTier(cfg.Tier)
+		serverCfg.Tier = cfg.Tier
+	} else {
+		serverCfg.Tier = client.DetectTier(ctx)
+	}
+
+	// Detect PAT scopes for scope-based tool filtering.
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		if serverCfg.TokenScopes == nil {
@@ -842,7 +877,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 	case config.ToolSurfaceMeta:
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
-			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Enterprise: cfg.Enterprise, IncludeMCP: true, Updater: updater})
+			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true, Updater: updater})
 			if catalogErr != nil {
 				slog.Warn("failed to build meta action catalog", "error", catalogErr)
 				actionCatalog = actioncatalog.NewCatalog()
@@ -857,7 +892,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
 	default:
-		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
+		gitlabtools.RegisterAll(server, client, cfg.Tier)
 		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
 		return serverSurfaceRegistration{}, nil
 	}
@@ -1120,6 +1155,20 @@ func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
 		"META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
 		"legacy_selector", "META_TOOLS",
 		"replacement", "TOOL_SURFACE="+replacement,
+	)
+}
+
+// logLegacyEnterpriseEnvDeprecation warns when the deprecated GITLAB_ENTERPRISE
+// env var is the active tier source (GITLAB_TIER unset), pointing users to
+// GITLAB_TIER. GITLAB_ENTERPRISE=true maps to GITLAB_TIER=ultimate, false to free.
+func logLegacyEnterpriseEnvDeprecation(tierValue, enterpriseValue string) {
+	if !config.LegacyEnterpriseEnvInUse(tierValue, enterpriseValue) {
+		return
+	}
+	slog.Warn(
+		"GITLAB_ENTERPRISE is deprecated; use GITLAB_TIER (free/premium/ultimate) instead",
+		"legacy_selector", "GITLAB_ENTERPRISE",
+		"replacement", "GITLAB_TIER=ultimate (was true) or GITLAB_TIER=free (was false)",
 	)
 }
 
@@ -1640,7 +1689,7 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 // token scopes, and read-only mode cannot leave hidden catalog actions behind.
 func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
-		Enterprise: cfg.Enterprise,
+		Tier:       cfg.Tier,
 		IncludeMCP: true,
 		Updater:    updater,
 	})
@@ -1777,8 +1826,8 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 // runToolSearch creates an in-memory MCP server, lists all tools, and
 // prints those matching every space-separated search term (AND logic,
 // case-insensitive match on name + description). Then it exits.
-func runToolSearch(query, toolSurface string, enterprise bool) {
-	if err := toolSearchRunner(query, toolSurface, enterprise); err != nil {
+func runToolSearch(query, toolSurface string, tier edition.Tier) {
+	if err := toolSearchRunner(query, toolSurface, tier); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		exitProcess(1)
 	}
@@ -1794,7 +1843,7 @@ var (
 // doToolSearch builds the selected MCP tool catalog, searches tool names and
 // descriptions with case-insensitive AND matching, and prints matching tool
 // names with the first description line.
-func doToolSearch(query, toolSurface string, enterprise bool) error {
+func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 	terms := strings.Fields(strings.ToLower(query))
 	if len(terms) == 0 {
 		return nil
@@ -1804,13 +1853,13 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 
 	switch config.EffectiveToolSurface(true, toolSurface) {
 	case config.ToolSurfaceMeta:
-		if err := gitlabtools.RegisterAllMeta(server, nil, enterprise); err != nil {
+		if err := gitlabtools.RegisterAllMeta(server, nil, tier); err != nil {
 			return err
 		}
 	case config.ToolSurfaceIndividual:
-		gitlabtools.RegisterAll(server, nil, enterprise)
+		gitlabtools.RegisterAll(server, nil, tier)
 	case config.ToolSurfaceDynamic:
-		catalog, err := buildToolSearchCatalog(enterprise)
+		catalog, err := buildToolSearchCatalog(tier)
 		if err != nil {
 			return err
 		}
@@ -1873,9 +1922,9 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 	return nil
 }
 
-func buildToolSearchCatalog(enterprise bool) (*actioncatalog.Catalog, error) {
+func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(nil, gitlabtools.ActionCatalogOptions{
-		Enterprise: enterprise,
+		Tier:       tier,
 		IncludeMCP: true,
 	})
 	if err != nil {

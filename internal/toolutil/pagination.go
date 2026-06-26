@@ -16,6 +16,38 @@ type PaginationInput struct {
 	PerPage int `json:"per_page,omitempty" jsonschema:"Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large."`
 }
 
+// KeysetPaginationInput holds GitLab keyset-pagination parameters for list
+// endpoints that support keyset pagination in addition to offset pagination.
+// Embed it alongside PaginationInput on a list input and wire it with
+// ApplyListOptions. Keyset pagination is more efficient than offset pagination
+// for deep pages of large, ordered result sets.
+type KeysetPaginationInput struct {
+	Pagination string `json:"pagination,omitempty" jsonschema:"Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost."`
+	PageToken  string `json:"page_token,omitempty" jsonschema:"Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'."`
+}
+
+// ApplyListOptions copies offset (PaginationInput) and keyset
+// (KeysetPaginationInput) parameters onto a gl.ListOptions, setting only the
+// values the caller supplied. Pass a zero KeysetPaginationInput for endpoints
+// that only support offset pagination.
+func ApplyListOptions(opts *gl.ListOptions, page PaginationInput, keyset KeysetPaginationInput) {
+	if opts == nil {
+		return
+	}
+	if page.Page > 0 {
+		opts.Page = int64(page.Page)
+	}
+	if page.PerPage > 0 {
+		opts.PerPage = int64(page.PerPage)
+	}
+	if keyset.Pagination != "" {
+		opts.Pagination = keyset.Pagination
+	}
+	if keyset.PageToken != "" {
+		opts.PageToken = keyset.PageToken
+	}
+}
+
 // PaginationOutput holds pagination metadata extracted from GitLab API responses.
 // Fields map to GitLab's X-Page, X-Per-Page, X-Total, X-Total-Pages, X-Next-Page,
 // X-Prev-Page headers. HasMore is a derived convenience flag (NextPage > 0) so

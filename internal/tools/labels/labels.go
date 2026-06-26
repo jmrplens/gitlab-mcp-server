@@ -32,6 +32,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"            jsonschema:"Project ID or URL-encoded path,required"`
 	LabelID     toolutil.StringOrInt `json:"label_id"              jsonschema:"Label ID or name,required"`
+	Name        string               `json:"name,omitempty"        jsonschema:"Label name to update (alternative to label_id for selecting the label by name)"`
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
 	Description string               `json:"description,omitempty" jsonschema:"New label description"`
@@ -41,8 +42,9 @@ type UpdateInput struct {
 
 // DeleteInput defines parameters for deleting a label.
 type DeleteInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	LabelID   toolutil.StringOrInt `json:"label_id"   jsonschema:"Label ID or name,required"`
+	ProjectID toolutil.StringOrInt `json:"project_id"     jsonschema:"Project ID or URL-encoded path,required"`
+	LabelID   toolutil.StringOrInt `json:"label_id"       jsonschema:"Label ID or name,required"`
+	Name      string               `json:"name,omitempty" jsonschema:"Label name to delete (alternative to label_id for selecting the label by name)"`
 }
 
 // SubscribeInput defines parameters for subscribing/unsubscribing to a label.
@@ -63,7 +65,10 @@ type ListInput struct {
 	Search                string               `json:"search,omitempty"                 jsonschema:"Filter labels by keyword search"`
 	WithCounts            bool                 `json:"with_counts,omitempty"            jsonschema:"Include issue and merge request counts"`
 	IncludeAncestorGroups bool                 `json:"include_ancestor_groups,omitempty" jsonschema:"Include labels from ancestor groups"`
+	OrderBy               string               `json:"order_by,omitempty"               jsonschema:"Column to order results by (e.g. name, created_at, updated_at)"`
+	Sort                  string               `json:"sort,omitempty"                   jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // Output represents a single project label.
@@ -89,6 +94,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	opts := labeldata.NewProjectListOptions(input.Page, input.PerPage, input.Search, input.WithCounts, input.IncludeAncestorGroups)
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	if input.OrderBy != "" {
+		opts.OrderBy = input.OrderBy
+	}
+	if input.Sort != "" {
+		opts.Sort = input.Sort
+	}
 
 	labels, resp, err := client.GL().Labels.ListLabels(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -168,6 +180,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("labelUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.UpdateLabelOptions{}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
 	if input.NewName != "" {
 		opts.NewName = new(input.NewName)
 	}
@@ -201,7 +216,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if input.ProjectID == "" {
 		return errors.New("labelDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
-	_, err := client.GL().Labels.DeleteLabel(string(input.ProjectID), string(input.LabelID), &gl.DeleteLabelOptions{}, gl.WithContext(ctx))
+	delOpts := &gl.DeleteLabelOptions{}
+	if input.Name != "" {
+		delOpts.Name = new(input.Name)
+	}
+	_, err := client.GL().Labels.DeleteLabel(string(input.ProjectID), string(input.LabelID), delOpts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("labelDelete", err, http.StatusForbidden,
 			"deleting project labels requires Maintainer or Owner role; group-inherited labels must be deleted at the group level")

@@ -13,9 +13,16 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_download_ml_model_package — download a file from a model package version.
 		toolutil.NewReadActionSpec("download", toolutil.RouteAction(client, Download), toolutil.ActionSpecOptions{
-			Aliases:        []string{"gitlab_download_ml_model_package"},
+			Aliases: []string{
+				"gitlab_download_ml_model_package",
+				"download ml model artifact",
+				"fetch machine learning model file",
+				"get model registry package file",
+				"download model version artifact",
+				"pull ml model binary",
+			},
 			Tags:           []string{"model_registry", "package", "download"},
-			Usage:          "Download a file from a model package version in the project model registry.",
+			Usage:          "Download a single artifact file from a model package version in the project ML model registry, returning the raw bytes base64-encoded.",
 			RelatedActions: []string{"package.list", "release.link_create", "repository.raw_blob"},
 			ParameterGuidance: map[string]toolutil.ParameterGuidance{
 				"project_id": {
@@ -39,9 +46,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					ExampleBinding: `params.filename:"model.bin"`,
 				},
 			},
-			OpenWorld:      true,
-			OwnerPackage:   "modelregistry",
-			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_download_ml_model_package", Title: toolutil.TitleFromName("gitlab_download_ml_model_package")},
+			OpenWorld:    true,
+			OwnerPackage: "modelregistry",
+			IndividualTool: toolutil.IndividualToolSpec{
+				Name:        "gitlab_download_ml_model_package",
+				Title:       toolutil.TitleFromName("gitlab_download_ml_model_package"),
+				Description: "Download one artifact file from a project ML model registry package version by project, model version, path, and filename. Returns: the artifact bytes base64-encoded in content_base64, plus project, model version, path, filename, and decoded size_bytes. See also: gitlab_package_list, gitlab_release_link_create, gitlab_repository_raw_blob.",
+			},
 		}),
 	}
 }

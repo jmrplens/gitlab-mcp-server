@@ -20,6 +20,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
@@ -105,7 +106,7 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, client, ent)
+	RegisterAll(server, client, edition.TierForEnterprise(ent))
 	toolutil.LockdownInputSchemas(server)
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -133,7 +134,7 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 	client := newTestClient(t, handler)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	if err := RegisterAllMeta(server, client, enterprise); err != nil {
+	if err := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}
 	toolutil.LockdownInputSchemas(server)
@@ -168,7 +169,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1028
+		const expectedTools = 1061
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -184,7 +185,10 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 866
+		// 860 = 861 −1 group_milestone_burndown action gated to Premium (the
+		// burndown_events endpoint is Premium/Ultimate). Prior: 858 +3 instance
+		// service accounts un-gated. See cmd/audit_edition_tier.
+		const expectedTools = 860
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -215,7 +219,7 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
 			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-			RegisterAll(server, client, tt.enterprise)
+			RegisterAll(server, client, edition.TierForEnterprise(tt.enterprise))
 			names := toolNamesFromServer(t, server)
 			if gotOrbit := slices.Contains(names, "gitlab_orbit_status"); gotOrbit != tt.wantOrbit {
 				t.Fatalf("RegisterAll() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
@@ -294,7 +298,7 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
 			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-			if registerErr := RegisterAllMeta(server, client, tt.enterprise); registerErr != nil {
+			if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(tt.enterprise)); registerErr != nil {
 				t.Fatalf("RegisterAllMeta() error = %v", registerErr)
 			}
 			if gotOrbit := slices.Contains(toolNamesFromServer(t, server), "gitlab_orbit"); gotOrbit != tt.wantOrbit {
@@ -892,8 +896,8 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"block": {}, "deactivate": {}, "reject": {}, "unapprove": {},
 	"approval_reset": {}, "disable_two_factor": {}, "disable_2fa": {},
 	"unshare": {}, "disable_project": {}, "import_from_file": {},
-	"group_member_unshare": {},
-	"cancel_github":        {}, "rotate": {}, "mirror_force_push": {},
+	"group_member_unshare": {}, "unshare_from_group": {},
+	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
 	"transfer": {},
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/impersonationtokens"
@@ -117,7 +118,7 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		Name:    "gitlab-mcp-server-e2e-scope",
 		Version: "test",
 	}, nil)
-	if registerErr := tools.RegisterAllMeta(scopeServer, limitedClient, sess.enterprise); registerErr != nil {
+	if registerErr := tools.RegisterAllMeta(scopeServer, limitedClient, edition.TierForEnterprise(sess.enterprise)); registerErr != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
 	}
 
@@ -253,7 +254,7 @@ func TestScopeFilter_AdminToken(t *testing.T) {
 		Name:    "gitlab-mcp-server-e2e-scope-admin",
 		Version: "test",
 	}, nil)
-	if registerErr := tools.RegisterAllMeta(server, adminClient, sess.enterprise); registerErr != nil {
+	if registerErr := tools.RegisterAllMeta(server, adminClient, edition.TierForEnterprise(sess.enterprise)); registerErr != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
 	}
 

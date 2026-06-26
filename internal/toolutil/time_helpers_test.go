@@ -1,7 +1,12 @@
 // time_helpers_test.go contains unit tests for time formatting and parsing helpers.
 package toolutil
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+)
 
 // TestFormatTime_ValidRFC3339 verifies that FormatTime formats a valid
 // RFC 3339 timestamp into a human-readable date string.
@@ -75,5 +80,41 @@ func TestFormatTime_DateOnly(t *testing.T) {
 	want := "20 Mar 2026"
 	if got != want {
 		t.Errorf("FormatTime() = %q, want %q", got, want)
+	}
+}
+
+// TestFormatTimePtr_Nil verifies that FormatTimePtr returns "" for a nil pointer.
+func TestFormatTimePtr_Nil(t *testing.T) {
+	got := FormatTimePtr(nil)
+	if got != "" {
+		t.Errorf("FormatTimePtr(nil) = %q, want \"\"", got)
+	}
+}
+
+// TestFormatTimePtr_Valid verifies that FormatTimePtr formats a non-nil time as RFC 3339.
+func TestFormatTimePtr_Valid(t *testing.T) {
+	ts := time.Date(2026, 3, 20, 15, 45, 0, 0, time.UTC)
+	got := FormatTimePtr(&ts)
+	want := "2026-03-20T15:45:00Z"
+	if got != want {
+		t.Errorf("FormatTimePtr() = %q, want %q", got, want)
+	}
+}
+
+// TestFormatISOTimePtr_Nil verifies that FormatISOTimePtr returns "" for a nil pointer.
+func TestFormatISOTimePtr_Nil(t *testing.T) {
+	got := FormatISOTimePtr(nil)
+	if got != "" {
+		t.Errorf("FormatISOTimePtr(nil) = %q, want \"\"", got)
+	}
+}
+
+// TestFormatISOTimePtr_Valid verifies that FormatISOTimePtr formats a non-nil ISOTime as YYYY-MM-DD.
+func TestFormatISOTimePtr_Valid(t *testing.T) {
+	iso := gl.ISOTime(time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC))
+	got := FormatISOTimePtr(&iso)
+	want := "2026-03-20"
+	if got != want {
+		t.Errorf("FormatISOTimePtr() = %q, want %q", got, want)
 	}
 }

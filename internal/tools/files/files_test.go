@@ -1284,6 +1284,62 @@ func TestGetRaw_WithRef(t *testing.T) {
 	}
 }
 
+// TestGetRaw_WithLFS verifies that the lfs flag is forwarded as a query
+// parameter so the raw endpoint resolves the LFS pointer's target file.
+func TestGetRaw_WithLFS(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
+			if got := r.URL.Query().Get("lfs"); got != "true" {
+				t.Errorf("lfs = %q, want %q", got, "true")
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("lfs target content"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	lfs := true
+	out, err := GetRaw(context.Background(), client, RawInput{
+		ProjectID: "42", FilePath: testFileMainGo, LFS: &lfs,
+	})
+	if err != nil {
+		t.Fatalf("GetRaw() unexpected error: %v", err)
+	}
+	if out.Content != "lfs target content" {
+		t.Errorf("Content = %q, want %q", out.Content, "lfs target content")
+	}
+}
+
+// TestGetRawFileMetaData_WithLFS verifies that the lfs flag is forwarded as a
+// query parameter on the raw metadata HEAD request.
+func TestGetRawFileMetaData_WithLFS(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" && r.Method == http.MethodHead {
+			if got := r.URL.Query().Get("lfs"); got != "true" {
+				t.Errorf("lfs = %q, want %q", got, "true")
+			}
+			w.Header().Set("X-Gitlab-File-Name", "main.go")
+			w.Header().Set("X-Gitlab-Size", "30")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	lfs := true
+	out, err := GetRawFileMetaData(context.Background(), client, RawMetaDataInput{
+		ProjectID: "42", FilePath: testFileMainGo, LFS: &lfs,
+	})
+	if err != nil {
+		t.Fatalf("GetRawFileMetaData() unexpected error: %v", err)
+	}
+	if out.FileName != testFileMainGo {
+		t.Errorf("FileName = %q, want %q", out.FileName, testFileMainGo)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Markdown formatters
 // ---------------------------------------------------------------------------.

@@ -5,6 +5,7 @@ package projectimportexport
 
 import (
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"os"
 	"runtime"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -209,6 +209,10 @@ func TestImportFromFile_FilePath_Success(t *testing.T) {
 	if out.ID != 43 {
 		t.Errorf("ID = %d, want 43", out.ID)
 	}
+	// The raw multipart import path must surface the documented `created_at`.
+	if out.CreatedAt != "2026-02-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want documented created_at to be surfaced", out.CreatedAt)
+	}
 }
 
 // TestImportFromFile_BothParams_Error verifies that providing both file_path
@@ -270,6 +274,7 @@ func TestGetImportStatus_Success(t *testing.T) {
 				"name_with_namespace": "group / imported-project",
 				"path": "imported-project",
 				"path_with_namespace": "group/imported-project",
+				"created_at": "2026-03-01T10:00:00Z",
 				"import_status": "finished",
 				"import_type": "file",
 				"correlation_id": "abc-123"
@@ -289,6 +294,11 @@ func TestGetImportStatus_Success(t *testing.T) {
 	}
 	if out.ImportStatus != "finished" {
 		t.Errorf("ImportStatus = %q, want %q", out.ImportStatus, "finished")
+	}
+	// The documented `created_at` attribute (which gl.ImportStatus mistags as
+	// `create_at`) must now be surfaced via the raw-decode superset.
+	if out.CreatedAt != "2026-03-01T10:00:00Z" {
+		t.Errorf("CreatedAt = %q, want documented created_at to be surfaced", out.CreatedAt)
 	}
 }
 
@@ -650,12 +660,13 @@ func TestImportFromFile_Base64DecodeError(t *testing.T) {
 	}
 }
 
-// TestImportStatusToOutput_NilCreatedAt verifies importStatusToOutput handles
-// nil CreateAt without panicking (the missed branch).
-func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
-	out := importStatusToOutput(&gl.ImportStatus{
+// TestRawImportStatusToOutput_NilCreatedAt verifies rawImportStatusToOutput
+// handles both timestamp fields being nil without panicking (the missed branch).
+func TestRawImportStatusToOutput_NilCreatedAt(t *testing.T) {
+	out := rawImportStatusToOutput(&importStatusAPI{
 		ID:           42,
 		ImportStatus: "finished",
+		CreatedAt:    nil,
 		CreateAt:     nil,
 	})
 	if out.ID != 42 {
@@ -666,17 +677,61 @@ func TestImportStatusToOutput_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestImportStatusToOutput_CreatedAt verifies importStatusToOutput formats a
-// present CreateAt timestamp.
-func TestImportStatusToOutput_CreatedAt(t *testing.T) {
+// TestRawImportStatusToOutput_DocumentedCreatedAt verifies rawImportStatusToOutput
+// surfaces the documented `created_at` attribute (the spelling the SDK mistags as
+// `create_at`).
+func TestRawImportStatusToOutput_DocumentedCreatedAt(t *testing.T) {
 	createdAt := time.Date(2026, 2, 1, 12, 30, 0, 0, time.UTC)
-	out := importStatusToOutput(&gl.ImportStatus{
+	out := rawImportStatusToOutput(&importStatusAPI{
 		ID:           42,
 		ImportStatus: "finished",
-		CreateAt:     &createdAt,
+		CreatedAt:    &createdAt,
 	})
 	if out.CreatedAt != "2026-02-01T12:30:00Z" {
 		t.Errorf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
+	}
+}
+
+// TestRawImportStatusToOutput_LegacyCreateAt verifies rawImportStatusToOutput
+// falls back to the legacy `create_at` spelling when the documented `created_at`
+// is absent, preserving compatibility with older instances/SDK decodes.
+func TestRawImportStatusToOutput_LegacyCreateAt(t *testing.T) {
+	legacy := time.Date(2025, 12, 25, 8, 0, 0, 0, time.UTC)
+	out := rawImportStatusToOutput(&importStatusAPI{
+		ID:           42,
+		ImportStatus: "finished",
+		CreateAt:     &legacy,
+	})
+	if out.CreatedAt != "2025-12-25T08:00:00Z" {
+		t.Errorf("CreatedAt = %q, want RFC3339 timestamp from create_at fallback", out.CreatedAt)
+	}
+}
+
+// errReader is an io.Reader that always fails, used to exercise the
+// request-construction error branch of rawImportFromFile.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("forced read error") }
+
+// TestRawGetImportStatus_RequestError verifies rawGetImportStatus returns the
+// request-construction error when the path contains an invalid percent escape.
+func TestRawGetImportStatus_RequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when request construction fails")
+	}))
+	if _, err := rawGetImportStatus(t.Context(), client, "projects/%zz/import"); err == nil {
+		t.Fatal("expected request-construction error for invalid path escape, got nil")
+	}
+}
+
+// TestRawImportFromFile_RequestError verifies rawImportFromFile returns the
+// request-construction error when the archive reader fails during multipart copy.
+func TestRawImportFromFile_RequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when request construction fails")
+	}))
+	if _, err := rawImportFromFile(t.Context(), client, errReader{}, nil); err == nil {
+		t.Fatal("expected request-construction error for failing archive reader, got nil")
 	}
 }
 
@@ -693,6 +748,128 @@ func TestActionSpecs_ImportFileError(t *testing.T) {
 	_, err := byTool["gitlab_import_project_from_file"].Route.Handler(t.Context(), map[string]any{"content_base64": base64.StdEncoding.EncodeToString([]byte("data"))})
 	if err == nil {
 		t.Error("expected import route error")
+	}
+}
+
+// TestScheduleExport_NestedUpload verifies that the structured Upload input is
+// mapped onto the SDK upload options, including the HTTP method.
+func TestScheduleExport_NestedUpload(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID: "1",
+		Upload: &ScheduleExportUploadInput{
+			URL:        "https://example.com/upload",
+			HTTPMethod: "POST",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Message == "" {
+		t.Error("expected non-empty message")
+	}
+}
+
+// TestScheduleExport_NestedUploadNoMethod verifies the nested upload path works
+// when only the URL is supplied (HTTP method left empty).
+func TestScheduleExport_NestedUploadNoMethod(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID: "1",
+		Upload:    &ScheduleExportUploadInput{URL: "https://example.com/upload"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestImportFromFile_OverrideParams verifies that override_params are mapped
+// onto the SDK ImportFileOptions and forwarded in the multipart request body.
+func TestImportFromFile_OverrideParams(t *testing.T) {
+	wantParams := map[string]string{
+		"override_params[visibility]":                      "private",
+		"override_params[description]":                     "overridden",
+		"override_params[name]":                            "renamed",
+		"override_params[path]":                            "renamed-path",
+		"override_params[namespace_id]":                    "42",
+		"override_params[shared_runners_enabled]":          "true",
+		"override_params[container_registry_access_level]": "private",
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
+			if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
+				t.Fatalf("parse multipart: %v", err)
+			}
+			for key, want := range wantParams {
+				if got := r.FormValue(key); got != want {
+					t.Errorf("%s = %q, want %q", key, got, want)
+				}
+			}
+			testutil.RespondJSON(w, http.StatusCreated,
+				`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	lfs := true
+	nsID := int64(42)
+	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
+		Name:          "p",
+		Path:          "p",
+		OverrideParams: &ImportOverrideParamsInput{
+			Name:                         "renamed",
+			Path:                         "renamed-path",
+			NamespaceID:                  &nsID,
+			Description:                  "overridden",
+			Visibility:                   "private",
+			DefaultBranch:                "main",
+			MergeMethod:                  "ff",
+			RequestAccessEnabled:         &lfs,
+			LFSEnabled:                   &lfs,
+			SharedRunnersEnabled:         &lfs,
+			IssuesAccessLevel:            "enabled",
+			MergeRequestsAccessLevel:     "private",
+			WikiAccessLevel:              "disabled",
+			BuildsAccessLevel:            "enabled",
+			SnippetsAccessLevel:          "private",
+			ContainerRegistryAccessLevel: "private",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ImportFromFile() error: %v", err)
+	}
+	if out.ID != 99 {
+		t.Errorf("ID = %d, want 99", out.ID)
+	}
+}
+
+// TestBuildOverrideParams_NilAndEmpty verifies that buildOverrideParams returns
+// nil for a nil input and for an input with no fields set.
+func TestBuildOverrideParams_NilAndEmpty(t *testing.T) {
+	if got := buildOverrideParams(nil); got != nil {
+		t.Errorf("buildOverrideParams(nil) = %v, want nil", got)
+	}
+	if got := buildOverrideParams(&ImportOverrideParamsInput{}); got != nil {
+		t.Errorf("buildOverrideParams(empty) = %v, want nil", got)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	mcpresources "github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -32,7 +33,7 @@ func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, `{"version":"17.0.0"}`)
 	}))
-	cfg := &config.Config{GitLabURL: srv.URL, GitLabToken: "eval-token", Enterprise: true}
+	cfg := &config.Config{GitLabURL: srv.URL, GitLabToken: "eval-token", Tier: edition.Ultimate, TierExplicit: true}
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
 		srv.Close()
@@ -82,7 +83,11 @@ func newCatalogGitLabClient(opts options) (*gitlabclient.Client, func(), error) 
 		if _, pingErr := client.Ping(ctx); pingErr != nil {
 			return nil, nil, fmt.Errorf("ping GitLab backend %s: %w", cfg.GitLabURL, pingErr)
 		}
-		client.DetectEnterprise(ctx, cfg.Enterprise)
+		if cfg.TierExplicit {
+			client.SetTier(cfg.Tier)
+		} else {
+			client.DetectTier(ctx)
+		}
 		return client, func() {
 			// GitLab catalog clients do not own an httptest server or other local resource.
 		}, nil

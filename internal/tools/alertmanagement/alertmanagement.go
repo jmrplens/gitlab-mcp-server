@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -21,18 +22,23 @@ import (
 type ListMetricImagesInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	AlertIID  int64                `json:"alert_iid" jsonschema:"Alert IID,required"`
-	Page      int64                `json:"page" jsonschema:"Page number for pagination"`
-	PerPage   int64                `json:"per_page" jsonschema:"Number of items per page"`
+	// OrderBy names the column used to order keyset-paginated results.
+	OrderBy string `json:"order_by,omitempty" jsonschema:"Column to order keyset-paginated results by (e.g. created_at, id)"`
+	// Sort selects the sort direction for ordered results.
+	Sort string `json:"sort,omitempty" jsonschema:"Sort direction (asc or desc)"`
+	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // MetricImageItem represents a single metric image.
 type MetricImageItem struct {
 	toolutil.HintableOutput
-	ID       int64  `json:"id"`
-	Filename string `json:"filename"`
-	FilePath string `json:"file_path"`
-	URL      string `json:"url"`
-	URLText  string `json:"url_text"`
+	ID        int64  `json:"id"`
+	CreatedAt string `json:"created_at,omitempty"`
+	Filename  string `json:"filename"`
+	FilePath  string `json:"file_path"`
+	URL       string `json:"url"`
+	URLText   string `json:"url_text"`
 }
 
 // ListMetricImagesOutput contains a list of metric images.
@@ -42,28 +48,38 @@ type ListMetricImagesOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// newMetricImageItem maps a client-go MetricImage onto the MCP output item,
+// mirroring every SDK field (id, created_at, filename, file_path, url, url_text).
+func newMetricImageItem(img *gl.MetricImage) MetricImageItem {
+	item := MetricImageItem{
+		ID:       img.ID,
+		Filename: img.Filename,
+		FilePath: img.FilePath,
+		URL:      img.URL,
+		URLText:  img.URLText,
+	}
+	if img.CreatedAt != nil {
+		item.CreatedAt = img.CreatedAt.Format(time.RFC3339)
+	}
+	return item
+}
+
 // ListMetricImages retrieves metric images for an alert.
 func ListMetricImages(ctx context.Context, client *gitlabclient.Client, input ListMetricImagesInput) (ListMetricImagesOutput, error) {
 	if input.AlertIID <= 0 {
 		return ListMetricImagesOutput{}, toolutil.ErrRequiredInt64("gitlab_list_alert_metric_images", "alert_iid")
 	}
-	opts := &gl.ListMetricImagesOptions{}
-	if input.Page > 0 || input.PerPage > 0 {
-		opts.ListOptions = gl.ListOptions{Page: input.Page, PerPage: input.PerPage}
+	opts := &gl.ListMetricImagesOptions{
+		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
 	}
+	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	images, resp, err := client.GL().AlertManagement.ListMetricImages(string(input.ProjectID), input.AlertIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMetricImagesOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_alert_metric_images", err, http.StatusNotFound, "verify project_id and alert_iid \u2014 check alerts with the project's alert management")
 	}
 	items := make([]MetricImageItem, 0, len(images))
 	for _, img := range images {
-		items = append(items, MetricImageItem{
-			ID:       img.ID,
-			Filename: img.Filename,
-			FilePath: img.FilePath,
-			URL:      img.URL,
-			URLText:  img.URLText,
-		})
+		items = append(items, newMetricImageItem(img))
 	}
 	return ListMetricImagesOutput{
 		Images:     items,
@@ -98,13 +114,7 @@ func UpdateMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 	if err != nil {
 		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_update_alert_metric_image", err, http.StatusNotFound, "verify image_id with gitlab_list_alert_metric_images")
 	}
-	return MetricImageItem{
-		ID:       img.ID,
-		Filename: img.Filename,
-		FilePath: img.FilePath,
-		URL:      img.URL,
-		URLText:  img.URLText,
-	}, nil
+	return newMetricImageItem(img), nil
 }
 
 // UploadMetricImage.
@@ -171,13 +181,7 @@ func UploadMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 	if err != nil {
 		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_upload_alert_metric_image", err, http.StatusBadRequest, "check file content is valid base64 PNG/JPEG")
 	}
-	return MetricImageItem{
-		ID:       img.ID,
-		Filename: img.Filename,
-		FilePath: img.FilePath,
-		URL:      img.URL,
-		URLText:  img.URLText,
-	}, nil
+	return newMetricImageItem(img), nil
 }
 
 // DeleteMetricImage.

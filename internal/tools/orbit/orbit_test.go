@@ -790,6 +790,41 @@ func TestGraphStatusOptions_InvalidProjectAndFormat(t *testing.T) {
 	}
 }
 
+// TestConvertStatus_NestedShape_MirrorsUserAndSystem verifies that the
+// nested Orbit status response shape (user/system keys) is mirrored
+// field-for-field into [StatusOutput].
+//
+// The test asserts that User.Available is carried through and that the
+// System object mirrors status, version, timestamp, error, and the
+// per-subsystem components (with nil component entries dropped).
+func TestConvertStatus_NestedShape_MirrorsUserAndSystem(t *testing.T) {
+	nested := convertStatus(&gl.OrbitStatus{
+		User: &gl.OrbitStatusUser{Available: true},
+		System: &gl.OrbitStatusSystem{
+			FormattedText: "system text",
+			Status:        "ok",
+			Version:       "1.2.3",
+			Timestamp:     "2026-01-01T00:00:00Z",
+			Error:         "grpc unreachable",
+			Components:    []*gl.OrbitStatusComponent{nil, {Name: "api", Status: "healthy"}},
+		},
+	})
+	if nested.User == nil || !nested.User.Available {
+		t.Fatalf("convertStatus() user = %+v, want available", nested.User)
+	}
+	if nested.System == nil {
+		t.Fatal("convertStatus() system = nil, want mirrored object")
+	}
+	if nested.System.FormattedText != "system text" || nested.System.Status != "ok" ||
+		nested.System.Version != "1.2.3" || nested.System.Timestamp != "2026-01-01T00:00:00Z" ||
+		nested.System.Error != "grpc unreachable" {
+		t.Fatalf("convertStatus() system = %+v, want mirrored scalar fields", nested.System)
+	}
+	if len(nested.System.Components) != 1 || nested.System.Components[0].Name != "api" {
+		t.Fatalf("convertStatus() system components = %+v, want single api entry", nested.System.Components)
+	}
+}
+
 // TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields verifies that
 // Orbit response converters skip nil slices while preserving optional metadata.
 //

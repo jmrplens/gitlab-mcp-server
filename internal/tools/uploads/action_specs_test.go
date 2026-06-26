@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"gitlab_project_upload", map[string]any{"project_id": "42", "filename": "file.txt", "content_base64": base64.StdEncoding.EncodeToString([]byte("hello"))}},
 		{"gitlab_project_upload_list", map[string]any{"project_id": "42"}},
 		{"gitlab_project_upload_delete", map[string]any{"project_id": "42", "upload_id": 1}},
+		{"gitlab_project_upload_delete_by_secret", map[string]any{"project_id": "42", "secret": "abc123", "filename": "file.txt"}},
 	}
 
 	for _, tt := range tests {
@@ -53,6 +55,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_project_upload", map[string]any{"project_id": "p", "content_base64": base64.StdEncoding.EncodeToString([]byte("data")), "filename": "f.txt"}},
 		{"gitlab_project_upload_list", map[string]any{"project_id": "p"}},
 		{"gitlab_project_upload_delete", map[string]any{"project_id": "p", "upload_id": 1}},
+		{"gitlab_project_upload_delete_by_secret", map[string]any{"project_id": "p", "secret": "abc123", "filename": "f.txt"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
@@ -80,6 +83,20 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 	if out.Message != "Successfully deleted upload 1 from project 42." {
 		t.Fatalf("delete message = %q", out.Message)
+	}
+
+	secretResult, err := byTool["gitlab_project_upload_delete_by_secret"].Route.Handler(t.Context(), map[string]any{
+		"project_id": "42", "secret": "abc123", "filename": "file.txt",
+	})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_project_upload_delete_by_secret) error: %v", err)
+	}
+	secretOut, ok := secretResult.(toolutil.DeleteOutput)
+	if !ok {
+		t.Fatalf("Route.Handler(gitlab_project_upload_delete_by_secret) returned %T, want toolutil.DeleteOutput", secretResult)
+	}
+	if secretOut.Message != "Successfully deleted upload abc123/file.txt from project 42." {
+		t.Fatalf("delete-by-secret message = %q", secretOut.Message)
 	}
 }
 
@@ -125,6 +142,44 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestActionSpecs_DistinctiveAliases verifies every project-upload spec carries
+// distinctive natural-language aliases beyond its canonical tool name, satisfying
+// the 1:1 audit metadata norm (no aliases_only_toolname findings).
+func TestActionSpecs_DistinctiveAliases(t *testing.T) {
+	byTool := uploadSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, uploadsActionHandler())))
+
+	for tool, want := range uploadActionAliases {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("missing spec for %q", tool)
+		}
+		extra := 0
+		for _, alias := range spec.Aliases {
+			if strings.TrimSpace(alias) != tool {
+				extra++
+			}
+		}
+		if extra < 2 || extra > 4 {
+			t.Fatalf("%s: want 2-4 natural-language aliases, got %d (%v)", tool, extra, spec.Aliases)
+		}
+		for _, w := range want {
+			if !slices.Contains(spec.Aliases, w) {
+				t.Fatalf("%s: missing alias %q in %v", tool, w, spec.Aliases)
+			}
+		}
+	}
+}
+
+// TestDecorateUploadMeta_UnknownToolNoOp verifies the decorator leaves options
+// untouched for a tool name absent from the alias map.
+func TestDecorateUploadMeta_UnknownToolNoOp(t *testing.T) {
+	options := toolutil.ActionSpecOptions{Aliases: []string{"gitlab_unknown_tool"}}
+	decorateUploadMeta(&options, "gitlab_unknown_tool")
+	if len(options.Aliases) != 1 {
+		t.Fatalf("expected no-op for unknown tool, got aliases %v", options.Aliases)
 	}
 }
 

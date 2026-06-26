@@ -34,8 +34,11 @@ func FormatMarkdown(p Output) string {
 	if p.Description != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdDescription, p.Description)
 	}
-	if p.Namespace != "" {
-		fmt.Fprintf(&b, "- **Namespace**: %s\n", p.Namespace)
+	if p.Namespace != nil && p.Namespace.FullPath != "" {
+		fmt.Fprintf(&b, "- **Namespace**: %s\n", p.Namespace.FullPath)
+	}
+	if p.ForkedFromProject != nil && p.ForkedFromProject.PathWithNamespace != "" {
+		fmt.Fprintf(&b, "- **Forked From**: %s\n", p.ForkedFromProject.PathWithNamespace)
 	}
 	if p.Archived {
 		fmt.Fprintf(&b, "- %s **Archived**\n", toolutil.EmojiArchived)
@@ -457,14 +460,14 @@ func FormatApprovalRuleMarkdown(out ApprovalRuleOutput) string {
 	}
 	fmt.Fprintf(&b, "- **Applies to all protected branches**: %s\n", boolIcon(out.AppliesToAllProtectedBranches))
 	fmt.Fprintf(&b, "- **Contains hidden groups**: %s\n", boolIcon(out.ContainsHiddenGroups))
-	if len(out.Users) > 0 {
-		fmt.Fprintf(&b, "- **Users**: %s\n", strings.Join(out.Users, ", "))
+	if names := userNames(out.Users); len(names) > 0 {
+		fmt.Fprintf(&b, "- **Users**: %s\n", strings.Join(names, ", "))
 	}
-	if len(out.Groups) > 0 {
-		fmt.Fprintf(&b, "- **Groups**: %s\n", strings.Join(out.Groups, ", "))
+	if names := groupNames(out.Groups); len(names) > 0 {
+		fmt.Fprintf(&b, "- **Groups**: %s\n", strings.Join(names, ", "))
 	}
-	if len(out.EligibleApprovers) > 0 {
-		fmt.Fprintf(&b, "- **Eligible Approvers**: %s\n", strings.Join(out.EligibleApprovers, ", "))
+	if names := userNames(out.EligibleApprovers); len(names) > 0 {
+		fmt.Fprintf(&b, "- **Eligible Approvers**: %s\n", strings.Join(names, ", "))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -491,12 +494,12 @@ func FormatListApprovalRulesMarkdown(out ListApprovalRulesOutput) string {
 			ruleType = "—"
 		}
 		users := "—"
-		if len(r.Users) > 0 {
-			users = strings.Join(r.Users, ", ")
+		if names := userNames(r.Users); len(names) > 0 {
+			users = strings.Join(names, ", ")
 		}
 		groups := "—"
-		if len(r.Groups) > 0 {
-			groups = strings.Join(r.Groups, ", ")
+		if names := groupNames(r.Groups); len(names) > 0 {
+			groups = strings.Join(names, ", ")
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s | %s |\n",
 			r.ID, toolutil.EscapeMdTableCell(r.Name), ruleType,
@@ -564,6 +567,50 @@ func FormatRepositoryStorageMarkdown(out RepositoryStorageOutput) string {
 	return b.String()
 }
 
+// FormatListTargetBranchRulesMarkdown renders a project's target branch rules
+// as a Markdown table.
+func FormatListTargetBranchRulesMarkdown(out ListTargetBranchRulesOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Target Branch Rules (%d)\n\n", len(out.TargetBranchRules))
+	if len(out.TargetBranchRules) == 0 {
+		b.WriteString("No target branch rules found.\n")
+		return b.String()
+	}
+	b.WriteString("| ID | Source Pattern | Target Branch | Created |\n")
+	b.WriteString("| --- | --- | --- | --- |\n")
+	for _, r := range out.TargetBranchRules {
+		created := "-"
+		if r.CreatedAt != "" {
+			created = toolutil.FormatTime(r.CreatedAt)
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+			r.ID, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.TargetBranch), created)
+	}
+	toolutil.WriteHints(
+		&b,
+		"Use action 'target_branch_rule_create' to add a rule",
+		"Use action 'target_branch_rule_delete' with a rule_id to remove a rule",
+	)
+	return b.String()
+}
+
+// FormatTargetBranchRuleMarkdown renders a single target branch rule as Markdown.
+func FormatTargetBranchRuleMarkdown(out TargetBranchRuleOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Target Branch Rule: %s\n\n", toolutil.EscapeMdHeading(out.Name))
+	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
+	fmt.Fprintf(&b, "- **Source Pattern**: %s\n", out.Name)
+	fmt.Fprintf(&b, "- **Target Branch**: %s\n", out.TargetBranch)
+	if out.CreatedAt != "" {
+		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
+	}
+	toolutil.WriteHints(
+		&b,
+		"Use action 'target_branch_rule_list' to see all rules for the project",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(formatProjectNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
@@ -586,4 +633,6 @@ func init() {
 	toolutil.RegisterMarkdown(FormatListApprovalRulesMarkdown)
 	toolutil.RegisterMarkdown(FormatPullMirrorMarkdown)
 	toolutil.RegisterMarkdown(FormatRepositoryStorageMarkdown)
+	toolutil.RegisterMarkdown(FormatListTargetBranchRulesMarkdown)
+	toolutil.RegisterMarkdown(FormatTargetBranchRuleMarkdown)
 }

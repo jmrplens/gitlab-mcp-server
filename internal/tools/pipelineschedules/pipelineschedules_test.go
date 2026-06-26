@@ -5,9 +5,14 @@ package pipelineschedules
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -59,8 +64,8 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 	if out.Schedules[0].Description != "Nightly build" {
 		t.Errorf("description = %q, want %q", out.Schedules[0].Description, "Nightly build")
 	}
-	if out.Schedules[0].OwnerName != "admin" {
-		t.Errorf("owner = %q, want %q", out.Schedules[0].OwnerName, "admin")
+	if out.Schedules[0].Owner == nil || out.Schedules[0].Owner.Username != "admin" {
+		t.Errorf("owner = %+v, want username %q", out.Schedules[0].Owner, "admin")
 	}
 }
 
@@ -80,6 +85,41 @@ func TestPipelineScheduleList_WithScope(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID: "123",
 		Scope:     "active",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestPipelineScheduleList_KeysetAndSort verifies List forwards order_by, sort,
+// and keyset pagination (pagination, page_token) query parameters.
+func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedules {
+			q := r.URL.Query()
+			if q.Get("order_by") != "id" {
+				t.Errorf("order_by = %q, want id", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			if q.Get("pagination") != "keyset" {
+				t.Errorf("pagination = %q, want keyset", q.Get("pagination"))
+			}
+			if q.Get("page_token") != "tok123" {
+				t.Errorf("page_token = %q, want tok123", q.Get("page_token"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:             "123",
+		OrderBy:               "id",
+		Sort:                  "desc",
+		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -109,12 +149,34 @@ func TestPipelineScheduleList_CancelledContext(t *testing.T) {
 // Pipeline Schedule Get
 // ---------------------------------------------------------------------------.
 
+// assertLastPipelineDocumentedSubset verifies that a last_pipeline reference
+// carries the documented fields (id, status, ref) and that the trimmed web_url
+// field is not surfaced in the serialized output, per
+// doc/api/pipeline_schedules.md.
+func assertLastPipelineDocumentedSubset(t *testing.T, lp *LastPipelineOutput) {
+	t.Helper()
+	if lp == nil || lp.ID != 99 || lp.Status != "success" || lp.Ref != "main" {
+		t.Errorf("last_pipeline = %+v, want id 99 status success ref main", lp)
+	}
+	blob, err := json.Marshal(lp)
+	if err != nil {
+		t.Fatalf("marshal last_pipeline: %v", err)
+	}
+	if strings.Contains(string(blob), "web_url") {
+		t.Errorf("last_pipeline JSON unexpectedly contains web_url: %s", blob)
+	}
+}
+
 // TestPipelineScheduleGet_Success verifies PipelineScheduleGet when success.
 func TestPipelineScheduleGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"owner":{"id":7,"username":"admin","name":"Admin User","state":"active","avatar_url":"http://av","web_url":"http://u"},
+				"last_pipeline":{"id":99,"sha":"abc","ref":"main","status":"success","web_url":"http://p"},
+				"variables":[{"key":"DEPLOY_ENV","value":"prod","variable_type":"env_var"},null],
+				"inputs":[{"name":"version","value":"1.2.3"},null]
 			}`)
 			return
 		}
@@ -133,6 +195,132 @@ func TestPipelineScheduleGet_Success(t *testing.T) {
 	}
 	if out.Cron != "0 1 * * *" {
 		t.Errorf("cron = %q, want %q", out.Cron, "0 1 * * *")
+	}
+	if out.Owner == nil || out.Owner.ID != 7 || out.Owner.Name != "Admin User" || out.Owner.State != "active" {
+		t.Errorf("owner = %+v, want full user object", out.Owner)
+	}
+	assertLastPipelineDocumentedSubset(t, out.LastPipeline)
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" || out.Variables[0].VariableType != "env_var" {
+		t.Errorf("variables = %+v, want one DEPLOY_ENV env_var", out.Variables)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" || out.Inputs[0].Value != "1.2.3" {
+		t.Errorf("inputs = %+v, want one version=1.2.3", out.Inputs)
+	}
+}
+
+// TestPipelineScheduleGet_RawVariableSurfaced verifies that the documented
+// variables[].raw boolean — which the SDK gl.PipelineVariable omits — is
+// surfaced through the raw REST superset fetch on the get-schedule handler.
+func TestPipelineScheduleGet_RawVariableSurfaced(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"variables":[{"key":"TOKEN","value":"$secret","variable_type":"env_var","raw":true}]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Variables) != 1 || !out.Variables[0].Raw {
+		t.Fatalf("variables = %+v, want one variable with raw=true", out.Variables)
+	}
+	blob, err := json.Marshal(out.Variables[0])
+	if err != nil {
+		t.Fatalf("marshal variable: %v", err)
+	}
+	if !strings.Contains(string(blob), `"raw":true`) {
+		t.Errorf("variable JSON missing raw=true: %s", blob)
+	}
+}
+
+// TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance verifies that a
+// schedule whose variables[] entries omit the raw field (older GitLab versions)
+// still decodes successfully, leaving raw at its false zero value and omitting it
+// from the serialized output via the omitempty tag.
+func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,
+				"variables":[{"key":"DEPLOY_ENV","value":"prod","variable_type":"env_var"}]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf("version-tolerant decode must not fail: %v", err)
+	}
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
+		t.Fatalf("variables = %+v, want one DEPLOY_ENV variable", out.Variables)
+	}
+	if out.Variables[0].Raw {
+		t.Errorf("raw = true, want false when field absent")
+	}
+	blob, err := json.Marshal(out.Variables[0])
+	if err != nil {
+		t.Fatalf("marshal variable: %v", err)
+	}
+	if strings.Contains(string(blob), "raw") {
+		t.Errorf("variable JSON unexpectedly contains raw when absent: %s", blob)
+	}
+}
+
+// TestToOutput_SDKConverter_FullSchedule exercises the SDK-wrapper toOutput
+// converter (still used by the list/create/update/take-ownership handlers, which
+// return the gl.PipelineSchedule wrapper) across all of its sub-object and
+// timestamp branches: owner, last_pipeline, variables, inputs, next_run_at,
+// created_at, and updated_at. The get/run handlers now use the raw superset path
+// (toOutputAPI), so this direct test keeps the SDK converter fully covered.
+func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
+	now := time.Date(2026, 3, 8, 1, 0, 0, 0, time.UTC)
+	destroy := true
+	s := &gitlab.PipelineSchedule{
+		ID:           1,
+		Description:  "Nightly",
+		Ref:          "main",
+		Cron:         "0 1 * * *",
+		CronTimezone: "UTC",
+		Active:       true,
+		NextRunAt:    &now,
+		CreatedAt:    &now,
+		UpdatedAt:    &now,
+		Owner:        &gitlab.User{ID: 7, Username: "admin", Name: "Admin User", State: "active"},
+		LastPipeline: &gitlab.LastPipeline{ID: 99, SHA: "abc", Ref: "main", Status: "success"},
+		Variables: []*gitlab.PipelineVariable{
+			{Key: "DEPLOY_ENV", Value: "prod", VariableType: gitlab.EnvVariableType},
+			nil,
+		},
+		Inputs: []*gitlab.PipelineInput{
+			{Name: "version", Value: "1.2.3", Destroy: &destroy},
+			nil,
+		},
+	}
+
+	out := toOutput(s)
+
+	if out.Owner == nil || out.Owner.ID != 7 {
+		t.Errorf("owner = %+v, want id 7", out.Owner)
+	}
+	if out.LastPipeline == nil || out.LastPipeline.ID != 99 {
+		t.Errorf("last_pipeline = %+v, want id 99", out.LastPipeline)
+	}
+	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
+		t.Errorf("variables = %+v, want one DEPLOY_ENV variable (nil skipped)", out.Variables)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+		t.Errorf("inputs = %+v, want one version input (nil skipped)", out.Inputs)
+	}
+	if out.NextRunAt == "" || out.CreatedAt == "" || out.UpdatedAt == "" {
+		t.Errorf("timestamps not formatted: %+v", out)
 	}
 }
 
@@ -165,25 +353,37 @@ func TestPipelineScheduleGet_CancelledContext(t *testing.T) {
 func TestPipelineScheduleCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules && r.Method == http.MethodPost {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"name":"version"`) {
+				t.Errorf("create body missing inputs: %s", body)
+			}
 			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id":10,"description":"Weekly deploy","ref":"main","cron":"0 9 * * 1","cron_timezone":"UTC","active":true
+				"id":10,"description":"Weekly deploy","ref":"main","cron":"0 9 * * 1","cron_timezone":"UTC","active":true,
+				"inputs":[{"name":"version","value":"1.0.0"}]
 			}`)
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
 	}))
 
+	active := true
 	out, err := Create(context.Background(), client, CreateInput{
-		ProjectID:   "123",
-		Description: "Weekly deploy",
-		Ref:         "main",
-		Cron:        "0 9 * * 1",
+		ProjectID:    "123",
+		Description:  "Weekly deploy",
+		Ref:          "main",
+		Cron:         "0 9 * * 1",
+		CronTimezone: "UTC",
+		Active:       &active,
+		Inputs:       []InputObject{{Name: "version", Value: "1.0.0"}},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.ID != 10 {
 		t.Errorf("id = %d, want 10", out.ID)
+	}
+	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+		t.Errorf("inputs = %+v, want one version input", out.Inputs)
 	}
 }
 
@@ -229,6 +429,10 @@ func TestPipelineScheduleCreate_CancelledContext(t *testing.T) {
 func TestPipelineScheduleUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodPut {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"name":"old_input"`) {
+				t.Errorf("update body missing inputs: %s", body)
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,"description":"Updated desc","ref":"develop","cron":"0 2 * * *","cron_timezone":"UTC","active":false
 			}`)
@@ -237,10 +441,12 @@ func TestPipelineScheduleUpdate_Success(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
 	}))
 
+	destroy := true
 	out, err := Update(context.Background(), client, UpdateInput{
 		ProjectID:   "123",
 		ScheduleID:  1,
 		Description: testUpdatedDesc,
+		Inputs:      []InputObject{{Name: "old_input", Destroy: &destroy}},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -391,8 +597,8 @@ func TestTakeOwnership_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TakeOwnership() error: %v", err)
 	}
-	if out.OwnerName != "newowner" {
-		t.Errorf("OwnerName = %q, want %q", out.OwnerName, "newowner")
+	if out.Owner == nil || out.Owner.Username != "newowner" {
+		t.Errorf("Owner = %+v, want username %q", out.Owner, "newowner")
 	}
 }
 
@@ -552,7 +758,7 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":100,"iid":10,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100"}
+				{"id":100,"iid":10,"project_id":42,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100","created_at":"2016-08-11T11:28:34.085Z","updated_at":"2016-08-11T11:32:35.169Z"}
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -567,11 +773,21 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	if len(out.Pipelines) != 1 {
 		t.Fatalf("len(Pipelines) = %d, want 1", len(out.Pipelines))
 	}
-	if out.Pipelines[0].ID != 100 {
-		t.Errorf("ID = %d, want 100", out.Pipelines[0].ID)
+	p := out.Pipelines[0]
+	if p.ID != 100 {
+		t.Errorf("ID = %d, want 100", p.ID)
 	}
-	if out.Pipelines[0].Source != "schedule" {
-		t.Errorf("Source = %q, want %q", out.Pipelines[0].Source, "schedule")
+	if p.Source != "schedule" {
+		t.Errorf("Source = %q, want %q", p.Source, "schedule")
+	}
+	if p.ProjectID != 42 {
+		t.Errorf("ProjectID = %d, want 42", p.ProjectID)
+	}
+	if p.CreatedAt != "2016-08-11T11:28:34Z" {
+		t.Errorf("CreatedAt = %q, want 2016-08-11T11:28:34Z", p.CreatedAt)
+	}
+	if p.UpdatedAt != "2016-08-11T11:32:35Z" {
+		t.Errorf("UpdatedAt = %q, want 2016-08-11T11:32:35Z", p.UpdatedAt)
 	}
 }
 
@@ -1246,7 +1462,8 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
-		ProjectID: "1", ScheduleID: 1, Page: 2, PerPage: 2,
+		ProjectID: "1", ScheduleID: 1,
+		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1256,6 +1473,37 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.TotalPages != 3 {
 		t.Errorf("TotalPages = %d, want 3", out.Pagination.TotalPages)
+	}
+}
+
+// TestListTriggeredPipelines_OrderByAndSort verifies ListTriggeredPipelines
+// forwards the order_by and sort query parameters to the GitLab API.
+func TestListTriggeredPipelines_OrderByAndSort(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
+			q := r.URL.Query()
+			if q.Get("order_by") != "id" {
+				t.Errorf("order_by = %q, want id", q.Get("order_by"))
+			}
+			if q.Get("sort") != "desc" {
+				t.Errorf("sort = %q, want desc", q.Get("sort"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"id":100,"iid":10,"project_id":42,"ref":"main","sha":"abc","status":"success","source":"schedule","web_url":"https://example.com/p/100"}
+			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
+		ProjectID: "42", ScheduleID: 1,
+		OrderBy: "id", Sort: "desc",
+	})
+	if err != nil {
+		t.Fatalf("ListTriggeredPipelines() error: %v", err)
+	}
+	if len(out.Pipelines) != 1 {
+		t.Fatalf("len(Pipelines) = %d, want 1", len(out.Pipelines))
 	}
 }
 
@@ -1272,7 +1520,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		Cron:         "0 1 * * *",
 		CronTimezone: "UTC",
 		Active:       true,
-		OwnerName:    "admin",
+		Owner:        &OwnerOutput{Username: "admin"},
+		LastPipeline: &LastPipelineOutput{ID: 99, Status: "success"},
 		NextRunAt:    "2026-03-08T01:00:00Z",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 		UpdatedAt:    "2026-03-07T12:00:00Z",
@@ -1287,6 +1536,8 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		"| Active | ✅ |",
 		"| Next Run | 8 Mar 2026 01:00 UTC |",
 		"| Owner | admin |",
+		"| Last Pipeline |",
+		"#99 (success)",
 		"| Created | 1 Jan 2026 00:00 UTC |",
 		"| Updated | 7 Mar 2026 12:00 UTC |",
 	} {
@@ -1342,8 +1593,8 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListMarkdown_WithSchedules(t *testing.T) {
 	out := ListOutput{
 		Schedules: []Output{
-			{ID: 1, Description: "Nightly", Ref: "main", Cron: "0 1 * * *", Active: true, OwnerName: "admin"},
-			{ID: 2, Description: "Weekly", Ref: "develop", Cron: "0 9 * * 1", Active: false, OwnerName: "user1"},
+			{ID: 1, Description: "Nightly", Ref: "main", Cron: "0 1 * * *", Active: true, Owner: &OwnerOutput{Username: "admin"}},
+			{ID: 2, Description: "Weekly", Ref: "develop", Cron: "0 9 * * 1", Active: false, Owner: &OwnerOutput{Username: "user1"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}

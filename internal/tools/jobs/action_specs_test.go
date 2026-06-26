@@ -127,17 +127,17 @@ func TestToOutput_OptionalFields(t *testing.T) {
 	if out.ArtifactsExpireAt == "" {
 		t.Error("expected ArtifactsExpireAt to be set")
 	}
-	if out.UserUsername != "admin" {
-		t.Errorf("UserUsername = %q, want %q", out.UserUsername, "admin")
+	if out.User == nil || out.User.Username != "admin" {
+		t.Errorf("User = %+v, want username admin", out.User)
 	}
-	if out.RunnerID != 5 {
-		t.Errorf("RunnerID = %d, want 5", out.RunnerID)
+	if out.Runner == nil || out.Runner.ID != 5 {
+		t.Errorf("Runner = %+v, want ID 5", out.Runner)
 	}
 	if out.ErasedAt == "" {
 		t.Error("expected ErasedAt to be set")
 	}
-	if out.CommitSHA != "abc123def456" {
-		t.Errorf("CommitSHA = %q, want %q", out.CommitSHA, "abc123def456")
+	if out.Commit == nil || out.Commit.ID != "abc123def456" {
+		t.Errorf("Commit = %+v, want ID abc123def456", out.Commit)
 	}
 }
 
@@ -158,14 +158,19 @@ func TestBridgeToOutput_OptionalFields(t *testing.T) {
 		CreatedAt:  &now,
 		StartedAt:  &now,
 		FinishedAt: &now,
+		ErasedAt:   &now,
 	}
 	out := BridgeToOutput(bridge)
 
-	if out.UserUsername != "deployer" {
-		t.Errorf("UserUsername = %q, want %q", out.UserUsername, "deployer")
+	if out.ErasedAt == "" {
+		t.Error("expected ErasedAt to be set")
 	}
-	if out.DownstreamPipeline != 99 {
-		t.Errorf("DownstreamPipeline = %d, want 99", out.DownstreamPipeline)
+
+	if out.User == nil || out.User.Username != "deployer" {
+		t.Errorf("User = %+v, want username deployer", out.User)
+	}
+	if out.DownstreamPipeline == nil || out.DownstreamPipeline.ID != 99 {
+		t.Errorf("DownstreamPipeline = %+v, want ID 99", out.DownstreamPipeline)
 	}
 	if out.CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")
@@ -265,12 +270,12 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 		Stage:          "build",
 		Status:         "failed",
 		Ref:            "main",
-		CommitSHA:      "abc123def456789",
+		Commit:         &CommitObject{ID: "abc123def456789"},
 		Duration:       45.5,
 		QueuedDuration: 2.5,
 		FailureReason:  "script_failure",
 		Coverage:       85.5,
-		UserUsername:   "admin",
+		User:           &UserObject{Username: "admin"},
 		CreatedAt:      "2024-01-01T00:00:00Z",
 		WebURL:         "https://gitlab.com/job/1",
 	}

@@ -14,28 +14,31 @@ import (
 // ListInput holds parameters for listing package protection rules.
 type ListInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Column to order results by (keyset pagination)"`
+	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput
+	toolutil.KeysetPaginationInput
 }
 
 // GetInput is not needed — GitLab API has no get-single-rule endpoint.
 
 // CreateInput holds parameters for creating a package protection rule.
 type CreateInput struct {
-	ProjectID                   toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
-	PackageNamePattern          string               `json:"package_name_pattern"                    jsonschema:"Package name pattern with optional wildcards (e.g. @my-scope/my-pkg*),required"`
-	PackageType                 string               `json:"package_type"                            jsonschema:"Package type (npm, pypi, maven, generic, etc.),required"`
-	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
+	ProjectID                   toolutil.StringOrInt         `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
+	PackageNamePattern          string                       `json:"package_name_pattern"                    jsonschema:"Package name pattern with optional wildcards (e.g. @my-scope/my-pkg*),required"`
+	PackageType                 string                       `json:"package_type"                            jsonschema:"Package type (npm, pypi, maven, generic, etc.),required"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
 }
 
 // UpdateInput holds parameters for updating a package protection rule.
 type UpdateInput struct {
-	ProjectID                   toolutil.StringOrInt `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
-	RuleID                      int64                `json:"rule_id"                                 jsonschema:"Package protection rule ID,required"`
-	PackageNamePattern          string               `json:"package_name_pattern,omitempty"          jsonschema:"Package name pattern with optional wildcards"`
-	PackageType                 string               `json:"package_type,omitempty"                  jsonschema:"Package type (npm, pypi, maven, generic, etc.)"`
-	MinimumAccessLevelForPush   string               `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
-	MinimumAccessLevelForDelete string               `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
+	ProjectID                   toolutil.StringOrInt         `json:"project_id"                              jsonschema:"Project ID or URL-encoded path,required"`
+	RuleID                      int64                        `json:"rule_id"                                 jsonschema:"Package protection rule ID,required"`
+	PackageNamePattern          string                       `json:"package_name_pattern,omitempty"          jsonschema:"Package name pattern with optional wildcards"`
+	PackageType                 string                       `json:"package_type,omitempty"                  jsonschema:"Package type (npm, pypi, maven, generic, etc.)"`
+	MinimumAccessLevelForPush   gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_push,omitempty" jsonschema:"Minimum access level for push (maintainer, owner, admin)"`
+	MinimumAccessLevelForDelete gl.ProtectionRuleAccessLevel `json:"minimum_access_level_for_delete,omitempty" jsonschema:"Minimum access level for delete (maintainer, owner, admin)"`
 }
 
 // DeleteInput holds parameters for deleting a package protection rule.
@@ -82,11 +85,12 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := &gl.ListPackageProtectionRulesOptions{}
-	if in.Page > 0 {
-		opts.Page = int64(in.Page)
+	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	if in.OrderBy != "" {
+		opts.OrderBy = in.OrderBy
 	}
-	if in.PerPage > 0 {
-		opts.PerPage = int64(in.PerPage)
+	if in.Sort != "" {
+		opts.Sort = in.Sort
 	}
 	rules, resp, err := client.GL().ProtectedPackages.ListPackageProtectionRules(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -119,10 +123,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 		PackageType:        new(in.PackageType),
 	}
 	if in.MinimumAccessLevelForPush != "" {
-		opts.MinimumAccessLevelForPush = gl.NewNullableWithValue(gl.ProtectionRuleAccessLevel(in.MinimumAccessLevelForPush))
+		opts.MinimumAccessLevelForPush = gl.NewNullableWithValue(in.MinimumAccessLevelForPush)
 	}
 	if in.MinimumAccessLevelForDelete != "" {
-		opts.MinimumAccessLevelForDelete = gl.NewNullableWithValue(gl.ProtectionRuleAccessLevel(in.MinimumAccessLevelForDelete))
+		opts.MinimumAccessLevelForDelete = gl.NewNullableWithValue(in.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ProtectedPackages.CreatePackageProtectionRules(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -151,10 +155,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 		opts.PackageType = new(in.PackageType)
 	}
 	if in.MinimumAccessLevelForPush != "" {
-		opts.MinimumAccessLevelForPush = gl.NewNullableWithValue(gl.ProtectionRuleAccessLevel(in.MinimumAccessLevelForPush))
+		opts.MinimumAccessLevelForPush = gl.NewNullableWithValue(in.MinimumAccessLevelForPush)
 	}
 	if in.MinimumAccessLevelForDelete != "" {
-		opts.MinimumAccessLevelForDelete = gl.NewNullableWithValue(gl.ProtectionRuleAccessLevel(in.MinimumAccessLevelForDelete))
+		opts.MinimumAccessLevelForDelete = gl.NewNullableWithValue(in.MinimumAccessLevelForDelete)
 	}
 	rule, _, err := client.GL().ProtectedPackages.UpdatePackageProtectionRules(string(in.ProjectID), in.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {

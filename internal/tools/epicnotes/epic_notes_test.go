@@ -24,8 +24,8 @@ const (
 						"nodes": [{
 							"notes": {
 								"nodes": [
-									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z"},
-									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z"}
+									{"id": "gid://gitlab/Note/100", "body": "This looks good", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice", "webUrl": "https://gitlab.example.com/alice", "avatarUrl": "https://gitlab.example.com/avatar/alice.png"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-15T10:00:00Z"},
+									{"id": "gid://gitlab/Note/101", "body": "changed the description", "author": {"id": "gid://gitlab/User/1", "name": "Administrator", "username": "admin"}, "system": true, "createdAt": "2026-01-15T12:00:00Z", "updatedAt": "2026-01-15T12:00:00Z"}
 								]
 							}
 						}]
@@ -66,7 +66,7 @@ const (
 	// GraphQL response for createNote mutation.
 	gqlCreateNoteData = `{
 		"createNote": {
-			"note": {"id": "gid://gitlab/Note/200", "body": "New comment", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-16T10:00:00Z", "updatedAt": "2026-01-16T10:00:00Z"},
+			"note": {"id": "gid://gitlab/Note/200", "body": "New comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-16T10:00:00Z", "updatedAt": "2026-01-16T10:00:00Z"},
 			"errors": []
 		}
 	}`
@@ -74,7 +74,7 @@ const (
 	// GraphQL response for updateNote mutation.
 	gqlUpdateNoteData = `{
 		"updateNote": {
-			"note": {"id": "gid://gitlab/Note/100", "body": "Updated comment", "author": {"username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-16T11:00:00Z"},
+			"note": {"id": "gid://gitlab/Note/100", "body": "Updated comment", "author": {"id": "gid://gitlab/User/5", "name": "Alice Example", "username": "alice"}, "system": false, "createdAt": "2026-01-15T10:00:00Z", "updatedAt": "2026-01-16T11:00:00Z"},
 			"errors": []
 		}
 	}`
@@ -272,6 +272,22 @@ func assertEpicNotesList(t *testing.T, out ListOutput) {
 	assertEpicNote(t, out.Notes[1], 101, "", "", true, 1)
 }
 
+// authorObj builds a canonical author object carrying just a username, for use
+// in Markdown formatter test fixtures.
+func authorObj(username string) *NoteUserOutput {
+	return &NoteUserOutput{Username: username}
+}
+
+// noteAuthorUsernameOrEmpty returns the canonical author username, or "" when the
+// author object is nil. It lets assertions compare against the migrated
+// *NoteUserOutput author object.
+func noteAuthorUsernameOrEmpty(got Output) string {
+	if got.Author != nil {
+		return got.Author.Username
+	}
+	return ""
+}
+
 func assertEpicNote(t *testing.T, got Output, wantID int64, wantBody, wantAuthor string, wantSystem bool, index int) {
 	t.Helper()
 	if got.ID != wantID {
@@ -280,8 +296,8 @@ func assertEpicNote(t *testing.T, got Output, wantID int64, wantBody, wantAuthor
 	if wantBody != "" && got.Body != wantBody {
 		t.Errorf("Notes[%d].Body = %q, want %q", index, got.Body, wantBody)
 	}
-	if wantAuthor != "" && got.Author != wantAuthor {
-		t.Errorf("Notes[%d].Author = %q, want %q", index, got.Author, wantAuthor)
+	if wantAuthor != "" && noteAuthorUsernameOrEmpty(got) != wantAuthor {
+		t.Errorf("Notes[%d].Author.Username = %q, want %q", index, noteAuthorUsernameOrEmpty(got), wantAuthor)
 	}
 	if got.System != wantSystem {
 		t.Errorf("Notes[%d].System = %v, want %v", index, got.System, wantSystem)
@@ -313,8 +329,11 @@ func TestGet(t *testing.T) {
 				if out.ID != 100 {
 					t.Errorf("ID = %d, want 100", out.ID)
 				}
-				if out.Author != "alice" {
-					t.Errorf("Author = %q, want %q", out.Author, "alice")
+				if got := noteAuthorUsernameOrEmpty(out); got != "alice" {
+					t.Errorf("Author.Username = %q, want %q", got, "alice")
+				}
+				if out.Author == nil || out.Author.ID == 0 {
+					t.Errorf("Author object should carry a non-zero ID, got %+v", out.Author)
 				}
 				if out.Body != "This looks good" {
 					t.Errorf("Body = %q, want %q", out.Body, "This looks good")
@@ -751,7 +770,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			input: Output{
 				ID:        100,
 				Body:      "This looks good",
-				Author:    "alice",
+				Author:    authorObj("alice"),
 				CreatedAt: "2026-01-15T10:00:00Z",
 				System:    false,
 			},
@@ -768,7 +787,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			input: Output{
 				ID:        101,
 				Body:      "changed the description",
-				Author:    "admin",
+				Author:    authorObj("admin"),
 				CreatedAt: "2026-01-15T12:00:00Z",
 				System:    true,
 			},
@@ -776,6 +795,20 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"## Epic Note #101",
 				"**System note**",
 				"changed the description",
+			},
+		},
+		{
+			name: "renders note with nil author object",
+			input: Output{
+				ID:        102,
+				Body:      "anonymous system entry",
+				Author:    nil,
+				CreatedAt: "2026-01-15T13:00:00Z",
+				System:    true,
+			},
+			contains: []string{
+				"## Epic Note #102",
+				"anonymous system entry",
 			},
 		},
 	}
@@ -805,8 +838,8 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "renders table with notes",
 			input: ListOutput{
 				Notes: []Output{
-					{ID: 100, Author: "alice", CreatedAt: "2026-01-15T10:00:00Z", System: false},
-					{ID: 101, Author: "admin", CreatedAt: "2026-01-15T12:00:00Z", System: true},
+					{ID: 100, Author: authorObj("alice"), CreatedAt: "2026-01-15T10:00:00Z", System: false},
+					{ID: 101, Author: authorObj("admin"), CreatedAt: "2026-01-15T12:00:00Z", System: true},
 				},
 				Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
 			},

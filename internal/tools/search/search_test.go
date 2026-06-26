@@ -1370,7 +1370,7 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 // TestFormatIssuesMarkdown_WithResults verifies FormatIssuesMarkdown when with results.
 func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 	s := FormatIssuesMarkdown(IssuesOutput{
-		Issues:     []issues.Output{{IID: 3, Title: "Fix login", State: "opened", Author: "dev1", Labels: []string{"bug", "critical"}}},
+		Issues:     []issues.Output{{IID: 3, Title: "Fix login", State: "opened", Author: &issues.IssueAuthorOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "#3") {
@@ -1772,6 +1772,60 @@ func TestActionSpecs_SearchDisambiguationUsage(t *testing.T) {
 	projects := byTool["gitlab_search_projects"]
 	if !strings.Contains(projects.Usage, "fuzzy project name") || !strings.Contains(projects.Usage, "use project.get instead") || !strings.Contains(projects.Usage, "Do not use for code") {
 		t.Fatalf("projects Usage = %q, want project/code distinction", projects.Usage)
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadata verifies every search tool carries
+// non-generic discovery metadata: an action-specific Usage (not the generic
+// placeholder), natural-language Aliases beyond the individual tool name,
+// canonical RelatedActions, and an IndividualTool.Description in the
+// "Returns: … See also: …" form (1:1 audit R-META).
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute search domain action") {
+				t.Errorf("%s Usage = %q, want action-specific usage", tool, spec.Usage)
+			}
+			naturalAliases := 0
+			for _, alias := range spec.Aliases {
+				if alias != tool {
+					naturalAliases++
+				}
+			}
+			if naturalAliases == 0 {
+				t.Errorf("%s Aliases = %v, want natural-language aliases", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s RelatedActions empty, want canonical related actions", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s Description = %q, want Returns:/See also: form", tool, desc)
+			}
+		})
+	}
+}
+
+// TestDecorateSearchMeta_UnknownToolNoOp verifies decorateSearchMeta leaves
+// options untouched when the individual tool has no entry in searchActionMeta.
+func TestDecorateSearchMeta_UnknownToolNoOp(t *testing.T) {
+	options := searchReadOptions("gitlab_search_unknown")
+	before := options
+	decorateSearchMeta(&options, "gitlab_search_unknown")
+
+	if options.Usage != before.Usage {
+		t.Errorf("Usage changed for unknown tool: %q", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("Description set for unknown tool: %q", options.IndividualTool.Description)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions set for unknown tool: %v", options.RelatedActions)
 	}
 }
 

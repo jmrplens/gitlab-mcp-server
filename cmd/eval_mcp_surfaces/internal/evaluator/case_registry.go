@@ -166,6 +166,7 @@ func buildCaseFixtureSpecsByName() map[string]CaseFixtureSpec {
 	fixtures = append(
 		fixtures,
 		PipelineJobFixture,
+		EnvironmentDeploymentFixture,
 		MergeRequestDiscussionFixture,
 		MergeRequestSourceFixture,
 		ReleaseCreateSourceFixture,

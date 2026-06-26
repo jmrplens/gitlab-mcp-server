@@ -113,6 +113,7 @@ const (
 	fixtureMergeRequest                   = "merge_request"
 	fixtureMergeRequestDiscussion         = "merge_request_discussion"
 	fixturePipelineJob                    = "pipeline_job"
+	fixtureEnvironmentDeployment          = "environment_deployment"
 	fixtureRelease                        = "release"
 	fixtureTag                            = "tag"
 	fixtureCIVariable                     = "ci_variable"

@@ -350,7 +350,7 @@ func TestExplore_Success(t *testing.T) {
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID: 42, Title: "Test", Visibility: "private",
-		Author: AuthorOutput{Name: "Admin", Username: "admin"},
+		Author: &SnippetAuthorOutput{Name: "Admin", Username: "admin"},
 		WebURL: "https://example.com/snippets/42",
 	}
 	md := FormatMarkdown(out)
@@ -362,7 +362,7 @@ func TestFormatMarkdown(t *testing.T) {
 // TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
-		Snippets: []Output{{ID: 1, Title: "S1", Visibility: "public", Author: AuthorOutput{Username: "u1"}}},
+		Snippets: []Output{{ID: 1, Title: "S1", Visibility: "public", Author: &SnippetAuthorOutput{Username: "u1"}}},
 	}
 	md := FormatListMarkdown(out)
 	if !strings.Contains(md, "S1") {

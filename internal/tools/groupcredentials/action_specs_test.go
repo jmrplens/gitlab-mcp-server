@@ -215,6 +215,58 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata verifies every group-credential tool carries
+// non-generic action-specific Usage, distinctive natural-language Aliases beyond
+// the tool name, and canonical RelatedActions (1:1 audit R-META).
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	byTool := groupCredentialSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	for tool := range groupCredentialActionMeta {
+		spec, ok := byTool[tool]
+		if !ok {
+			t.Fatalf("meta entry %q has no projected spec", tool)
+		}
+		if strings.Contains(spec.Usage, "domain action") || strings.TrimSpace(spec.Usage) == "" {
+			t.Errorf("%s: generic or empty Usage %q", tool, spec.Usage)
+		}
+		distinctive := 0
+		for _, alias := range spec.Aliases {
+			if alias != tool {
+				distinctive++
+			}
+		}
+		if distinctive < 2 || distinctive > 4 {
+			t.Errorf("%s: want 2-4 distinctive aliases, got %d (%v)", tool, distinctive, spec.Aliases)
+		}
+		if len(spec.RelatedActions) == 0 {
+			t.Errorf("%s: empty RelatedActions", tool)
+		}
+		if spec.IndividualTool.Description == "" ||
+			!strings.Contains(spec.IndividualTool.Description, "Returns:") ||
+			!strings.Contains(spec.IndividualTool.Description, "See also:") {
+			t.Errorf("%s: description not in 'Returns: … See also: …' form: %q", tool, spec.IndividualTool.Description)
+		}
+	}
+}
+
+// TestDecorateGroupCredentialMeta_UnknownTool verifies the decorator is a no-op
+// for tools that have no discovery-metadata entry, leaving the base options
+// untouched.
+func TestDecorateGroupCredentialMeta_UnknownTool(t *testing.T) {
+	options := toolutil.ActionSpecOptions{
+		Aliases:        []string{"gitlab_unknown_tool"},
+		Usage:          "Use to execute groupcredentials domain action.",
+		RelatedActions: []string{"group.get"},
+	}
+	decorateGroupCredentialMeta(&options, "gitlab_unknown_tool")
+	if options.Usage != "Use to execute groupcredentials domain action." {
+		t.Errorf("Usage mutated for unknown tool: %q", options.Usage)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_unknown_tool" {
+		t.Errorf("Aliases mutated for unknown tool: %v", options.Aliases)
+	}
+}
+
 func groupCredentialSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

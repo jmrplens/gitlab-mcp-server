@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -70,7 +71,7 @@ func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T
 			expectedNames := toolNamesFromServer(t, expectedServer)
 
 			catalogServer := mcp.NewServer(&mcp.Implementation{Name: "catalog", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-			RegisterAll(catalogServer, tc.client, tc.enterprise)
+			RegisterAll(catalogServer, tc.client, edition.TierForEnterprise(tc.enterprise))
 			catalogNames := toolNamesFromServer(t, catalogServer)
 
 			missing, extra := diffStringSlices(expectedNames, catalogNames)

@@ -7,6 +7,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// userName returns the username of a nested user object, or "" when nil.
+func userName(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
+// userNames maps a slice of nested user objects to their usernames, skipping
+// nil entries.
+func userNames(users []*BasicUserOutput) []string {
+	if len(users) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		if u != nil {
+			names = append(names, u.Username)
+		}
+	}
+	return names
+}
+
 // FormatOutputMarkdown renders a single epic as a Markdown summary.
 func FormatOutputMarkdown(e Output) string {
 	var b strings.Builder
@@ -15,9 +38,9 @@ func FormatOutputMarkdown(e Output) string {
 	if e.Status != "" {
 		fmt.Fprintf(&b, "- **Status**: %s\n", e.Status)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, e.Author)
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, userName(e.Author))
 	if len(e.Assignees) > 0 {
-		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(e.Assignees, ", "))
+		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(userNames(e.Assignees), ", "))
 	}
 	if e.Confidential {
 		b.WriteString("- **Confidential**: yes\n")
@@ -91,7 +114,7 @@ func FormatListMarkdown(out ListOutput) string {
 			e.IID,
 			toolutil.MdTitleLink(toolutil.EscapeMdTableCell(e.Title), e.WebURL),
 			e.State,
-			toolutil.EscapeMdTableCell(e.Author),
+			toolutil.EscapeMdTableCell(userName(e.Author)),
 			toolutil.EscapeMdTableCell(labels),
 			toolutil.FormatTime(e.CreatedAt),
 		)
@@ -121,7 +144,7 @@ func FormatLinksMarkdown(out LinksOutput) string {
 			e.IID,
 			toolutil.MdTitleLink(toolutil.EscapeMdTableCell(e.Title), e.WebURL),
 			e.State,
-			toolutil.EscapeMdTableCell(e.Author),
+			toolutil.EscapeMdTableCell(userName(e.Author)),
 			toolutil.FormatTime(e.CreatedAt),
 		)
 	}

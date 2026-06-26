@@ -36,6 +36,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 			"file_name": testFileName, "output_path": filepath.Join(outDir, "dl.bin"),
 		}},
 		{"list", "gitlab_package_list", map[string]any{"project_id": "1"}},
+		{"group_list", "gitlab_list_group_packages", map[string]any{"group_id": "1"}},
 		{"file_list", "gitlab_package_file_list", map[string]any{"project_id": "1", "package_id": "10"}},
 		{"delete", "gitlab_package_delete", map[string]any{"project_id": "1", "package_id": "10"}},
 		{"file_delete", "gitlab_package_file_delete", map[string]any{"project_id": "1", "package_id": "10", "package_file_id": "20"}},
@@ -238,6 +239,9 @@ func packageActionHandler() http.Handler {
 	})
 	handler.HandleFunc("GET /api/v4/projects/1/packages", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default"}]`)
+	})
+	handler.HandleFunc("GET /api/v4/groups/1/packages", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","project_id":7,"project_path":"grp/proj"}]`)
 	})
 	handler.HandleFunc("GET /api/v4/projects/1/packages/10/package_files", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":20,"package_id":10,"file_name":"app.tar.gz","size":1024,"file_sha256":"abc"}]`)

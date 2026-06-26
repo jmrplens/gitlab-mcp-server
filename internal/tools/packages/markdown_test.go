@@ -191,6 +191,61 @@ func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 	}
 }
 
+// TestFormatGroupListMarkdown_EmptyPackages verifies the group package list
+// markdown renders the empty-state message.
+func TestFormatGroupListMarkdown_EmptyPackages(t *testing.T) {
+	got := FormatGroupListMarkdown(GroupListOutput{
+		Packages:   nil,
+		Pagination: toolutil.PaginationOutput{TotalItems: 0},
+	})
+	if !strings.Contains(got, "No packages found.") {
+		t.Error("missing 'No packages found.' message")
+	}
+}
+
+// TestFormatGroupListMarkdown_RendersProjectAndHint verifies the group package
+// list markdown renders the owning project path, the project id fallback, and
+// the preserve-links hint.
+func TestFormatGroupListMarkdown_RendersProjectAndHint(t *testing.T) {
+	got := FormatGroupListMarkdown(GroupListOutput{
+		Packages: []GroupListItem{
+			{ListItem: ListItem{ID: 1, Name: "pkg-a", Version: "1.0.0", PackageType: "generic", Status: "default"}, ProjectID: 7, ProjectPath: "grp/proj"},
+			{ListItem: ListItem{ID: 2, Name: "pkg-b", Version: "2.0.0", PackageType: "npm", Status: "default"}, ProjectID: 8},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+	if !strings.Contains(got, "grp/proj") {
+		t.Errorf("FormatGroupListMarkdown() = %q, want project path", got)
+	}
+	if !strings.Contains(got, "| 8 |") && !strings.Contains(got, " 8 |") {
+		t.Errorf("FormatGroupListMarkdown() = %q, want project id fallback 8", got)
+	}
+	if !strings.Contains(got, toolutil.HintPreserveLinks) {
+		t.Errorf("FormatGroupListMarkdown() = %q, want preserve-links hint", got)
+	}
+}
+
+// TestGroupProjectSummary_Variants verifies the owning-project summary prefers
+// the project path, falls back to the project id, and returns empty otherwise.
+func TestGroupProjectSummary_Variants(t *testing.T) {
+	tests := []struct {
+		name string
+		pkg  GroupListItem
+		want string
+	}{
+		{name: "path", pkg: GroupListItem{ProjectID: 7, ProjectPath: "grp/proj"}, want: "grp/proj"},
+		{name: "id fallback", pkg: GroupListItem{ProjectID: 7}, want: "7"},
+		{name: "none", pkg: GroupListItem{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := groupProjectSummary(tt.pkg); got != tt.want {
+				t.Fatalf("groupProjectSummary() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPipelineSummary_Variants verifies package pipeline summaries for primary,
 // historical, linked, and empty pipeline data.
 func TestPipelineSummary_Variants(t *testing.T) {
@@ -488,8 +543,8 @@ func TestList_WithEmptyPackage(t *testing.T) {
 	if out.Packages[0].CreatedAt != "" {
 		t.Errorf("CreatedAt should be empty when nil, got %q", out.Packages[0].CreatedAt)
 	}
-	if out.Packages[0].WebPath != "" {
-		t.Errorf("WebPath should be empty when Links is nil, got %q", out.Packages[0].WebPath)
+	if out.Packages[0].Links != nil {
+		t.Errorf("Links should be nil when _links is absent, got %+v", out.Packages[0].Links)
 	}
 	if len(out.Packages[0].Tags) != 0 {
 		t.Errorf("Tags should be empty, got %v", out.Packages[0].Tags)
@@ -992,11 +1047,11 @@ func TestList_WithNameAndTypeFilter(t *testing.T) {
 	if len(out.Packages) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(out.Packages))
 	}
-	if out.Packages[0].WebPath == "" {
-		t.Error("expected non-empty WebPath")
+	if out.Packages[0].Links == nil || out.Packages[0].Links.WebPath != "/packages/10" {
+		t.Errorf("expected Links.WebPath=/packages/10, got %+v", out.Packages[0].Links)
 	}
-	if len(out.Packages[0].Tags) != 1 {
-		t.Errorf("expected 1 tag, got %d", len(out.Packages[0].Tags))
+	if len(out.Packages[0].Tags) != 1 || out.Packages[0].Tags[0].Name != "latest" {
+		t.Errorf("expected 1 tag named latest, got %+v", out.Packages[0].Tags)
 	}
 }
 

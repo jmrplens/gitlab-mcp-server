@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
@@ -127,31 +128,48 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	}
 }
 
-// TestGetOrCreate_DetectsEnterprisePerEntry verifies that CE/EE detection is
-// scoped to the pool entry rather than inherited from the shared HTTP config.
-func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
+// licenseMux returns a mux that serves /version plus a /license endpoint whose
+// plan depends on the token, so DetectTier can resolve a per-token tier.
+func licenseMux(planForToken func(token string) (status int, plan string)) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("PRIVATE-TOKEN")
-		enterprise := token == "glpat-ee"
+	mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"version":    "17.0.0",
-			"enterprise": enterprise,
-		})
+		_ = json.NewEncoder(w).Encode(map[string]any{"version": "17.0.0"})
+	})
+	mux.HandleFunc("GET /api/v4/license", func(w http.ResponseWriter, r *http.Request) {
+		status, plan := planForToken(r.Header.Get("PRIVATE-TOKEN"))
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"plan": plan})
+	})
+	return mux
+}
+
+// TestGetOrCreate_DetectsTierPerEntry verifies that Free/Premium/Ultimate
+// detection is scoped to the pool entry rather than inherited from the shared
+// HTTP config, with enterprise derived from the detected tier.
+func TestGetOrCreate_DetectsTierPerEntry(t *testing.T) {
+	mux := licenseMux(func(token string) (int, string) {
+		if token == "glpat-ee" {
+			return http.StatusOK, "ultimate"
+		}
+		return http.StatusForbidden, ""
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	cfg := testConfig(srv.URL)
-	cfg.Enterprise = true
-	cfg.AutoDetectEnterprise = true
+	cfg.Tier = edition.Ultimate
+	cfg.TierExplicit = false // detect per entry
 	captured := make([]bool, 0, 2)
 	factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
-		if entryCfg.Enterprise != client.IsEnterprise() {
-			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
+		if entryCfg.Enterprise() != client.IsEnterprise() {
+			t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise(), client.IsEnterprise())
 		}
-		captured = append(captured, entryCfg.Enterprise)
+		captured = append(captured, entryCfg.Enterprise())
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
 	pool := New(cfg, factory)
@@ -172,46 +190,46 @@ func TestGetOrCreate_DetectsEnterprisePerEntry(t *testing.T) {
 	if !captured[1] {
 		t.Fatalf("EE entry enterprise = false, want true")
 	}
-	if !cfg.Enterprise {
-		t.Fatalf("shared config Enterprise was mutated to false")
+	if cfg.Tier != edition.Ultimate {
+		t.Fatalf("shared config Tier was mutated to %v", cfg.Tier)
 	}
 }
 
-// TestGetOrCreate_EnterpriseConfigOverridesDetection verifies that explicit
-// MCP server configuration wins when enterprise auto-detection is disabled.
-func TestGetOrCreate_EnterpriseConfigOverridesDetection(t *testing.T) {
+// TestGetOrCreate_TierConfigOverridesDetection verifies that an explicit
+// configured tier wins and no license detection runs when TierExplicit is true.
+func TestGetOrCreate_TierConfigOverridesDetection(t *testing.T) {
 	cases := []struct {
 		name       string
-		configured bool
-		detected   bool
+		configured edition.Tier
+		wantEnt    bool
 	}{
-		{name: "force enterprise", configured: true, detected: false},
-		{name: "force community", configured: false, detected: true},
+		{name: "force ultimate", configured: edition.Ultimate, wantEnt: true},
+		{name: "force free", configured: edition.Free, wantEnt: false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mux := http.NewServeMux()
-			mux.HandleFunc("GET /api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"version":    "17.0.0",
-					"enterprise": tc.detected,
-				})
+			// License endpoint returns the opposite of the configured tier; an
+			// explicit tier must ignore it entirely.
+			mux := licenseMux(func(string) (int, string) {
+				if tc.configured.IsEnterprise() {
+					return http.StatusForbidden, ""
+				}
+				return http.StatusOK, "ultimate"
 			})
 			srv := httptest.NewServer(mux)
 			defer srv.Close()
 
 			cfg := testConfig(srv.URL)
-			cfg.Enterprise = tc.configured
-			cfg.AutoDetectEnterprise = false
+			cfg.Tier = tc.configured
+			cfg.TierExplicit = true
 
 			var captured bool
 			factory := func(client *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
-				if entryCfg.Enterprise != client.IsEnterprise() {
-					t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise, client.IsEnterprise())
+				if entryCfg.Enterprise() != client.IsEnterprise() {
+					t.Fatalf("entry config enterprise %v does not match client enterprise %v", entryCfg.Enterprise(), client.IsEnterprise())
 				}
-				captured = entryCfg.Enterprise
+				captured = entryCfg.Enterprise()
 				return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 			}
 
@@ -219,8 +237,8 @@ func TestGetOrCreate_EnterpriseConfigOverridesDetection(t *testing.T) {
 			if _, err := pool.GetOrCreate("glpat-forced", srv.URL); err != nil {
 				t.Fatalf("GetOrCreate() error: %v", err)
 			}
-			if captured != tc.configured {
-				t.Fatalf("captured enterprise = %v, want configured %v", captured, tc.configured)
+			if captured != tc.wantEnt {
+				t.Fatalf("captured enterprise = %v, want %v", captured, tc.wantEnt)
 			}
 		})
 	}

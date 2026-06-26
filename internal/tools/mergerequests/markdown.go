@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -31,15 +32,17 @@ func FormatMarkdown(mr Output) string {
 		titlePrefix += " " + toolutil.EmojiDraft
 	}
 	fmt.Fprintf(&b, "## %s MR !%d: %s\n\n", titlePrefix, mr.IID, toolutil.EscapeMdHeading(mr.Title))
-	if mr.ProjectPath != "" {
-		fmt.Fprintf(&b, "- **Project**: %s\n", mr.ProjectPath)
+	if path := mrProjectPath(mr); path != "" {
+		fmt.Fprintf(&b, "- **Project**: %s\n", path)
 	}
 	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.MRStateEmoji(mr.State), mr.State)
 	if mr.Draft {
 		fmt.Fprintf(&b, "- %s **Draft** merge request\n", toolutil.EmojiDraft)
 	}
 	fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", mr.SourceBranch, mr.TargetBranch)
-	fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.MergeStatus)
+	if mr.DetailedMergeStatus != "" {
+		fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.DetailedMergeStatus)
+	}
 	writeMergeRequestPeopleAndLabels(&b, mr)
 	writeMergeRequestPipeline(&b, mr)
 	if mr.ChangesCount != "" {
@@ -66,21 +69,69 @@ func FormatMarkdown(mr Output) string {
 	return b.String()
 }
 
+// AuthorName returns the username of the merge request author, or "" when the
+// author object is absent. Exported for downstream consumers (e.g. search)
+// that render the author after the 1:1 object migration.
+func AuthorName(mr Output) string {
+	return userName(mr.Author)
+}
+
+// ProjectPath returns the "group/project" path derived from the MR references
+// object, or "" when unavailable. Exported for downstream consumers (e.g.
+// search) that previously read the flattened project_path scalar.
+func ProjectPath(mr Output) string {
+	return mrProjectPath(mr)
+}
+
+// mrProjectPath derives the "group/project" path from the MR references object
+// (the part before the "!IID" suffix in the full reference), or "" when the
+// references object is absent or malformed.
+func mrProjectPath(mr Output) string {
+	if mr.References == nil {
+		return ""
+	}
+	full := mr.References.Full
+	if idx := strings.LastIndex(full, "!"); idx > 0 {
+		return full[:idx]
+	}
+	return ""
+}
+
+// userName returns the username of a basic-user object, or "" when nil.
+func userName(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	return u.Username
+}
+
+// userNames maps a slice of basic-user objects to their usernames, skipping nil.
+func userNames(users []*BasicUserOutput) []string {
+	out := make([]string, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		out = append(out, u.Username)
+	}
+	return out
+}
+
 func writeMergeRequestPeopleAndLabels(b *strings.Builder, mr Output) {
 	if mr.HasConflicts {
 		fmt.Fprintf(b, "- %s **Has Conflicts**\n", toolutil.EmojiWarning)
 	}
-	if mr.Author != "" {
-		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, mr.Author)
+	if author := userName(mr.Author); author != "" {
+		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, author)
 	}
-	if len(mr.Assignees) > 0 {
-		fmt.Fprintf(b, "- **Assignees**: %s\n", strings.Join(prefixAt(mr.Assignees), ", "))
+	if names := userNames(mr.Assignees); len(names) > 0 {
+		fmt.Fprintf(b, "- **Assignees**: %s\n", strings.Join(prefixAt(names), ", "))
 	}
-	if len(mr.Reviewers) > 0 {
-		fmt.Fprintf(b, "- **Reviewers**: %s\n", strings.Join(prefixAt(mr.Reviewers), ", "))
+	if names := userNames(mr.Reviewers); len(names) > 0 {
+		fmt.Fprintf(b, "- **Reviewers**: %s\n", strings.Join(prefixAt(names), ", "))
 	}
-	if mr.Milestone != "" {
-		fmt.Fprintf(b, "- **Milestone**: %s\n", mr.Milestone)
+	if mr.Milestone != nil && mr.Milestone.Title != "" {
+		fmt.Fprintf(b, "- **Milestone**: %s\n", mr.Milestone.Title)
 	}
 	if len(mr.Labels) > 0 {
 		fmt.Fprintf(b, "- **Labels**: %s\n", strings.Join(mr.Labels, ", "))
@@ -88,22 +139,26 @@ func writeMergeRequestPeopleAndLabels(b *strings.Builder, mr Output) {
 }
 
 func writeMergeRequestPipeline(b *strings.Builder, mr Output) {
-	if mr.PipelineID <= 0 {
+	if mr.Pipeline == nil || mr.Pipeline.ID <= 0 {
 		return
 	}
-	if mr.PipelineWebURL != "" {
-		fmt.Fprintf(b, "- **Pipeline**: [#%d](%s)\n", mr.PipelineID, mr.PipelineWebURL)
+	if mr.Pipeline.WebURL != "" {
+		fmt.Fprintf(b, "- **Pipeline**: [#%d](%s)\n", mr.Pipeline.ID, mr.Pipeline.WebURL)
 		return
 	}
-	fmt.Fprintf(b, "- **Pipeline**: #%d\n", mr.PipelineID)
+	fmt.Fprintf(b, "- **Pipeline**: #%d\n", mr.Pipeline.ID)
 }
 
 func writeMergeRequestTerminalActor(b *strings.Builder, mr Output) {
-	if mr.State == "merged" && mr.MergedBy != "" {
-		writeMergeRequestActorLine(b, "Merged By", mr.MergedBy, mr.MergedAt)
+	if mr.State == "merged" {
+		if name := userName(mr.MergeUser); name != "" {
+			writeMergeRequestActorLine(b, "Merged By", name, mr.MergedAt)
+		}
 	}
-	if mr.State == "closed" && mr.ClosedBy != "" {
-		writeMergeRequestActorLine(b, "Closed By", mr.ClosedBy, mr.ClosedAt)
+	if mr.State == "closed" {
+		if name := userName(mr.ClosedBy); name != "" {
+			writeMergeRequestActorLine(b, "Closed By", name, mr.ClosedAt)
+		}
 	}
 }
 
@@ -141,7 +196,7 @@ func FormatListMarkdown(out ListOutput) string {
 			draftTag = " " + toolutil.EmojiDraft
 		}
 		fmt.Fprintf(&b, "| [!%d](%s) | %s%s | %s %s | %s | %s | %s → %s |\n",
-			mr.IID, mr.WebURL, toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(mr.Author), toolutil.EscapeMdTableCell(mr.ProjectPath), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
+			mr.IID, mr.WebURL, toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(userName(mr.Author)), toolutil.EscapeMdTableCell(mrProjectPath(mr)), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -289,7 +344,7 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, issue := range out.Issues {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n",
-			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issue.Author), strings.Join(issue.Labels, ", "))
+			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issues.AuthorName(issue)), strings.Join(issue.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
@@ -363,7 +418,7 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 			iss.WebURL,
 			toolutil.EscapeMdTableCell(iss.Title),
 			iss.State,
-			iss.Author,
+			issues.AuthorName(iss),
 			strings.Join(iss.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -401,10 +456,12 @@ func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 func FormatDependencyMarkdown(d DependencyOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## MR Dependency (#%d)\n\n", d.ID)
-	fmt.Fprintf(&b, "- **Blocking MR**: !%d (ID: %d)\n", d.BlockingMRIID, d.BlockingMRID)
-	fmt.Fprintf(&b, toolutil.FmtMdTitle, d.BlockingMRTitle)
-	fmt.Fprintf(&b, toolutil.FmtMdState, d.BlockingMRState)
-	fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", d.BlockingSourceBranch, d.BlockingTargetBranch)
+	if bmr := d.BlockingMergeRequest; bmr != nil {
+		fmt.Fprintf(&b, "- **Blocking MR**: !%d (ID: %d)\n", bmr.IID, bmr.ID)
+		fmt.Fprintf(&b, toolutil.FmtMdTitle, bmr.Title)
+		fmt.Fprintf(&b, toolutil.FmtMdState, bmr.State)
+		fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", bmr.SourceBranch, bmr.TargetBranch)
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_mr_get` to view the blocking MR",
@@ -423,11 +480,16 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 	b.WriteString("| ID | Blocking MR | Title | State |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, d := range out.Dependencies {
+		var iid int64
+		var title, state string
+		if bmr := d.BlockingMergeRequest; bmr != nil {
+			iid, title, state = bmr.IID, bmr.Title, bmr.State
+		}
 		fmt.Fprintf(&b, "| %d | !%d | %s | %s |\n",
 			d.ID,
-			d.BlockingMRIID,
-			toolutil.EscapeMdTableCell(d.BlockingMRTitle),
-			d.BlockingMRState)
+			iid,
+			toolutil.EscapeMdTableCell(title),
+			state)
 	}
 	toolutil.WriteHints(
 		&b,

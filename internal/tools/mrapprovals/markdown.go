@@ -7,6 +7,49 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// userNames returns the display names of a slice of basic-user outputs,
+// skipping nil entries. Used by the Markdown formatters to render the
+// approver/eligible/user object lists as comma-separated names.
+func userNames(users []*BasicUserOutput) []string {
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		if u != nil {
+			names = append(names, u.Name)
+		}
+	}
+	return names
+}
+
+// groupNames returns the display names of a slice of group outputs, skipping
+// nil entries.
+func groupNames(groups []*GroupOutput) []string {
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g != nil {
+			names = append(names, g.Name)
+		}
+	}
+	return names
+}
+
+// approverNames returns the display names of merge-request approver users,
+// appending the approval timestamp in parentheses when present. Skips entries
+// with a nil user object.
+func approverNames(users []*MergeRequestApproverUserOutput) []string {
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		if u == nil || u.User == nil {
+			continue
+		}
+		if u.ApprovedAt != "" {
+			names = append(names, fmt.Sprintf("%s (%s)", u.User.Name, u.ApprovedAt))
+		} else {
+			names = append(names, u.User.Name)
+		}
+	}
+	return names
+}
+
 // FormatStateMarkdown renders the MR approval state as Markdown.
 func FormatStateMarkdown(s StateOutput) string {
 	var b strings.Builder
@@ -23,7 +66,7 @@ func FormatStateMarkdown(s StateOutput) string {
 	b.WriteString("| -- | ---- | ---- | -------- | -------- | ----------- |\n")
 	for _, r := range s.Rules {
 		approved := toolutil.BoolEmoji(r.Approved)
-		approvedBy := strings.Join(r.ApprovedByNames, ", ")
+		approvedBy := strings.Join(userNames(r.ApprovedBy), ", ")
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(approvedBy))
 	}
 	toolutil.WriteHints(
@@ -46,7 +89,7 @@ func FormatRulesMarkdown(out RulesOutput) string {
 	b.WriteString("| -- | ---- | ---- | -------- | -------- | -------- |\n")
 	for _, r := range out.Rules {
 		approved := toolutil.BoolEmoji(r.Approved)
-		eligible := strings.Join(r.EligibleNames, ", ")
+		eligible := strings.Join(userNames(r.EligibleApprovers), ", ")
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(eligible))
 	}
 	toolutil.WriteHints(
@@ -70,19 +113,11 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 	fmt.Fprintf(&b, "| Has Approval Rules | %v |\n", c.HasApprovalRules)
 	fmt.Fprintf(&b, "| User Has Approved | %v |\n", c.UserHasApproved)
 	fmt.Fprintf(&b, "| User Can Approve | %v |\n", c.UserCanApprove)
-	if len(c.ApprovedBy) > 0 {
-		names := make([]string, 0, len(c.ApprovedBy))
-		for _, a := range c.ApprovedBy {
-			if a.ApprovedAt != "" {
-				names = append(names, fmt.Sprintf("%s (%s)", a.Name, a.ApprovedAt))
-			} else {
-				names = append(names, a.Name)
-			}
-		}
+	if names := approverNames(c.ApprovedBy); len(names) > 0 {
 		fmt.Fprintf(&b, "\n**Approved by**: %s\n", strings.Join(names, ", "))
 	}
-	if len(c.SuggestedNames) > 0 {
-		fmt.Fprintf(&b, "\n**Suggested approvers**: %s\n", strings.Join(c.SuggestedNames, ", "))
+	if names := userNames(c.SuggestedApprovers); len(names) > 0 {
+		fmt.Fprintf(&b, "\n**Suggested approvers**: %s\n", strings.Join(names, ", "))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -102,14 +137,14 @@ func FormatRuleMarkdown(r RuleOutput) string {
 	fmt.Fprintf(&b, "| Type | %s |\n", r.RuleType)
 	fmt.Fprintf(&b, "| Approvals Required | %d |\n", r.ApprovalsRequired)
 	fmt.Fprintf(&b, "| Approved | %s |\n", approved)
-	if len(r.EligibleNames) > 0 {
-		fmt.Fprintf(&b, "| Eligible | %s |\n", strings.Join(r.EligibleNames, ", "))
+	if eligible := userNames(r.EligibleApprovers); len(eligible) > 0 {
+		fmt.Fprintf(&b, "| Eligible | %s |\n", strings.Join(eligible, ", "))
 	}
-	if len(r.UserNames) > 0 {
-		fmt.Fprintf(&b, "| Users | %s |\n", strings.Join(r.UserNames, ", "))
+	if users := userNames(r.Users); len(users) > 0 {
+		fmt.Fprintf(&b, "| Users | %s |\n", strings.Join(users, ", "))
 	}
-	if len(r.GroupNames) > 0 {
-		fmt.Fprintf(&b, "| Groups | %s |\n", strings.Join(r.GroupNames, ", "))
+	if groups := groupNames(r.Groups); len(groups) > 0 {
+		fmt.Fprintf(&b, "| Groups | %s |\n", strings.Join(groups, ", "))
 	}
 	toolutil.WriteHints(
 		&b,
