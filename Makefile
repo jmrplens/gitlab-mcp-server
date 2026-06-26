@@ -8,6 +8,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
+	audit-discovery audit-discovery-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -737,6 +738,17 @@ audit-1to1:
 ## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
 audit-edition-tier:
 	go run ./cmd/audit_edition_tier/ -gaps-only
+
+## audit-discovery: report discovery-metadata gaps (aliases/usage/related/param-guidance/sibling-cluster) across the ActionSpec catalog (META-001).
+audit-discovery:
+	go run ./cmd/audit_discovery_completeness/ -gaps-only -output plan/discovery-backlog.json
+
+## audit-discovery-check: CI gate for META-001. Exits non-zero when any error-severity finding is present.
+## Note: post-Phase-0 baseline has ~439 errors (real findings); this gate is
+## designed to drive Phase 1+ waves to zero. Use `make audit-discovery` for
+## the human-readable report.
+audit-discovery-check:
+	go run ./cmd/audit_discovery_completeness/ -gaps-only -check
 
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:
