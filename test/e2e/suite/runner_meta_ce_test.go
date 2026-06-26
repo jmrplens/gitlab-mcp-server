@@ -127,6 +127,9 @@ func TestMeta_Runner(t *testing.T) {
 		})
 
 		t.Run("ControllerList", func(t *testing.T) {
+			if !sess.enterprise {
+				t.Skip("runner controllers are an Ultimate-only experimental API; gated off CE")
+			}
 			out, err := callToolOn[runnercontrollers.ListOutput](ctx, sess.meta, "gitlab_runner", map[string]any{
 				"action": "controller_list",
 				"params": map[string]any{},
@@ -139,6 +142,9 @@ func TestMeta_Runner(t *testing.T) {
 		})
 
 		t.Run("ControllerGet_Graceful404", func(t *testing.T) {
+			if !sess.enterprise {
+				t.Skip("runner controllers are an Ultimate-only experimental API; gated off CE")
+			}
 			_, err := callToolOn[runnercontrollers.Output](ctx, sess.meta, "gitlab_runner", map[string]any{
 				"action": "controller_get",
 				"params": map[string]any{"controller_id": 999999},

@@ -212,6 +212,9 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/ApprovalSettings/Get_Graceful404", func(t *testing.T) {
+		if !sess.enterprise {
+			t.Skip("MR approval settings are a Premium feature; the action is gated off CE")
+		}
 		out, err := callToolOn[mrapprovalsettings.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_settings_project_get",
 			"params": map[string]any{
@@ -232,6 +235,9 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 	})
 
 	t.Run("Meta/ApprovalSettings/Update_Graceful404", func(t *testing.T) {
+		if !sess.enterprise {
+			t.Skip("MR approval settings are a Premium feature; the action is gated off CE")
+		}
 		out, err := callToolOn[mrapprovalsettings.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "approval_settings_project_update",
 			"params": map[string]any{
