@@ -56,10 +56,10 @@ type Output struct {
 	AvatarURL                   string `json:"avatar_url,omitempty"`
 	WebURL                      string `json:"web_url,omitempty"`
 	MembersCountWithDescendants int64  `json:"members_count_with_descendants,omitempty"`
-	BillableMembersCount        int64  `json:"billable_members_count,omitempty"`
-	Plan                        string `json:"plan,omitempty"`
-	TrialEndsOn                 string `json:"trial_ends_on,omitempty"`
-	Trial                       bool   `json:"trial,omitempty"`
+	BillableMembersCount        int64  `json:"billable_members_count,omitempty" tier:"premium"`
+	Plan                        string `json:"plan,omitempty" tier:"premium"`
+	TrialEndsOn                 string `json:"trial_ends_on,omitempty" tier:"premium"`
+	Trial                       bool   `json:"trial,omitempty" tier:"premium"`
 	MaxSeatsUsed                *int64 `json:"max_seats_used,omitempty"`
 	SeatsInUse                  *int64 `json:"seats_in_use,omitempty"`
 }

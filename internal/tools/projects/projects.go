@@ -113,7 +113,7 @@ type CreateInput struct {
 	SquashOption                              string `json:"squash_option,omitempty" jsonschema:"Squash option (never, always, default_on, default_off)"`
 	OnlyAllowMergeIfPipelineSucceeds          bool   `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Only allow merge when pipeline succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merge when all discussions are resolved"`
-	OnlyAllowMergeIfAllStatusChecksPassed     *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" jsonschema:"Only allow merge when all external status checks pass"`
+	OnlyAllowMergeIfAllStatusChecksPassed     *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
 	AllowMergeOnSkippedPipeline               *bool  `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Allow merge when pipeline is skipped"`
 	ProtectMergeRequestPipelines              *bool  `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	RemoveSourceBranchAfterMerge              *bool  `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Remove source branch after merge by default"`
@@ -310,10 +310,10 @@ type Output struct {
 
 	// Mirror settings (1:1 SDK parity).
 	Mirror                           bool  `json:"mirror" tier:"premium"`
-	MirrorUserID                     int64 `json:"mirror_user_id,omitempty"`
-	MirrorTriggerBuilds              bool  `json:"mirror_trigger_builds"`
-	OnlyMirrorProtectedBranches      bool  `json:"only_mirror_protected_branches"`
-	MirrorOverwritesDivergedBranches bool  `json:"mirror_overwrites_diverged_branches"`
+	MirrorUserID                     int64 `json:"mirror_user_id,omitempty" tier:"premium"`
+	MirrorTriggerBuilds              bool  `json:"mirror_trigger_builds" tier:"premium"`
+	OnlyMirrorProtectedBranches      bool  `json:"only_mirror_protected_branches" tier:"premium"`
+	MirrorOverwritesDivergedBranches bool  `json:"mirror_overwrites_diverged_branches" tier:"premium"`
 
 	// Import status (1:1 SDK parity).
 	ImportType   string `json:"import_type,omitempty"`
@@ -496,7 +496,7 @@ type UpdateInput struct {
 	TagList           []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
 
 	// Merge settings (additive)
-	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" jsonschema:"Only allow merge when all external status checks pass"`
+	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate" jsonschema:"Only allow merge when all external status checks pass"`
 	AllowPipelineTriggerApproveDeployment *bool  `json:"allow_pipeline_trigger_approve_deployment,omitempty" jsonschema:"Allow pipeline triggerer to approve deployment"`
 	PreventMergeWithoutJiraIssue          *bool  `json:"prevent_merge_without_jira_issue,omitempty" jsonschema:"Require an associated Jira issue before merge"`
 	MergeRequestDefaultTargetSelf         *bool  `json:"mr_default_target_self,omitempty" jsonschema:"Default merge request target to the project itself (for forks)"`

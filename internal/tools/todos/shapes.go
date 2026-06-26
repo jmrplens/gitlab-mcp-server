@@ -195,7 +195,7 @@ type TodoTargetOut struct {
 	Links        *IssueLinksOut `json:"_links,omitempty"`
 	MovedToID    int64          `json:"moved_to_id,omitempty"`
 	TimeStats    *TimeStatsOut  `json:"time_stats,omitempty"`
-	Weight       int64          `json:"weight,omitempty"`
+	Weight       int64          `json:"weight,omitempty" tier:"premium"`
 
 	// Only available for type MergeRequest.
 	MergedAt                  string          `json:"merged_at,omitempty"`

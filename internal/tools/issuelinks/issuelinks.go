@@ -87,7 +87,7 @@ type RelationOutput struct {
 	DueDate        string            `json:"due_date,omitempty"`
 	WebURL         string            `json:"web_url"`
 	References     *ReferencesOutput `json:"references,omitempty"`
-	Weight         int64             `json:"weight,omitempty"`
+	Weight         int64             `json:"weight,omitempty" tier:"premium"`
 	UserNotesCount int64             `json:"user_notes_count,omitempty"`
 	IssueLinkID    int               `json:"issue_link_id"`
 	LinkType       string            `json:"link_type"`

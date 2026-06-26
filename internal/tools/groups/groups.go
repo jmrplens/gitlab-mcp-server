@@ -949,11 +949,11 @@ type CreateInput struct {
 	TwoFactorGracePeriod            *int64                         `json:"two_factor_grace_period,omitempty"            jsonschema:"Grace period in hours before two-factor authentication is enforced"`
 	WikiAccessLevel                 string                         `json:"wiki_access_level,omitempty"                  jsonschema:"Wiki access level (disabled, private, enabled)"`
 
-	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
-	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
-	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // UpdateInput defines parameters for updating a group.
@@ -1004,11 +1004,11 @@ type UpdateInput struct {
 	AllowMergeOnSkippedPipeline               *bool `json:"allow_merge_on_skipped_pipeline,omitempty"                jsonschema:"Allow merging when the pipeline is skipped"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved *bool `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merging when all discussions are resolved"`
 
-	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
-	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
-	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
-	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimit                  *int64   `json:"unique_project_download_limit,omitempty" tier:"ultimate"                       jsonschema:"Max number of unique projects a user can download before being banned (Ultimate)"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64   `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"   jsonschema:"Time window in seconds for the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAllowlist         []string `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"             jsonschema:"Usernames excluded from the unique project download limit (Ultimate)"`
+	UniqueProjectDownloadLimitAlertlist         []int64  `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"             jsonschema:"User IDs notified when the unique project download limit is exceeded (Ultimate)"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool    `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"        jsonschema:"Automatically ban users who exceed the unique project download limit (Ultimate)"`
 }
 
 // DeleteInput defines parameters for deleting a group.

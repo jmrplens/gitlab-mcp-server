@@ -344,7 +344,7 @@ type IssueRefOutput struct {
 	ExternalID           string                      `json:"external_id,omitempty"`
 	State                string                      `json:"state"`
 	Description          string                      `json:"description,omitempty"`
-	HealthStatus         string                      `json:"health_status,omitempty"`
+	HealthStatus         string                      `json:"health_status,omitempty" tier:"ultimate"`
 	Author               *UserOutput                 `json:"author,omitempty"`
 	Milestone            *MilestoneOutput            `json:"milestone,omitempty"`
 	ProjectID            int64                       `json:"project_id"`
@@ -365,7 +365,7 @@ type IssueRefOutput struct {
 	References           *ReferencesOutput           `json:"references,omitempty"`
 	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
 	Confidential         bool                        `json:"confidential"`
-	Weight               int64                       `json:"weight,omitempty"`
+	Weight               int64                       `json:"weight,omitempty" tier:"premium"`
 	DiscussionLocked     bool                        `json:"discussion_locked"`
 	IssueType            string                      `json:"issue_type,omitempty"`
 	Subscribed           bool                        `json:"subscribed"`
@@ -373,9 +373,9 @@ type IssueRefOutput struct {
 	Links                *LinksOutput                `json:"_links,omitempty"`
 	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
 	MergeRequestCount    int64                       `json:"merge_requests_count,omitempty"`
-	EpicIssueID          int64                       `json:"epic_issue_id,omitempty"`
-	Epic                 *EpicOutput                 `json:"epic,omitempty"`
-	Iteration            *IterationOutput            `json:"iteration,omitempty"`
+	EpicIssueID          int64                       `json:"epic_issue_id,omitempty" tier:"premium"`
+	Epic                 *EpicOutput                 `json:"epic,omitempty" tier:"premium"`
+	Iteration            *IterationOutput            `json:"iteration,omitempty" tier:"premium"`
 	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
 }
