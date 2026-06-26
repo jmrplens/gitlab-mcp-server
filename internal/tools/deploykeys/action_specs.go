@@ -50,6 +50,20 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 	if actionName == "deploy_key_list_project" {
 		options.Usage = "Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested."
 	}
+	if actionName == "deploy_key_list_all" {
+		options.Usage = "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of deploy_key_list_project when you need every key on the instance, not just those enabled for a single project."
+		options.RelatedActions = []string{"deploy_key_list_project", "deploy_key_add_instance", "deploy_key_enable"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"page": {
+				SemanticRole: "page_offset",
+				ValueSource:  "Optional 1-based page index. Combine with per_page to iterate the full instance key set.",
+			},
+			"per_page": {
+				SemanticRole: "page_size",
+				ValueSource:  "Items per page (1-100). For bulk enumeration prefer keyset pagination via order_by+sort+page_token instead of repeated offset pages.",
+			},
+		}
+	}
 	if actionName == "deploy_key_get" || actionName == "deploy_key_update" || actionName == "deploy_key_delete" || actionName == "deploy_key_enable" {
 		options.Usage = "Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -85,7 +99,7 @@ func deployKeyDescription(actionName string) string {
 	case "deploy_key_enable":
 		return "Enable an existing deploy key for a project. Returns: the enabled deploy key with id, title, fingerprint, and can_push. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_list_project, gitlab_deploy_key_get."
 	case "deploy_key_list_all":
-		return "List all instance-level deploy keys (admin only) with ordering and pagination. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project."
+		return "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of gitlab_deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project."
 	case "deploy_key_add_instance":
 		return "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable."
 	case "deploy_key_list_user_project":
@@ -110,7 +124,7 @@ func deployKeyAliases(actionName string) []string {
 	case "deploy_key_enable":
 		return []string{"enable deploy key", "attach deploy key to project"}
 	case "deploy_key_list_all":
-		return []string{"list all deploy keys", "instance deploy keys"}
+		return []string{"list all instance deploy keys", "all ssh deploy keys", "instance-wide deploy keys", "list every deploy key"}
 	case "deploy_key_add_instance":
 		return []string{"add instance deploy key", "create instance deploy key"}
 	case "deploy_key_list_user_project":

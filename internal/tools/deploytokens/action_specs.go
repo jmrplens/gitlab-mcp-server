@@ -87,6 +87,8 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ExampleBinding: `params.group_id:"my-group"`,
 		}
 		relatedActions = []string{"access.deploy_token_list_group", "group.get"}
+	case "deploy_token_list_all":
+		relatedActions = []string{"access.deploy_token_list_project", "access.deploy_token_list_group", "project.get"}
 	}
 
 	if actionName == "deploy_token_get_project" || actionName == "deploy_token_get_group" || actionName == "deploy_token_delete_project" || actionName == "deploy_token_delete_group" {
@@ -135,8 +137,8 @@ type deployTokenActionMetaEntry struct {
 // (deployTokenOptions / deployTokenDescription).
 var deployTokenActionMeta = map[string]deployTokenActionMetaEntry{
 	"deploy_token_list_all": {
-		usage:   "List every deploy token across the whole GitLab instance (admin only). Use this for an instance-wide audit of deploy tokens, not for a single project or group.",
-		aliases: []string{"list all deploy tokens", "instance deploy tokens", "audit deploy tokens instance-wide"},
+		usage:   "List ALL deploy tokens across the whole GitLab instance in one call (admin only). Use this instead of deploy_token_list_project or deploy_token_list_group when you need every instance-wide token, not just those owned by a single project or group.",
+		aliases: []string{"list all deploy tokens", "instance deploy tokens", "audit deploy tokens instance-wide", "enumerate every deploy token"},
 	},
 	"deploy_token_list_project": {
 		usage:   "List the deploy tokens owned by one project. Use this to inventory a project's registry/repository deploy credentials before creating or revoking one.",
@@ -193,7 +195,7 @@ func decorateDeployTokenMeta(options *toolutil.ActionSpecOptions, actionName str
 func deployTokenDescription(actionName string) string {
 	switch actionName {
 	case "deploy_token_list_all":
-		return "List all deploy tokens across the GitLab instance (admin only). Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group."
+		return "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of gitlab_deploy_token_list_project or gitlab_deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project."
 	case "deploy_token_list_project":
 		return "List deploy tokens owned by a project. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, expiry, and pagination metadata. See also: gitlab_deploy_token_get_project, gitlab_deploy_token_create_project, gitlab_deploy_token_delete_project."
 	case "deploy_token_list_group":

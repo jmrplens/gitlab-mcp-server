@@ -79,6 +79,13 @@ var variantSuffixes = []string{"_batch", "_bulk", "_all", "_directory", "_single
 // crudSuffixes are common CRUD verb suffixes stripped alongside variant suffixes.
 var crudSuffixes = []string{"_list", "_get", "_delete", "_update", "_create"}
 
+// scopeSuffixes mark scope-specific variants of a base action (project/user/
+// group/instance) that should cluster with the base. Without these, the
+// cluster algorithm would treat deploy_key_list_project and deploy_key_list_all
+// as unrelated even though they are both "list deploy keys" with different
+// scope or aggregation. Stripped AFTER crudSuffixes.
+var scopeSuffixes = []string{"_project", "_user", "_group", "_instance"}
+
 // usageSignalKeywords are heuristic markers that a Usage string mentions a
 // distinguishing signal for sibling-cluster disambiguation. The list is
 // intentionally conservative: only phrases that strongly imply a comparison
@@ -514,16 +521,13 @@ func hasDisambiguation(spec toolutil.ActionSpec, clusterMembers []string) bool {
 		return false
 	}
 	// (a) A sibling in RelatedActions (accept prefixed or bare form).
+	// Cross-package action IDs use "." as separator ("pages.domain_list")
+	// while cluster siblings use "_" ("pages_domain_list"). Normalize both
+	// forms before matching.
 	for _, related := range spec.RelatedActions {
 		lc := strings.ToLower(strings.TrimSpace(related))
-		if _, ok := siblings[lc]; ok {
+		if siblingMatches(lc, siblings) {
 			return true
-		}
-		// Tail match: "release.link_create" -> "link_create".
-		if idx := strings.LastIndex(lc, "."); idx >= 0 {
-			if _, ok := siblings[lc[idx+1:]]; ok {
-				return true
-			}
 		}
 	}
 	// (a') A sibling mentioned in any CommonConfusions entry of any param.
@@ -559,6 +563,44 @@ func usageHasSignal(usage string) bool {
 // CRUD verbs (_create, _get, _list, _delete, _update) are not variant
 // suffixes — they are the verbs that distinguish operations on a single
 // resource.
+
+// siblingMatches reports whether the related-action name (possibly
+// cross-package prefixed with "." separator) refers to any cluster sibling
+// (which use "_" separator). Accepts:
+//   - exact lowercase match
+//   - tail match after the last "." ("pages.domain_list" -> "domain_list")
+//   - separator-normalized match: replace "." with "_" in the related name
+//     ("pages.domain_list" -> "pages_domain_list") and compare to siblings
+func siblingMatches(related string, siblings map[string]struct{}) bool {
+	if _, ok := siblings[related]; ok {
+		return true
+	}
+	if idx := strings.LastIndex(related, "."); idx >= 0 {
+		tail := related[idx+1:]
+		if _, ok := siblings[tail]; ok {
+			return true
+		}
+		// Also accept the cross-package form: take only the resource portion
+		// (skip the owner package) and the local-action portion to form a
+		// candidate sibling key. "pages.domain_list" -> "pages_domain_list".
+		head := related[:idx]
+		candidate := head + "_" + tail
+		if _, ok := siblings[candidate]; ok {
+			return true
+		}
+	}
+	// Fallback: a sibling name is contained in the related name (covers
+	// cases where the related name embeds a sibling as a substring, e.g.
+	// the related name "page_domain_list" or "do_main_list" — defensive
+	// against non-conformant RelatedActions values).
+	for sibling := range siblings {
+		if strings.Contains(related, sibling) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasNonCRUDVariantSuffix(name string) bool {
 	lower := strings.ToLower(name)
 	for _, sfx := range variantSuffixes {
@@ -666,6 +708,12 @@ func baseActionStem(name string) string {
 			}
 		}
 		for _, sfx := range crudSuffixes {
+			if newLower, ok := strings.CutSuffix(lower, sfx); ok {
+				lower = newLower
+				changed = true
+			}
+		}
+		for _, sfx := range scopeSuffixes {
 			if newLower, ok := strings.CutSuffix(lower, sfx); ok {
 				lower = newLower
 				changed = true

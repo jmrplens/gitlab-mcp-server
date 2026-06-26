@@ -293,6 +293,52 @@ func TestHasNonCRUDVariantSuffix(t *testing.T) {
 	}
 }
 
+// TestBaseActionStem_StripsScopeSuffixes verifies the scope suffixes
+// (_project, _user, _group, _instance) collapse scope-specific variants
+// to the same base stem.
+func TestBaseActionStem_StripsScopeSuffixes(t *testing.T) {
+	cases := map[string]string{
+		"deploy_key_list_project":   "deploy_key",
+		"deploy_key_list_user":      "deploy_key",
+		"deploy_key_list_group":     "deploy_key",
+		"deploy_key_list_instance":  "deploy_key",
+		"deploy_token_list_project": "deploy_token",
+		"deploy_token_list_group":   "deploy_token",
+		"deploy_token_list_all":     "deploy_token",
+		"pages_domain_list_all":     "pages_domain",
+		"pages_domain_list_project": "pages_domain",
+	}
+	for in, want := range cases {
+		if got := baseActionStem(in); got != want {
+			t.Errorf("baseActionStem(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestSiblingMatches_AcceptsPrefixedAndUnderscoreForms pins the cross-format
+// matching that resolves RelatedActions "pages.domain_list" against cluster
+// sibling "pages_domain_list" (the same action referenced with two different
+// separator conventions).
+func TestSiblingMatches_AcceptsPrefixedAndUnderscoreForms(t *testing.T) {
+	siblings := map[string]struct{}{
+		"pages_domain_list":   {},
+		"pages_domain_get":    {},
+		"pages_domain_create": {},
+	}
+	cases := map[string]bool{
+		"pages_domain_list":    true,  // exact lowercase
+		"pages.domain_list":    true,  // head + "_" + tail -> "pages_domain_list"
+		"PAGES.DOMAIN_LIST":    true,  // normalized lowercase + head/tail form
+		"pages.domain_unknown": false, // no match
+		"totally_unrelated":    false, // no match
+	}
+	for in, want := range cases {
+		if got := siblingMatches(strings.ToLower(in), siblings); got != want {
+			t.Errorf("siblingMatches(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 // TestUsageHasSignal_DetectsDistinguishingPhrases verifies the Usage signal
 // heuristic matches the gold-standard phrasing patterns. "single" is
 // deliberately excluded from the keyword list (too generic).
