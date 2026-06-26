@@ -243,8 +243,8 @@ type Output struct {
 	LFSEnabled                                bool     `json:"lfs_enabled"`
 	CIConfigPath                              string   `json:"ci_config_path,omitempty"`
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
-	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled"`
-	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled"`
+	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled" tier:"premium"`
+	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled" tier:"premium"`
 	ProtectMergeRequestPipelines              *bool    `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
@@ -254,10 +254,10 @@ type Output struct {
 	PackageRegistryAccessLevel                string   `json:"package_registry_access_level,omitempty"`
 	BuildTimeout                              int64    `json:"build_timeout,omitempty"`
 	SuggestionCommitMessage                   string   `json:"suggestion_commit_message,omitempty"`
-	ComplianceFrameworks                      []string `json:"compliance_frameworks,omitempty"`
+	ComplianceFrameworks                      []string `json:"compliance_frameworks,omitempty" tier:"premium"`
 	ImportURL                                 string   `json:"import_url,omitempty"`
-	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty"`
-	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty"`
+	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty" tier:"premium"`
+	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty" tier:"premium"`
 
 	// Access-level enums (1:1 SDK parity).
 	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty"`
@@ -276,15 +276,15 @@ type Output struct {
 	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty"`
 	InfrastructureAccessLevel        string `json:"infrastructure_access_level,omitempty"`
 	MonitorAccessLevel               string `json:"monitor_access_level,omitempty"`
-	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty"`
+	RequirementsAccessLevel          string `json:"requirements_access_level,omitempty" tier:"ultimate"`
 	SecurityAndComplianceAccessLevel string `json:"security_and_compliance_access_level,omitempty"`
 	ModelExperimentsAccessLevel      string `json:"model_experiments_access_level,omitempty"`
 	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty"`
 
 	// CI/CD settings (1:1 SDK parity).
 	CIDisplayPipelineVariables               bool     `json:"ci_display_pipeline_variables"`
-	AllowPipelineTriggerApproveDeployment    bool     `json:"allow_pipeline_trigger_approve_deployment"`
-	PreventMergeWithoutJiraIssue             bool     `json:"prevent_merge_without_jira_issue"`
+	AllowPipelineTriggerApproveDeployment    bool     `json:"allow_pipeline_trigger_approve_deployment" tier:"premium"`
+	PreventMergeWithoutJiraIssue             bool     `json:"prevent_merge_without_jira_issue" tier:"ultimate"`
 	PrintingMergeRequestLinkEnabled          bool     `json:"printing_merge_request_link_enabled"`
 	CIDefaultGitDepth                        int64    `json:"ci_default_git_depth,omitempty"`
 	CIDeletePipelinesInSeconds               int64    `json:"ci_delete_pipelines_in_seconds,omitempty"`
@@ -296,7 +296,7 @@ type Output struct {
 	CIJobTokenScopeEnabled                   bool     `json:"ci_job_token_scope_enabled"`
 	CIOptInJWT                               bool     `json:"ci_opt_in_jwt"`
 	CIAllowForkPipelinesToRunInParentProject bool     `json:"ci_allow_fork_pipelines_to_run_in_parent_project"`
-	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty"`
+	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" tier:"premium"`
 	CIPipelineVariablesMinimumOverrideRole   string   `json:"ci_pipeline_variables_minimum_override_role,omitempty"`
 	BuildCoverageRegex                       string   `json:"build_coverage_regex,omitempty"`
 	BuildGitStrategy                         string   `json:"build_git_strategy,omitempty"`
@@ -304,12 +304,12 @@ type Output struct {
 	AutoDevopsDeployStrategy                 string   `json:"auto_devops_deploy_strategy,omitempty"`
 	AutoDevopsEnabled                        bool     `json:"auto_devops_enabled"`
 	KeepLatestArtifact                       bool     `json:"keep_latest_artifact"`
-	MergeTrainsSkipTrainAllowed              bool     `json:"merge_trains_skip_train_allowed"`
+	MergeTrainsSkipTrainAllowed              bool     `json:"merge_trains_skip_train_allowed" tier:"premium"`
 	PublicJobs                               bool     `json:"public_jobs"`
 	MaxArtifactsSize                         int64    `json:"max_artifacts_size,omitempty"`
 
 	// Mirror settings (1:1 SDK parity).
-	Mirror                           bool  `json:"mirror"`
+	Mirror                           bool  `json:"mirror" tier:"premium"`
 	MirrorUserID                     int64 `json:"mirror_user_id,omitempty"`
 	MirrorTriggerBuilds              bool  `json:"mirror_trigger_builds"`
 	OnlyMirrorProtectedBranches      bool  `json:"only_mirror_protected_branches"`
@@ -324,9 +324,9 @@ type Output struct {
 	ContainerRegistryImagePrefix string `json:"container_registry_image_prefix,omitempty"`
 
 	// Security and compliance (1:1 SDK parity).
-	SecurityAndComplianceEnabled     bool `json:"security_and_compliance_enabled"`
+	SecurityAndComplianceEnabled     bool `json:"security_and_compliance_enabled" tier:"ultimate"`
 	EnforceAuthChecksOnUploads       bool `json:"enforce_auth_checks_on_uploads,omitempty"`
-	PreReceiveSecretDetectionEnabled bool `json:"pre_receive_secret_detection_enabled"`
+	PreReceiveSecretDetectionEnabled bool `json:"pre_receive_secret_detection_enabled" tier:"ultimate"`
 	AutoDuoCodeReviewEnabled         bool `json:"auto_duo_code_review_enabled"`
 
 	// Service desk (1:1 SDK parity).
@@ -337,8 +337,8 @@ type Output struct {
 	IssuesTemplate                           string `json:"issues_template,omitempty" tier:"premium"`
 	MergeRequestsTemplate                    string `json:"merge_requests_template,omitempty" tier:"premium"`
 	IssueBranchTemplate                      string `json:"issue_branch_template,omitempty"`
-	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty"`
-	RequirementsEnabled                      bool   `json:"requirements_enabled"`
+	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty" tier:"premium"`
+	RequirementsEnabled                      bool   `json:"requirements_enabled" tier:"ultimate"`
 	EmailsEnabled                            bool   `json:"emails_enabled"`
 	GroupRunnersEnabled                      bool   `json:"group_runners_enabled"`
 	ResourceGroupDefaultProcessMode          string `json:"resource_group_default_process_mode,omitempty"`
@@ -372,7 +372,7 @@ type Output struct {
 	PublicBuilds                 bool     `json:"public_builds,omitempty"`
 	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty" tier:"premium"`
 	TagList                      []string `json:"tag_list,omitempty"`
-	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty" tier:"premium"`
+	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty"`
 	RestrictUserDefinedVariables bool     `json:"restrict_user_defined_variables"`
 	EmailsDisabled               bool     `json:"emails_disabled"`
 }

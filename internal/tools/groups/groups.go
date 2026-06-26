@@ -56,7 +56,7 @@ type Output struct {
 	DefaultBranch         string `json:"default_branch,omitempty"`
 	RequestAccessEnabled  bool   `json:"request_access_enabled"`
 	CreatedAt             string `json:"created_at,omitempty"`
-	MarkedForDeletion     string `json:"marked_for_deletion_on,omitempty" tier:"premium"`
+	MarkedForDeletion     string `json:"marked_for_deletion_on,omitempty"`
 	AvatarURL             string `json:"avatar_url,omitempty"`
 	ProjectCreationLevel  string `json:"project_creation_level,omitempty"`
 	SubGroupCreationLevel string `json:"subgroup_creation_level,omitempty"`
@@ -76,7 +76,7 @@ type Output struct {
 	MembershipLock                            bool                      `json:"membership_lock" tier:"premium"`
 	MaxArtifactsSize                          int64                     `json:"max_artifacts_size,omitempty"`
 	DefaultBranchProtectionDefaults           *BranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
-	RepositoryStorage                         string                    `json:"repository_storage,omitempty"`
+	RepositoryStorage                         string                    `json:"repository_storage,omitempty" tier:"premium"`
 	FileTemplateProjectID                     int64                     `json:"file_template_project_id,omitempty" tier:"premium"`
 	Statistics                                *StatisticsOutput         `json:"statistics,omitempty"`
 	CustomAttributes                          []CustomAttributeOutput   `json:"custom_attributes,omitempty"`
@@ -89,8 +89,8 @@ type Output struct {
 	MentionsDisabled                          bool                      `json:"mentions_disabled"`
 	RunnersToken                              string                    `json:"runners_token,omitempty"`
 	SharedWithGroups                          []SharedWithGroupOutput   `json:"shared_with_groups,omitempty"`
-	LDAPCN                                    string                    `json:"ldap_cn,omitempty"`
-	LDAPAccess                                int                       `json:"ldap_access,omitempty"`
+	LDAPCN                                    string                    `json:"ldap_cn,omitempty" tier:"premium"`
+	LDAPAccess                                int                       `json:"ldap_access,omitempty" tier:"premium"`
 	LDAPGroupLinks                            []LDAPGroupLinkOutput     `json:"ldap_group_links,omitempty"`
 	SAMLGroupLinks                            []SAMLGroupLinkOutput     `json:"saml_group_links,omitempty"`
 	SharedRunnersMinutesLimit                 int64                     `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
