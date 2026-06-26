@@ -66,29 +66,29 @@ type CreateInput struct {
 // key.
 type NoteOutput struct {
 	toolutil.HintableOutput
-	ID           int64               `json:"id"`
-	Body         string              `json:"body"`
-	Author       *NoteUserOutput     `json:"author,omitempty"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Title        string              `json:"title,omitempty"`
-	FileName     string              `json:"file_name,omitempty"`
-	CreatedAt    string              `json:"created_at"`
-	UpdatedAt    string              `json:"updated_at,omitempty"`
-	ExpiresAt    string              `json:"expires_at,omitempty"`
-	Resolved     bool                `json:"resolved"`
-	Resolvable   bool                `json:"resolvable"`
-	ResolvedAt   string              `json:"resolved_at,omitempty"`
-	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
-	System       bool                `json:"system"`
-	Internal     bool                `json:"internal"`
-	Confidential bool                `json:"confidential"`
-	Type         string              `json:"type,omitempty"`
-	NoteableType string              `json:"noteable_type,omitempty"`
-	NoteableID   int64               `json:"noteable_id,omitempty"`
-	NoteableIID  int64               `json:"noteable_iid,omitempty"`
-	CommitID     string              `json:"commit_id,omitempty"`
-	Position     *NotePositionOutput `json:"position,omitempty"`
-	ProjectID    int64               `json:"project_id,omitempty"`
+	ID           int64                        `json:"id"`
+	Body         string                       `json:"body"`
+	Author       *toolutil.NoteUserOutput     `json:"author,omitempty"`
+	Attachment   string                       `json:"attachment,omitempty"`
+	Title        string                       `json:"title,omitempty"`
+	FileName     string                       `json:"file_name,omitempty"`
+	CreatedAt    string                       `json:"created_at"`
+	UpdatedAt    string                       `json:"updated_at,omitempty"`
+	ExpiresAt    string                       `json:"expires_at,omitempty"`
+	Resolved     bool                         `json:"resolved"`
+	Resolvable   bool                         `json:"resolvable"`
+	ResolvedAt   string                       `json:"resolved_at,omitempty"`
+	ResolvedBy   *toolutil.NoteUserOutput     `json:"resolved_by,omitempty"`
+	System       bool                         `json:"system"`
+	Internal     bool                         `json:"internal"`
+	Confidential bool                         `json:"confidential"`
+	Type         string                       `json:"type,omitempty"`
+	NoteableType string                       `json:"noteable_type,omitempty"`
+	NoteableID   int64                        `json:"noteable_id,omitempty"`
+	NoteableIID  int64                        `json:"noteable_iid,omitempty"`
+	CommitID     string                       `json:"commit_id,omitempty"`
+	Position     *toolutil.NotePositionOutput `json:"position,omitempty"`
+	ProjectID    int64                        `json:"project_id,omitempty"`
 }
 
 // Output represents a discussion thread. Its Notes field is a local
@@ -146,13 +146,13 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 	out := NoteOutput{
 		ID:           n.ID,
 		Body:         n.Body,
-		Author:       noteAuthorOutput(n.Author),
+		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
 		Attachment:   n.Attachment,
 		Title:        n.Title,
 		FileName:     n.FileName,
 		Resolved:     n.Resolved,
 		Resolvable:   n.Resolvable,
-		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
+		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
 		System:       n.System,
 		Internal:     n.Internal,
 		Confidential: n.Internal,
@@ -161,7 +161,7 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 		NoteableID:   n.NoteableID,
 		NoteableIID:  n.NoteableIID,
 		CommitID:     n.CommitID,
-		Position:     notePositionOutput(n.Position),
+		Position:     toolutil.NewNotePositionOutput(n.Position),
 		ProjectID:    n.ProjectID,
 	}
 	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)

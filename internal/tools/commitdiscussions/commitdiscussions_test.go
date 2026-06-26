@@ -439,8 +439,8 @@ func TestUpdateNote_APIError(t *testing.T) {
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: testDiscussionID, Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
-			{ID: "d2", Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
+			{ID: testDiscussionID, Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
+			{ID: "d2", Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
 		},
 	}
 	md := FormatListMarkdownString(out)
@@ -472,7 +472,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	out := Output{
 		ID:    testDiscussionID,
-		Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
+		Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
 	}
 	md := FormatMarkdownString(out)
 	if !strings.Contains(md, "Discussion "+testDiscussionID) {
@@ -498,7 +498,7 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString(t *testing.T) {
-	n := NoteOutput{ID: 10, Author: &NoteUserOutput{Username: "dev"}, Body: "Nice!", CreatedAt: testDate20260101}
+	n := NoteOutput{ID: 10, Author: &toolutil.NoteUserOutput{Username: "dev"}, Body: "Nice!", CreatedAt: testDate20260101}
 	md := FormatNoteMarkdownString(n)
 	if !strings.Contains(md, "Note") {
 		t.Error("expected header")
@@ -518,7 +518,7 @@ func TestFormatNoteMarkdownString(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
-	n := NoteOutput{ID: 11, Author: &NoteUserOutput{Username: "bot"}, Body: "OK"}
+	n := NoteOutput{ID: 11, Author: &toolutil.NoteUserOutput{Username: "bot"}, Body: "OK"}
 	md := FormatNoteMarkdownString(n)
 	if strings.Contains(md, "Created") {
 		t.Error("should not show Created when empty")

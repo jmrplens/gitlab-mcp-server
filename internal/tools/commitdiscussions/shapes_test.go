@@ -1,6 +1,9 @@
 // shapes_test.go contains unit tests for the commit discussion output
 // converters and position-input builders, exercising the full 1:1 field
 // mapping (author, resolved_by, position, line range) plus nil-guard paths.
+// Shared note shapes (NoteUserOutput, LinePositionOutput, LineRangeOutput,
+// NotePositionOutput) live in internal/toolutil since DEDUP-001 wave 2;
+// the canonical converter unit tests are in toolutil/noteshapes_test.go.
 package commitdiscussions
 
 import (
@@ -8,6 +11,8 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestNoteToOutput_FullMapping verifies that NoteToOutput mirrors every gl.Note
@@ -127,20 +132,20 @@ func TestNoteToOutput_Minimal(t *testing.T) {
 // TestNotePositionOutput_LineRangeEmpty verifies that a line range whose
 // endpoints are both nil collapses to a nil LineRange on the output.
 func TestNotePositionOutput_LineRangeEmpty(t *testing.T) {
-	out := notePositionOutput(&gl.NotePosition{BaseSHA: "b", LineRange: &gl.LineRange{}})
+	out := toolutil.NewNotePositionOutput(&gl.NotePosition{BaseSHA: "b", LineRange: &gl.LineRange{}})
 	if out == nil {
 		t.Fatal("expected non-nil position output")
 	}
 	if out.LineRange != nil {
 		t.Errorf("expected nil line range when both endpoints nil, got %+v", out.LineRange)
 	}
-	if notePositionOutput(nil) != nil {
+	if toolutil.NewNotePositionOutput(nil) != nil {
 		t.Error("expected nil for nil position")
 	}
-	if lineRangeOutput(nil) != nil {
+	if toolutil.NewLineRangeOutput(nil) != nil {
 		t.Error("expected nil for nil line range")
 	}
-	if linePositionOutput(nil) != nil {
+	if toolutil.NewLinePositionOutput(nil) != nil {
 		t.Error("expected nil for nil line position")
 	}
 }
@@ -227,7 +232,7 @@ func TestFirstNoteAuthor(t *testing.T) {
 	if got := noteAuthorUsername(NoteOutput{}); got != "" {
 		t.Errorf("expected empty author for nil author, got %q", got)
 	}
-	d := Output{Notes: []*NoteOutput{{Author: &NoteUserOutput{Username: "alice"}}}}
+	d := Output{Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "alice"}}}}
 	if got := firstNoteAuthor(d); got != "alice" {
 		t.Errorf("expected alice, got %q", got)
 	}
