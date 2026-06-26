@@ -31,6 +31,7 @@ Environment overrides:
   EVAL_SURFACE_FIXTURE_SMOKE Set true to prepare and smoke-test fixtures for selected presets without model calls.
   EVAL_SURFACE_PUBLISH_DOCS Set false to skip README/docs publication for full multi-preset runs.
   EVAL_SURFACE_TOLERATE_MODEL_FAILURES Set true to record genuine per-task model failures without blocking docs publish (harness/validation failures still block).
+  EVAL_SURFACE_TASK         Comma-separated task IDs to run within the preset (passes --task), e.g. MT-110 or MS-038. Use for targeted re-tests of specific cases.
   EVAL_SURFACE_OUT_ROOT     Artifact root (default: dist/evaluation/surfaces).
   EVAL_SURFACE_RUN_DIR      Exact artifact directory for this run.
   EVAL_SURFACE_TIMESTAMP    UTC-like timestamp used in names.
@@ -300,7 +301,11 @@ retry_setup_gitlab() {
 run_evaluator() {
   local name="$1"
   shift
-  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false "$@"
+  local task_args=()
+  if [[ -n "${EVAL_SURFACE_TASK:-}" ]]; then
+    task_args=(--task "$EVAL_SURFACE_TASK")
+  fi
+  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false "${task_args[@]}" "$@"
 }
 
 run_fixture_smoke() {
