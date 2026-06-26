@@ -128,18 +128,18 @@ type ConfigOutput struct {
 	Approved                       bool                               `json:"approved"`
 	ApprovalsRequired              int64                              `json:"approvals_required"`
 	ApprovalsLeft                  int64                              `json:"approvals_left"`
-	ApprovalsBeforeMerge           int64                              `json:"approvals_before_merge"`
-	RequirePasswordToApprove       bool                               `json:"require_password_to_approve"`
-	HasApprovalRules               bool                               `json:"has_approval_rules"`
+	ApprovalsBeforeMerge           int64                              `json:"approvals_before_merge" tier:"premium"`
+	RequirePasswordToApprove       bool                               `json:"require_password_to_approve" tier:"premium"`
+	HasApprovalRules               bool                               `json:"has_approval_rules" tier:"premium"`
 	UserHasApproved                bool                               `json:"user_has_approved"`
 	UserCanApprove                 bool                               `json:"user_can_approve"`
-	MergeRequestApproversAvailable bool                               `json:"merge_request_approvers_available"`
-	MultipleApprovalRulesAvailable bool                               `json:"multiple_approval_rules_available"`
+	MergeRequestApproversAvailable bool                               `json:"merge_request_approvers_available" tier:"premium"`
+	MultipleApprovalRulesAvailable bool                               `json:"multiple_approval_rules_available" tier:"premium"`
 	ApprovedBy                     []*MergeRequestApproverUserOutput  `json:"approved_by,omitempty"`
-	SuggestedApprovers             []*BasicUserOutput                 `json:"suggested_approvers,omitempty"`
-	Approvers                      []*MergeRequestApproverUserOutput  `json:"approvers,omitempty"`
-	ApproverGroups                 []*MergeRequestApproverGroupOutput `json:"approver_groups,omitempty"`
-	ApprovalRulesLeft              []RuleOutput                       `json:"approval_rules_left,omitempty"`
+	SuggestedApprovers             []*BasicUserOutput                 `json:"suggested_approvers,omitempty" tier:"premium"`
+	Approvers                      []*MergeRequestApproverUserOutput  `json:"approvers,omitempty" tier:"premium"`
+	ApproverGroups                 []*MergeRequestApproverGroupOutput `json:"approver_groups,omitempty" tier:"premium"`
+	ApprovalRulesLeft              []RuleOutput                       `json:"approval_rules_left,omitempty" tier:"premium"`
 }
 
 // ---------------------------------------------------------------------------
