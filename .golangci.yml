@@ -235,6 +235,14 @@ linters:
           - gosec
         text: "G101: Potential hardcoded credentials"
 
+      # action_specs.go files contain only GitLab domain action IDs (e.g. "job.token_scope_list",
+      # "group.wiki_edit"). Constant names derived from feature names (Token, Wiki) trigger G101
+      # as false positives — these are never credentials.
+      - path: "action_specs\\.go"
+        linters:
+          - gosec
+        text: "G101: Potential hardcoded credentials"
+
       # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
       # Disable only the t.Parallel() requirement for the e2e suite.
       - path: "test/e2e/"

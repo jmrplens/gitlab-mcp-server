@@ -5,7 +5,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-//nolint:gosec // G101 false positive: action IDs are GitLab domain terms, not credentials.
 const (
 	actionGroupWikiList = "group.wiki_list"
 	actionGroupWikiGet  = "group.wiki_get"

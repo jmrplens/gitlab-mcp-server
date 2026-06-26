@@ -7,7 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-//nolint:gosec // G101 false positive: these action IDs contain "token" as a GitLab domain term, not as credential values.
 const (
 	actionJobTokenScopeAddProject    = "job.token_scope_add_project"
 	actionJobTokenScopeAddGroup      = "job.token_scope_add_group"
