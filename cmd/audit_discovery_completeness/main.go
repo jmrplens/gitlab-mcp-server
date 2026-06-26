@@ -53,6 +53,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -391,7 +392,15 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	}
 
 	// Check C: sibling-cluster disambiguation.
-	if inCluster && !hasDisambiguation(spec, clusterMembers) {
+	// Only flag when the spec itself carries a non-CRUD variant suffix
+	// (_batch/_bulk/_all/_directory/_single) AND the cluster has at least
+	// one such variant member. Pure CRUD families (create/get/list/delete/
+	// update on the same resource) are not confusable because the verb is
+	// the disambiguator — the link_create_batch / publish vs
+	// publish_directory class is the only real eval-failure pattern.
+	if inCluster && hasNonCRUDVariantSuffix(spec.Name) &&
+		hasNonCRUDVariantInCluster(clusterMembers) &&
+		!hasDisambiguation(spec, clusterMembers) {
 		addFlag("missing_disambiguation")
 	}
 
@@ -527,6 +536,31 @@ func usageHasSignal(usage string) bool {
 		}
 	}
 	return false
+}
+
+// hasNonCRUDVariantSuffix reports whether the action name ends with a
+// non-CRUD variant suffix (_batch, _bulk, _all, _directory, _single). These
+// are the suffixes that mark a sibling variant of an existing base action
+// and require disambiguation in the Usage / RelatedActions metadata. Pure
+// CRUD verbs (_create, _get, _list, _delete, _update) are not variant
+// suffixes — they are the verbs that distinguish operations on a single
+// resource.
+func hasNonCRUDVariantSuffix(name string) bool {
+	lower := strings.ToLower(name)
+	for _, sfx := range variantSuffixes {
+		if strings.HasSuffix(lower, sfx) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasNonCRUDVariantInCluster reports whether any cluster member carries a
+// non-CRUD variant suffix. Used to gate the missing_disambiguation check on
+// clusters that actually contain a base-vs-variant pair (the eval-failure
+// class) — pure CRUD families are exempt.
+func hasNonCRUDVariantInCluster(members []string) bool {
+	return slices.ContainsFunc(members, hasNonCRUDVariantSuffix)
 }
 
 // siblingSet returns the set of lowercase sibling names excluding self.

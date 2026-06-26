@@ -201,6 +201,98 @@ func TestSiblingCluster_IgnoresSingletons(t *testing.T) {
 	}
 }
 
+// TestMissingDisambiguation_OnlyFlagsNonCRUDVariants pins the Phase 1
+// refinement: pure CRUD families (create/get/list/delete/update on the
+// same resource) do NOT need disambiguation because the verb is the
+// disambiguator. Only base-vs-variant clusters with non-CRUD suffixes
+// (_batch, _bulk, _all, _directory, _single) trigger the check.
+func TestMissingDisambiguation_OnlyFlagsNonCRUDVariants(t *testing.T) {
+	// Pure CRUD family: token_group_create/get/list. None have non-CRUD
+	// variant suffixes; none should be flagged missing_disambiguation.
+	crud := []toolutil.ActionSpec{
+		{
+			Name: "accesstokens.token_group_create", OwnerPackage: "accesstokens",
+			Usage:          "Create a group access token.",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_create_group_access_token"},
+		},
+		{
+			Name: "accesstokens.token_group_get", OwnerPackage: "accesstokens",
+			Usage:          "Get a group access token by token_id.",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_get_group_access_token"},
+		},
+		{
+			Name: "accesstokens.token_group_list", OwnerPackage: "accesstokens",
+			Usage:          "List group access tokens.",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_list_group_access_tokens"},
+		},
+	}
+	clusters := siblingClusters(crud)
+	if len(clusters) != 1 {
+		t.Fatalf("expected 1 cluster, got %+v", clusters)
+	}
+	for _, spec := range crud {
+		members := clusterMembersFor(clusters, spec.OwnerPackage, spec.Name)
+		finding := analyzeSpec(spec, nil, members, 3)
+		if containsStr(finding.Flags, "missing_disambiguation") {
+			t.Errorf("pure CRUD member %q should NOT be flagged missing_disambiguation: %+v", spec.Name, finding.Flags)
+		}
+	}
+
+	// Base-vs-variant cluster: link_create (base) + link_create_batch (variant).
+	// The _batch variant should be flagged because it lacks both a sibling
+	// reference and a usage signal.
+	base := toolutil.ActionSpec{
+		Name: "releaselinks.link_create", OwnerPackage: "releaselinks",
+		Usage:          "Create a single release asset link.",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_release_link_create"},
+		Aliases:        []string{"create release link"},
+	}
+	variant := toolutil.ActionSpec{
+		Name: "releaselinks.link_create_batch", OwnerPackage: "releaselinks",
+		Usage:          "Use to execute releaselinks domain action.",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_release_link_create_batch"},
+		Aliases:        []string{"gitlab_release_link_create_batch"},
+	}
+	clusters2 := siblingClusters([]toolutil.ActionSpec{base, variant})
+	members := clusterMembersFor(clusters2, "releaselinks", variant.Name)
+	finding := analyzeSpec(variant, nil, members, 3)
+	if !containsStr(finding.Flags, "missing_disambiguation") {
+		t.Errorf("base-vs-variant batch should be flagged missing_disambiguation: %+v", finding.Flags)
+	}
+}
+
+// TestHasNonCRUDVariantSuffix verifies the suffix detector matches only
+// the non-CRUD variant markers and ignores pure CRUD verbs.
+func TestHasNonCRUDVariantSuffix(t *testing.T) {
+	variant := []string{
+		"release.link_create_batch",
+		"package.publish_directory",
+		"deploy_key_list_all",
+		"registry_tag_delete_bulk",
+		"members.add_bulk",
+		"notes.delete_all",
+	}
+	for _, name := range variant {
+		if !hasNonCRUDVariantSuffix(name) {
+			t.Errorf("hasNonCRUDVariantSuffix(%q) = false, want true", name)
+		}
+	}
+	crud := []string{
+		"branch.list",
+		"branch.get",
+		"branch.create",
+		"branch.update",
+		"branch.delete",
+		"token_group_create",
+		"deploy_key_get",
+	}
+	for _, name := range crud {
+		if hasNonCRUDVariantSuffix(name) {
+			t.Errorf("hasNonCRUDVariantSuffix(%q) = true, want false", name)
+		}
+	}
+}
+
 // TestUsageHasSignal_DetectsDistinguishingPhrases verifies the Usage signal
 // heuristic matches the gold-standard phrasing patterns. "single" is
 // deliberately excluded from the keyword list (too generic).
