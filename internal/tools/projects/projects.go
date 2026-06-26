@@ -334,8 +334,8 @@ type Output struct {
 	ServiceDeskAddress string `json:"service_desk_address,omitempty"`
 
 	// Templates and misc (1:1 SDK parity).
-	IssuesTemplate                           string `json:"issues_template,omitempty"`
-	MergeRequestsTemplate                    string `json:"merge_requests_template,omitempty"`
+	IssuesTemplate                           string `json:"issues_template,omitempty" tier:"premium"`
+	MergeRequestsTemplate                    string `json:"merge_requests_template,omitempty" tier:"premium"`
 	IssueBranchTemplate                      string `json:"issue_branch_template,omitempty"`
 	ExternalAuthorizationClassificationLabel string `json:"external_authorization_classification_label,omitempty"`
 	RequirementsEnabled                      bool   `json:"requirements_enabled"`
@@ -370,9 +370,9 @@ type Output struct {
 	ContainerRegistryEnabled     bool     `json:"container_registry_enabled,omitempty"`
 	PackagesEnabled              bool     `json:"packages_enabled,omitempty"`
 	PublicBuilds                 bool     `json:"public_builds,omitempty"`
-	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty"`
+	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty" tier:"premium"`
 	TagList                      []string `json:"tag_list,omitempty"`
-	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty"`
+	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty" tier:"premium"`
 	RestrictUserDefinedVariables bool     `json:"restrict_user_defined_variables"`
 	EmailsDisabled               bool     `json:"emails_disabled"`
 }

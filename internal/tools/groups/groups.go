@@ -56,7 +56,7 @@ type Output struct {
 	DefaultBranch         string `json:"default_branch,omitempty"`
 	RequestAccessEnabled  bool   `json:"request_access_enabled"`
 	CreatedAt             string `json:"created_at,omitempty"`
-	MarkedForDeletion     string `json:"marked_for_deletion_on,omitempty"`
+	MarkedForDeletion     string `json:"marked_for_deletion_on,omitempty" tier:"premium"`
 	AvatarURL             string `json:"avatar_url,omitempty"`
 	ProjectCreationLevel  string `json:"project_creation_level,omitempty"`
 	SubGroupCreationLevel string `json:"subgroup_creation_level,omitempty"`
@@ -68,16 +68,16 @@ type Output struct {
 	EnabledGitAccessProtocol             string `json:"enabled_git_access_protocol,omitempty"`
 	MathRenderingLimitsEnabled           bool   `json:"math_rendering_limits_enabled"`
 	LockMathRenderingLimitsEnabled       bool   `json:"lock_math_rendering_limits_enabled"`
-	DuoAvailability                      string `json:"duo_availability,omitempty"`
-	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled"`
-	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled"`
-	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled"`
+	DuoAvailability                      string `json:"duo_availability,omitempty" tier:"premium"`
+	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled" tier:"premium"`
+	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled" tier:"premium"`
+	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled" tier:"premium"`
 	// Remaining gl.Group fields (1:1 audit).
-	MembershipLock                            bool                      `json:"membership_lock"`
+	MembershipLock                            bool                      `json:"membership_lock" tier:"premium"`
 	MaxArtifactsSize                          int64                     `json:"max_artifacts_size,omitempty"`
 	DefaultBranchProtectionDefaults           *BranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
 	RepositoryStorage                         string                    `json:"repository_storage,omitempty"`
-	FileTemplateProjectID                     int64                     `json:"file_template_project_id,omitempty"`
+	FileTemplateProjectID                     int64                     `json:"file_template_project_id,omitempty" tier:"premium"`
 	Statistics                                *StatisticsOutput         `json:"statistics,omitempty"`
 	CustomAttributes                          []CustomAttributeOutput   `json:"custom_attributes,omitempty"`
 	ShareWithGroupLock                        bool                      `json:"share_with_group_lock"`
@@ -93,15 +93,15 @@ type Output struct {
 	LDAPAccess                                int                       `json:"ldap_access,omitempty"`
 	LDAPGroupLinks                            []LDAPGroupLinkOutput     `json:"ldap_group_links,omitempty"`
 	SAMLGroupLinks                            []SAMLGroupLinkOutput     `json:"saml_group_links,omitempty"`
-	SharedRunnersMinutesLimit                 int64                     `json:"shared_runners_minutes_limit,omitempty"`
-	ExtraSharedRunnersMinutesLimit            int64                     `json:"extra_shared_runners_minutes_limit,omitempty"`
-	PreventForkingOutsideGroup                bool                      `json:"prevent_forking_outside_group"`
-	IPRestrictionRanges                       string                    `json:"ip_restriction_ranges,omitempty"`
-	AllowedEmailDomainsList                   string                    `json:"allowed_email_domains_list,omitempty"`
-	WikiAccessLevel                           string                    `json:"wiki_access_level,omitempty"`
-	OnlyAllowMergeIfPipelineSucceeds          bool                      `json:"only_allow_merge_if_pipeline_succeeds"`
-	AllowMergeOnSkippedPipeline               bool                      `json:"allow_merge_on_skipped_pipeline"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved bool                      `json:"only_allow_merge_if_all_discussions_are_resolved"`
+	SharedRunnersMinutesLimit                 int64                     `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
+	ExtraSharedRunnersMinutesLimit            int64                     `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
+	PreventForkingOutsideGroup                bool                      `json:"prevent_forking_outside_group" tier:"premium"`
+	IPRestrictionRanges                       string                    `json:"ip_restriction_ranges,omitempty" tier:"premium"`
+	AllowedEmailDomainsList                   string                    `json:"allowed_email_domains_list,omitempty" tier:"premium"`
+	WikiAccessLevel                           string                    `json:"wiki_access_level,omitempty" tier:"premium"`
+	OnlyAllowMergeIfPipelineSucceeds          bool                      `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
+	AllowMergeOnSkippedPipeline               bool                      `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved bool                      `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
 	DefaultBranchProtection                   int64                     `json:"default_branch_protection,omitempty"`
 	Projects                                  []ProjectItem             `json:"projects,omitempty"`
 	SharedProjects                            []ProjectItem             `json:"shared_projects,omitempty"`
