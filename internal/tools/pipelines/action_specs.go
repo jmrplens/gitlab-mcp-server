@@ -119,7 +119,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	case "get":
 		options.Usage = "Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields."
 		options.Aliases = []string{"get pipeline", "show pipeline details", "lookup pipeline"}
-		options.RelatedActions = []string{"pipeline.list", "pipeline.variables", actionJobListProject, "pipeline.cancel", "pipeline.retry"}
+		options.RelatedActions = []string{actionPipelineList, "pipeline.variables", actionJobListProject, "pipeline.cancel", "pipeline.retry"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"pipeline_id": {
 				SemanticRole:     "pipeline_identifier",
@@ -217,7 +217,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	if actionName == "wait" {
 		options.Usage = "Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead."
 		options.Aliases = []string{"wait for pipeline", "poll pipeline status", "wait pipeline completion"}
-		options.RelatedActions = []string{"pipeline.get", "pipeline.list", "merge_request.pipelines", "merge_request.merge"}
+		options.RelatedActions = []string{"pipeline.get", actionPipelineList, "merge_request.pipelines", "merge_request.merge"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"pipeline_id": {
 				SemanticRole:     "pipeline_identifier",

@@ -9,6 +9,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionUserGet               = "user.get"
+	actionUserModify            = "user.modify"
+	actionUserCurrent           = "user.current"
+	actionUserList              = "user.list"
+	actionUserBlock             = "user.block"
+	actionUserCurrentStatus     = "user.current_user_status"
+	actionUserUnblock           = "user.unblock"
+	actionUserSSHKeys           = "user.ssh_keys"
+	actionUserSSHKeysForUser    = "user.ssh_keys_for_user"
+	actionUserGetSSHKey         = "user.get_ssh_key"
+	actionUserGetSSHKeyForUser  = "user.get_ssh_key_for_user"
+	actionUserDelete            = "user.delete"
+	actionUserDeleteSSHKey      = "user.delete_ssh_key"
+	actionUserDelSSHKeyForUser  = "user.delete_ssh_key_for_user"
+	actionUserAssociations      = "user.associations_count"
+	actionUserAddSSHKey         = "user.add_ssh_key"
+	actionUserAddSSHKeyForUser  = "user.add_ssh_key_for_user"
+	roleMe                      = "me"
+	toolUserCurrent             = "gitlab_user_current"
+)
+
 // ActionSpecs returns canonical specs for user account, status, SSH key, and
 // misc actions, including the Free-tier instance service-account specs. The
 // bool parameter is retained for signature compatibility but ignored: tier
@@ -17,9 +39,9 @@ import (
 func ActionSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
 	specs := []toolutil.ActionSpec{
 		// gitlab_user_current — return the authenticated user profile for the current token.
-		userReadSpec("current", toolutil.RouteAction(client, Current), "gitlab_user_current"),
+		userReadSpec("current", toolutil.RouteAction(client, Current), toolUserCurrent),
 		// gitlab_user_current (alias for "me") — same as gitlab_user_current, registered under a friendlier name.
-		userReadSpec("me", toolutil.RouteAction(client, Current), "gitlab_user_current"),
+		userReadSpec(roleMe, toolutil.RouteAction(client, Current), toolUserCurrent),
 		// gitlab_list_users — list users visible to the authenticated caller with optional filters.
 		userReadSpec("list", toolutil.RouteAction(client, List), "gitlab_list_users"),
 		// gitlab_get_user — fetch a single user by numeric ID (returns a structured not-found result on 404).
@@ -161,187 +183,187 @@ var userToolMetadata = map[string]userToolMeta{
 	"gitlab_get_user_status": {
 		usage:          "Get a user's status (emoji, message, availability, clear-at time) by numeric user_id. Use when the prompt asks whether someone is busy or what their status message says.",
 		aliases:        []string{"get user status", "show user availability", "user status"},
-		relatedActions: []string{"user.get", "user.current_user_status", "user.set_status"},
+		relatedActions: []string{actionUserGet, actionUserCurrentStatus, "user.set_status"},
 		description:    "Get a user's status by ID. Returns: emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_set_user_status, gitlab_get_user.",
 	},
 	"gitlab_set_user_status": {
 		usage:          "Set the authenticated user's status with emoji, message, availability, and an optional auto-clear duration. Use when the prompt asks to update your own status.",
 		aliases:        []string{"set my status", "update user status", "change status"},
-		relatedActions: []string{"user.current_user_status", "user.get_status"},
+		relatedActions: []string{actionUserCurrentStatus, "user.get_status"},
 		description:    "Set the current user's status. Returns: the updated emoji, message, availability, and clear-status time. See also: gitlab_current_user_status, gitlab_get_user_status.",
 	},
 	"gitlab_current_user_status": {
 		usage:          "Get the authenticated user's own status (emoji, message, availability). Use when the prompt asks about the caller's current status.",
 		aliases:        []string{"my status", "current user status", "show my status"},
-		relatedActions: []string{"user.current", "user.set_status", "user.get_status"},
+		relatedActions: []string{actionUserCurrent, "user.set_status", "user.get_status"},
 		description:    "Get the current user's status. Returns: emoji, message, availability, and clear-status time. See also: gitlab_set_user_status, gitlab_get_user_status, gitlab_user_current.",
 	},
 	"gitlab_list_ssh_keys": {
 		usage:          "List the authenticated user's SSH keys with pagination. Use when the prompt asks which SSH keys are on the current account.",
 		aliases:        []string{"list my ssh keys", "list ssh keys", "show ssh keys"},
-		relatedActions: []string{"user.get_ssh_key", "user.add_ssh_key", "user.delete_ssh_key"},
+		relatedActions: []string{actionUserGetSSHKey, actionUserAddSSHKey, actionUserDeleteSSHKey},
 		description:    "List the current user's SSH keys. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key, gitlab_add_ssh_key, gitlab_delete_ssh_key.",
 	},
 	"gitlab_get_ssh_key": {
 		usage:          "Get one of the authenticated user's SSH keys by key_id. Use when the prompt references a specific key and needs its details.",
 		aliases:        []string{"get ssh key", "show ssh key", "lookup ssh key"},
-		relatedActions: []string{"user.ssh_keys", "user.add_ssh_key", "user.delete_ssh_key"},
+		relatedActions: []string{actionUserSSHKeys, actionUserAddSSHKey, actionUserDeleteSSHKey},
 		description:    "Get one of the current user's SSH keys by ID. Returns: key ID, title, public key, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_add_ssh_key, gitlab_delete_ssh_key.",
 	},
 	"gitlab_add_ssh_key": {
 		usage:          "Add an SSH public key to the authenticated user's account with a title and optional expiry and usage type. Use when the prompt asks to register a new key.",
 		aliases:        []string{"add ssh key", "create ssh key", "register ssh key"},
-		relatedActions: []string{"user.ssh_keys", "user.get_ssh_key", "user.delete_ssh_key"},
+		relatedActions: []string{actionUserSSHKeys, actionUserGetSSHKey, actionUserDeleteSSHKey},
 		description:    "Add an SSH key to the current user. Returns: created key ID, title, usage type, and expiry. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_delete_ssh_key.",
 	},
 	"gitlab_delete_ssh_key": {
 		usage:          "Delete one of the authenticated user's SSH keys by key_id. Use when the prompt asks to remove a key from the current account.",
 		aliases:        []string{"delete ssh key", "remove ssh key", "revoke ssh key"},
-		relatedActions: []string{"user.ssh_keys", "user.get_ssh_key", "user.add_ssh_key"},
+		relatedActions: []string{actionUserSSHKeys, actionUserGetSSHKey, actionUserAddSSHKey},
 		description:    "Delete one of the current user's SSH keys. Returns: confirmation with the deleted key ID. See also: gitlab_list_ssh_keys, gitlab_get_ssh_key, gitlab_add_ssh_key.",
 	},
 	"gitlab_list_ssh_keys_for_user": {
 		usage:          "List SSH keys belonging to a specific user by user_id with pagination. Use when the prompt asks which keys another user has registered.",
 		aliases:        []string{"list ssh keys for user", "user ssh keys", "show another user's keys"},
-		relatedActions: []string{"user.get_ssh_key_for_user", "user.add_ssh_key_for_user", "user.delete_ssh_key_for_user"},
+		relatedActions: []string{actionUserGetSSHKeyForUser, actionUserAddSSHKeyForUser, actionUserDelSSHKeyForUser},
 		description:    "List a specific user's SSH keys. Returns: key summaries with ID, title, fingerprint, usage type, and expiry. See also: gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_get_ssh_key_for_user": {
 		usage:          "Get a specific SSH key for a specific user by user_id and key_id. Use when the prompt references one of another user's keys.",
 		aliases:        []string{"get ssh key for user", "show user's ssh key", "lookup user ssh key"},
-		relatedActions: []string{"user.ssh_keys_for_user", "user.add_ssh_key_for_user", "user.delete_ssh_key_for_user"},
+		relatedActions: []string{actionUserSSHKeysForUser, actionUserAddSSHKeyForUser, actionUserDelSSHKeyForUser},
 		description:    "Get a specific user's SSH key by ID. Returns: key ID, title, public key, usage type, and expiry. See also: gitlab_list_ssh_keys_for_user, gitlab_add_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_add_ssh_key_for_user": {
 		usage:          "Add an SSH public key to a specific user's account (admin only) with title and optional expiry. Use when the prompt asks to register a key on behalf of another user.",
 		aliases:        []string{"add ssh key for user", "create ssh key for user", "register user ssh key"},
-		relatedActions: []string{"user.ssh_keys_for_user", "user.get_ssh_key_for_user", "user.delete_ssh_key_for_user"},
+		relatedActions: []string{actionUserSSHKeysForUser, actionUserGetSSHKeyForUser, actionUserDelSSHKeyForUser},
 		description:    "Add an SSH key to a specific user. Returns: created key ID, title, usage type, and expiry. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_delete_ssh_key_for_user.",
 	},
 	"gitlab_delete_ssh_key_for_user": {
 		usage:          "Delete a specific SSH key from a specific user's account (admin only) by user_id and key_id. Use when the prompt asks to remove another user's key.",
 		aliases:        []string{"delete ssh key for user", "remove user ssh key", "revoke user ssh key"},
-		relatedActions: []string{"user.ssh_keys_for_user", "user.get_ssh_key_for_user", "user.add_ssh_key_for_user"},
+		relatedActions: []string{actionUserSSHKeysForUser, actionUserGetSSHKeyForUser, actionUserAddSSHKeyForUser},
 		description:    "Delete a specific user's SSH key. Returns: confirmation with the deleted key ID. Requires admin token. See also: gitlab_list_ssh_keys_for_user, gitlab_get_ssh_key_for_user, gitlab_add_ssh_key_for_user.",
 	},
 	"gitlab_list_emails": {
 		usage:          "List the authenticated user's registered email addresses. Use when the prompt asks which emails are on the current account.",
 		aliases:        []string{"list emails", "list my emails", "show email addresses"},
-		relatedActions: []string{"user.current", "user.modify"},
+		relatedActions: []string{actionUserCurrent, actionUserModify},
 		description:    "List the current user's email addresses. Returns: email entries with ID, address, and confirmation time. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_list_user_contribution_events": {
 		usage:          "List a user's recent contribution events (pushes, comments, merges) filtered by action, target type, date range, and scope. Use when the prompt asks what a user has done recently.",
 		aliases:        []string{"list contribution events", "user activity feed", "recent contributions"},
-		relatedActions: []string{"user.get", "user.activities", "user.associations_count"},
+		relatedActions: []string{actionUserGet, "user.activities", actionUserAssociations},
 		description:    "List a user's contribution events. Returns: event entries with action, target type/title, project, and timestamp. See also: gitlab_get_user, gitlab_get_user_activities, gitlab_get_user_associations_count.",
 	},
 	"gitlab_get_user_associations_count": {
 		usage:          "Get a user's association counts (groups, projects, issues, merge requests) by user_id. Use when the prompt asks how much a user owns or is involved in before deletion.",
 		aliases:        []string{"user associations count", "count user associations", "user ownership counts"},
-		relatedActions: []string{"user.get", "user.memberships", "user.delete"},
+		relatedActions: []string{actionUserGet, "user.memberships", actionUserDelete},
 		description:    "Get a user's association counts. Returns: groups, projects, issues, and merge-requests counts. See also: gitlab_get_user, gitlab_get_user_memberships, gitlab_delete_user.",
 	},
 	"gitlab_get_user_activities": {
 		usage:          "List recent user activities (last_activity_on per username) optionally filtered by a from-date (admin only). Use when the prompt asks who has been active recently.",
 		aliases:        []string{"list user activities", "user activity report", "last activity dates"},
-		relatedActions: []string{"user.list", "user.contribution_events", "user.memberships"},
+		relatedActions: []string{actionUserList, "user.contribution_events", "user.memberships"},
 		description:    "List user activities (admin). Returns: username and last-activity date per user. See also: gitlab_list_users, gitlab_list_user_contribution_events, gitlab_get_user_memberships.",
 	},
 	"gitlab_get_user_memberships": {
 		usage:          "List a user's project and group memberships by user_id, optionally filtered by type (Project or Namespace). Use when the prompt asks where a user is a member and at what access level.",
 		aliases:        []string{"list user memberships", "user memberships", "where is user a member"},
-		relatedActions: []string{"user.get", "user.associations_count", "user.activities"},
+		relatedActions: []string{actionUserGet, actionUserAssociations, "user.activities"},
 		description:    "List a user's memberships. Returns: source ID, name, type, and access level per membership. See also: gitlab_get_user, gitlab_get_user_associations_count, gitlab_get_user_activities.",
 	},
 	"gitlab_create_user_runner": {
 		usage:          "Register a CI runner scoped to the current user as instance, group, or project type. Use when the prompt asks to create a runner and provide an authentication token.",
 		aliases:        []string{"create user runner", "register user runner", "new user ci runner"},
-		relatedActions: []string{"user.current", "user.create_current_user_pat"},
+		relatedActions: []string{actionUserCurrent, "user.create_current_user_pat"},
 		description:    "Create a runner linked to the current user. Returns: runner ID, authentication token, and token expiry. See also: gitlab_user_current, gitlab_create_current_user_pat.",
 	},
 	"gitlab_create_current_user_pat": {
 		usage:          "Create a personal access token for the authenticated user with a name, scopes, and optional expiry. Use when the prompt asks to mint a new token for the current account.",
 		aliases:        []string{"create personal access token", "create pat", "new access token"},
-		relatedActions: []string{"user.current", "user.create_runner"},
+		relatedActions: []string{actionUserCurrent, "user.create_runner"},
 		description:    "Create a personal access token for the current user. Returns: token ID, the secret token, scopes, and expiry. See also: gitlab_user_current, gitlab_create_user_runner.",
 	},
 	"gitlab_upload_user_avatar": {
 		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user; there is no user_id parameter.",
 		aliases:        []string{"upload my avatar", "set current user avatar", "change my profile picture", "update user avatar"},
-		relatedActions: []string{"user.current", "user.modify", "user.current_user_status"},
+		relatedActions: []string{actionUserCurrent, actionUserModify, actionUserCurrentStatus},
 		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_delete_user_identity": {
 		usage:          "Delete a user's external authentication identity by user_id and provider name (admin only). Use when the prompt asks to unlink an SSO/LDAP identity from a user.",
 		aliases:        []string{"delete user identity", "remove identity provider", "unlink user identity"},
-		relatedActions: []string{"user.get", "user.modify"},
+		relatedActions: []string{actionUserGet, actionUserModify},
 		description:    "Delete a user's external identity. Returns: confirmation with user ID and provider. Requires admin token. See also: gitlab_get_user, gitlab_modify_user.",
 	},
 	"gitlab_modify_user": {
 		usage:          "Update an existing user's profile fields (email, name, flags, social links) by user_id (admin only). Use when the prompt asks to change a user's account details.",
 		aliases:        []string{"modify user", "update user", "edit user account"},
-		relatedActions: []string{"user.get", "user.create", "user.delete"},
+		relatedActions: []string{actionUserGet, "user.create", actionUserDelete},
 		description:    "Modify an existing user. Returns: the updated user profile metadata. See also: gitlab_get_user, gitlab_create_user, gitlab_delete_user.",
 	},
 	"gitlab_delete_user": {
 		usage:          "Delete a user account by user_id (admin only); supports hard delete to remove all contributions. Use only when the prompt explicitly asks to remove a user.",
 		aliases:        []string{"delete user", "remove user account", "destroy user"},
-		relatedActions: []string{"user.get", "user.block", "user.associations_count"},
+		relatedActions: []string{actionUserGet, actionUserBlock, actionUserAssociations},
 		description:    "Delete a user account. Returns: confirmation with the deleted user ID. Requires admin token. See also: gitlab_get_user, gitlab_block_user, gitlab_get_user_associations_count.",
 	},
 	"gitlab_block_user": {
 		usage:          "Block a user from signing in by user_id (admin only); reversible via unblock. Use when the prompt asks to suspend a user's access.",
 		aliases:        []string{"block user", "suspend user", "disable user sign-in"},
-		relatedActions: []string{"user.unblock", "user.ban", "user.get"},
+		relatedActions: []string{actionUserUnblock, "user.ban", actionUserGet},
 		description:    "Block a user from signing in. Returns: confirmation with the user ID and action. Reversible via gitlab_unblock_user. See also: gitlab_unblock_user, gitlab_ban_user, gitlab_get_user.",
 	},
 	"gitlab_unblock_user": {
 		usage:          "Unblock a previously blocked user by user_id (admin only). Use when the prompt asks to restore a blocked user's access.",
 		aliases:        []string{"unblock user", "restore user access", "re-enable user"},
-		relatedActions: []string{"user.block", "user.activate", "user.get"},
+		relatedActions: []string{actionUserBlock, "user.activate", actionUserGet},
 		description:    "Unblock a previously blocked user. Returns: confirmation with the user ID and action. See also: gitlab_block_user, gitlab_activate_user, gitlab_get_user.",
 	},
 	"gitlab_ban_user": {
 		usage:          "Ban a user by user_id (admin only); reversible via unban. Use when the prompt asks to ban a user, hiding their content.",
 		aliases:        []string{"ban user", "block and hide user", "ban account"},
-		relatedActions: []string{"user.unban", "user.block", "user.get"},
+		relatedActions: []string{"user.unban", actionUserBlock, actionUserGet},
 		description:    "Ban a user. Returns: confirmation with the user ID and action. Reversible via gitlab_unban_user. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
 	},
 	"gitlab_unban_user": {
 		usage:          "Unban a previously banned user by user_id (admin only). Use when the prompt asks to lift a ban.",
 		aliases:        []string{"unban user", "lift user ban", "restore banned user"},
-		relatedActions: []string{"user.ban", "user.unblock", "user.get"},
+		relatedActions: []string{"user.ban", actionUserUnblock, actionUserGet},
 		description:    "Unban a previously banned user. Returns: confirmation with the user ID and action. See also: gitlab_ban_user, gitlab_unblock_user, gitlab_get_user.",
 	},
 	"gitlab_activate_user": {
 		usage:          "Activate a deactivated user account by user_id (admin only). Use when the prompt asks to reactivate a dormant user.",
 		aliases:        []string{"activate user", "reactivate user", "enable user account"},
-		relatedActions: []string{"user.deactivate", "user.unblock", "user.get"},
+		relatedActions: []string{"user.deactivate", actionUserUnblock, actionUserGet},
 		description:    "Activate a deactivated user. Returns: confirmation with the user ID and action. See also: gitlab_deactivate_user, gitlab_unblock_user, gitlab_get_user.",
 	},
 	"gitlab_deactivate_user": {
 		usage:          "Deactivate an inactive user account by user_id (admin only); reversible via activate. Use when the prompt asks to deactivate a dormant user.",
 		aliases:        []string{"deactivate user", "make user dormant", "disable inactive user"},
-		relatedActions: []string{"user.activate", "user.block", "user.get"},
+		relatedActions: []string{"user.activate", actionUserBlock, actionUserGet},
 		description:    "Deactivate an active user. Returns: confirmation with the user ID and action. Reversible via gitlab_activate_user. See also: gitlab_activate_user, gitlab_block_user, gitlab_get_user.",
 	},
 	"gitlab_approve_user": {
 		usage:          "Approve a pending user sign-up by user_id (admin only). Use when the prompt asks to approve a user awaiting admin approval.",
 		aliases:        []string{"approve user", "approve pending signup", "accept user registration"},
-		relatedActions: []string{"user.reject", "user.get", "user.list"},
+		relatedActions: []string{"user.reject", actionUserGet, actionUserList},
 		description:    "Approve a pending user sign-up. Returns: confirmation with the user ID and action. See also: gitlab_reject_user, gitlab_get_user, gitlab_list_users.",
 	},
 	"gitlab_reject_user": {
 		usage:          "Reject a pending user sign-up by user_id (admin only); this permanently deletes the pending user. Use only when the prompt asks to reject a registration.",
 		aliases:        []string{"reject user", "deny pending signup", "decline user registration"},
-		relatedActions: []string{"user.approve", "user.get", "user.list"},
+		relatedActions: []string{"user.approve", actionUserGet, actionUserList},
 		description:    "Reject a pending user sign-up. Returns: confirmation with the user ID and action. Permanently deletes the pending user. See also: gitlab_approve_user, gitlab_get_user, gitlab_list_users.",
 	},
 	"gitlab_disable_two_factor": {
 		usage:          "Disable two-factor authentication for a user by user_id (admin only). Use when the prompt asks to clear a user's locked-out 2FA.",
 		aliases:        []string{"disable two factor", "disable 2fa", "reset user 2fa"},
-		relatedActions: []string{"user.get", "user.modify"},
+		relatedActions: []string{actionUserGet, actionUserModify},
 		description:    "Disable 2FA for a user. Returns: confirmation with the user ID and action. See also: gitlab_get_user, gitlab_modify_user.",
 	},
 	"gitlab_create_service_account": {
@@ -373,19 +395,19 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 	}
 
 	switch individualTool {
-	case "gitlab_user_current":
+	case toolUserCurrent:
 		options.Usage = "Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active."
-		if actionName == "me" {
+		if actionName == roleMe {
 			options.Aliases = []string{"whoami", "my account", "current user identity"}
 		} else {
 			options.Aliases = []string{"who am i", "current user", "show my profile"}
 		}
-		options.RelatedActions = []string{"user.list", "user.current_user_status", "user.emails"}
+		options.RelatedActions = []string{actionUserList, actionUserCurrentStatus, "user.emails"}
 		options.IndividualTool.Description = "Get the current authenticated user. Returns: account ID, username, name, state, avatar URL, and profile metadata. See also: gitlab_list_users, gitlab_current_user_status, gitlab_list_emails."
 	case "gitlab_list_users":
 		options.Usage = "List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories."
 		options.Aliases = []string{"list users", "find users", "search users"}
-		options.RelatedActions = []string{"user.get", "user.current", "user.create"}
+		options.RelatedActions = []string{actionUserGet, actionUserCurrent, "user.create"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"search": {
 				ValueSource:      "Name, username, or email fragment from the user's request.",
@@ -397,7 +419,7 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 	case "gitlab_get_user":
 		options.Usage = "Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields."
 		options.Aliases = []string{"get user by id", "show user details", "lookup user"}
-		options.RelatedActions = []string{"user.list", "user.modify", "user.delete"}
+		options.RelatedActions = []string{actionUserList, actionUserModify, actionUserDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"user_id": {
 				SemanticRole:     "scope_user",
@@ -410,7 +432,7 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 	case "gitlab_create_user":
 		options.Usage = "Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested."
 		options.Aliases = []string{"create user", "provision user", "new user account"}
-		options.RelatedActions = []string{"user.get", "user.modify", "user.block"}
+		options.RelatedActions = []string{actionUserGet, actionUserModify, actionUserBlock}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"email": {
 				SemanticRole:     "email_address",

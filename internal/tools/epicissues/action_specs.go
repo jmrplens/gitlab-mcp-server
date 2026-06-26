@@ -5,6 +5,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionEpicIssueList   = "group.epic_issue_list"
+	actionEpicIssueAssign = "group.epic_issue_assign"
+	actionEpicIssueRemove = "group.epic_issue_remove"
+	actionEpicGet         = "group.epic_get"
+	actionIssueGet        = "issue.get"
+	paramFullPath         = "full_path"
+	paramChildProjectPath = "child_project_path"
+	roleParentGroupPath   = "parent_group_path"
+)
+
 // ActionSpecs returns canonical specs for epic issue hierarchy actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -20,10 +31,10 @@ func epicIssueListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_list")
 	options.Usage = "Use to list issues assigned to an epic. Send full_path for the epic group and epic_iid from the epic_create or epic_get result."
 	options.Aliases = []string{"list epic issues", "show issues in epic", "epic child issues", "issues linked to epic"}
-	options.RelatedActions = []string{"group.epic_issue_assign", "group.epic_issue_remove", "group.epic_issue_update", "group.epic_get", "issue.get"}
+	options.RelatedActions = []string{actionEpicIssueAssign, actionEpicIssueRemove, "group.epic_issue_update", actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"full_path": {
-			SemanticRole:     "parent_group_path",
+		paramFullPath: {
+			SemanticRole:     roleParentGroupPath,
 			ValueSource:      "Group full path that owns the epic.",
 			CommonConfusions: []string{"Do not use a child project path as full_path; epics live on groups."},
 		},
@@ -42,15 +53,15 @@ func epicIssueAssignSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_assign")
 	options.Usage = "Use to assign a project issue as a child of an epic owned by a group path. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result; do not omit full_path or epic_iid after creating the epic."
 	options.Aliases = []string{"assign issue to epic", "add issue to epic", "link issue to epic", "attach issue to epic"}
-	options.RelatedActions = []string{"group.epic_issue_list", "group.epic_issue_remove", "group.epic_get", "issue.get"}
+	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueRemove, actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"full_path": {
-			SemanticRole:     "parent_group_path",
+		paramFullPath: {
+			SemanticRole:     roleParentGroupPath,
 			ValueSource:      "Group full path that owns the epic.",
 			CommonConfusions: []string{"Do not use the child project path as full_path."},
 		},
-		"child_project_path": {
-			SemanticRole:     "child_project_path",
+		paramChildProjectPath: {
+			SemanticRole:     paramChildProjectPath,
 			ValueSource:      "Project path that owns the issue being assigned to the epic.",
 			CommonConfusions: []string{"Do not use project_id or target_full_path for this parameter."},
 		},
@@ -69,15 +80,15 @@ func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_remove")
 	options.Usage = "Use to unlink a child issue from an epic. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result; removal is destructive and requires confirmation."
 	options.Aliases = []string{"remove issue from epic", "unlink issue from epic", "detach issue from epic"}
-	options.RelatedActions = []string{"group.epic_issue_list", "group.epic_issue_assign", "group.epic_get", "issue.get"}
+	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueAssign, actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"full_path": {
-			SemanticRole:     "parent_group_path",
+		paramFullPath: {
+			SemanticRole:     roleParentGroupPath,
 			ValueSource:      "Group full path that owns the epic.",
 			CommonConfusions: []string{"Do not use the child project path as full_path."},
 		},
-		"child_project_path": {
-			SemanticRole:     "child_project_path",
+		paramChildProjectPath: {
+			SemanticRole:     paramChildProjectPath,
 			ValueSource:      "Project path that owns the issue being removed from the epic.",
 			CommonConfusions: []string{"Do not use project_id or target_full_path for this parameter."},
 		},
@@ -96,10 +107,10 @@ func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_update")
 	options.Usage = "Use to reorder an issue within an epic by moving it before or after another linked issue. Send full_path for the epic group and epic_iid from the epic_create or epic_get result; child_id and adjacent_id are work item GIDs from the epic_issue_list output id field, and relative_position is BEFORE or AFTER."
 	options.Aliases = []string{"reorder epic issue", "move issue within epic", "reposition epic issue", "change epic issue order"}
-	options.RelatedActions = []string{"group.epic_issue_list", "group.epic_issue_assign", "group.epic_issue_remove", "group.epic_get"}
+	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueAssign, actionEpicIssueRemove, actionEpicGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"full_path": {
-			SemanticRole:     "parent_group_path",
+		paramFullPath: {
+			SemanticRole:     roleParentGroupPath,
 			ValueSource:      "Group full path that owns the epic.",
 			CommonConfusions: []string{"Do not use the child project path as full_path."},
 		},

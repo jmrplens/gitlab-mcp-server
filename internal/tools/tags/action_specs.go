@@ -9,7 +9,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionTagGet = "tag.get"
+const (
+	actionTagGet           = "tag.get"
+	actionTagList          = "tag.list"
+	actionTagUnprotect     = "tag.unprotect"
+	actionTagProtect       = "tag.protect"
+	actionTagListProtected = "tag.list_protected"
+	paramTagName           = "tag_name"
+)
 
 // ActionSpecs returns canonical specs for tag and protected tag actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
@@ -43,7 +50,7 @@ func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
 		result, err := baseHandler(ctx, input)
 		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			tagName, _ := input["tag_name"].(string)
+			tagName, _ := input[paramTagName].(string)
 			projectID, _ := input["project_id"].(string)
 			return tagNotFoundOutput{Identifier: fmt.Sprintf("%q in project %s", tagName, projectID)}, nil
 		}
@@ -55,7 +62,7 @@ func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 func tagSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute tags domain action.", Tags: []string{"tag"},
-		RelatedActions: []string{"tag.list", actionTagGet, "release.get", "repository.commit_get"},
+		RelatedActions: []string{actionTagList, actionTagGet, "release.get", "repository.commit_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "tags",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -77,10 +84,10 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 	case "get":
 		options.Usage = "Get one tag by project_id and tag_name. Use when a concrete tag is already known and detailed metadata/signature are needed."
 		options.Aliases = []string{"get tag", "show tag details", "lookup tag"}
-		options.RelatedActions = []string{"tag.list", "release.get", "tag.get_signature"}
+		options.RelatedActions = []string{actionTagList, "release.get", "tag.get_signature"}
 		options.IndividualTool.Description = "Get a single tag from a project by name. Returns: the tag with target, message, protection flag, the full associated commit object, release note, and creation time. See also: gitlab_tag_list, gitlab_tag_get_signature, gitlab_release_get."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"tag_name": {
+			paramTagName: {
 				SemanticRole:   "git_tag",
 				ValueSource:    "Tag string from task context or tag list output.",
 				ExampleBinding: `params.tag_name:"v1.2.0"`,
@@ -92,7 +99,7 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 		options.RelatedActions = []string{"release.create", actionTagGet, "repository.compare"}
 		options.IndividualTool.Description = "Create a new tag in a project pointing at a ref. Returns: the created tag with target, message, protection flag, and the associated commit object. See also: gitlab_tag_get, gitlab_tag_delete, gitlab_release_create."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"tag_name": {
+			paramTagName: {
 				SemanticRole:   "git_tag",
 				ValueSource:    "Tag name requested for the release/version.",
 				ExampleBinding: `params.tag_name:"v2.0.0"`,
@@ -107,32 +114,32 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 	case "delete":
 		options.Usage = "Delete a tag from a project by name. Destructive and not recoverable; protected tags must be unprotected first."
 		options.Aliases = []string{"delete tag", "remove tag", "drop tag"}
-		options.RelatedActions = []string{"tag.list", actionTagGet, "tag.unprotect"}
+		options.RelatedActions = []string{actionTagList, actionTagGet, actionTagUnprotect}
 		options.IndividualTool.Description = "Delete a tag from a project permanently. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_get, gitlab_tag_list, gitlab_tag_unprotect."
 	case "get_signature":
 		options.Usage = "Get the X.509 signature attached to a tag. Use to verify tag provenance and certificate status."
 		options.Aliases = []string{"get tag signature", "tag x509 signature", "verify tag signature"}
-		options.RelatedActions = []string{actionTagGet, "tag.list"}
+		options.RelatedActions = []string{actionTagGet, actionTagList}
 		options.IndividualTool.Description = "Get the X.509 signature of a tag. Returns: the signature type, verification status, and the X.509 certificate with issuer detail. See also: gitlab_tag_get, gitlab_tag_list."
 	case "list_protected":
 		options.Usage = "List protected tags for a project with offset or keyset pagination. Use to audit which tag patterns are protected and their create access levels."
 		options.Aliases = []string{"list protected tags", "show protected tags", "find protected tags"}
-		options.RelatedActions = []string{"tag.get_protected", "tag.protect", "tag.list"}
+		options.RelatedActions = []string{"tag.get_protected", actionTagProtect, actionTagList}
 		options.IndividualTool.Description = "List protected tags in one project with offset or keyset pagination. Returns: protected tag patterns with their create access levels and pagination metadata. See also: gitlab_tag_get_protected, gitlab_tag_protect, gitlab_tag_list."
 	case "get_protected":
 		options.Usage = "Get a single protected tag or wildcard rule by name. Use when a concrete protected pattern is already known."
 		options.Aliases = []string{"get protected tag", "show protected tag", "lookup protected tag"}
-		options.RelatedActions = []string{"tag.list_protected", "tag.protect", "tag.unprotect"}
+		options.RelatedActions = []string{actionTagListProtected, actionTagProtect, actionTagUnprotect}
 		options.IndividualTool.Description = "Get a single protected tag or wildcard rule by name. Returns: the protected tag with its create access levels (access level, user, group, and deploy key descriptions). See also: gitlab_tag_list_protected, gitlab_tag_protect, gitlab_tag_unprotect."
 	case "protect":
 		options.Usage = "Protect a tag or wildcard pattern with create access levels. Provide create_access_level for a simple rule, or allowed_to_create for granular user/group/deploy-key permissions."
 		options.Aliases = []string{"protect tag", "add protected tag", "restrict tag creation"}
-		options.RelatedActions = []string{"tag.unprotect", "tag.list_protected", "tag.get_protected"}
+		options.RelatedActions = []string{actionTagUnprotect, actionTagListProtected, "tag.get_protected"}
 		options.IndividualTool.Description = "Protect a tag or wildcard pattern with create access levels. Returns: the protected tag with its resolved create access levels. See also: gitlab_tag_unprotect, gitlab_tag_list_protected, gitlab_tag_get_protected."
 	case "unprotect":
 		options.Usage = "Remove protection from a tag or wildcard pattern by name. Destructive; allows the matched tags to be created or deleted again."
 		options.Aliases = []string{"unprotect tag", "remove tag protection", "delete protected tag"}
-		options.RelatedActions = []string{"tag.protect", "tag.list_protected", "tag.delete"}
+		options.RelatedActions = []string{actionTagProtect, actionTagListProtected, "tag.delete"}
 		options.IndividualTool.Description = "Remove protection from a tag or wildcard pattern. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_protect, gitlab_tag_list_protected, gitlab_tag_get_protected."
 	}
 	switch {

@@ -70,6 +70,7 @@ const (
 	actionExportDownload = "projectimportexport.export_download"
 	actionImportFromFile = "projectimportexport.import_from_file"
 	actionImportStatus   = "projectimportexport.import_status"
+	actionProjectGet     = "project.get"
 )
 
 // projectImportExportMeta maps each individual tool to its discovery metadata
@@ -79,7 +80,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_schedule_project_export": {
 		usage:    "Schedule an asynchronous export archive for a project. Optionally upload the archive to a URL when it is ready. Then poll gitlab_get_project_export_status until 'finished' and download with gitlab_download_project_export.",
 		aliases:  []string{"export project", "schedule project export", "create project export archive", "back up project"},
-		related:  []string{actionExportStatus, actionExportDownload, "project.get"},
+		related:  []string{actionExportStatus, actionExportDownload, actionProjectGet},
 		guidance: projectIDGuidance(),
 		description: "Schedule an asynchronous project export. Returns: a confirmation message. " +
 			"See also: gitlab_get_project_export_status, gitlab_download_project_export.",
@@ -87,7 +88,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_get_project_export_status": {
 		usage:    "Get the current export status of a project. Use after gitlab_schedule_project_export to poll until export_status is 'finished'; status values are none, started, finished, regeneration_in_progress.",
 		aliases:  []string{"export status", "check project export progress", "is project export ready"},
-		related:  []string{actionExportSchedule, actionExportDownload, "project.get"},
+		related:  []string{actionExportSchedule, actionExportDownload, actionProjectGet},
 		guidance: projectIDGuidance(),
 		description: "Get the export status of a project. Returns: export id, name, path, status, message, and download links. " +
 			"See also: gitlab_schedule_project_export, gitlab_download_project_export.",
@@ -103,7 +104,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_import_project_from_file": {
 		usage:   "Import a project from a GitLab export archive (.tar.gz) supplied as a local file path or base64 content. Optionally override the namespace, name, path, and project attributes via override_params. Poll gitlab_get_project_import_status afterward.",
 		aliases: []string{"import project", "import project from file", "restore project from export", "upload project archive"},
-		related: []string{actionImportStatus, actionExportDownload, "project.get"},
+		related: []string{actionImportStatus, actionExportDownload, actionProjectGet},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"path": {
 				SemanticRole:     "new_project_path",
@@ -130,7 +131,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 	"gitlab_get_project_import_status": {
 		usage:    "Get the import status of a project created by gitlab_import_project_from_file. Poll until import_status is 'finished' or 'failed'; inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",
 		aliases:  []string{"import status", "check project import progress", "did project import succeed"},
-		related:  []string{actionImportFromFile, "project.get"},
+		related:  []string{actionImportFromFile, actionProjectGet},
 		guidance: projectIDGuidance(),
 		description: "Get the import status of a project. Returns: import id, name, path, status, type, correlation id, and import error. " +
 			"See also: gitlab_import_project_from_file.",

@@ -5,6 +5,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionGroupMilestoneGet    = "group_milestone.get"
+	actionGroupMilestoneList   = "group_milestone.list"
+	actionGroupMilestoneUpdate = "group_milestone.update"
+	actionGroupMilestoneIssues = "group_milestone.issues"
+)
+
 // ActionSpecs returns canonical specs for group milestone actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -101,49 +108,49 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 	"gitlab_group_milestone_list": {
 		usage:       "List milestones in a group with filtering, ordering, and pagination. Use filters such as state, title, search, include_ancestors, include_descendants, order_by, and sort when the prompt asks for matching group milestones.",
 		aliases:     []string{"list group milestones", "show group milestones", "find milestones in group"},
-		related:     []string{"group_milestone.get", "group_milestone.create", "milestone.list"},
+		related:     []string{actionGroupMilestoneGet, "group_milestone.create", "milestone.list"},
 		description: "List milestones in a group with filtering and pagination. Returns: matching group milestones with state, dates, expiry, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_create, gitlab_milestone_list.",
 	},
 	"gitlab_group_milestone_get": {
 		usage:       "Get one exact group milestone by group_id plus milestone_iid. Use after list results or when the prompt already names a concrete group milestone IID.",
 		aliases:     []string{"get group milestone", "show group milestone details", "fetch group milestone"},
-		related:     []string{"group_milestone.list", "group_milestone.update", "group_milestone.issues"},
+		related:     []string{actionGroupMilestoneList, actionGroupMilestoneUpdate, actionGroupMilestoneIssues},
 		description: "Get a single group milestone by IID. Returns: milestone metadata, state, start and due dates, expiry, and timestamps. See also: gitlab_group_milestone_list, gitlab_group_milestone_update, gitlab_group_milestone_issues.",
 	},
 	"gitlab_group_milestone_create": {
 		usage:       "Create a new milestone in a group. Provide title and optional description, start_date, and due_date.",
 		aliases:     []string{"create group milestone", "add group milestone", "new group milestone"},
-		related:     []string{"group_milestone.get", "group_milestone.list", "group_milestone.update"},
+		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
 		description: "Create a new group milestone. Returns: the created milestone with ID, IID, state, start and due dates. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_update.",
 	},
 	"gitlab_group_milestone_update": {
 		usage:       "Update an existing group milestone. Only non-empty fields are applied; use state_event to close or activate.",
 		aliases:     []string{"update group milestone", "edit group milestone", "close group milestone", "activate group milestone"},
-		related:     []string{"group_milestone.get", "group_milestone.list", "group_milestone.delete"},
+		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, "group_milestone.delete"},
 		description: "Update an existing group milestone. Returns: the updated milestone with state, dates, and expiry. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_delete.",
 	},
 	"gitlab_group_milestone_delete": {
 		usage:       "Permanently delete a group milestone. Destructive and irreversible; confirm group_id and milestone_iid before calling. Requires Owner role.",
 		aliases:     []string{"delete group milestone", "remove group milestone"},
-		related:     []string{"group_milestone.get", "group_milestone.list", "group_milestone.update"},
+		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
 		description: "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",
 	},
 	"gitlab_group_milestone_issues": {
 		usage:       "List issues assigned to a group milestone, with ordering and pagination. Use to inspect the issue scope of a group milestone.",
 		aliases:     []string{"group milestone issues", "issues in group milestone", "list group milestone issues"},
-		related:     []string{"group_milestone.get", "group_milestone.merge_requests", "issue.list_group"},
+		related:     []string{actionGroupMilestoneGet, "group_milestone.merge_requests", "issue.list_group"},
 		description: "List issues assigned to a group milestone. Returns: assigned issues with state, web URL, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.",
 	},
 	"gitlab_group_milestone_merge_requests": {
 		usage:       "List merge requests assigned to a group milestone, with ordering and pagination. Use to inspect the MR scope of a group milestone.",
 		aliases:     []string{"group milestone merge requests", "merge requests in group milestone", "list group milestone MRs"},
-		related:     []string{"group_milestone.get", "group_milestone.issues", "group_milestone.burndown"},
+		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneIssues, "group_milestone.burndown"},
 		description: "List merge requests assigned to a group milestone. Returns: assigned merge requests with state, source and target branches, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
 	},
 	"gitlab_group_milestone_burndown_events": {
 		usage:       "List burndown chart events for a group milestone, with ordering and pagination. Requires GitLab Premium or higher.",
 		aliases:     []string{"group milestone burndown", "burndown chart events", "group milestone burndown events"},
-		related:     []string{"group_milestone.get", "group_milestone.issues", "group_milestone.merge_requests"},
+		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneIssues, "group_milestone.merge_requests"},
 		description: "List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
 	},
 }

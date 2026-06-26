@@ -738,10 +738,10 @@ func ToOutput(p *gl.Project) Output {
 		out.Topics = []string{}
 	}
 	if p.MarkedForDeletionOn != nil {
-		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format("2006-01-02")
+		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
 	}
 	if p.MarkedForDeletionAt != nil { //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
-		out.MarkedForDeletionAt = time.Time(*p.MarkedForDeletionAt).Format("2006-01-02") //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
+		out.MarkedForDeletionAt = time.Time(*p.MarkedForDeletionAt).Format(time.DateOnly) //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
 	}
 	if p.CreatedAt != nil {
 		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
@@ -1203,7 +1203,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	// Check if the project still exists (marked for delayed deletion)
 	p, _, getErr := client.GL().Projects.GetProject(string(input.ProjectID), &gl.GetProjectOptions{}, gl.WithContext(ctx))
 	if getErr == nil && p.MarkedForDeletionOn != nil {
-		deletionDate := time.Time(*p.MarkedForDeletionOn).Format("2006-01-02")
+		deletionDate := time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
 		return DeleteOutput{
 			Status:              "scheduled",
 			Message:             fmt.Sprintf("Project %s is marked for deletion on %s. Use gitlab_project_delete with permanently_remove=true and full_path to delete immediately, or use gitlab_project_restore to cancel the deletion.", input.ProjectID, deletionDate),

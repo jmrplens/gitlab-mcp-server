@@ -23,6 +23,11 @@ import (
 // for most slugs and Owner role on the group, mirroring the existing
 // group-level Datadog tools.
 
+const (
+	groupsPathPrefix      = "groups/"
+	integrationsPathInfix = "/integrations/"
+)
+
 // ListGroupIntegrations (read).
 
 // ListGroupIntegrationsInput is the input for listing a group's active integrations.
@@ -72,7 +77,7 @@ func GetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	if input.Slug == "" {
 		return GetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("get_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := "groups/" + gl.PathEscape(string(input.GroupID)) + "/integrations/" + gl.PathEscape(input.Slug)
+	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
 	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return GetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("get_group_integration", err)
@@ -107,7 +112,7 @@ func SetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	if input.Slug == "" {
 		return SetGroupIntegrationOutput{}, toolutil.WrapErrWithMessage("set_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := "groups/" + gl.PathEscape(string(input.GroupID)) + "/integrations/" + gl.PathEscape(input.Slug)
+	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
 	body := integrationConfigBody(input.Config)
 
 	req, err := client.GL().NewRequest(http.MethodPut, path, body, []gl.RequestOptionFunc{gl.WithContext(ctx)})
@@ -135,7 +140,7 @@ func DeleteGroupIntegration(ctx context.Context, client *gitlabclient.Client, in
 	if input.Slug == "" {
 		return toolutil.WrapErrWithMessage("delete_group_integration", toolutil.ErrFieldRequired("slug"))
 	}
-	path := "groups/" + gl.PathEscape(string(input.GroupID)) + "/integrations/" + gl.PathEscape(input.Slug)
+	path := groupsPathPrefix + gl.PathEscape(string(input.GroupID)) + integrationsPathInfix + gl.PathEscape(input.Slug)
 	req, err := client.GL().NewRequest(http.MethodDelete, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
 		return toolutil.WrapErrWithMessage("delete_group_integration", err)

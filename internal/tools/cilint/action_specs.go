@@ -5,6 +5,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionPipelineCreate = "pipeline.create"
+
 // ActionSpecs returns canonical specs for CI lint actions exposed as MCP
 // tools. Both routes mirror the non-deprecated client-go ValidateService
 // methods one-to-one: lint maps to ProjectNamespaceLint (validate arbitrary
@@ -33,7 +35,7 @@ func ciLintSpec(name string, route toolutil.ActionRoute, individualTool string) 
 	options := toolutil.ActionSpecOptions{
 		Aliases:        []string{individualTool},
 		Tags:           []string{"template", "ci", "lint"},
-		RelatedActions: []string{"template.ci_yml_get", "pipeline.create", "repository.file_get"},
+		RelatedActions: []string{"template.ci_yml_get", actionPipelineCreate, "repository.file_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "cilint",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -43,12 +45,12 @@ func ciLintSpec(name string, route toolutil.ActionRoute, individualTool string) 
 	case "gitlab_ci_lint":
 		options.Usage = "Validate a .gitlab-ci.yml snippet against a project's namespace without committing it. Use when the prompt provides raw CI YAML to check, or to confirm edits before pushing; pass content with the YAML and project_id for include/component resolution, and set dry_run to simulate pipeline creation."
 		options.Aliases = []string{"validate ci yaml", "lint ci config", "check gitlab-ci.yml syntax", "validate pipeline yaml", "test ci configuration"}
-		options.RelatedActions = []string{"template.lint_project", "pipeline.create", "ci_catalog.list"}
+		options.RelatedActions = []string{"template.lint_project", actionPipelineCreate, "ci_catalog.list"}
 		options.IndividualTool.Description = "Validate inline .gitlab-ci.yml content within a project namespace. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: gitlab_ci_lint_project, gitlab_pipeline_create, gitlab_list_catalog_resources."
 	case "gitlab_ci_lint_project":
 		options.Usage = "Validate the .gitlab-ci.yml already committed to a project at a given ref. Use when the prompt names a project rather than supplying YAML; pass project_id and optionally content_ref/ref to choose the branch or tag, and dry_run to simulate pipeline creation for that ref."
 		options.Aliases = []string{"validate project ci config", "lint committed gitlab-ci.yml", "check project pipeline yaml", "validate ci file in repo", "lint project ci yaml"}
-		options.RelatedActions = []string{"template.lint", "pipeline.create", "repository.file_get"}
+		options.RelatedActions = []string{"template.lint", actionPipelineCreate, "repository.file_get"}
 		options.IndividualTool.Description = "Validate a project's committed .gitlab-ci.yml at a branch or tag. Returns: validity flag, errors, warnings, the merged YAML, and resolved includes. See also: gitlab_ci_lint, gitlab_pipeline_create, gitlab_file_get."
 	}
 

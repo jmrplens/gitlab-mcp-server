@@ -5,6 +5,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionMergeTrainListProject = "merge_train.list_project"
+	actionMergeTrainListBranch  = "merge_train.list_branch"
+	actionMergeTrainGet         = "merge_train.get"
+	actionMergeTrainAdd         = "merge_train.add"
+)
+
 // ActionSpecs returns canonical specs for merge train actions exposed
 // as MCP tools. The list, get, and add routes are projected into the
 // dynamic, meta, individual, and audit surfaces by the action catalog
@@ -56,25 +63,25 @@ var mergeTrainActionMeta = map[string]mergeTrainActionMetaEntry{
 	"gitlab_list_project_merge_trains": {
 		usage:       "List every merge train in a project. Use when the prompt asks for all merge trains, active trains, or completed trains in a known project, optionally filtered by scope and sorted.",
 		aliases:     []string{"list project merge trains", "show merge trains", "find merge trains in project"},
-		related:     []string{"merge_train.list_branch", "merge_train.get", "merge_train.add"},
+		related:     []string{actionMergeTrainListBranch, actionMergeTrainGet, actionMergeTrainAdd},
 		description: "List all merge trains in a project. Returns: merge train entries with the merge request, user, pipeline, target branch, status, duration, and pagination metadata. See also: gitlab_list_merge_request_in_merge_train, gitlab_get_merge_request_on_merge_train, gitlab_add_merge_request_to_merge_train.",
 	},
 	"gitlab_list_merge_request_in_merge_train": {
 		usage:       "List the merge requests sitting on the merge train for one target branch. Use when work is scoped to a specific branch's merge train rather than the whole project.",
 		aliases:     []string{"list merge requests in merge train", "show merge train for branch", "merge train queue for branch"},
-		related:     []string{"merge_train.list_project", "merge_train.get", "merge_train.add"},
+		related:     []string{actionMergeTrainListProject, actionMergeTrainGet, actionMergeTrainAdd},
 		description: "List the merge requests on a merge train for a target branch. Returns: merge train entries with the merge request, user, pipeline, status, duration, and pagination metadata. See also: gitlab_list_project_merge_trains, gitlab_get_merge_request_on_merge_train, gitlab_add_merge_request_to_merge_train.",
 	},
 	"gitlab_get_merge_request_on_merge_train": {
 		usage:       "Fetch the merge train status of a single merge request by its IID. Use when the prompt names a concrete MR and asks whether or where it sits on a merge train.",
 		aliases:     []string{"get merge request on merge train", "merge train status of mr", "show mr merge train"},
-		related:     []string{"merge_train.list_project", "merge_train.list_branch", "merge_train.add"},
+		related:     []string{actionMergeTrainListProject, actionMergeTrainListBranch, actionMergeTrainAdd},
 		description: "Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_list_project_merge_trains, gitlab_list_merge_request_in_merge_train, gitlab_add_merge_request_to_merge_train.",
 	},
 	"gitlab_add_merge_request_to_merge_train": {
 		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline; optionally enable auto_merge, verify a head sha, or squash on merge.",
 		aliases:     []string{"add merge request to merge train", "enqueue mr on merge train", "merge train an mr"},
-		related:     []string{"merge_train.get", "merge_train.list_branch", "merge_train.list_project"},
+		related:     []string{actionMergeTrainGet, actionMergeTrainListBranch, actionMergeTrainListProject},
 		description: "Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",
 	},
 }

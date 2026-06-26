@@ -5,6 +5,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionResourceGroupUpcomingJobs = "resource_group.upcoming_jobs"
+	actionResourceGroupList         = "resource_group.list"
+	actionResourceGroupGet          = "resource_group.get"
+)
+
 // ActionSpecs returns canonical specs for resource group actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -46,7 +52,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 				"show resource group concurrency settings",
 				"inspect resource group process mode",
 			},
-			related: []string{"resource_group.list", "resource_group.edit", "resource_group.upcoming_jobs"},
+			related: []string{actionResourceGroupList, "resource_group.edit", actionResourceGroupUpcomingJobs},
 			description: "Get one CI resource group in a project by key. Returns: the resource group ID, key, and process mode " +
 				"(the concurrency mode that controls how jobs sharing the resource group are serialized). " +
 				"See also: gitlab_list_resource_groups, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.",
@@ -59,7 +65,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 				"change job concurrency mode for resource group",
 				"set resource group ordering (oldest_first, newest_first, unordered)",
 			},
-			related: []string{"resource_group.get", "resource_group.list", "resource_group.upcoming_jobs"},
+			related: []string{actionResourceGroupGet, actionResourceGroupList, actionResourceGroupUpcomingJobs},
 			description: "Update the process mode of one CI resource group by key. Returns: the updated resource group ID, key, " +
 				"and new process mode that controls how queued jobs sharing the resource group are serialized. " +
 				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
@@ -72,7 +78,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 				"show jobs queued behind resource group concurrency lock",
 				"resource group pending job queue",
 			},
-			related: []string{"resource_group.get", "resource_group.list", "job.list"},
+			related: []string{actionResourceGroupGet, actionResourceGroupList, "job.list"},
 			description: "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, " +
 				"status, and stage, ordered as they will run under the resource group's process mode. " +
 				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
@@ -85,7 +91,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 				"show CI concurrency resource groups in project",
 				"find resource groups controlling job serialization",
 			},
-			related: []string{"resource_group.get", "resource_group.edit", "resource_group.upcoming_jobs"},
+			related: []string{actionResourceGroupGet, "resource_group.edit", actionResourceGroupUpcomingJobs},
 			description: "List the CI resource groups configured for a project. Returns: each resource group's ID, key, and " +
 				"process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency. " +
 				"See also: gitlab_get_resource_group, gitlab_edit_resource_group, gitlab_list_resource_group_upcoming_jobs.",

@@ -22,6 +22,15 @@ type tierException struct {
 
 // acceptedTierExceptions maps canonical action IDs to their audited tier and a
 // rationale citing the real doc page/section.
+const (
+	docMRApprovalsPremium   = "merge_request_approvals.md = Premium"
+	docProjPushRulesPremium = "project_push_rules.md = Premium"
+	docGrpPushRulesPremium  = "group_push_rules.md = Premium"
+	docTargetBranchPremium  = "target branch rules = Premium"
+	docPullMirrorPremium    = "project_pull_mirroring.md = Premium"
+	docBillableMembersPrem  = "billable members = Premium"
+)
+
 var acceptedTierExceptions = map[string]tierException{
 	// merge_request_approvals.md is page-Premium, but the basic per-MR approval
 	// STATE endpoints are Free; only approval RULES are Premium.
@@ -30,43 +39,43 @@ var acceptedTierExceptions = map[string]tierException{
 
 	// Project push rules — owned by the projects package (projects.md = Free) but
 	// documented on the Premium project push-rules page.
-	"project.push_rule_get":    {tierPremium, "project_push_rules.md = Premium"},
-	"project.push_rule_add":    {tierPremium, "project_push_rules.md = Premium"},
-	"project.push_rule_edit":   {tierPremium, "project_push_rules.md = Premium"},
-	"project.push_rule_delete": {tierPremium, "project_push_rules.md = Premium"},
+	"project.push_rule_get":    {tierPremium, docProjPushRulesPremium},
+	"project.push_rule_add":    {tierPremium, docProjPushRulesPremium},
+	"project.push_rule_edit":   {tierPremium, docProjPushRulesPremium},
+	"project.push_rule_delete": {tierPremium, docProjPushRulesPremium},
 
 	// Project-level approval configuration/rules — documented on the Premium
 	// merge_request_approvals page, not on projects.md.
-	"project.approval_config_get":    {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_config_change": {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_rule_list":     {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_rule_get":      {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_rule_create":   {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_rule_update":   {tierPremium, "merge_request_approvals.md = Premium"},
-	"project.approval_rule_delete":   {tierPremium, "merge_request_approvals.md = Premium"},
+	"project.approval_config_get":    {tierPremium, docMRApprovalsPremium},
+	"project.approval_config_change": {tierPremium, docMRApprovalsPremium},
+	"project.approval_rule_list":     {tierPremium, docMRApprovalsPremium},
+	"project.approval_rule_get":      {tierPremium, docMRApprovalsPremium},
+	"project.approval_rule_create":   {tierPremium, docMRApprovalsPremium},
+	"project.approval_rule_update":   {tierPremium, docMRApprovalsPremium},
+	"project.approval_rule_delete":   {tierPremium, docMRApprovalsPremium},
 
 	// Pull mirroring — documented on the Premium project_pull_mirroring page,
 	// distinct from the Free remote_mirrors (push) page.
-	"project.pull_mirror_get":       {tierPremium, "project_pull_mirroring.md = Premium"},
-	"project.pull_mirror_configure": {tierPremium, "project_pull_mirroring.md = Premium"},
-	"project.start_mirroring":       {tierPremium, "project_pull_mirroring.md = Premium"},
+	"project.pull_mirror_get":       {tierPremium, docPullMirrorPremium},
+	"project.pull_mirror_configure": {tierPremium, docPullMirrorPremium},
+	"project.start_mirroring":       {tierPremium, docPullMirrorPremium},
 
 	// Target branch rules — Premium, documented separately (GraphQL-backed).
-	"project.target_branch_rule_list":   {tierPremium, "target branch rules = Premium"},
-	"project.target_branch_rule_create": {tierPremium, "target branch rules = Premium"},
-	"project.target_branch_rule_delete": {tierPremium, "target branch rules = Premium"},
+	"project.target_branch_rule_list":   {tierPremium, docTargetBranchPremium},
+	"project.target_branch_rule_create": {tierPremium, docTargetBranchPremium},
+	"project.target_branch_rule_delete": {tierPremium, docTargetBranchPremium},
 
 	// Group push rules — group_push_rules.md = Premium (groups.md is Free).
-	"group.push_rule_get":    {tierPremium, "group_push_rules.md = Premium"},
-	"group.push_rule_add":    {tierPremium, "group_push_rules.md = Premium"},
-	"group.push_rule_edit":   {tierPremium, "group_push_rules.md = Premium"},
-	"group.push_rule_delete": {tierPremium, "group_push_rules.md = Premium"},
+	"group.push_rule_get":    {tierPremium, docGrpPushRulesPremium},
+	"group.push_rule_add":    {tierPremium, docGrpPushRulesPremium},
+	"group.push_rule_edit":   {tierPremium, docGrpPushRulesPremium},
+	"group.push_rule_delete": {tierPremium, docGrpPushRulesPremium},
 
 	// Group billable members & provisioned users — Premium/Ultimate billing
 	// endpoints documented under members/billing, not on groups.md.
-	"group.group_billable_members_list":            {tierPremium, "billable members = Premium"},
-	"group.group_billable_member_memberships_list": {tierPremium, "billable members = Premium"},
-	"group.group_billable_member_remove":           {tierPremium, "billable members = Premium"},
+	"group.group_billable_members_list":            {tierPremium, docBillableMembersPrem},
+	"group.group_billable_member_memberships_list": {tierPremium, docBillableMembersPrem},
+	"group.group_billable_member_remove":           {tierPremium, docBillableMembersPrem},
 	"group.list_provisioned_users":                 {tierPremium, "provisioned users = Premium"},
 
 	// Group issue board create/delete — group_boards.md page is Free but the

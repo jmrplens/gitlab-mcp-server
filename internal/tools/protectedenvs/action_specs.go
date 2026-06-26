@@ -7,6 +7,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionEnvProtectedGet       = "environment.protected_get"
+	actionEnvProtectedUnprotect = "environment.protected_unprotect"
+)
+
 // ActionSpecs returns canonical specs for protected environment actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -99,22 +104,22 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 	"gitlab_protected_environment_list": {
 		usage:   "List the protected environments configured on a project, including their deploy access levels and approval rules. Use this when the prompt asks which project environments are gated or who can deploy to them.",
 		aliases: []string{"list project protected environments", "show project deployment gates", "which project environments are protected"},
-		related: []string{"environment.protected_get", "environment.list", "deployment.list"},
+		related: []string{actionEnvProtectedGet, "environment.list", "deployment.list"},
 	},
 	"gitlab_protected_environment_get": {
 		usage:   "Fetch a single project protected environment by name (including wildcard tiers such as production). Use after a list result or when the prompt names a concrete environment and you need its deploy access levels and approval rules.",
 		aliases: []string{"get project protected environment", "show deployment gate for an environment", "view environment protection settings"},
-		related: []string{"environment.protected_list", "environment.protected_update", "environment.protected_unprotect"},
+		related: []string{"environment.protected_list", "environment.protected_update", actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_protect": {
 		usage:   "Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]; require approvals via approval_rules with required_approvals.",
 		aliases: []string{"protect a project environment", "gate project deployments", "restrict who can deploy to an environment", "require deployment approvals"},
-		related: []string{"environment.protected_get", "environment.protected_update", "environment.protected_unprotect"},
+		related: []string{actionEnvProtectedGet, "environment.protected_update", actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_update": {
 		usage:   "Change the deploy access levels or approval rules on an already-protected project environment. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy or how many approvals a gated environment needs.",
 		aliases: []string{"update protected environment rules", "change deployment access levels", "adjust environment approval rules", "edit project deployment gate"},
-		related: []string{"environment.protected_get", "environment.protected_protect", "environment.protected_unprotect"},
+		related: []string{actionEnvProtectedGet, "environment.protected_protect", actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_unprotect": {
 		usage:   "Remove protection from a project environment (or wildcard tier), deleting its deployment gates and approval rules. Destructive; confirm project_id and the environment name before calling.",

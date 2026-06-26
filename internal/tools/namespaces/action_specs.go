@@ -5,6 +5,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionNamespaceGet    = "namespace.get"
+	actionGroupList       = "group.list"
+	actionNamespaceSearch = "namespace.search"
+)
+
 // ActionSpecs returns canonical specs for namespace actions exposed through gitlab_user.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -31,25 +37,25 @@ var namespaceActionMeta = map[string]namespaceActionMetaEntry{
 	"gitlab_namespace_list": {
 		usage:       "List namespaces (user and group namespaces) visible to the authenticated user. Use filters such as search, owned_only, top_level_only, order_by, sort, and pagination when scoping the result set.",
 		aliases:     []string{"list namespaces", "show namespaces", "list groups and user namespaces"},
-		related:     []string{"namespace.get", "namespace.search", "group.list", "project.list"},
+		related:     []string{actionNamespaceGet, actionNamespaceSearch, actionGroupList, "project.list"},
 		description: "List namespaces visible to the authenticated user. Returns: matching namespaces with id, name, path, kind, plan, seat usage, and pagination metadata. See also: gitlab_namespace_get, gitlab_namespace_search, gitlab_group_list.",
 	},
 	"gitlab_namespace_get": {
 		usage:       "Get one namespace by numeric ID or full path. Use after a list or search result, or when the prompt already names a concrete namespace.",
 		aliases:     []string{"get namespace", "show namespace details", "fetch namespace"},
-		related:     []string{"namespace.list", "namespace.search", "group.get"},
+		related:     []string{"namespace.list", actionNamespaceSearch, "group.get"},
 		description: "Get a single namespace by ID or path. Returns: the namespace with id, name, path, kind, full path, parent id, plan, trial state, and seat usage. See also: gitlab_namespace_list, gitlab_namespace_search.",
 	},
 	"gitlab_namespace_exists": {
 		usage:       "Check whether a namespace path is available before creating a group or project. Optionally scope the check to a parent namespace with parent_id.",
 		aliases:     []string{"check namespace availability", "namespace path exists", "is namespace taken"},
-		related:     []string{"namespace.get", "namespace.search", "group.create"},
+		related:     []string{actionNamespaceGet, actionNamespaceSearch, "group.create"},
 		description: "Check whether a namespace path is taken. Returns: an exists flag and suggested alternative paths when the path is unavailable. See also: gitlab_namespace_get, gitlab_namespace_search.",
 	},
 	"gitlab_namespace_search": {
 		usage:       "Search namespaces by query string across name and path. Use when the user provides a partial namespace name or path fragment.",
 		aliases:     []string{"search namespaces", "find namespace", "lookup namespace by name"},
-		related:     []string{"namespace.list", "namespace.get", "group.list"},
+		related:     []string{"namespace.list", actionNamespaceGet, actionGroupList},
 		description: "Search namespaces by name or path. Returns: matching namespaces with id, name, path, kind, and pagination metadata. See also: gitlab_namespace_list, gitlab_namespace_get.",
 	},
 }
@@ -75,7 +81,7 @@ func namespaceReadSpec(name string, route toolutil.ActionRoute, individualTool s
 		Aliases:           []string{individualTool},
 		Tags:              []string{"user", "namespace"},
 		Usage:             "Use to execute namespaces domain action.",
-		RelatedActions:    []string{"group.list", "project.list"},
+		RelatedActions:    []string{actionGroupList, "project.list"},
 		ParameterGuidance: guidance,
 		OpenWorld:         true,
 		OwnerPackage:      "namespaces",

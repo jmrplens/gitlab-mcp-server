@@ -11,9 +11,13 @@ import (
 
 // Canonical related-action IDs referenced across schedule discovery metadata.
 const (
-	actionScheduleList = "pipeline_schedule.schedule_list"
-	actionScheduleGet  = "pipeline_schedule.schedule_get"
-	actionPipelineList = "pipeline.list"
+	actionScheduleList      = "pipeline_schedule.schedule_list"
+	actionScheduleGet       = "pipeline_schedule.schedule_get"
+	actionScheduleUpdate    = "pipeline_schedule.schedule_update"
+	actionScheduleRun       = "pipeline_schedule.schedule_run"
+	actionPipelineList      = "pipeline.list"
+	paramScheduleID         = "schedule_id"
+	rolePipelineScheduleID  = "pipeline_schedule_id"
 )
 
 // ActionSpecs returns canonical specs for pipeline schedule actions.
@@ -100,10 +104,10 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_get": {
 		usage:   "Get one pipeline schedule by schedule_id. Use after listing schedules or when the prompt names a concrete schedule; the single-schedule payload includes last_pipeline, variables, and inputs.",
 		aliases: []string{"get pipeline schedule", "show schedule details", "fetch scheduled pipeline"},
-		related: []string{actionScheduleList, "pipeline_schedule.schedule_update", "pipeline_schedule.schedule_run"},
+		related: []string{actionScheduleList, actionScheduleUpdate, actionScheduleRun},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:     "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:     rolePipelineScheduleID,
 				ValueSource:      "Numeric schedule ID from a prior list, usually shown in the schedule URL.",
 				ExampleBinding:   "params.schedule_id:13",
 				CommonConfusions: []string{"schedule_id is the database ID, not the schedule description or cron string."},
@@ -114,7 +118,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_create": {
 		usage:   "Create a pipeline schedule in a project. Provide description, ref, and a 5-field cron expression; add cron_timezone, active, or inputs only when requested.",
 		aliases: []string{"create pipeline schedule", "schedule a pipeline", "add cron pipeline"},
-		related: []string{actionScheduleGet, actionScheduleList, "pipeline_schedule.schedule_update"},
+		related: []string{actionScheduleGet, actionScheduleList, actionScheduleUpdate},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"cron": {
 				SemanticRole:     "cron_expression",
@@ -135,8 +139,8 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		aliases: []string{"update pipeline schedule", "edit scheduled pipeline", "change schedule cron"},
 		related: []string{actionScheduleGet, "pipeline_schedule.schedule_take_ownership", actionScheduleList},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:   "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to edit, from a prior list or get.",
 				ExampleBinding: "params.schedule_id:13",
 			},
@@ -148,8 +152,8 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		aliases: []string{"delete pipeline schedule", "remove scheduled pipeline"},
 		related: []string{actionScheduleGet, actionScheduleList},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:   "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to delete, from a prior list or get.",
 				ExampleBinding: "params.schedule_id:13",
 			},
@@ -161,8 +165,8 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 		aliases: []string{"run pipeline schedule", "trigger scheduled pipeline now", "play schedule"},
 		related: []string{actionScheduleGet, "pipeline_schedule.schedule_list_triggered_pipelines", "pipeline_schedule.schedule_take_ownership"},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:   "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to trigger, from a prior list or get.",
 				ExampleBinding: "params.schedule_id:13",
 			},
@@ -172,10 +176,10 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_take_ownership": {
 		usage:   "Take ownership of a pipeline schedule so the authenticated user becomes its owner. Requires Maintainer+ and is a prerequisite for editing or running schedules owned by others.",
 		aliases: []string{"take ownership of pipeline schedule", "claim schedule ownership", "become schedule owner"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_update", "pipeline_schedule.schedule_run"},
+		related: []string{actionScheduleGet, actionScheduleUpdate, actionScheduleRun},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:   "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule whose ownership to take.",
 				ExampleBinding: "params.schedule_id:13",
 			},
@@ -225,10 +229,10 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_list_triggered_pipelines": {
 		usage:   "List the pipelines that a schedule has triggered. Use order-independent offset or keyset pagination for long histories.",
 		aliases: []string{"list pipelines triggered by schedule", "show scheduled pipeline runs", "schedule run history"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_run", actionPipelineList},
+		related: []string{actionScheduleGet, actionScheduleRun, actionPipelineList},
 		guidance: map[string]toolutil.ParameterGuidance{
-			"schedule_id": {
-				SemanticRole:   "pipeline_schedule_id",
+			paramScheduleID: {
+				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule whose triggered pipelines to list.",
 				ExampleBinding: "params.schedule_id:13",
 			},

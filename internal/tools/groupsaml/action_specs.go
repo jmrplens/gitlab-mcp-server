@@ -5,6 +5,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionGroupSAMLLinkAdd = "group.saml_link_add"
+
 // ActionSpecs returns canonical specs for group SAML link actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -42,7 +44,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_group_saml_link_list":
 		options.Usage = "List the SAML group links configured on a group (Premium/Ultimate). Use to see which SAML group names map to access levels. To list the actual users provisioned through SAML SSO, use gitlab_group_saml_users_list instead."
 		options.Aliases = []string{"list saml links", "show group saml links", "saml group mappings"}
-		options.RelatedActions = []string{"group.get", "group.saml_link_add", "group.saml_users_list"}
+		options.RelatedActions = []string{"group.get", actionGroupSAMLLinkAdd, "group.saml_users_list"}
 		options.IndividualTool.Description = "List a GitLab group's SAML group links. Returns: each link's SAML group name, access level, and provider. See also: gitlab_group_saml_users_list, gitlab_group_saml_link_add, gitlab_group_get."
 	case "gitlab_group_saml_users_list":
 		options.Usage = "List the users provisioned via SAML SSO for a top-level group (Premium/Ultimate). Use when the user asks which accounts came in through the group's SAML SSO, distinct from group SAML *links* (which map SAML group names to access levels)."
@@ -64,7 +66,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_group_saml_link_get":
 		options.Usage = "Get a single SAML group link on a group by its SAML group name (Premium/Ultimate). Use to inspect the access level and provider for one specific SAML SSO group mapping rather than listing them all."
 		options.Aliases = []string{"get saml link", "show one saml group mapping", "inspect saml group link", "fetch saml sso mapping"}
-		options.RelatedActions = []string{"group.saml_link_list", "group.saml_link_add", "group.saml_link_delete"}
+		options.RelatedActions = []string{"group.saml_link_list", actionGroupSAMLLinkAdd, "group.saml_link_delete"}
 		options.IndividualTool.Description = "Get one SAML group link of a GitLab group by SAML group name. Returns: the link's SAML group name, access level, and provider. See also: gitlab_group_saml_link_list, gitlab_group_saml_link_add, gitlab_group_saml_link_delete."
 	case "gitlab_group_saml_link_add":
 		options.Usage = "Add a SAML group link mapping a SAML group name to an access level (Premium/Ultimate)."
@@ -73,7 +75,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_group_saml_link_delete":
 		options.Usage = "Delete a SAML group link from a group by its SAML group name (Premium/Ultimate). Removes the mapping between a SAML SSO group and its access level; existing members are not removed."
 		options.Aliases = []string{"delete saml link", "remove group saml mapping", "unlink saml group", "drop saml sso mapping"}
-		options.RelatedActions = []string{"group.saml_link_list", "group.saml_link_get", "group.saml_link_add"}
+		options.RelatedActions = []string{"group.saml_link_list", "group.saml_link_get", actionGroupSAMLLinkAdd}
 		options.IndividualTool.Description = "Delete a SAML group link from a GitLab group by SAML group name. Returns: a confirmation that the SAML group mapping was removed (members are not deleted). See also: gitlab_group_saml_link_list, gitlab_group_saml_link_get, gitlab_group_saml_link_add."
 	}
 

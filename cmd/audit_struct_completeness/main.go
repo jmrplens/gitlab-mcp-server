@@ -53,6 +53,20 @@ const (
 	// slice-of-element field plus pagination); they are validated through the
 	// element converter, never paired against the wrapper. See nonResultSDKStruct.
 	responseStructName = "Response"
+
+	docJobsSingle        = "jobs.md#get-a-single-job"
+	docGroupEpicBoards   = "group_epic_boards.md"
+	docGroupBoards       = "group_boards.md"
+	docEnvRetrieve       = "environments.md#retrieve-an-environment"
+	docDeployments       = "deployments.md"
+	docBoards            = "boards.md"
+	docPipelineSched     = "pipeline_schedules.md"
+	docCommitSignature   = "commits.md#get-the-signature-of-a-commit"
+	docPipelineTriggers  = "pipeline_triggers.md"
+	docMRApprovals       = "merge_request_approvals.md"
+	tagKeyJSON           = "json"
+	typNameString        = "string"
+	typNameInt64         = "int64"
 )
 
 // acceptedOutputRenames suppresses specific MCP output json tags from
@@ -101,52 +115,52 @@ var curatedRefSubsets = map[string]string{
 	//
 	// environments — nested objects of the "Retrieve an environment" response
 	// (doc/api/environments.md#retrieve-an-environment).
-	"environments.ClusterAgentOutput":       "environments.md#retrieve-an-environment",
-	"environments.ConfigProjectOutput":      "environments.md#retrieve-an-environment",
-	"environments.DeploymentOutput":         "environments.md#retrieve-an-environment",
-	"environments.DeploymentUserOutput":     "environments.md#retrieve-an-environment",
-	"environments.DeployableOutput":         "environments.md#retrieve-an-environment",
-	"environments.DeployableUserOutput":     "environments.md#retrieve-an-environment",
-	"environments.DeployableCommitOutput":   "environments.md#retrieve-an-environment",
-	"environments.DeployablePipelineOutput": "environments.md#retrieve-an-environment",
-	"environments.DeployableRunnerOutput":   "environments.md#retrieve-an-environment",
+	"environments.ClusterAgentOutput":       docEnvRetrieve,
+	"environments.ConfigProjectOutput":      docEnvRetrieve,
+	"environments.DeploymentOutput":         docEnvRetrieve,
+	"environments.DeploymentUserOutput":     docEnvRetrieve,
+	"environments.DeployableOutput":         docEnvRetrieve,
+	"environments.DeployableUserOutput":     docEnvRetrieve,
+	"environments.DeployableCommitOutput":   docEnvRetrieve,
+	"environments.DeployablePipelineOutput": docEnvRetrieve,
+	"environments.DeployableRunnerOutput":   docEnvRetrieve,
 
 	// jobs — nested objects of the job response (doc/api/jobs.md#get-a-single-job).
-	"jobs.CommitObject":       "jobs.md#get-a-single-job",
-	"jobs.RunnerObject":       "jobs.md#get-a-single-job",
-	"jobs.UserObject":         "jobs.md#get-a-single-job",
-	"jobs.ProjectObject":      "jobs.md#get-a-single-job",
-	"jobs.PipelineObject":     "jobs.md#get-a-single-job",
+	"jobs.CommitObject":       docJobsSingle,
+	"jobs.RunnerObject":       docJobsSingle,
+	"jobs.UserObject":         docJobsSingle,
+	"jobs.ProjectObject":      docJobsSingle,
+	"jobs.PipelineObject":     docJobsSingle,
 	"jobs.PipelineInfoObject": "jobs.md#list-pipeline-trigger-jobs",
 
 	// boards — nested objects of the board / board-list responses (doc/api/boards.md).
-	"boards.ProjectOutput":           "boards.md",
-	"boards.MilestoneOutput":         "boards.md",
-	"boards.BasicUserOutput":         "boards.md",
-	"boards.LabelOutput":             "boards.md",
-	"boards.LabelDetailsOutput":      "boards.md",
-	"boards.BoardListAssigneeOutput": "boards.md",
-	"boards.IterationOutput":         "boards.md",
+	"boards.ProjectOutput":           docBoards,
+	"boards.MilestoneOutput":         docBoards,
+	"boards.BasicUserOutput":         docBoards,
+	"boards.LabelOutput":             docBoards,
+	"boards.LabelDetailsOutput":      docBoards,
+	"boards.BoardListAssigneeOutput": docBoards,
+	"boards.IterationOutput":         docBoards,
 
 	// deployments — nested objects of the deployment response (doc/api/deployments.md).
-	"deployments.UserOutput":               "deployments.md",
-	"deployments.EnvironmentOutput":        "deployments.md",
-	"deployments.DeployableOutput":         "deployments.md",
-	"deployments.DeployableUserOutput":     "deployments.md",
-	"deployments.DeployableCommitOutput":   "deployments.md",
-	"deployments.DeployablePipelineOutput": "deployments.md",
-	"deployments.DeployableRunnerOutput":   "deployments.md",
+	"deployments.UserOutput":               docDeployments,
+	"deployments.EnvironmentOutput":        docDeployments,
+	"deployments.DeployableOutput":         docDeployments,
+	"deployments.DeployableUserOutput":     docDeployments,
+	"deployments.DeployableCommitOutput":   docDeployments,
+	"deployments.DeployablePipelineOutput": docDeployments,
+	"deployments.DeployableRunnerOutput":   docDeployments,
 
 	// pipelineschedules — nested objects of the schedule response (doc/api/pipeline_schedules.md).
-	"pipelineschedules.OwnerOutput":             "pipeline_schedules.md",
-	"pipelineschedules.LastPipelineOutput":      "pipeline_schedules.md",
-	"pipelineschedules.VariableObject":          "pipeline_schedules.md",
-	"pipelineschedules.TriggeredPipelineOutput": "pipeline_schedules.md",
+	"pipelineschedules.OwnerOutput":             docPipelineSched,
+	"pipelineschedules.LastPipelineOutput":      docPipelineSched,
+	"pipelineschedules.VariableObject":          docPipelineSched,
+	"pipelineschedules.TriggeredPipelineOutput": docPipelineSched,
 
 	// mrapprovals — nested user/group reference objects of the approval-rule /
 	// approval-state responses (doc/api/merge_request_approvals.md).
-	"mrapprovals.BasicUserOutput": "merge_request_approvals.md",
-	"mrapprovals.GroupOutput":     "merge_request_approvals.md",
+	"mrapprovals.BasicUserOutput": docMRApprovals,
+	"mrapprovals.GroupOutput":     docMRApprovals,
 
 	// projects — owner is a documented identity subset of the full gl.User
 	// (doc/api/projects.md owner.* attribute table).
@@ -158,23 +172,23 @@ var curatedRefSubsets = map[string]string{
 	"groupmarkdownuploads.UploadedByOutput": "group_markdown_uploads.md",
 
 	// groupboards — nested refs of the group-board responses (doc/api/group_boards.md).
-	"groupboards.GroupRefOutput":     "group_boards.md",
-	"groupboards.MilestoneOutput":    "group_boards.md",
-	"groupboards.BasicUserOutput":    "group_boards.md",
-	"groupboards.LabelDetailsOutput": "group_boards.md",
-	"groupboards.LabelOutput":        "group_boards.md",
+	"groupboards.GroupRefOutput":     docGroupBoards,
+	"groupboards.MilestoneOutput":    docGroupBoards,
+	"groupboards.BasicUserOutput":    docGroupBoards,
+	"groupboards.LabelDetailsOutput": docGroupBoards,
+	"groupboards.LabelOutput":        docGroupBoards,
 
 	// groupepicboards — nested refs of the epic-board responses (doc/api/group_epic_boards.md).
-	"groupepicboards.GroupRefOutput":     "group_epic_boards.md",
-	"groupepicboards.ListLabelOutput":    "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput": "group_epic_boards.md",
-	"groupepicboards.BoardListOutput":    "group_epic_boards.md",
+	"groupepicboards.GroupRefOutput":     docGroupEpicBoards,
+	"groupepicboards.ListLabelOutput":    docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput": docGroupEpicBoards,
+	"groupepicboards.BoardListOutput":    docGroupEpicBoards,
 
 	// pipelinetriggers — owner/user are documented identity subsets of gl.User
 	// (doc/api/pipeline_triggers.md).
-	"pipelinetriggers.UserOutput":           "pipeline_triggers.md",
-	"pipelinetriggers.BasicUserOutput":      "pipeline_triggers.md",
-	"pipelinetriggers.DetailedStatusOutput": "pipeline_triggers.md",
+	"pipelinetriggers.UserOutput":           docPipelineTriggers,
+	"pipelinetriggers.BasicUserOutput":      docPipelineTriggers,
+	"pipelinetriggers.DetailedStatusOutput": docPipelineTriggers,
 
 	// releases / groupreleases — author and commit are documented subsets
 	// (doc/api/releases/_index.md, doc/api/group_releases.md).
@@ -207,7 +221,7 @@ var docOmittedFields = map[string]string{
 	"environments.Output.project": "environments.md (list/get/create/update response)",
 	// jobs: the job response nests pipeline.id; there is no top-level pipeline_id
 	// (the old MCP pipeline_id was a flattened convenience scalar, now removed).
-	"jobs.Output.pipeline_id": "jobs.md#get-a-single-job",
+	"jobs.Output.pipeline_id": docJobsSingle,
 }
 
 // isDocOmittedField reports whether an SDK field is a doc-justified intentional
@@ -228,14 +242,14 @@ func isDocOmittedField(pkg, mcpType, tag string) bool {
 var docAddedFields = map[string]string{
 	// jobs — documented in doc/api/jobs.md but absent from gl.Job / gl.JobRunner;
 	// fetched via raw REST (rawGetJob/rawListJobs into the jobAPI superset).
-	"jobs.Output.archived":          "jobs.md#get-a-single-job",
-	"jobs.Output.source":            "jobs.md#get-a-single-job",
-	"jobs.Output.runner_manager":    "jobs.md#get-a-single-job",
-	"jobs.RunnerObject.ip_address":  "jobs.md#get-a-single-job",
-	"jobs.RunnerObject.online":      "jobs.md#get-a-single-job",
-	"jobs.RunnerObject.paused":      "jobs.md#get-a-single-job",
-	"jobs.RunnerObject.runner_type": "jobs.md#get-a-single-job",
-	"jobs.RunnerObject.status":      "jobs.md#get-a-single-job",
+	"jobs.Output.archived":          docJobsSingle,
+	"jobs.Output.source":            docJobsSingle,
+	"jobs.Output.runner_manager":    docJobsSingle,
+	"jobs.RunnerObject.ip_address":  docJobsSingle,
+	"jobs.RunnerObject.online":      docJobsSingle,
+	"jobs.RunnerObject.paused":      docJobsSingle,
+	"jobs.RunnerObject.runner_type": docJobsSingle,
+	"jobs.RunnerObject.status":      docJobsSingle,
 
 	// boards — limit_metric is documented in doc/api/boards.md on each board list
 	// (all_metrics / issue_count / issue_weights, or null) but absent from
@@ -246,46 +260,46 @@ var docAddedFields = map[string]string{
 	// deployments — deployable.project {ci_job_token_scope_enabled} is documented in
 	// doc/api/deployments.md but absent from gl.DeploymentDeployable; fetched via raw
 	// REST (rawGetDeployment/rawListDeployments into the deploymentAPI superset).
-	"deployments.DeployableOutput.project": "deployments.md",
+	"deployments.DeployableOutput.project": docDeployments,
 
 	// pipelineschedules — variables[].raw is documented on the single-schedule
 	// response but absent from gl.PipelineVariable; fetched via raw REST
 	// (rawGetSchedule into the rawScheduleAPI superset).
-	"pipelineschedules.VariableObject.raw": "pipeline_schedules.md",
+	"pipelineschedules.VariableObject.raw": docPipelineSched,
 
 	// mrapprovals — approval rule `overridden` is documented (approval_state/list/
 	// create/update rule responses) but absent from gl.MergeRequestApprovalRule;
 	// fetched via raw REST (rawApprovalState/rawListApprovalRules/rawMutateApprovalRule).
-	"mrapprovals.RuleOutput.overridden": "merge_request_approvals.md",
+	"mrapprovals.RuleOutput.overridden": docMRApprovals,
 
 	// groupboards — documented in doc/api/group_boards.md but absent from
 	// gl.GroupIssueBoard; fetched via raw REST (rawListGroupBoards/rawGetGroupBoard/
 	// rawCreateGroupBoard/rawUpdateGroupBoard into the groupIssueBoardAPI superset).
-	"groupboards.GroupBoardOutput.hide_backlog_list": "group_boards.md",
-	"groupboards.GroupBoardOutput.hide_closed_list":  "group_boards.md",
-	"groupboards.GroupBoardOutput.assignee":          "group_boards.md",
-	"groupboards.GroupBoardOutput.weight":            "group_boards.md",
+	"groupboards.GroupBoardOutput.hide_backlog_list": docGroupBoards,
+	"groupboards.GroupBoardOutput.hide_closed_list":  docGroupBoards,
+	"groupboards.GroupBoardOutput.assignee":          docGroupBoards,
+	"groupboards.GroupBoardOutput.weight":            docGroupBoards,
 
 	// groupepicboards — documented in doc/api/group_epic_boards.md but absent from
 	// gl.GroupEpicBoard / gl.BoardList / gl.LabelDetails; fetched via raw REST superset.
-	"groupepicboards.Output.hide_backlog_list":      "group_epic_boards.md",
-	"groupepicboards.Output.hide_closed_list":       "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.title":      "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.group_id":   "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.project_id": "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.template":   "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.created_at": "group_epic_boards.md",
-	"groupepicboards.LabelDetailsOutput.updated_at": "group_epic_boards.md",
-	"groupepicboards.BoardListOutput.list_type":     "group_epic_boards.md",
-	"groupepicboards.BoardListOutput.collapsed":     "group_epic_boards.md",
+	"groupepicboards.Output.hide_backlog_list":      docGroupEpicBoards,
+	"groupepicboards.Output.hide_closed_list":       docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.title":      docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.group_id":   docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.project_id": docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.template":   docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.created_at": docGroupEpicBoards,
+	"groupepicboards.LabelDetailsOutput.updated_at": docGroupEpicBoards,
+	"groupepicboards.BoardListOutput.list_type":     docGroupEpicBoards,
+	"groupepicboards.BoardListOutput.collapsed":     docGroupEpicBoards,
 
 	// commits — the commit signature endpoint documents SSH/X.509 signature fields
 	// absent from gl.GPGSignature; fetched via raw REST (rawGetGPGSignature into the
 	// gpgSignatureAPI superset). Citation: commits.md#get-the-signature-of-a-commit.
-	"commits.GPGSignatureOutput.signature_type":   "commits.md#get-the-signature-of-a-commit",
-	"commits.GPGSignatureOutput.commit_source":    "commits.md#get-the-signature-of-a-commit",
-	"commits.GPGSignatureOutput.key":              "commits.md#get-the-signature-of-a-commit",
-	"commits.GPGSignatureOutput.x509_certificate": "commits.md#get-the-signature-of-a-commit",
+	"commits.GPGSignatureOutput.signature_type":   docCommitSignature,
+	"commits.GPGSignatureOutput.commit_source":    docCommitSignature,
+	"commits.GPGSignatureOutput.key":              docCommitSignature,
+	"commits.GPGSignatureOutput.x509_certificate": docCommitSignature,
 
 	// projectimportexport — the import-status response documents `created_at`, but the
 	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the
@@ -646,7 +660,7 @@ func outputGroups(pairs map[[2]string]structPair) []outputGroup {
 // the SDK type in EVERY pairing that carries that tag, so a field that is
 // compatible in at least one pairing is not double-flagged.
 func diffOutputGroup(pkg string, group outputGroup) gap {
-	mcpFields := flattenFields(group.mcpType, []string{"json"})
+	mcpFields := flattenFields(group.mcpType, []string{tagKeyJSON})
 
 	// unionSDK maps each SDK json tag to one representative SDK type string (used
 	// for the missing-field SDKType label). sdkTypesByTag collects every SDK type
@@ -656,7 +670,7 @@ func diffOutputGroup(pkg string, group outputGroup) gap {
 	sdkNames := make([]string, 0, len(group.pairs))
 	for _, pair := range group.pairs {
 		sdkNames = append(sdkNames, pair.sdkName)
-		for tag, sdkType := range flattenFields(pair.sdkType, []string{"json"}) {
+		for tag, sdkType := range flattenFields(pair.sdkType, []string{tagKeyJSON}) {
 			if _, ok := unionSDK[tag]; !ok {
 				unionSDK[tag] = sdkType
 			}
@@ -845,10 +859,10 @@ func handlerInputStruct(pkg *packages.Package, fn *ast.FuncDecl) (*types.Named, 
 // input-only. SDK fields absent from the MCP struct are MISSING (R-INPUT);
 // fields present but type-divergent are advisory TypeMismatches.
 func diffPair(pkg, kind string, pair structPair) gap {
-	mcpFields := flattenFields(pair.mcpType, []string{"json"})
-	sdkTagKeys := []string{"json"}
+	mcpFields := flattenFields(pair.mcpType, []string{tagKeyJSON})
+	sdkTagKeys := []string{tagKeyJSON}
 	if pair.sdkURLTags {
-		sdkTagKeys = []string{"url", "json"}
+		sdkTagKeys = []string{"url", tagKeyJSON}
 	}
 	sdkFields := flattenFields(pair.sdkType, sdkTagKeys)
 
@@ -891,15 +905,15 @@ func diffPair(pkg, kind string, pair structPair) gap {
 // field overlap.
 func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
 	mcp = map[string]struct{}{}
-	for tag := range flattenFields(pair.mcpType, []string{"json"}) {
+	for tag := range flattenFields(pair.mcpType, []string{tagKeyJSON}) {
 		if tag != "" && tag != "-" {
 			mcp[tag] = struct{}{}
 		}
 	}
 	sdk = map[string]struct{}{}
-	sdkKeys := []string{"json"}
+	sdkKeys := []string{tagKeyJSON}
 	if pair.sdkURLTags {
-		sdkKeys = []string{"url", "json"}
+		sdkKeys = []string{"url", tagKeyJSON}
 	}
 	for tag := range flattenFields(pair.sdkType, sdkKeys) {
 		if tag != "" && tag != "-" {
@@ -1093,10 +1107,10 @@ func typesCompatible(mcpType, sdkType string) bool {
 		return true
 	}
 	// SDK enum/value types projected to scalars.
-	if strings.HasSuffix(sdk, "value") && (mcp == "int" || mcp == "string" || mcp == "int64") {
+	if strings.HasSuffix(sdk, "value") && (mcp == "int" || mcp == typNameString || mcp == typNameInt64) {
 		return true
 	}
-	if sdkTimeLike(sdk) && (mcp == "string" || mcp == "int64") {
+	if sdkTimeLike(sdk) && (mcp == typNameString || mcp == typNameInt64) {
 		return true
 	}
 	// SDK label collections (LabelOptions/Labels, both defined as []string) are
@@ -1121,7 +1135,7 @@ func normalizeType(s string) string {
 
 func scalarLike(s string) bool {
 	switch s {
-	case "int", "int64", "int32", "float64", "float32", "bool", "string":
+	case "int", typNameInt64, "int32", "float64", "float32", "bool", typNameString:
 		return true
 	default:
 		return false

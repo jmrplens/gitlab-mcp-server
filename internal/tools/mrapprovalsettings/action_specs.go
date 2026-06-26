@@ -5,6 +5,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionMRApprovalsGetState = "mrapprovals.get_state"
+
 // ActionSpecs returns canonical specs for merge request approval settings actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -41,25 +43,25 @@ var approvalSettingsMeta = map[string]approvalSettingsMetaEntry{
 	"gitlab_get_group_mr_approval_settings": {
 		usage:          "Read the merge request approval settings for a group. Use this to inspect inherited and locked approval policy before updating a group or any of its projects.",
 		aliases:        []string{"get group mr approval settings", "show group approval settings", "view group merge request approval policy"},
-		relatedActions: []string{"approval_settings_group_update", "mrapprovals.get_state", "group.get"},
+		relatedActions: []string{"approval_settings_group_update", actionMRApprovalsGetState, "group.get"},
 		description:    "Read the merge request approval settings of a group. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_group_mr_approval_settings, gitlab_get_project_mr_approval_settings.",
 	},
 	"gitlab_update_group_mr_approval_settings": {
 		usage:          "Update the merge request approval settings for a group. Set only the fields you want to change; omitted fields are left unchanged. Group-level changes can lock the corresponding setting for projects in the group.",
 		aliases:        []string{"update group mr approval settings", "change group approval settings", "set group merge request approval policy"},
-		relatedActions: []string{"approval_settings_group_get", "mrapprovals.get_state", "group.get"},
+		relatedActions: []string{"approval_settings_group_get", actionMRApprovalsGetState, "group.get"},
 		description:    "Update the merge request approval settings of a group. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_group_mr_approval_settings, gitlab_update_project_mr_approval_settings.",
 	},
 	"gitlab_get_project_mr_approval_settings": {
 		usage:          "Read the merge request approval settings for a project. Use this to inspect the effective approval policy, including which settings are locked by the parent group.",
 		aliases:        []string{"get project mr approval settings", "show project approval settings", "view project merge request approval policy"},
-		relatedActions: []string{"approval_settings_project_update", "mrapprovals.get_state", "project.get"},
+		relatedActions: []string{"approval_settings_project_update", actionMRApprovalsGetState, "project.get"},
 		description:    "Read the merge request approval settings of a project. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_project_mr_approval_settings, gitlab_get_group_mr_approval_settings.",
 	},
 	"gitlab_update_project_mr_approval_settings": {
 		usage:          "Update the merge request approval settings for a project. Set only the fields you want to change; omitted fields are left unchanged. Settings locked by the parent group cannot be overridden here.",
 		aliases:        []string{"update project mr approval settings", "change project approval settings", "set project merge request approval policy"},
-		relatedActions: []string{"approval_settings_project_get", "mrapprovals.get_state", "project.get"},
+		relatedActions: []string{"approval_settings_project_get", actionMRApprovalsGetState, "project.get"},
 		description:    "Update the merge request approval settings of a project. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_project_mr_approval_settings, gitlab_update_group_mr_approval_settings.",
 	},
 }

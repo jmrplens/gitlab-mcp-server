@@ -5,6 +5,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionIssueGet                 = "issue.get"
+	actionMRGet                    = "merge_request.get"
+	actionIssueLabelList           = "issue.event_issue_label_list"
+	actionIssueStatList            = "issue.event_issue_state_list"
+	actionIssueLabelGet            = "issue.event_issue_label_get"
+	actionIssueStateGet            = "issue.event_issue_state_get"
+	actionIssueMilestoneList       = "issue.event_issue_milestone_list"
+	actionIssueMilestoneGet        = "issue.event_issue_milestone_get"
+	actionMRStatList               = "merge_request.event_mr_state_list"
+	actionMRStatGet                = "merge_request.event_mr_state_get"
+	actionMRMilestoneList          = "merge_request.event_mr_milestone_list"
+	actionMRMilestoneGet           = "merge_request.event_mr_milestone_get"
+	actionMRLabelList              = "merge_request.event_mr_label_list"
+	actionMRLabelGet               = "merge_request.event_mr_label_get"
+	domainResourceEvents           = "resourceevents"
+	tagResourceEvent               = "resource_event"
+	usageDefault                   = "Use to execute resourceevents domain action."
+	editionPremium                 = "premium"
+)
+
 // IssueActionSpecs returns canonical specs for issue resource event actions.
 func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -25,7 +46,7 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // Issue iteration and weight events depend on iterations/weights, which are
 // GitLab Premium features.
 func issueEventPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
-	spec.Edition = "premium"
+	spec.Edition = editionPremium
 	return spec
 }
 
@@ -37,9 +58,9 @@ func issueEventReadSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func issueEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"issue", "resource_event"},
+		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"issue", tagResourceEvent},
 		OpenWorld:      true,
-		OwnerPackage:   "resourceevents",
+		OwnerPackage: domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -64,15 +85,15 @@ func mergeRequestEventReadSpec(name string, route toolutil.ActionRoute, individu
 
 func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"merge_request", "resource_event"},
+		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"merge_request", tagResourceEvent},
 		OpenWorld:      true,
-		OwnerPackage:   "resourceevents",
+		OwnerPackage: domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
 
 // EpicActionSpecs returns canonical specs for group epic resource event actions.
-// Epic label events are a GitLab Premium/Ultimate (Edition: "premium") feature.
+// Epic label events are a GitLab Premium/Ultimate (Edition: editionPremium) feature.
 func EpicActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		epicEventReadSpec("event_epic_label_list", toolutil.RouteAction(client, ListGroupEpicLabelEvents), "gitlab_list_group_epic_label_events"),
@@ -88,10 +109,10 @@ func epicEventReadSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func epicEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"group", "epic", "resource_event"},
-		Edition:        "premium",
+		Aliases: []string{individualTool}, Usage: usageDefault, Tags: []string{"group", "epic", tagResourceEvent},
+		Edition: editionPremium,
 		OpenWorld:      true,
-		OwnerPackage:   "resourceevents",
+		OwnerPackage: domainResourceEvents,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -137,25 +158,25 @@ var eventActionMeta = map[string]eventActionMetaEntry{
 		usage:       "List the label-change audit events for one issue (when each label was added or removed and by whom).",
 		aliases:     []string{"list issue label events", "issue label history", "label changes on issue"},
 		description: "List label events for an issue. Returns: label events with action, the label object, the acting user, and pagination metadata. See also: gitlab_issue_label_event_get, gitlab_issue_get.",
-		related:     []string{"issue.event_issue_label_get", "issue.event_issue_milestone_list", "issue.event_issue_state_list", "issue.get"},
+		related:     []string{actionIssueLabelGet, actionIssueMilestoneList, actionIssueStatList, actionIssueGet},
 	},
 	"gitlab_issue_label_event_get": {
 		usage:       "Fetch one issue label-change event by id (a single add/remove of a label).",
 		aliases:     []string{"get issue label event", "show issue label change"},
 		description: "Get a single label event for an issue. Returns: the event with action, the label object, and the acting user. See also: gitlab_issue_label_event_list.",
-		related:     []string{"issue.event_issue_label_list", "issue.event_issue_milestone_get", "issue.event_issue_state_get", "issue.get"},
+		related:     []string{actionIssueLabelList, actionIssueMilestoneGet, actionIssueStateGet, actionIssueGet},
 	},
 	"gitlab_mr_label_event_list": {
 		usage:       "List the label-change audit events for one merge request (when each label was added or removed and by whom).",
 		aliases:     []string{"list mr label events", "merge request label history", "label changes on mr"},
 		description: "List label events for a merge request. Returns: label events with action, the label object, the acting user, and pagination metadata. See also: gitlab_mr_label_event_get, gitlab_mr_get.",
-		related:     []string{"merge_request.event_mr_label_get", "merge_request.event_mr_milestone_list", "merge_request.event_mr_state_list", "merge_request.get"},
+		related:     []string{actionMRLabelGet, actionMRMilestoneList, actionMRStatList, actionMRGet},
 	},
 	"gitlab_mr_label_event_get": {
 		usage:       "Fetch one merge request label-change event by id (a single add/remove of a label).",
 		aliases:     []string{"get mr label event", "show merge request label change"},
 		description: "Get a single label event for a merge request. Returns: the event with action, the label object, and the acting user. See also: gitlab_mr_label_event_list.",
-		related:     []string{"merge_request.event_mr_label_list", "merge_request.event_mr_milestone_get", "merge_request.event_mr_state_get", "merge_request.get"},
+		related:     []string{actionMRLabelList, actionMRMilestoneGet, actionMRStatGet, actionMRGet},
 	},
 	"gitlab_list_group_epic_label_events": {
 		usage:       "List the label-change audit events for one group epic (when each label was added or removed and by whom). Requires GitLab Premium/Ultimate.",
@@ -173,66 +194,66 @@ var eventActionMeta = map[string]eventActionMetaEntry{
 		usage:       "List the milestone-change audit events for one issue (when the milestone was assigned or removed and by whom).",
 		aliases:     []string{"list issue milestone events", "issue milestone history", "milestone changes on issue"},
 		description: "List milestone events for an issue. Returns: milestone events with action, the milestone object, the acting user, and pagination metadata. See also: gitlab_issue_milestone_event_get, gitlab_issue_get.",
-		related:     []string{"issue.event_issue_milestone_get", "issue.event_issue_label_list", "issue.event_issue_state_list", "issue.get"},
+		related:     []string{actionIssueMilestoneGet, actionIssueLabelList, actionIssueStatList, actionIssueGet},
 	},
 	"gitlab_issue_milestone_event_get": {
 		usage:       "Fetch one issue milestone-change event by id (a single milestone assignment or removal).",
 		aliases:     []string{"get issue milestone event", "show issue milestone change"},
 		description: "Get a single milestone event for an issue. Returns: the event with action, the milestone object, and the acting user. See also: gitlab_issue_milestone_event_list.",
-		related:     []string{"issue.event_issue_milestone_list", "issue.event_issue_label_get", "issue.event_issue_state_get", "issue.get"},
+		related:     []string{actionIssueMilestoneList, actionIssueLabelGet, actionIssueStateGet, actionIssueGet},
 	},
 	"gitlab_mr_milestone_event_list": {
 		usage:       "List the milestone-change audit events for one merge request (when the milestone was assigned or removed and by whom).",
 		aliases:     []string{"list mr milestone events", "merge request milestone history", "milestone changes on mr"},
 		description: "List milestone events for a merge request. Returns: milestone events with action, the milestone object, the acting user, and pagination metadata. See also: gitlab_mr_milestone_event_get, gitlab_mr_get.",
-		related:     []string{"merge_request.event_mr_milestone_get", "merge_request.event_mr_label_list", "merge_request.event_mr_state_list", "merge_request.get"},
+		related:     []string{actionMRMilestoneGet, actionMRLabelList, actionMRStatList, actionMRGet},
 	},
 	"gitlab_mr_milestone_event_get": {
 		usage:       "Fetch one merge request milestone-change event by id (a single milestone assignment or removal).",
 		aliases:     []string{"get mr milestone event", "show merge request milestone change"},
 		description: "Get a single milestone event for a merge request. Returns: the event with action, the milestone object, and the acting user. See also: gitlab_mr_milestone_event_list.",
-		related:     []string{"merge_request.event_mr_milestone_list", "merge_request.event_mr_label_get", "merge_request.event_mr_state_get", "merge_request.get"},
+		related:     []string{actionMRMilestoneList, actionMRLabelGet, actionMRStatGet, actionMRGet},
 	},
 	"gitlab_issue_state_event_list": {
 		usage:       "List the state-change audit events for one issue (close and reopen transitions and who made them).",
 		aliases:     []string{"list issue state events", "issue state history", "issue close reopen history"},
 		description: "List state events for an issue. Returns: state events with the state value, the acting user, and pagination metadata. See also: gitlab_issue_state_event_get, gitlab_issue_get.",
-		related:     []string{"issue.event_issue_state_get", "issue.event_issue_label_list", "issue.event_issue_milestone_list", "issue.get"},
+		related:     []string{actionIssueStateGet, actionIssueLabelList, actionIssueMilestoneList, actionIssueGet},
 	},
 	"gitlab_issue_state_event_get": {
 		usage:       "Fetch one issue state-change event by id (a single close or reopen transition).",
 		aliases:     []string{"get issue state event", "show issue state change"},
 		description: "Get a single state event for an issue. Returns: the event with the state value and the acting user. See also: gitlab_issue_state_event_list.",
-		related:     []string{"issue.event_issue_state_list", "issue.event_issue_label_get", "issue.event_issue_milestone_get", "issue.get"},
+		related:     []string{actionIssueStatList, actionIssueLabelGet, actionIssueMilestoneGet, actionIssueGet},
 	},
 	"gitlab_mr_state_event_list": {
 		usage:       "List the state-change audit events for one merge request (close, reopen, and merge transitions and who made them).",
 		aliases:     []string{"list mr state events", "merge request state history", "mr close reopen merge history"},
 		description: "List state events for a merge request. Returns: state events with the state value, the acting user, and pagination metadata. See also: gitlab_mr_state_event_get, gitlab_mr_get.",
-		related:     []string{"merge_request.event_mr_state_get", "merge_request.event_mr_label_list", "merge_request.event_mr_milestone_list", "merge_request.get"},
+		related:     []string{actionMRStatGet, actionMRLabelList, actionMRMilestoneList, actionMRGet},
 	},
 	"gitlab_mr_state_event_get": {
 		usage:       "Fetch one merge request state-change event by id (a single close, reopen, or merge transition).",
 		aliases:     []string{"get mr state event", "show merge request state change"},
 		description: "Get a single state event for a merge request. Returns: the event with the state value and the acting user. See also: gitlab_mr_state_event_list.",
-		related:     []string{"merge_request.event_mr_state_list", "merge_request.event_mr_label_get", "merge_request.event_mr_milestone_get", "merge_request.get"},
+		related:     []string{actionMRStatList, actionMRLabelGet, actionMRMilestoneGet, actionMRGet},
 	},
 	"gitlab_issue_iteration_event_list": {
 		usage:       "List the iteration-change audit events for one issue (when the iteration was assigned or removed and by whom). Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"list issue iteration events", "issue iteration history", "iteration changes on issue"},
 		description: "List iteration events for an issue (Premium/Ultimate). Returns: iteration events with action, the iteration object, the acting user, and pagination metadata. See also: gitlab_issue_iteration_event_get, gitlab_issue_get.",
-		related:     []string{"issue.event_issue_iteration_get", "issue.event_issue_weight_list", "issue.event_issue_label_list", "issue.get"},
+		related:     []string{"issue.event_issue_iteration_get", "issue.event_issue_weight_list", actionIssueLabelList, actionIssueGet},
 	},
 	"gitlab_issue_iteration_event_get": {
 		usage:       "Fetch one issue iteration-change event by id (a single iteration assignment or removal). Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"get issue iteration event", "show issue iteration change"},
 		description: "Get a single iteration event for an issue (Premium/Ultimate). Returns: the event with action, the iteration object, and the acting user. See also: gitlab_issue_iteration_event_list.",
-		related:     []string{"issue.event_issue_iteration_list", "issue.event_issue_weight_list", "issue.event_issue_label_get", "issue.get"},
+		related:     []string{"issue.event_issue_iteration_list", "issue.event_issue_weight_list", actionIssueLabelGet, actionIssueGet},
 	},
 	"gitlab_issue_weight_event_list": {
 		usage:       "List the weight-change audit events for one issue (each weight value set and by whom). Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"list issue weight events", "issue weight history", "weight changes on issue"},
 		description: "List weight events for an issue (Premium/Ultimate). Returns: weight events with the weight value, the acting user, and pagination metadata. See also: gitlab_issue_get.",
-		related:     []string{"issue.event_issue_iteration_list", "issue.event_issue_label_list", "issue.event_issue_state_list", "issue.get"},
+		related:     []string{"issue.event_issue_iteration_list", actionIssueLabelList, actionIssueStatList, actionIssueGet},
 	},
 }

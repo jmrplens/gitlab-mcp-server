@@ -7,6 +7,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionIntegrationList      = "project.integration_list"
+	actionIntegrationGet       = "project.integration_get"
+	actionIntegrationDelete    = "project.integration_delete"
+	actionIntegrationSetJira   = "project.integration_set_jira"
+	actionIntegrationSetGroup  = "project.integration_set_group"
+	actionIntegrationListGroup = "project.integration_list_group"
+	actionIntegrationGetGroup  = "project.integration_get_group"
+	actionIntegrationDelGroup  = "project.integration_delete_group"
+	actionGroupGet             = "group.get"
+	tagIntegration             = "integration"
+)
+
 // ActionSpecs returns canonical specs for project integration actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -45,7 +58,7 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 	if err := Delete(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	_, out, _ := toolutil.DeleteResult("integration")
+	_, out, _ := toolutil.DeleteResult(tagIntegration)
 	return out, nil
 }
 
@@ -53,7 +66,7 @@ func deleteGroupDatadogOutput(ctx context.Context, client *gitlabclient.Client, 
 	if err := DeleteGroupDatadog(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	_, out, _ := toolutil.DeleteResult("integration")
+	_, out, _ := toolutil.DeleteResult(tagIntegration)
 	return out, nil
 }
 
@@ -61,7 +74,7 @@ func deleteGroupIntegrationOutput(ctx context.Context, client *gitlabclient.Clie
 	if err := DeleteGroupIntegration(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	_, out, _ := toolutil.DeleteResult("integration")
+	_, out, _ := toolutil.DeleteResult(tagIntegration)
 	return out, nil
 }
 
@@ -113,57 +126,57 @@ var integrationActionMeta = map[string]struct {
 	"gitlab_list_integrations": {
 		usage:   "List every integration (service) wired up on a project to see what is active before reading or removing one.",
 		aliases: []string{"list project integrations", "show project services", "what integrations are enabled"},
-		related: []string{"project.integration_get", "project.integration_set_jira", "project.integration_delete"},
+		related: []string{actionIntegrationGet, actionIntegrationSetJira, actionIntegrationDelete},
 	},
 	"gitlab_get_integration": {
 		usage:   "Inspect one project integration by slug to read its active status and event-trigger configuration.",
 		aliases: []string{"get integration details", "show service config", "view integration settings"},
-		related: []string{"project.integration_list", "project.integration_delete", "project.integration_set_jira"},
+		related: []string{actionIntegrationList, actionIntegrationDelete, actionIntegrationSetJira},
 	},
 	"gitlab_delete_integration": {
 		usage:   "Disable and remove a project integration by slug when it is no longer needed.",
 		aliases: []string{"disable integration", "remove project service", "turn off integration"},
-		related: []string{"project.integration_list", "project.integration_get"},
+		related: []string{actionIntegrationList, actionIntegrationGet},
 	},
 	"gitlab_set_jira_integration": {
 		usage:   "Connect a project to a Jira instance, setting the URL, credentials, and which events sync to Jira.",
 		aliases: []string{"configure jira", "set up jira integration", "connect project to jira"},
-		related: []string{"project.integration_list", "project.integration_get", "project.integration_delete"},
+		related: []string{actionIntegrationList, actionIntegrationGet, actionIntegrationDelete},
 	},
 	"gitlab_set_integration": {
 		usage:   "Configure any project integration by slug with a free-form config object when no dedicated tool exists (e.g. slack, harbor, jenkins, google-play).",
 		aliases: []string{"configure integration", "set up project integration", "enable integration", "update integration config", "set slack integration", "set harbor integration", "set jenkins integration"},
-		related: []string{"project.integration_get", "project.integration_list", "project.integration_delete", "project.integration_set_jira"},
+		related: []string{actionIntegrationGet, actionIntegrationList, actionIntegrationDelete, actionIntegrationSetJira},
 	},
 	"gitlab_list_group_integrations": {
 		usage:   "List every active integration wired up on a group to see what is enabled before reading or removing one.",
 		aliases: []string{"list group integrations", "show group services", "what integrations are enabled on the group"},
-		related: []string{"project.integration_get_group", "project.integration_set_group", "project.integration_delete_group"},
+		related: []string{actionIntegrationGetGroup, actionIntegrationSetGroup, actionIntegrationDelGroup},
 	},
 	"gitlab_get_group_integration": {
 		usage:   "Inspect one group integration by slug to read its active status and configuration.",
 		aliases: []string{"get group integration details", "show group service config", "view group integration settings"},
-		related: []string{"project.integration_list_group", "project.integration_set_group", "project.integration_delete_group"},
+		related: []string{actionIntegrationListGroup, actionIntegrationSetGroup, actionIntegrationDelGroup},
 	},
 	"gitlab_set_group_integration": {
 		usage:   "Configure any group integration by slug with a free-form config object, applying it across the group's projects.",
 		aliases: []string{"configure group integration", "set up group integration", "enable group integration", "update group integration config"},
-		related: []string{"project.integration_get_group", "project.integration_list_group", "project.integration_delete_group"},
+		related: []string{actionIntegrationGetGroup, actionIntegrationListGroup, actionIntegrationDelGroup},
 	},
 	"gitlab_delete_group_integration": {
 		usage:   "Disable and remove a group integration by slug when it is no longer needed.",
 		aliases: []string{"disable group integration", "remove group service", "turn off group integration"},
-		related: []string{"project.integration_list_group", "project.integration_get_group", "project.integration_set_group"},
+		related: []string{actionIntegrationListGroup, actionIntegrationGetGroup, actionIntegrationSetGroup},
 	},
 	"gitlab_get_group_datadog_integration": {
 		usage:   "Read the Datadog integration on a group to confirm the configured site, env, service, and tags.",
 		aliases: []string{"get group datadog config", "show group datadog integration", "view group datadog settings"},
-		related: []string{"project.integration_set_group_datadog", "project.integration_delete_group_datadog", "group.get"},
+		related: []string{"project.integration_set_group_datadog", "project.integration_delete_group_datadog", actionGroupGet},
 	},
 	"gitlab_set_group_datadog_integration": {
 		usage:   "Create or update a group's Datadog integration so logs and CI traces forward to the chosen Datadog site.",
 		aliases: []string{"configure group datadog", "set up group datadog", "update group datadog integration"},
-		related: []string{"project.integration_get_group_datadog", "project.integration_delete_group_datadog", "group.get"},
+		related: []string{"project.integration_get_group_datadog", "project.integration_delete_group_datadog", actionGroupGet},
 	},
 	"gitlab_delete_group_datadog_integration": {
 		usage:   "Remove a group's Datadog integration and clear its stored API key when forwarding is no longer wanted.",
@@ -189,7 +202,7 @@ func applyIntegrationMeta(opts toolutil.ActionSpecOptions, individualTool string
 
 func integrationOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute integrations domain action.", Tags: []string{"project", "integration"},
+		Aliases: []string{individualTool}, Usage: "Use to execute integrations domain action.", Tags: []string{"project", tagIntegration},
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "integrations",
@@ -204,9 +217,9 @@ func integrationOptions(individualTool, description string) toolutil.ActionSpecO
 // Premium, Ultimate); it is gated on Owner role, not on a licensing tier.
 func groupIntegrationOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := integrationOptions(individualTool, description)
-	opts.Tags = []string{"group", "integration"}
+	opts.Tags = []string{"group", tagIntegration}
 	if _, ok := integrationActionMeta[individualTool]; !ok {
-		opts.RelatedActions = []string{"group.get"}
+		opts.RelatedActions = []string{actionGroupGet}
 	}
 	return applyIntegrationMeta(opts, individualTool)
 }
@@ -216,11 +229,11 @@ func groupIntegrationOptions(individualTool, description string) toolutil.Action
 // (doc/api/group_integrations.md page tier = Free, Premium, Ultimate).
 func groupDatadogOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	opts := integrationOptions(individualTool, description)
-	opts.Tags = []string{"group", "integration", "datadog"}
+	opts.Tags = []string{"group", tagIntegration, "datadog"}
 	// applyIntegrationMeta already set group-specific RelatedActions; only fall
 	// back to the generic group.get when no per-action metadata was found.
 	if _, ok := integrationActionMeta[individualTool]; !ok {
-		opts.RelatedActions = []string{"group.get"}
+		opts.RelatedActions = []string{actionGroupGet}
 	}
 	return applyIntegrationMeta(opts, individualTool)
 }

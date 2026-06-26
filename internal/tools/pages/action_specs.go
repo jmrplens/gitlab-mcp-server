@@ -7,6 +7,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionPagesDomainList = "pages.domain_list"
+	actionPagesDomainGet  = "pages.domain_get"
+)
+
 // ActionSpecs returns canonical specs for project Pages actions
 // exposed as MCP tools. The settings, custom domain, and admin
 // routes are projected into the dynamic, meta, individual, and
@@ -138,7 +143,7 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_get": {
 		usage:   "Read the GitLab Pages settings for a project, including the published URL and HTTPS configuration.",
 		aliases: []string{"get pages settings", "show pages configuration", "view pages site url"},
-		related: []string{"pages.update", "pages.unpublish", "pages.domain_list"},
+		related: []string{"pages.update", "pages.unpublish", actionPagesDomainList},
 	},
 	"pages_update": {
 		usage:   "Update a project's GitLab Pages settings such as force-HTTPS, unique-domain, and the primary domain.",
@@ -153,32 +158,32 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_domain_list_all": {
 		usage:   "List every GitLab Pages custom domain across the whole instance (admin only).",
 		aliases: []string{"list all pages domains", "audit pages custom domains", "show instance pages domains"},
-		related: []string{"pages.domain_list", "pages.domain_get"},
+		related: []string{actionPagesDomainList, actionPagesDomainGet},
 	},
 	"pages_domain_list": {
 		usage:   "List the custom Pages domains attached to a project, with verification and SSL status.",
 		aliases: []string{"list project pages domains", "show custom domains", "find pages domains for project"},
-		related: []string{"pages.domain_get", "pages.domain_create", "pages.domain_list_all"},
+		related: []string{actionPagesDomainGet, "pages.domain_create", "pages.domain_list_all"},
 	},
 	"pages_domain_get": {
 		usage:   "Fetch one custom Pages domain by name, including its verification code and certificate details.",
 		aliases: []string{"get pages domain", "show custom domain details", "check pages domain verification"},
-		related: []string{"pages.domain_list", "pages.domain_update", "pages.domain_delete"},
+		related: []string{actionPagesDomainList, "pages.domain_update", "pages.domain_delete"},
 	},
 	"pages_domain_create": {
 		usage:   "Attach a new custom Pages domain to a project and obtain its DNS verification code.",
 		aliases: []string{"add pages domain", "create custom domain", "attach domain to pages"},
-		related: []string{"pages.domain_get", "pages.domain_update", "pages.domain_list"},
+		related: []string{actionPagesDomainGet, "pages.domain_update", actionPagesDomainList},
 	},
 	"pages_domain_update": {
 		usage:   "Update a custom Pages domain's auto-SSL setting or TLS certificate and key.",
 		aliases: []string{"update pages domain", "set pages domain certificate", "toggle pages domain auto ssl"},
-		related: []string{"pages.domain_get", "pages.domain_delete", "pages.domain_list"},
+		related: []string{actionPagesDomainGet, "pages.domain_delete", actionPagesDomainList},
 	},
 	"pages_domain_delete": {
 		usage:   "Detach and delete a custom Pages domain from a project.",
 		aliases: []string{"delete pages domain", "remove custom domain", "detach pages domain"},
-		related: []string{"pages.domain_get", "pages.domain_list"},
+		related: []string{actionPagesDomainGet, actionPagesDomainList},
 	},
 }
 

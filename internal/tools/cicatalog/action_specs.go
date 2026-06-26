@@ -8,8 +8,9 @@ import (
 // Canonical action IDs for CI/CD Catalog routes, reused across the per-tool
 // discovery metadata so RelatedActions stay in sync with the catalog.
 const (
-	actionCatalogList = "cicatalog.list"
-	actionCatalogGet  = "cicatalog.get"
+	actionCatalogList  = "cicatalog.list"
+	actionCatalogGet   = "cicatalog.get"
+	actionTemplateLint = "template.lint"
 )
 
 // ActionSpecs returns canonical specs for CI/CD Catalog actions exposed as
@@ -33,7 +34,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func catalogSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute cicatalog domain action.", Tags: []string{"ci_catalog", "component", "graphql"},
-		RelatedActions: []string{"template.lint", "pipeline.create", "project.get"},
+		RelatedActions: []string{actionTemplateLint, "pipeline.create", "project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "cicatalog",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -81,7 +82,7 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 	"gitlab_list_catalog_resources": {
 		usage:   "Browse the CI/CD Catalog of published component projects. Use search to match by name or description, scope to limit to your namespace (NAMESPACED) or the whole instance (ALL), and sort by name, latest release, or star count when the prompt asks for reusable pipeline components or templates to include.",
 		aliases: []string{"browse ci/cd catalog", "list cicd components", "search component catalog", "find reusable pipeline components", "list catalog resources"},
-		related: []string{actionCatalogGet, "template.lint", "pipeline.create"},
+		related: []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
 		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. " +
 			"Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. " +
 			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_create_pipeline.",
@@ -89,7 +90,7 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 	"gitlab_get_catalog_resource": {
 		usage:   "Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.",
 		aliases: []string{"get catalog resource", "show cicd component details", "inspect catalog component inputs", "fetch component project versions"},
-		related: []string{actionCatalogList, "template.lint", "project.get"},
+		related: []string{actionCatalogList, actionTemplateLint, "project.get"},
 		description: "Get a single CI/CD Catalog resource by GID or full path. " +
 			"Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. " +
 			"See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_get_project.",

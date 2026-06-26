@@ -5,6 +5,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionFFUserListFeatureFlagUpdate = "feature_flags.feature_flag_update"
+	actionFFUserListGet               = "feature_flags.ff_user_list_get"
+	actionFFUserListList              = "feature_flags.ff_user_list_list"
+)
+
 // ActionSpecs returns canonical specs for feature flag user list actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -105,17 +111,17 @@ func userListAliases(actionName, individualTool string) []string {
 func userListRelatedActions(actionName string) []string {
 	switch actionName {
 	case "ff_user_list_list":
-		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_create", "feature_flags.feature_flag_update"}
+		return []string{actionFFUserListGet, "feature_flags.ff_user_list_create", actionFFUserListFeatureFlagUpdate}
 	case "ff_user_list_get":
-		return []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}
+		return []string{actionFFUserListList, "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}
 	case "ff_user_list_create":
-		return []string{"feature_flags.ff_user_list_list", "feature_flags.ff_user_list_update", "feature_flags.feature_flag_update"}
+		return []string{actionFFUserListList, "feature_flags.ff_user_list_update", actionFFUserListFeatureFlagUpdate}
 	case "ff_user_list_update":
-		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list", "feature_flags.ff_user_list_delete"}
+		return []string{actionFFUserListGet, actionFFUserListList, "feature_flags.ff_user_list_delete"}
 	case "ff_user_list_delete":
-		return []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_list"}
+		return []string{actionFFUserListGet, actionFFUserListList}
 	default:
-		return []string{"feature_flags.feature_flag_get", "feature_flags.feature_flag_update"}
+		return []string{"feature_flags.feature_flag_get", actionFFUserListFeatureFlagUpdate}
 	}
 }
 

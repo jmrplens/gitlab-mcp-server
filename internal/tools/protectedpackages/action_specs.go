@@ -8,6 +8,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionPackageProtectionRuleCreate = "package.protection_rule_create"
+	actionPackageProtectionRuleList   = "package.protection_rule_list"
+)
+
 // ActionSpecs returns canonical specs for package protection rule actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -64,22 +69,22 @@ func applyProtectedPackageDiscovery(options *toolutil.ActionSpecOptions, individ
 	case "gitlab_list_package_protection_rules":
 		options.Usage = "List package protection rules configured for one project. Use when the prompt asks which package name patterns are protected, who may push or delete packages, or to find a rule id before updating or deleting it."
 		options.Aliases = []string{"list package protection rules", "protected package patterns", "package push rules"}
-		options.RelatedActions = []string{"package.protection_rule_create", "package.protection_rule_update", "project.get"}
+		options.RelatedActions = []string{actionPackageProtectionRuleCreate, "package.protection_rule_update", "project.get"}
 		options.IndividualTool.Description = "List package protection rules for a project. Returns: each rule's id, project id, package name pattern, package type, and minimum push/delete access levels, with pagination metadata. For container image protection use gitlab_registry_protection_list. See also: gitlab_create_package_protection_rule, gitlab_update_package_protection_rule."
 	case "gitlab_create_package_protection_rule":
 		options.Usage = "Create a package protection rule for a project. Provide project_id, a package_name_pattern, and a package_type, then set the minimum push/delete access levels to restrict who can publish or remove matching packages."
 		options.Aliases = []string{"protect package name pattern", "restrict package push", "create package protection rule"}
-		options.RelatedActions = []string{"package.protection_rule_list", "package.protection_rule_update", "package.protection_rule_delete"}
+		options.RelatedActions = []string{actionPackageProtectionRuleList, "package.protection_rule_update", "package.protection_rule_delete"}
 		options.IndividualTool.Description = "Create a package protection rule for a project. Returns: the new rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: gitlab_list_package_protection_rules, gitlab_update_package_protection_rule, gitlab_delete_package_protection_rule."
 	case "gitlab_update_package_protection_rule":
 		options.Usage = "Update an existing package protection rule by its id. Use to change the package name pattern, package type, or the minimum push/delete access levels of a rule located via gitlab_list_package_protection_rules."
 		options.Aliases = []string{"update package protection rule", "change package push access levels", "edit package protection rule"}
-		options.RelatedActions = []string{"package.protection_rule_list", "package.protection_rule_create", "package.protection_rule_delete"}
+		options.RelatedActions = []string{actionPackageProtectionRuleList, actionPackageProtectionRuleCreate, "package.protection_rule_delete"}
 		options.IndividualTool.Description = "Update an existing package protection rule by its id. Returns: the updated rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: gitlab_list_package_protection_rules, gitlab_create_package_protection_rule, gitlab_delete_package_protection_rule."
 	case "gitlab_delete_package_protection_rule":
 		options.Usage = "Delete a package protection rule from a project by its id. Use when a package name pattern should no longer be protected; this removes the restriction permanently and cannot be undone."
 		options.Aliases = []string{"delete package protection rule", "remove package protection", "unprotect package pattern"}
-		options.RelatedActions = []string{"package.protection_rule_list", "package.protection_rule_create"}
+		options.RelatedActions = []string{actionPackageProtectionRuleList, actionPackageProtectionRuleCreate}
 		options.IndividualTool.Description = "Delete a package protection rule from a project by its id (cannot be undone). Returns: a success confirmation. See also: gitlab_list_package_protection_rules, gitlab_create_package_protection_rule."
 	}
 }

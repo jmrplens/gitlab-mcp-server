@@ -9,6 +9,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionWikiList   = "wiki.list"
+	actionWikiGet    = "wiki.get"
+	actionWikiUpdate = "wiki.update"
+)
+
 // ActionSpecs returns canonical specs for project wiki actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -74,7 +80,7 @@ func wikiDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 func wikiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute wikis domain action.", Tags: []string{"wiki"},
-		RelatedActions: []string{"wiki.list", "wiki.get", "project.get", "repository.file_get"},
+		RelatedActions: []string{actionWikiList, actionWikiGet, "project.get", "repository.file_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "wikis",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -117,42 +123,42 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 	"gitlab_wiki_list": {
 		usage:   "List the wiki pages of a project. Set with_content only when the page bodies are needed, since it returns the full content of every page.",
 		aliases: []string{"list wiki pages", "show project wiki", "find wiki pages"},
-		related: []string{"wiki.get", "wiki.create", "project.get"},
+		related: []string{actionWikiGet, "wiki.create", "project.get"},
 		description: "List a project's wiki pages. Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_create.",
 	},
 	"gitlab_wiki_get": {
 		usage:   "Fetch one wiki page by its slug. Use after wiki.list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
 		aliases: []string{"get wiki page", "read wiki page", "show wiki page content"},
-		related: []string{"wiki.list", "wiki.update", "wiki.delete"},
+		related: []string{actionWikiList, actionWikiUpdate, "wiki.delete"},
 		description: "Get a single wiki page by slug. Returns: the page title, slug, format, content, and encoding. " +
 			"See also: gitlab_wiki_list, gitlab_wiki_update, gitlab_wiki_delete.",
 	},
 	"gitlab_wiki_create": {
 		usage:   "Create a new wiki page in a project. Provide a title and content; set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
 		aliases: []string{"create wiki page", "add wiki page", "new wiki page"},
-		related: []string{"wiki.list", "wiki.get", "wiki.update"},
+		related: []string{actionWikiList, actionWikiGet, actionWikiUpdate},
 		description: "Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_update, gitlab_wiki_list.",
 	},
 	"gitlab_wiki_update": {
 		usage:   "Update an existing wiki page identified by slug. Provide at least one of title, content, or format to change.",
 		aliases: []string{"update wiki page", "edit wiki page", "rename wiki page"},
-		related: []string{"wiki.get", "wiki.list", "wiki.delete"},
+		related: []string{actionWikiGet, actionWikiList, "wiki.delete"},
 		description: "Update an existing wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_delete, gitlab_wiki_list.",
 	},
 	"gitlab_wiki_delete": {
 		usage:   "Permanently delete a wiki page by slug. Destructive; requires Maintainer or Owner role and confirmation of the project and slug.",
 		aliases: []string{"delete wiki page", "remove wiki page"},
-		related: []string{"wiki.get", "wiki.list", "wiki.update"},
+		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
 		description: "Delete a wiki page permanently. Returns: a success confirmation for the removed page. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_list.",
 	},
 	"gitlab_wiki_upload_attachment": {
 		usage:   "Upload a file to the wiki's uploads folder so it can be referenced from wiki pages. Provide either content_base64 or file_path, plus a filename and optional branch.",
 		aliases: []string{"upload wiki attachment", "attach file to wiki", "add wiki attachment"},
-		related: []string{"wiki.get", "wiki.list", "wiki.update"},
+		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
 		description: "Upload an attachment to the project wiki repository. Returns: the attachment file name, file path, branch, URL, and ready-to-paste Markdown link. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_update.",
 	},

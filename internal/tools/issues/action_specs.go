@@ -9,9 +9,18 @@ import (
 )
 
 const (
-	actionIssueList    = "issue.list"
-	actionSearchIssues = "search.issues"
-	actionIssueGet     = "issue.get"
+	actionIssueList          = "issue.list"
+	actionSearchIssues       = "search.issues"
+	actionIssueGet           = "issue.get"
+	actionIssueUpdate        = "issue.update"
+	actionIssueTimeStatsGet  = "issue.time_stats_get"
+	actionIssueTimeEstSet    = "issue.time_estimate_set"
+	actionIssueSpentTimeAdd  = "issue.spent_time_add"
+	toolIssueListGroup       = "gitlab_issue_list_group"
+	paramStateEvent          = "state_event"
+	roleScopeProject         = "scope_project"
+	paramProjectID           = "project_id"
+	domainIssues             = "issues"
 )
 
 // ActionSpecs returns canonical specs for issue lifecycle actions exposed
@@ -31,7 +40,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_issue_list_all — list issues visible to the caller across all projects.
 		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
 		// gitlab_issue_list_group — list issues across a group and its projects.
-		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
+		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
 		// gitlab_issue_update — update issue fields; supports close/reopen via state_event.
 		issueUpdateActionSpec(client),
 		// gitlab_issue_delete — permanently delete an issue (destructive, requires confirmation).
@@ -96,7 +105,7 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_issue_list_group — list issues across a group's projects.
-		groupIssueReadSpec("issues", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
+		groupIssueReadSpec(domainIssues, toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
 	}
 }
 
@@ -109,10 +118,10 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	case "gitlab_issue_get":
 		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known."
 		options.Aliases = []string{"get issue", "show issue details", "fetch issue"}
-		options.RelatedActions = []string{actionIssueList, "issue.update", "issue.delete", "issue.notes_list"}
+		options.RelatedActions = []string{actionIssueList, actionIssueUpdate, "issue.delete", "issue.notes_list"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"project_id": {
-				SemanticRole:     "scope_project",
+			paramProjectID: {
+				SemanticRole:     roleScopeProject,
 				ValueSource:      "Project ID or full namespace path that owns the issue.",
 				ExampleBinding:   `params.project_id:"group/project"`,
 				CommonConfusions: []string{"Use the issue's parent project here, not a group path or global issue ID."},
@@ -130,8 +139,8 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 		options.Aliases = []string{"list project issues", "find issues in project", "show project issues"}
 		options.RelatedActions = []string{actionIssueGet, "issue.create", actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"project_id": {
-				SemanticRole:     "scope_project",
+			paramProjectID: {
+				SemanticRole:     roleScopeProject,
 				ValueSource:      "Project ID or namespace path whose issues should be listed.",
 				ExampleBinding:   `params.project_id:"group/project"`,
 				CommonConfusions: []string{"Use project_id for the project scope; use group_id only with issue.list_group."},
@@ -205,7 +214,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	// aliases so neither canonical action is aliases_only (1:1 audit metadata).
 	// The group surface owns the individual-tool description to avoid a
 	// projected-description drift across the two canonical actions.
-	"gitlab_issue_list_group": {
+	toolIssueListGroup: {
 		usage:   "List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.",
 		aliases: []string{"issues in a group", "group-scoped issue list", "list a group's issues", "issues across subgroups"},
 		related: []string{actionIssueList, "group.get", actionSearchIssues},
@@ -213,7 +222,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_delete": {
 		usage:       "Permanently delete an issue. Destructive and irreversible; confirm project_id and issue_iid before calling.",
 		aliases:     []string{"delete issue", "remove issue"},
-		related:     []string{actionIssueGet, actionIssueList, "issue.update"},
+		related:     []string{actionIssueGet, actionIssueList, actionIssueUpdate},
 		description: "Delete an issue permanently. Returns: a success confirmation naming the issue and project. See also: gitlab_issue_get, gitlab_issue_update.",
 	},
 	"gitlab_issue_reorder": {
@@ -225,7 +234,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_move": {
 		usage:       "Move an issue to a different project, preserving its discussion and metadata.",
 		aliases:     []string{"move issue to project", "transfer issue"},
-		related:     []string{actionIssueGet, "issue.update", actionIssueList},
+		related:     []string{actionIssueGet, actionIssueUpdate, actionIssueList},
 		description: "Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
 	},
 	"gitlab_issue_subscribe": {
@@ -249,31 +258,31 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_time_estimate_set": {
 		usage:       "Set the time estimate for an issue using a human duration such as 3h30m or 1d.",
 		aliases:     []string{"set issue estimate", "estimate issue time"},
-		related:     []string{"issue.time_estimate_reset", "issue.spent_time_add", "issue.time_stats_get"},
+		related:     []string{"issue.time_estimate_reset", actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
 		description: "Set an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_time_estimate_reset": {
 		usage:       "Clear the time estimate previously set on an issue.",
 		aliases:     []string{"reset issue estimate", "clear issue estimate"},
-		related:     []string{"issue.time_estimate_set", "issue.time_stats_get"},
+		related:     []string{actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Clear an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_set, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_add": {
 		usage:       "Log time spent on an issue using a human duration such as 2h or 30m; logged values accumulate across calls.",
 		aliases:     []string{"log issue time", "add spent time"},
-		related:     []string{"issue.spent_time_reset", "issue.time_estimate_set", "issue.time_stats_get"},
+		related:     []string{"issue.spent_time_reset", actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Add spent time to an issue. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_reset": {
 		usage:       "Reset the total time spent on an issue back to zero.",
 		aliases:     []string{"reset spent time", "clear issue spent time"},
-		related:     []string{"issue.spent_time_add", "issue.time_stats_get"},
+		related:     []string{actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
 		description: "Reset an issue's spent time. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_add, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_time_stats_get": {
 		usage:       "Read the time tracking totals (estimate and time spent) for an issue.",
 		aliases:     []string{"get issue time stats", "show issue time tracking"},
-		related:     []string{"issue.time_estimate_set", "issue.time_estimate_reset", "issue.spent_time_add", "issue.spent_time_reset"},
+		related:     []string{actionIssueTimeEstSet, "issue.time_estimate_reset", actionIssueSpentTimeAdd, "issue.spent_time_reset"},
 		description: "Read an issue's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_issue_time_estimate_set, gitlab_issue_spent_time_add.",
 	},
 	"gitlab_issue_participants": {
@@ -307,10 +316,10 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 	}
 	options.Usage = "Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested."
 	options.Aliases = []string{"open issue", "create bug report", "file issue"}
-	options.RelatedActions = []string{actionIssueGet, actionIssueList, "issue.update"}
+	options.RelatedActions = []string{actionIssueGet, actionIssueList, actionIssueUpdate}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"project_id": {
-			SemanticRole:     "scope_project",
+		paramProjectID: {
+			SemanticRole:     roleScopeProject,
 			ValueSource:      "Project where the issue should be created.",
 			ExampleBinding:   `params.project_id:"group/project"`,
 			CommonConfusions: []string{"Use the target project path or numeric ID; do not substitute group_id or repository URL."},
@@ -348,16 +357,16 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
 	options.RelatedActions = []string{actionIssueGet, "issue.delete", actionIssueList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-		"state_event": {
+		paramStateEvent: {
 			SemanticRole:     "issue_state_transition",
 			ValueSource:      "task intent when closing or reopening an issue",
 			CommonConfusions: []string{"Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen."},
-			ExampleBinding:   `{"state_event":"close"}`,
+			ExampleBinding:   `{paramStateEvent:"close"}`,
 		},
 	}
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 		{
-			PropertyPath: "state_event",
+			PropertyPath: paramStateEvent,
 			Values: map[string]any{
 				"enum":        []any{"close", "reopen"},
 				"description": "State transition; set to close or reopen when changing issue state.",
@@ -381,7 +390,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"issue"},
 		OpenWorld:      true,
-		OwnerPackage:   "issues",
+		OwnerPackage: domainIssues,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -391,7 +400,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 // gitlab_issue_list_group individual tool.
 func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := groupIssueOptions(individualTool)
-	if individualTool == "gitlab_issue_list_group" {
+	if individualTool == toolIssueListGroup {
 		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project."
 		options.Aliases = []string{"list group issues", "show issues in group", "find issues across group"}
 		options.RelatedActions = []string{actionIssueList, "group.get", actionSearchIssues}
@@ -415,7 +424,7 @@ func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"group", "issue"},
 		OpenWorld:      true,
-		OwnerPackage:   "issues",
+		OwnerPackage: domainIssues,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
