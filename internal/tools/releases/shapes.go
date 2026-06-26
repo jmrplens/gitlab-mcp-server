@@ -1,7 +1,7 @@
 package releases
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -14,23 +14,7 @@ import (
 // This file covers the release sub-objects surfaced on the canonical json keys
 // (author, commit, assets, _links, milestones, evidences).
 
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
 // formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD,
-// or "" when nil.
-func formatISOTimePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
-
 // assetsOptions converts the nested assets input into gl.ReleaseAssetsOptions,
 // returning nil when no asset links are supplied so the assets object is
 // omitted from the request body.
@@ -115,11 +99,11 @@ func commitOutput(c gl.Commit) *CommitOutput {
 	return &CommitOutput{
 		ID: c.ID, ShortID: c.ShortID, Title: c.Title,
 		AuthorName: c.AuthorName, AuthorEmail: c.AuthorEmail,
-		AuthoredDate:   formatTimePtr(c.AuthoredDate),
+		AuthoredDate:   toolutil.FormatTimePtr(c.AuthoredDate),
 		CommitterName:  c.CommitterName,
 		CommitterEmail: c.CommitterEmail,
-		CommittedDate:  formatTimePtr(c.CommittedDate),
-		CreatedAt:      formatTimePtr(c.CreatedAt),
+		CommittedDate:  toolutil.FormatTimePtr(c.CommittedDate),
+		CreatedAt:      toolutil.FormatTimePtr(c.CreatedAt),
 		Message:        c.Message,
 		ParentIDs:      c.ParentIDs,
 	}
@@ -237,8 +221,8 @@ func milestoneOutputs(ms []*gl.ReleaseMilestone) []*MilestoneOutput {
 		mo := &MilestoneOutput{
 			ID: m.ID, IID: m.IID, ProjectID: m.ProjectID,
 			Title: m.Title, Description: m.Description, State: m.State,
-			CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
-			DueDate: formatISOTimePtr(m.DueDate), StartDate: formatISOTimePtr(m.StartDate),
+			CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
+			DueDate: toolutil.FormatISOTimePtr(m.DueDate), StartDate: toolutil.FormatISOTimePtr(m.StartDate),
 			WebURL: m.WebURL,
 		}
 		if m.IssueStats != nil {
@@ -268,7 +252,7 @@ func evidenceOutputs(evs []*gl.ReleaseEvidence) []*EvidenceOutput {
 			continue
 		}
 		out = append(out, &EvidenceOutput{
-			SHA: e.SHA, Filepath: e.Filepath, CollectedAt: formatTimePtr(e.CollectedAt),
+			SHA: e.SHA, Filepath: e.Filepath, CollectedAt: toolutil.FormatTimePtr(e.CollectedAt),
 		})
 	}
 	return out

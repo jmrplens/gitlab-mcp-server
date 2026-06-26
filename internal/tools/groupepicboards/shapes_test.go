@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -36,11 +38,11 @@ func TestConvertersNil(t *testing.T) {
 
 // TestTimeHelper verifies the RFC3339 helper across nil and populated inputs.
 func TestTimeHelper(t *testing.T) {
-	if got := formatTimePtr(nil); got != "" {
-		t.Errorf("formatTimePtr(nil) = %q, want empty", got)
+	if got := toolutil.FormatTimePtr(nil); got != "" {
+		t.Errorf("toolutil.FormatTimePtr(nil) = %q, want empty", got)
 	}
 	tm := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	if got := formatTimePtr(&tm); got != "2024-01-02T03:04:05Z" {
+	if got := toolutil.FormatTimePtr(&tm); got != "2024-01-02T03:04:05Z" {
 		t.Errorf("formatTimePtr = %q", got)
 	}
 }

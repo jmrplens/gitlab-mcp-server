@@ -3,6 +3,8 @@ package projects
 import (
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -16,14 +18,6 @@ import (
 // shared_with_groups, license, container_expiration_policy, custom_attributes,
 // and the approval-rule eligible_approvers / users / groups / protected_branches
 // object arrays.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // formatISODatePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD, or
 // "" when nil.
@@ -110,7 +104,7 @@ func ownerOutput(u *gl.User) *OwnerOutput {
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
 		Locked: u.Locked, AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 		PublicEmail: u.PublicEmail,
-		CreatedAt:   formatTimePtr(u.CreatedAt),
+		CreatedAt:   toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -264,7 +258,7 @@ func containerExpirationPolicyOutput(p *gl.ContainerExpirationPolicy) *Container
 		Cadence: p.Cadence, KeepN: p.KeepN, OlderThan: p.OlderThan,
 		NameRegexDelete: p.NameRegexDelete, NameRegexKeep: p.NameRegexKeep,
 		Enabled:   p.Enabled,
-		NextRunAt: formatTimePtr(p.NextRunAt),
+		NextRunAt: toolutil.FormatTimePtr(p.NextRunAt),
 		NameRegex: p.NameRegex, //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
 	}
 }
@@ -311,7 +305,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -410,7 +404,7 @@ func approverUsersOutput(approvers []*gl.MergeRequestApproverUser) []*ApproverUs
 		}
 		out = append(out, &ApproverUserOutput{
 			User:       basicUserOutput(a.User),
-			ApprovedAt: formatTimePtr(a.ApprovedAt),
+			ApprovedAt: toolutil.FormatTimePtr(a.ApprovedAt),
 		})
 	}
 	if len(out) == 0 {

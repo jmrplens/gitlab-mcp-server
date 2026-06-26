@@ -3,7 +3,6 @@ package awardemoji
 import (
 	"context"
 	"strings"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -749,18 +748,10 @@ func userOutput(u gl.BasicUser) *UserOutput {
 		Username:  u.Username,
 		Name:      u.Name,
 		State:     u.State,
-		CreatedAt: formatTimePtr(u.CreatedAt),
+		CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 		AvatarURL: u.AvatarURL,
 		WebURL:    u.WebURL,
 	}
-}
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
 }
 
 // toOutput converts the GitLab API response to the tool output format.
@@ -769,8 +760,8 @@ func toOutput(e *gl.AwardEmoji) Output {
 		ID:            e.ID,
 		Name:          e.Name,
 		User:          userOutput(e.User),
-		CreatedAt:     formatTimePtr(e.CreatedAt),
-		UpdatedAt:     formatTimePtr(e.UpdatedAt),
+		CreatedAt:     toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:     toolutil.FormatTimePtr(e.UpdatedAt),
 		AwardableID:   e.AwardableID,
 		AwardableType: e.AwardableType,
 	}

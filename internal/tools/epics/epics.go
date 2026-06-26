@@ -310,14 +310,6 @@ func formatISODate(t *gl.ISOTime) string {
 	return time.Time(*t).Format(time.DateOnly)
 }
 
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
 // toLinkItem converts a GitLab REST Epic to the LinksItem format.
 func toLinkItem(e *gl.Epic) LinksItem {
 	return LinksItem{
@@ -344,9 +336,9 @@ func toLinkItem(e *gl.Epic) LinksItem {
 		Upvotes:                 e.Upvotes,
 		Downvotes:               e.Downvotes,
 		UserNotesCount:          e.UserNotesCount,
-		CreatedAt:               formatTimePtr(e.CreatedAt),
-		UpdatedAt:               formatTimePtr(e.UpdatedAt),
-		ClosedAt:                formatTimePtr(e.ClosedAt),
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
 }
 
@@ -377,9 +369,9 @@ func epicToOutput(e *gl.Epic) Output {
 		Upvotes:                 e.Upvotes,
 		Downvotes:               e.Downvotes,
 		UserNotesCount:          e.UserNotesCount,
-		CreatedAt:               formatTimePtr(e.CreatedAt),
-		UpdatedAt:               formatTimePtr(e.UpdatedAt),
-		ClosedAt:                formatTimePtr(e.ClosedAt),
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
 }
 

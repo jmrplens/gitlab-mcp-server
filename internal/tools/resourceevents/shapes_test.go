@@ -15,11 +15,11 @@ import (
 // TestFormatTimePtr_NilAndValue verifies formatTimePtr renders nil as "" and a
 // non-nil time as RFC 3339.
 func TestFormatTimePtr_NilAndValue(t *testing.T) {
-	if got := formatTimePtr(nil); got != "" {
-		t.Errorf("formatTimePtr(nil) = %q, want empty", got)
+	if got := toolutil.FormatTimePtr(nil); got != "" {
+		t.Errorf("toolutil.FormatTimePtr(nil) = %q, want empty", got)
 	}
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	if got := formatTimePtr(&ts); got != "2026-01-02T03:04:05Z" {
+	if got := toolutil.FormatTimePtr(&ts); got != "2026-01-02T03:04:05Z" {
 		t.Errorf("formatTimePtr = %q, want RFC3339", got)
 	}
 }

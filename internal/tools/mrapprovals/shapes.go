@@ -1,7 +1,7 @@
 package mrapprovals
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -19,14 +19,6 @@ import (
 // internal/tools/groups Output (curated identifying fields rather than the full
 // gl.Group / gl.ProjectApprovalRule surface, which embeds large nested
 // statistics, deprecated project lists, and LDAP/SAML links).
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // BasicUserOutput is the documented reference subset of the compact user object
 // embedded in approval payloads (suggested_approvers, eligible_approvers, users,
@@ -91,7 +83,7 @@ func approverUserOutput(u *gl.MergeRequestApproverUser) *MergeRequestApproverUse
 	}
 	return &MergeRequestApproverUserOutput{
 		User:       basicUserOutput(u.User),
-		ApprovedAt: formatTimePtr(u.ApprovedAt),
+		ApprovedAt: toolutil.FormatTimePtr(u.ApprovedAt),
 	}
 }
 

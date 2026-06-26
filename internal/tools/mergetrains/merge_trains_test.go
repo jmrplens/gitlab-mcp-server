@@ -569,8 +569,8 @@ func TestPipelineHelpers_NilBranches(t *testing.T) {
 	if pipelineDetailedStatusOutput(nil) != nil {
 		t.Error("pipelineDetailedStatusOutput(nil) should be nil")
 	}
-	if formatTimePtr(nil) != "" {
-		t.Error("formatTimePtr(nil) should be empty")
+	if toolutil.FormatTimePtr(nil) != "" {
+		t.Error("toolutil.FormatTimePtr(nil) should be empty")
 	}
 	ds := pipelineDetailedStatusOutput(&gl.DetailedStatus{Label: "passed"})
 	if ds == nil || ds.Illustration != nil {

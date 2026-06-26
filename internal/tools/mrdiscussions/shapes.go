@@ -1,8 +1,6 @@
 package mrdiscussions
 
 import (
-	"time"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -10,14 +8,6 @@ import (
 // 1:1 audit policy (full nested objects) these surface every field of the SDK
 // struct and are replicated here rather than imported from sibling packages to
 // preserve the zero-import-cycle constraint (C-IMPORTS).
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // NoteUserOutput mirrors gl.NoteAuthor / gl.NoteResolvedBy (identical shapes):
 // the user who authored or resolved a note.

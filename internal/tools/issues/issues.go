@@ -1297,12 +1297,12 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 		Upvotes:                     mr.Upvotes,
 		Downvotes:                   mr.Downvotes,
 		UserNotesCount:              mr.UserNotesCount,
-		CreatedAt:                   formatTimePtr(mr.CreatedAt),
-		UpdatedAt:                   formatTimePtr(mr.UpdatedAt),
-		MergedAt:                    formatTimePtr(mr.MergedAt),
-		MergeAfter:                  formatTimePtr(mr.MergeAfter),
-		PreparedAt:                  formatTimePtr(mr.PreparedAt),
-		ClosedAt:                    formatTimePtr(mr.ClosedAt),
+		CreatedAt:                   toolutil.FormatTimePtr(mr.CreatedAt),
+		UpdatedAt:                   toolutil.FormatTimePtr(mr.UpdatedAt),
+		MergedAt:                    toolutil.FormatTimePtr(mr.MergedAt),
+		MergeAfter:                  toolutil.FormatTimePtr(mr.MergeAfter),
+		PreparedAt:                  toolutil.FormatTimePtr(mr.PreparedAt),
+		ClosedAt:                    toolutil.FormatTimePtr(mr.ClosedAt),
 		WebURL:                      mr.WebURL,
 	}
 	return out

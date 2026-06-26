@@ -421,9 +421,9 @@ func ToOutput(m *gl.MergeRequest) Output {
 	}
 	out.Pipeline = pipelineInfoOutput(m.Pipeline)
 	out.HeadPipeline = pipelineOutput(m.HeadPipeline)
-	out.LatestBuildStartedAt = formatTimePtr(m.LatestBuildStartedAt)
-	out.LatestBuildFinishedAt = formatTimePtr(m.LatestBuildFinishedAt)
-	out.FirstDeployedToProductionAt = formatTimePtr(m.FirstDeployedToProductionAt)
+	out.LatestBuildStartedAt = toolutil.FormatTimePtr(m.LatestBuildStartedAt)
+	out.LatestBuildFinishedAt = toolutil.FormatTimePtr(m.LatestBuildFinishedAt)
+	out.FirstDeployedToProductionAt = toolutil.FormatTimePtr(m.FirstDeployedToProductionAt)
 	return out
 }
 
@@ -499,12 +499,12 @@ func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 // populateTimestamps extracts timestamps and references from a
 // BasicMergeRequest into the Output.
 func populateTimestamps(out *Output, m *gl.BasicMergeRequest) {
-	out.MergeAfter = formatTimePtr(m.MergeAfter)
-	out.CreatedAt = formatTimePtr(m.CreatedAt)
-	out.UpdatedAt = formatTimePtr(m.UpdatedAt)
-	out.MergedAt = formatTimePtr(m.MergedAt)
-	out.ClosedAt = formatTimePtr(m.ClosedAt)
-	out.PreparedAt = formatTimePtr(m.PreparedAt)
+	out.MergeAfter = toolutil.FormatTimePtr(m.MergeAfter)
+	out.CreatedAt = toolutil.FormatTimePtr(m.CreatedAt)
+	out.UpdatedAt = toolutil.FormatTimePtr(m.UpdatedAt)
+	out.MergedAt = toolutil.FormatTimePtr(m.MergedAt)
+	out.ClosedAt = toolutil.FormatTimePtr(m.ClosedAt)
+	out.PreparedAt = toolutil.FormatTimePtr(m.PreparedAt)
 	out.References = referencesOutput(m.References)
 }
 

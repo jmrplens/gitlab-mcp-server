@@ -1,7 +1,7 @@
 package jobs
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -14,14 +14,6 @@ import (
 // documents for each sub-object (see doc/api/jobs.md), and are replicated here
 // as local types rather than imported from sibling packages to preserve the
 // zero-import-cycle constraint (C-IMPORTS).
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // CommitObject mirrors the `commit` object embedded on a job, holding the
 // fields the Jobs API documents for that sub-object.
@@ -51,7 +43,7 @@ func commitObject(c *gl.Commit) *CommitObject {
 		Title:       c.Title,
 		AuthorName:  c.AuthorName,
 		AuthorEmail: c.AuthorEmail,
-		CreatedAt:   formatTimePtr(c.CreatedAt),
+		CreatedAt:   toolutil.FormatTimePtr(c.CreatedAt),
 		Message:     c.Message,
 	}
 }
@@ -109,7 +101,7 @@ func pipelineInfoObject(p *gl.PipelineInfo) *PipelineInfoObject {
 	return &PipelineInfoObject{
 		ID: p.ID, ProjectID: p.ProjectID, Status: p.Status,
 		Ref: p.Ref, SHA: p.SHA, WebURL: p.WebURL,
-		UpdatedAt: formatTimePtr(p.UpdatedAt), CreatedAt: formatTimePtr(p.CreatedAt),
+		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
 	}
 }
 
@@ -254,7 +246,7 @@ func userObject(u *gl.User) *UserObject {
 	return &UserObject{
 		ID: u.ID, Name: u.Name, Username: u.Username, State: u.State,
 		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
-		CreatedAt:    formatTimePtr(u.CreatedAt),
+		CreatedAt:    toolutil.FormatTimePtr(u.CreatedAt),
 		Bio:          u.Bio,
 		Location:     u.Location,
 		PublicEmail:  u.PublicEmail,

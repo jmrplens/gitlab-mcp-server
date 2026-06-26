@@ -1,7 +1,7 @@
 package issues
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -15,22 +15,6 @@ import (
 // (author, assignees, assignee, closed_by, milestone, references, epic,
 // _links, time tracking, task completion, label details, iteration). The old
 // flattened scalars are preserved additively under *_username / *_title keys.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
-// formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD.
-func formatISOTimePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
 
 // LinksOutput mirrors gl.IssueLinks (the issue _links object).
 type LinksOutput struct {
@@ -120,8 +104,8 @@ func iterationOutput(it *gl.GroupIteration) *IterationOutput {
 	return &IterationOutput{
 		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
 		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: formatTimePtr(it.CreatedAt), UpdatedAt: formatTimePtr(it.UpdatedAt),
-		StartDate: formatISOTimePtr(it.StartDate), DueDate: formatISOTimePtr(it.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
 	}
 }
 
@@ -148,7 +132,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -266,8 +250,8 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 	return &MilestoneOutput{
 		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
-		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
-		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
 		Expired: m.Expired,
 	}
 }
@@ -349,17 +333,17 @@ func epicOutput(e *gl.Epic) *EpicOutput {
 		Upvotes:                 e.Upvotes,
 		Downvotes:               e.Downvotes,
 		UserNotesCount:          e.UserNotesCount,
-		StartDate:               formatISOTimePtr(e.StartDate),
+		StartDate:               toolutil.FormatISOTimePtr(e.StartDate),
 		StartDateIsFixed:        e.StartDateIsFixed,
-		StartDateFixed:          formatISOTimePtr(e.StartDateFixed),
-		StartDateFromMilestones: formatISOTimePtr(e.StartDateFromMilestones),
-		DueDate:                 formatISOTimePtr(e.DueDate),
+		StartDateFixed:          toolutil.FormatISOTimePtr(e.StartDateFixed),
+		StartDateFromMilestones: toolutil.FormatISOTimePtr(e.StartDateFromMilestones),
+		DueDate:                 toolutil.FormatISOTimePtr(e.DueDate),
 		DueDateIsFixed:          e.DueDateIsFixed,
-		DueDateFixed:            formatISOTimePtr(e.DueDateFixed),
-		DueDateFromMilestones:   formatISOTimePtr(e.DueDateFromMilestones),
-		CreatedAt:               formatTimePtr(e.CreatedAt),
-		UpdatedAt:               formatTimePtr(e.UpdatedAt),
-		ClosedAt:                formatTimePtr(e.ClosedAt),
+		DueDateFixed:            toolutil.FormatISOTimePtr(e.DueDateFixed),
+		DueDateFromMilestones:   toolutil.FormatISOTimePtr(e.DueDateFromMilestones),
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
 	return out
 }

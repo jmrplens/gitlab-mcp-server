@@ -7,18 +7,10 @@
 package environments
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
-
-// formatTimePtr renders a *time.Time as an RFC3339 string, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // ClusterAgentOutput mirrors the environment `cluster_agent` object documented in
 // the "Retrieve an environment" response (doc/api/environments.md): id, name,
@@ -56,7 +48,7 @@ func clusterAgentOutput(a *gl.Agent) *ClusterAgentOutput {
 	out := &ClusterAgentOutput{
 		ID:              a.ID,
 		Name:            a.Name,
-		CreatedAt:       formatTimePtr(a.CreatedAt),
+		CreatedAt:       toolutil.FormatTimePtr(a.CreatedAt),
 		CreatedByUserID: a.CreatedByUserID,
 	}
 	cp := a.ConfigProject
@@ -67,7 +59,7 @@ func clusterAgentOutput(a *gl.Agent) *ClusterAgentOutput {
 		NameWithNamespace: cp.NameWithNamespace,
 		Path:              cp.Path,
 		PathWithNamespace: cp.PathWithNamespace,
-		CreatedAt:         formatTimePtr(cp.CreatedAt),
+		CreatedAt:         toolutil.FormatTimePtr(cp.CreatedAt),
 	}
 	return out
 }
@@ -180,7 +172,7 @@ func deployableUserOutput(u *gl.User) *DeployableUserOutput {
 		State:        u.State,
 		AvatarURL:    u.AvatarURL,
 		WebURL:       u.WebURL,
-		CreatedAt:    formatTimePtr(u.CreatedAt),
+		CreatedAt:    toolutil.FormatTimePtr(u.CreatedAt),
 		Bio:          u.Bio,
 		Location:     u.Location,
 		PublicEmail:  u.PublicEmail,
@@ -219,16 +211,16 @@ func deployableCommitOutput(c *gl.Commit) *DeployableCommitOutput {
 	return &DeployableCommitOutput{
 		ID:             c.ID,
 		ShortID:        c.ShortID,
-		CreatedAt:      formatTimePtr(c.CreatedAt),
+		CreatedAt:      toolutil.FormatTimePtr(c.CreatedAt),
 		ParentIDs:      c.ParentIDs,
 		Title:          c.Title,
 		Message:        c.Message,
 		AuthorName:     c.AuthorName,
 		AuthorEmail:    c.AuthorEmail,
-		AuthoredDate:   formatTimePtr(c.AuthoredDate),
+		AuthoredDate:   toolutil.FormatTimePtr(c.AuthoredDate),
 		CommitterName:  c.CommitterName,
 		CommitterEmail: c.CommitterEmail,
-		CommittedDate:  formatTimePtr(c.CommittedDate),
+		CommittedDate:  toolutil.FormatTimePtr(c.CommittedDate),
 	}
 }
 
@@ -285,7 +277,7 @@ func deploymentOutput(d *gl.Deployment) *DeploymentOutput {
 		IID:       d.IID,
 		Ref:       d.Ref,
 		SHA:       d.SHA,
-		CreatedAt: formatTimePtr(d.CreatedAt),
+		CreatedAt: toolutil.FormatTimePtr(d.CreatedAt),
 		Status:    d.Status,
 		User:      deploymentUserOutput(d.User),
 	}
@@ -307,9 +299,9 @@ func deployableOutput(d gl.DeploymentDeployable) *DeployableOutput {
 		Ref:        d.Ref,
 		Tag:        d.Tag,
 		Coverage:   d.Coverage,
-		CreatedAt:  formatTimePtr(d.CreatedAt),
-		StartedAt:  formatTimePtr(d.StartedAt),
-		FinishedAt: formatTimePtr(d.FinishedAt),
+		CreatedAt:  toolutil.FormatTimePtr(d.CreatedAt),
+		StartedAt:  toolutil.FormatTimePtr(d.StartedAt),
+		FinishedAt: toolutil.FormatTimePtr(d.FinishedAt),
 		Duration:   d.Duration,
 		User:       deployableUserOutput(d.User),
 		Commit:     deployableCommitOutput(d.Commit),

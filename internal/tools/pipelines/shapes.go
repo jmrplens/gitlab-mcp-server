@@ -1,7 +1,7 @@
 package pipelines
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -14,14 +14,6 @@ import (
 // This file covers the pipeline sub-objects surfaced on the canonical json keys
 // (user, detailed_status). The old flattened user_username scalar is removed
 // because the data now lives in the user object.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in the
 // pipeline payload under the "user" key. It surfaces every field of the SDK
@@ -44,7 +36,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 

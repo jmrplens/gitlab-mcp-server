@@ -1,8 +1,6 @@
 package commitdiscussions
 
 import (
-	"time"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -113,12 +111,12 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 		Attachment:   n.Attachment,
 		Title:        n.Title,
 		FileName:     n.FileName,
-		CreatedAt:    formatTimePtr(n.CreatedAt),
-		UpdatedAt:    formatTimePtr(n.UpdatedAt),
-		ExpiresAt:    formatTimePtr(n.ExpiresAt),
+		CreatedAt:    toolutil.FormatTimePtr(n.CreatedAt),
+		UpdatedAt:    toolutil.FormatTimePtr(n.UpdatedAt),
+		ExpiresAt:    toolutil.FormatTimePtr(n.ExpiresAt),
 		Resolved:     n.Resolved,
 		Resolvable:   n.Resolvable,
-		ResolvedAt:   formatTimePtr(n.ResolvedAt),
+		ResolvedAt:   toolutil.FormatTimePtr(n.ResolvedAt),
 		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
 		System:       n.System,
 		Internal:     n.Internal,
@@ -149,14 +147,6 @@ func ToOutput(d *gl.Discussion) Output {
 		IndividualNote: d.IndividualNote,
 		Notes:          notes,
 	}
-}
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil || t.IsZero() {
-		return ""
-	}
-	return t.Format(time.RFC3339)
 }
 
 // noteAuthorOutput converts a gl.NoteAuthor value into the additive author

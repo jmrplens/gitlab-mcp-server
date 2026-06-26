@@ -1,8 +1,6 @@
 package groupepicboards
 
 import (
-	"time"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -17,14 +15,6 @@ import (
 // (see group_epic_boards.go) rather than from the SDK structs. Mirrors are
 // replicated here rather than imported from sibling packages to preserve the
 // zero-import-cycle constraint (C-IMPORTS).
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // GroupRefOutput mirrors the documented `group` sub-object of an epic board.
 // Documented reference subset per doc/api/group_epic_boards.md: the example

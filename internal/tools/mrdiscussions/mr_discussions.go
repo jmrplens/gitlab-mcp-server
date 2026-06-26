@@ -164,10 +164,10 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 		Position:     notePositionOutput(n.Position),
 		ProjectID:    n.ProjectID,
 	}
-	out.CreatedAt = formatTimePtr(n.CreatedAt)
-	out.UpdatedAt = formatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = formatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = formatTimePtr(n.ResolvedAt)
+	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
+	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
+	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
+	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
 	return out
 }
 

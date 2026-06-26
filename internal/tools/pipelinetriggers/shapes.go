@@ -1,7 +1,7 @@
 package pipelinetriggers
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -16,14 +16,6 @@ import (
 //   - owner   (gl.User, the trigger owner)
 //   - user    (gl.BasicUser, the user that started a triggered pipeline)
 //   - detailed_status (gl.DetailedStatus on a triggered pipeline)
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // UserOutput is the trigger owner. Documented reference subset per
 // doc/api/pipeline_triggers.md: the trigger-token endpoints document `owner`
@@ -54,7 +46,7 @@ func userOutput(u *gl.User) *UserOutput {
 	return &UserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
 		AvatarURL: u.AvatarURL, WebURL: u.WebURL, Email: u.Email,
-		CreatedAt: formatTimePtr(u.CreatedAt), Bot: u.Bot, Locked: u.Locked,
+		CreatedAt: toolutil.FormatTimePtr(u.CreatedAt), Bot: u.Bot, Locked: u.Locked,
 	}
 }
 
@@ -81,7 +73,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 

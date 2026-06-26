@@ -298,10 +298,10 @@ func convertTrigger(t *gl.PipelineTrigger) Output {
 		Description: t.Description,
 		Token:       t.Token,
 		Owner:       userOutput(t.Owner),
-		CreatedAt:   formatTimePtr(t.CreatedAt),
-		UpdatedAt:   formatTimePtr(t.UpdatedAt),
-		DeletedAt:   formatTimePtr(t.DeletedAt),
-		LastUsed:    formatTimePtr(t.LastUsed),
+		CreatedAt:   toolutil.FormatTimePtr(t.CreatedAt),
+		UpdatedAt:   toolutil.FormatTimePtr(t.UpdatedAt),
+		DeletedAt:   toolutil.FormatTimePtr(t.DeletedAt),
+		LastUsed:    toolutil.FormatTimePtr(t.LastUsed),
 	}
 }
 
@@ -327,11 +327,11 @@ func convertPipeline(p *gl.Pipeline) RunOutput {
 		Coverage:       p.Coverage,
 		WebURL:         p.WebURL,
 		DetailedStatus: detailedStatusOutput(p.DetailedStatus),
-		CreatedAt:      formatTimePtr(p.CreatedAt),
-		UpdatedAt:      formatTimePtr(p.UpdatedAt),
-		StartedAt:      formatTimePtr(p.StartedAt),
-		FinishedAt:     formatTimePtr(p.FinishedAt),
-		CommittedAt:    formatTimePtr(p.CommittedAt),
+		CreatedAt:      toolutil.FormatTimePtr(p.CreatedAt),
+		UpdatedAt:      toolutil.FormatTimePtr(p.UpdatedAt),
+		StartedAt:      toolutil.FormatTimePtr(p.StartedAt),
+		FinishedAt:     toolutil.FormatTimePtr(p.FinishedAt),
+		CommittedAt:    toolutil.FormatTimePtr(p.CommittedAt),
 	}
 }
 

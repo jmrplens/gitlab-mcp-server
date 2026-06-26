@@ -4681,11 +4681,11 @@ func mergeRequestSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 // every guard path (nil pointers, nil slice elements, all-nil slices, zero
 // times) is covered.
 func TestShapeConverters_EdgeBranches(t *testing.T) {
-	if got := formatISOTimePtr(nil); got != "" {
-		t.Errorf("formatISOTimePtr(nil) = %q, want empty", got)
+	if got := toolutil.FormatISOTimePtr(nil); got != "" {
+		t.Errorf("toolutil.FormatISOTimePtr(nil) = %q, want empty", got)
 	}
 	iso := gl.ISOTime(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC))
-	if got := formatISOTimePtr(&iso); got != "2026-01-02" {
+	if got := toolutil.FormatISOTimePtr(&iso); got != "2026-01-02" {
 		t.Errorf("formatISOTimePtr = %q, want 2026-01-02", got)
 	}
 	if got := formatTimeValue(time.Time{}); got != "" {

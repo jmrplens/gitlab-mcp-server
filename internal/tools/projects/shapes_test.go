@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -65,8 +67,8 @@ func TestShapeConverters_NilInputs(t *testing.T) {
 	if approverGroupsOutput(nil) != nil {
 		t.Error("approverGroupsOutput(nil) != nil")
 	}
-	if formatTimePtr(nil) != "" {
-		t.Error("formatTimePtr(nil) != empty")
+	if toolutil.FormatTimePtr(nil) != "" {
+		t.Error("toolutil.FormatTimePtr(nil) != empty")
 	}
 	if formatISODatePtr(nil) != "" {
 		t.Error("formatISODatePtr(nil) != empty")

@@ -1,7 +1,7 @@
 package mergetrains
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -16,14 +16,6 @@ import (
 // (PipelineOutput, mirrors gl.Pipeline with its nested detailed_status). The
 // merge_request sub-object (MergeRequestOutput) mirrors gl.MergeTrainMergeRequest
 // and is defined alongside the handlers in merge_trains.go.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object embedded on the
 // merge-train "user" key.
@@ -45,7 +37,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -117,9 +109,9 @@ func pipelineOutput(p *gl.Pipeline) *PipelineOutput {
 		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
 		Source: string(p.Source), Ref: p.Ref, Name: p.Name, SHA: p.SHA, BeforeSHA: p.BeforeSHA,
 		Tag: p.Tag, YamlErrors: p.YamlErrors, User: basicUserOutput(p.User),
-		UpdatedAt: formatTimePtr(p.UpdatedAt), CreatedAt: formatTimePtr(p.CreatedAt),
-		StartedAt: formatTimePtr(p.StartedAt), FinishedAt: formatTimePtr(p.FinishedAt),
-		CommittedAt: formatTimePtr(p.CommittedAt), Duration: p.Duration, QueuedDuration: p.QueuedDuration,
+		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
+		StartedAt: toolutil.FormatTimePtr(p.StartedAt), FinishedAt: toolutil.FormatTimePtr(p.FinishedAt),
+		CommittedAt: toolutil.FormatTimePtr(p.CommittedAt), Duration: p.Duration, QueuedDuration: p.QueuedDuration,
 		Coverage: p.Coverage, WebURL: p.WebURL, DetailedStatus: pipelineDetailedStatusOutput(p.DetailedStatus),
 	}
 }

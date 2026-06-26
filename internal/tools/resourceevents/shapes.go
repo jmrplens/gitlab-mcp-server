@@ -1,7 +1,7 @@
 package resourceevents
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -16,22 +16,6 @@ import (
 // label (gl.LabelEventLabel), the milestone (gl.Milestone), and the iteration
 // (gl.Iteration). The previously flattened user_id/username/milestone_* scalars
 // are removed in favor of these full nested objects.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
-// formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD.
-func formatISOTimePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
 
 // EventUserOutput mirrors gl.BasicUser, the user object embedded on every
 // resource event (the actor that performed the change).
@@ -53,7 +37,7 @@ func eventUserOutput(u *gl.BasicUser) *EventUserOutput {
 	}
 	return &EventUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -102,8 +86,8 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 	return &MilestoneOutput{
 		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
-		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
-		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
 		Expired: m.Expired,
 	}
 }
@@ -134,7 +118,7 @@ func iterationOutput(it *gl.Iteration) *IterationOutput {
 	return &IterationOutput{
 		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
 		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: formatTimePtr(it.CreatedAt), UpdatedAt: formatTimePtr(it.UpdatedAt),
-		StartDate: formatISOTimePtr(it.StartDate), DueDate: formatISOTimePtr(it.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
 	}
 }

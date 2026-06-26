@@ -1,7 +1,7 @@
 package issuelinks
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -11,23 +11,7 @@ import (
 // struct and are replicated here rather than imported from sibling packages to
 // preserve the zero-import-cycle constraint (C-IMPORTS).
 
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
 // formatISOTimePtr renders an optional ISO date (gitlab.ISOTime) as YYYY-MM-DD,
-// or "" when nil.
-func formatISOTimePtr(t *gitlab.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
-
 // UserOutput mirrors gitlab.IssueAuthor / gitlab.IssueAssignee (they share the
 // same shape). It surfaces the full user sub-object referenced by an issue
 // relation's author and assignees.
@@ -147,9 +131,9 @@ func milestoneOutput(m *gitlab.Milestone) *MilestoneOutput {
 	return &MilestoneOutput{
 		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description,
-		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
+		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
 		State: m.State, WebURL: m.WebURL,
-		UpdatedAt: formatTimePtr(m.UpdatedAt), CreatedAt: formatTimePtr(m.CreatedAt),
+		UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(m.CreatedAt),
 		Expired: m.Expired,
 	}
 }
@@ -265,8 +249,8 @@ func iterationOutput(it *gitlab.GroupIteration) *IterationOutput {
 	return &IterationOutput{
 		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
 		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: formatTimePtr(it.CreatedAt), UpdatedAt: formatTimePtr(it.UpdatedAt),
-		StartDate: formatISOTimePtr(it.StartDate), DueDate: formatISOTimePtr(it.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
 	}
 }
 
@@ -315,17 +299,17 @@ func epicOutput(e *gitlab.Epic) *EpicOutput {
 		Upvotes:                 e.Upvotes,
 		Downvotes:               e.Downvotes,
 		UserNotesCount:          e.UserNotesCount,
-		StartDate:               formatISOTimePtr(e.StartDate),
+		StartDate:               toolutil.FormatISOTimePtr(e.StartDate),
 		StartDateIsFixed:        e.StartDateIsFixed,
-		StartDateFixed:          formatISOTimePtr(e.StartDateFixed),
-		StartDateFromMilestones: formatISOTimePtr(e.StartDateFromMilestones),
-		DueDate:                 formatISOTimePtr(e.DueDate),
+		StartDateFixed:          toolutil.FormatISOTimePtr(e.StartDateFixed),
+		StartDateFromMilestones: toolutil.FormatISOTimePtr(e.StartDateFromMilestones),
+		DueDate:                 toolutil.FormatISOTimePtr(e.DueDate),
 		DueDateIsFixed:          e.DueDateIsFixed,
-		DueDateFixed:            formatISOTimePtr(e.DueDateFixed),
-		DueDateFromMilestones:   formatISOTimePtr(e.DueDateFromMilestones),
-		CreatedAt:               formatTimePtr(e.CreatedAt),
-		UpdatedAt:               formatTimePtr(e.UpdatedAt),
-		ClosedAt:                formatTimePtr(e.ClosedAt),
+		DueDateFixed:            toolutil.FormatISOTimePtr(e.DueDateFixed),
+		DueDateFromMilestones:   toolutil.FormatISOTimePtr(e.DueDateFromMilestones),
+		CreatedAt:               toolutil.FormatTimePtr(e.CreatedAt),
+		UpdatedAt:               toolutil.FormatTimePtr(e.UpdatedAt),
+		ClosedAt:                toolutil.FormatTimePtr(e.ClosedAt),
 	}
 }
 
@@ -395,17 +379,17 @@ func issueRefOutput(i *gitlab.Issue) *IssueRefOutput {
 		ProjectID:            i.ProjectID,
 		Assignees:            assigneeOutputs(i.Assignees),
 		Assignee:             assigneeOutput(i.Assignee), //nolint:staticcheck // SA1019: surfaced for 1:1 SDK fidelity
-		UpdatedAt:            formatTimePtr(i.UpdatedAt),
-		ClosedAt:             formatTimePtr(i.ClosedAt),
+		UpdatedAt:            toolutil.FormatTimePtr(i.UpdatedAt),
+		ClosedAt:             toolutil.FormatTimePtr(i.ClosedAt),
 		ClosedBy:             closerOutput(i.ClosedBy),
 		Title:                i.Title,
-		CreatedAt:            formatTimePtr(i.CreatedAt),
+		CreatedAt:            toolutil.FormatTimePtr(i.CreatedAt),
 		MovedToID:            i.MovedToID,
 		Labels:               []string(i.Labels),
 		LabelDetails:         labelDetailsOutputs(i.LabelDetails),
 		Upvotes:              i.Upvotes,
 		Downvotes:            i.Downvotes,
-		DueDate:              formatISOTimePtr(i.DueDate),
+		DueDate:              toolutil.FormatISOTimePtr(i.DueDate),
 		WebURL:               i.WebURL,
 		References:           referencesOutput(i.References),
 		TimeStats:            timeStatsOutput(i.TimeStats),

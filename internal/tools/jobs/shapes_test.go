@@ -42,8 +42,8 @@ func TestObjectConverters_NilAndEmpty(t *testing.T) {
 	if projectObject(nil) != nil {
 		t.Error("projectObject(nil) != nil")
 	}
-	if formatTimePtr(nil) != "" {
-		t.Error("formatTimePtr(nil) != \"\"")
+	if toolutil.FormatTimePtr(nil) != "" {
+		t.Error("toolutil.FormatTimePtr(nil) != \"\"")
 	}
 }
 

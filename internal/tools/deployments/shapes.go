@@ -1,7 +1,7 @@
 package deployments
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -18,14 +18,6 @@ import (
 // runner objects). The deployable.project sub-object ({ci_job_token_scope_enabled})
 // is documented but absent from the SDK, so it is surfaced via a raw REST superset
 // fetch (see rawGetDeployment/rawListDeployments in deployments.go).
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // UserOutput is the documented reference subset of the deployment-level user
 // object (sourced from gl.ProjectUser). Documented reference subset per
@@ -107,7 +99,7 @@ func deployableUserOutput(u *gitlab.User) *DeployableUserOutput {
 		State:        u.State,
 		AvatarURL:    u.AvatarURL,
 		WebURL:       u.WebURL,
-		CreatedAt:    formatTimePtr(u.CreatedAt),
+		CreatedAt:    toolutil.FormatTimePtr(u.CreatedAt),
 		Bio:          u.Bio,
 		Location:     u.Location,
 		PublicEmail:  u.PublicEmail,
@@ -142,7 +134,7 @@ func deployableCommitOutput(c *gitlab.Commit) *DeployableCommitOutput {
 		Title:       c.Title,
 		AuthorName:  c.AuthorName,
 		AuthorEmail: c.AuthorEmail,
-		CreatedAt:   formatTimePtr(c.CreatedAt),
+		CreatedAt:   toolutil.FormatTimePtr(c.CreatedAt),
 		Message:     c.Message,
 	}
 }
@@ -171,8 +163,8 @@ func deployablePipelineOutput(p gitlab.DeploymentDeployablePipeline) *Deployable
 		Ref:       p.Ref,
 		Status:    p.Status,
 		WebURL:    p.WebURL,
-		CreatedAt: formatTimePtr(p.CreatedAt),
-		UpdatedAt: formatTimePtr(p.UpdatedAt),
+		CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
+		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt),
 	}
 }
 
@@ -263,9 +255,9 @@ func deployableOutput(d gitlab.DeploymentDeployable, project *DeployableProjectO
 		Ref:        d.Ref,
 		Tag:        d.Tag,
 		Coverage:   d.Coverage,
-		CreatedAt:  formatTimePtr(d.CreatedAt),
-		StartedAt:  formatTimePtr(d.StartedAt),
-		FinishedAt: formatTimePtr(d.FinishedAt),
+		CreatedAt:  toolutil.FormatTimePtr(d.CreatedAt),
+		StartedAt:  toolutil.FormatTimePtr(d.StartedAt),
+		FinishedAt: toolutil.FormatTimePtr(d.FinishedAt),
 		Project:    project,
 		User:       deployableUserOutput(d.User),
 		Commit:     deployableCommitOutput(d.Commit),

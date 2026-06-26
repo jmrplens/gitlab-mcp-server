@@ -1,7 +1,7 @@
 package todos
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -14,14 +14,6 @@ import (
 // This file covers the to-do sub-objects surfaced on the canonical json keys:
 // project (gl.BasicProject), author (gl.BasicUser), and target (gl.TodoTarget),
 // including the nested issue/MR summary objects referenced from a target.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // BasicProjectOut mirrors gl.BasicProject (the project a to-do belongs to).
 type BasicProjectOut struct {
@@ -41,7 +33,7 @@ func basicProjectOut(p *gl.BasicProject) *BasicProjectOut {
 	return &BasicProjectOut{
 		ID: p.ID, Description: p.Description, Name: p.Name,
 		NameWithNamespace: p.NameWithNamespace, Path: p.Path,
-		PathWithNamespace: p.PathWithNamespace, CreatedAt: formatTimePtr(p.CreatedAt),
+		PathWithNamespace: p.PathWithNamespace, CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
 	}
 }
 
@@ -62,7 +54,7 @@ func basicUserOut(u *gl.BasicUser) *BasicUserOut {
 	}
 	return &BasicUserOut{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -104,18 +96,10 @@ func milestoneOut(m *gl.Milestone) *MilestoneOut {
 	return &MilestoneOut{
 		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
-		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
-		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
 		Expired: m.Expired,
 	}
-}
-
-// formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD.
-func formatISOTimePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
 }
 
 // TaskCompletionStatusOut mirrors gl.TasksCompletionStatus.
@@ -228,7 +212,7 @@ func todoTargetOut(t *gl.TodoTarget) *TodoTargetOut {
 		Assignees:            basicUserOuts(t.Assignees),
 		Assignee:             basicUserOut(t.Assignee),
 		Author:               basicUserOut(t.Author),
-		CreatedAt:            formatTimePtr(t.CreatedAt),
+		CreatedAt:            toolutil.FormatTimePtr(t.CreatedAt),
 		Description:          t.Description,
 		Downvotes:            t.Downvotes,
 		ID:                   t.ID,
@@ -240,7 +224,7 @@ func todoTargetOut(t *gl.TodoTarget) *TodoTargetOut {
 		Subscribed:           t.Subscribed,
 		TaskCompletionStatus: taskCompletionStatusOut(t.TaskCompletionStatus),
 		Title:                t.Title,
-		UpdatedAt:            formatTimePtr(t.UpdatedAt),
+		UpdatedAt:            toolutil.FormatTimePtr(t.UpdatedAt),
 		Upvotes:              t.Upvotes,
 		UserNotesCount:       t.UserNotesCount,
 		WebURL:               t.WebURL,
@@ -253,7 +237,7 @@ func todoTargetOut(t *gl.TodoTarget) *TodoTargetOut {
 		TimeStats:    timeStatsOut(t.TimeStats),
 		Weight:       t.Weight,
 
-		MergedAt:                  formatTimePtr(t.MergedAt),
+		MergedAt:                  toolutil.FormatTimePtr(t.MergedAt),
 		ApprovalsBeforeMerge:      t.ApprovalsBeforeMerge,
 		ForceRemoveSourceBranch:   t.ForceRemoveSourceBranch,
 		MergeCommitSHA:            t.MergeCommitSHA,

@@ -116,10 +116,10 @@ func toOutput(n *gl.Note) Output {
 		ProjectID:    n.ProjectID,
 		Confidential: n.Confidential, //nolint:staticcheck // mirror deprecated SDK field for 1:1 fidelity
 	}
-	out.CreatedAt = formatTimePtr(n.CreatedAt)
-	out.UpdatedAt = formatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = formatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = formatTimePtr(n.ResolvedAt)
+	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
+	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
+	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
+	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
 	return out
 }
 

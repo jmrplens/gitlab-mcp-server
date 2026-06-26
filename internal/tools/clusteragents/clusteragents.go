@@ -3,21 +3,12 @@ package clusteragents
 import (
 	"context"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
-
-// formatTimePtr renders a *time.Time as an RFC3339 string, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
 
 // ConfigProjectOutput mirrors gl.ConfigProject (a cluster agent's configuration
 // project reference) field-for-field.
@@ -39,7 +30,7 @@ func configProjectOutput(cp gl.ConfigProject) ConfigProjectOutput {
 		NameWithNamespace: cp.NameWithNamespace,
 		Path:              cp.Path,
 		PathWithNamespace: cp.PathWithNamespace,
-		CreatedAt:         formatTimePtr(cp.CreatedAt),
+		CreatedAt:         toolutil.FormatTimePtr(cp.CreatedAt),
 	}
 }
 
@@ -69,7 +60,7 @@ func agentItem(a *gl.Agent) AgentItem {
 	return AgentItem{
 		ID:              a.ID,
 		Name:            a.Name,
-		CreatedAt:       formatTimePtr(a.CreatedAt),
+		CreatedAt:       toolutil.FormatTimePtr(a.CreatedAt),
 		CreatedByUserID: a.CreatedByUserID,
 		ConfigProject:   configProjectOutput(a.ConfigProject),
 	}
@@ -199,9 +190,9 @@ func agentTokenItem(t *gl.AgentToken) AgentTokenItem {
 		Description:     t.Description,
 		AgentID:         t.AgentID,
 		Status:          t.Status,
-		CreatedAt:       formatTimePtr(t.CreatedAt),
+		CreatedAt:       toolutil.FormatTimePtr(t.CreatedAt),
 		CreatedByUserID: t.CreatedByUserID,
-		LastUsedAt:      formatTimePtr(t.LastUsedAt),
+		LastUsedAt:      toolutil.FormatTimePtr(t.LastUsedAt),
 		Token:           t.Token,
 	}
 }

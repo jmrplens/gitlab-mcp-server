@@ -1,7 +1,7 @@
 package deploymentmergerequests
 
 import (
-	"time"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -13,22 +13,6 @@ import (
 // (C-IMPORTS). The deployment merge requests endpoint returns the full
 // []*gl.MergeRequest payload, so Output mirrors gl.MergeRequest (which embeds
 // gl.BasicMergeRequest) field-for-field.
-
-// formatTimePtr renders an optional timestamp as RFC 3339, or "" when nil.
-func formatTimePtr(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
-// formatISOTimePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD.
-func formatISOTimePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in
 // merge-request payloads (author, assignee, assignees, reviewers, merge_user,
@@ -51,7 +35,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: formatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
 	}
 }
 
@@ -92,8 +76,8 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 	return &MilestoneOutput{
 		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
 		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
-		StartDate: formatISOTimePtr(m.StartDate), DueDate: formatISOTimePtr(m.DueDate),
-		CreatedAt: formatTimePtr(m.CreatedAt), UpdatedAt: formatTimePtr(m.UpdatedAt),
+		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
+		CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
 		Expired: m.Expired,
 	}
 }
@@ -208,7 +192,7 @@ func pipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
 	return &PipelineInfoOutput{
 		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
 		Source: p.Source, Ref: p.Ref, SHA: p.SHA, Name: p.Name, WebURL: p.WebURL,
-		UpdatedAt: formatTimePtr(p.UpdatedAt), CreatedAt: formatTimePtr(p.CreatedAt),
+		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
 	}
 }
 
@@ -280,9 +264,9 @@ func pipelineOutput(p *gl.Pipeline) *PipelineOutput {
 		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
 		Source: string(p.Source), Ref: p.Ref, Name: p.Name, SHA: p.SHA, BeforeSHA: p.BeforeSHA,
 		Tag: p.Tag, YamlErrors: p.YamlErrors, User: basicUserOutput(p.User),
-		UpdatedAt: formatTimePtr(p.UpdatedAt), CreatedAt: formatTimePtr(p.CreatedAt),
-		StartedAt: formatTimePtr(p.StartedAt), FinishedAt: formatTimePtr(p.FinishedAt),
-		CommittedAt: formatTimePtr(p.CommittedAt), Duration: p.Duration, QueuedDuration: p.QueuedDuration,
+		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
+		StartedAt: toolutil.FormatTimePtr(p.StartedAt), FinishedAt: toolutil.FormatTimePtr(p.FinishedAt),
+		CommittedAt: toolutil.FormatTimePtr(p.CommittedAt), Duration: p.Duration, QueuedDuration: p.QueuedDuration,
 		Coverage: p.Coverage, WebURL: p.WebURL, DetailedStatus: pipelineDetailedStatusOutput(p.DetailedStatus),
 	}
 }

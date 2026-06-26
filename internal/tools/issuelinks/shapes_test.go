@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -25,10 +27,10 @@ func timePtr(year int, month time.Month, day int) *time.Time {
 
 // TestFormatTimePtr verifies RFC 3339 rendering and the nil branch.
 func TestFormatTimePtr(t *testing.T) {
-	if got := formatTimePtr(nil); got != "" {
-		t.Errorf("formatTimePtr(nil) = %q, want empty", got)
+	if got := toolutil.FormatTimePtr(nil); got != "" {
+		t.Errorf("toolutil.FormatTimePtr(nil) = %q, want empty", got)
 	}
-	got := formatTimePtr(timePtr(2026, time.January, 2))
+	got := toolutil.FormatTimePtr(timePtr(2026, time.January, 2))
 	if got != "2026-01-02T00:00:00Z" {
 		t.Errorf("formatTimePtr = %q", got)
 	}
@@ -36,10 +38,10 @@ func TestFormatTimePtr(t *testing.T) {
 
 // TestFormatISOTimePtr verifies YYYY-MM-DD rendering and the nil branch.
 func TestFormatISOTimePtr(t *testing.T) {
-	if got := formatISOTimePtr(nil); got != "" {
-		t.Errorf("formatISOTimePtr(nil) = %q, want empty", got)
+	if got := toolutil.FormatISOTimePtr(nil); got != "" {
+		t.Errorf("toolutil.FormatISOTimePtr(nil) = %q, want empty", got)
 	}
-	got := formatISOTimePtr(isoTimePtr(2026, time.March, 4))
+	got := toolutil.FormatISOTimePtr(isoTimePtr(2026, time.March, 4))
 	if got != "2026-03-04" {
 		t.Errorf("formatISOTimePtr = %q", got)
 	}
