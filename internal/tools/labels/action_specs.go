@@ -15,6 +15,7 @@ const (
 	actionLabelList     = "label.list"
 	paramLabelID        = "label_id"
 	roleLabelIdentifier = "label_identifier"
+	hintLabelNameOrID   = "Label name or ID from task context or label list output."
 )
 
 // ActionSpecs returns canonical specs for project label actions exposed
@@ -111,7 +112,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
@@ -136,7 +137,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
@@ -148,7 +149,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
@@ -160,7 +161,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
@@ -172,7 +173,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
@@ -184,7 +185,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,
-				ValueSource:    "Label name or ID from task context or label list output.",
+				ValueSource:    hintLabelNameOrID,
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}

@@ -6,14 +6,16 @@ import (
 )
 
 const (
-	actionEpicIssueList   = "group.epic_issue_list"
-	actionEpicIssueAssign = "group.epic_issue_assign"
-	actionEpicIssueRemove = "group.epic_issue_remove"
-	actionEpicGet         = "group.epic_get"
-	actionIssueGet        = "issue.get"
-	paramFullPath         = "full_path"
-	paramChildProjectPath = "child_project_path"
-	roleParentGroupPath   = "parent_group_path"
+	actionEpicIssueList     = "group.epic_issue_list"
+	actionEpicIssueAssign   = "group.epic_issue_assign"
+	actionEpicIssueRemove   = "group.epic_issue_remove"
+	actionEpicGet           = "group.epic_get"
+	actionIssueGet          = "issue.get"
+	paramFullPath           = "full_path"
+	paramChildProjectPath   = "child_project_path"
+	roleParentGroupPath     = "parent_group_path"
+	hintGroupFullPath       = "Group full path that owns the epic."
+	hintNotChildProjectPath = "Do not use the child project path as full_path."
 )
 
 // ActionSpecs returns canonical specs for epic issue hierarchy actions.
@@ -35,7 +37,7 @@ func epicIssueListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramFullPath: {
 			SemanticRole:     roleParentGroupPath,
-			ValueSource:      "Group full path that owns the epic.",
+			ValueSource:      hintGroupFullPath,
 			CommonConfusions: []string{"Do not use a child project path as full_path; epics live on groups."},
 		},
 		"epic_iid": {
@@ -57,8 +59,8 @@ func epicIssueAssignSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramFullPath: {
 			SemanticRole:     roleParentGroupPath,
-			ValueSource:      "Group full path that owns the epic.",
-			CommonConfusions: []string{"Do not use the child project path as full_path."},
+			ValueSource:      hintGroupFullPath,
+			CommonConfusions: []string{hintNotChildProjectPath},
 		},
 		paramChildProjectPath: {
 			SemanticRole:     paramChildProjectPath,
@@ -84,8 +86,8 @@ func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramFullPath: {
 			SemanticRole:     roleParentGroupPath,
-			ValueSource:      "Group full path that owns the epic.",
-			CommonConfusions: []string{"Do not use the child project path as full_path."},
+			ValueSource:      hintGroupFullPath,
+			CommonConfusions: []string{hintNotChildProjectPath},
 		},
 		paramChildProjectPath: {
 			SemanticRole:     paramChildProjectPath,
@@ -111,8 +113,8 @@ func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramFullPath: {
 			SemanticRole:     roleParentGroupPath,
-			ValueSource:      "Group full path that owns the epic.",
-			CommonConfusions: []string{"Do not use the child project path as full_path."},
+			ValueSource:      hintGroupFullPath,
+			CommonConfusions: []string{hintNotChildProjectPath},
 		},
 		"child_id": {
 			SemanticRole:     "child_work_item_gid",

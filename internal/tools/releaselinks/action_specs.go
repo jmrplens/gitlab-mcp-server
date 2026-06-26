@@ -8,6 +8,7 @@ import (
 const (
 	actionReleaseCreate     = "release.create"
 	actionReleaseLinkList   = "release_link.list"
+	actionReleaseLinkListID = "release.link_list"
 	actionPackagePublish    = "package.publish"
 	actionPackagePublishDir = "package.publish_directory"
 )
@@ -59,7 +60,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if actionName == "link_delete" {
 		options.Usage = "Delete a release asset link by link_id. Use to detach a downloadable asset from a release; the underlying file or package is not removed."
 		options.Aliases = []string{"delete release link", "remove release asset link", "detach release download"}
-		options.RelatedActions = []string{"release.link_get", "release.link_list", "release.get"}
+		options.RelatedActions = []string{"release.link_get", actionReleaseLinkListID, "release.get"}
 	}
 	if actionName == "link_create_batch" {
 		options.Usage = "Create MULTIPLE release asset links in one call. Provide the release tag_name and a links array, each entry with a name and an absolute url. Use this instead of repeated link_create when attaching several assets at once, for example one link per file uploaded by package.publish_directory."
@@ -84,7 +85,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
 		}
-		options.RelatedActions = []string{actionReleaseCreate, "release.link_list", actionPackagePublish, actionPackagePublishDir}
+		options.RelatedActions = []string{actionReleaseCreate, actionReleaseLinkListID, actionPackagePublish, actionPackagePublishDir}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"url": {
 				SemanticRole: "release_asset_absolute_url",
@@ -119,7 +120,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if actionName == "link_create_batch" {
 		options.Usage = "Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets."
 		options.Aliases = []string{"batch release links", "release package asset links", "link package files to release", "create multiple release assets"}
-		options.RelatedActions = []string{actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, "release.link_list"}
+		options.RelatedActions = []string{actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, actionReleaseLinkListID}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_links",

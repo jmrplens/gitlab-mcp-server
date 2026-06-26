@@ -18,6 +18,7 @@ const (
 	actionPipelineList     = "pipeline.list"
 	paramScheduleID        = "schedule_id"
 	rolePipelineScheduleID = "pipeline_schedule_id"
+	exampleScheduleID      = "params.schedule_id:13"
 )
 
 // ActionSpecs returns canonical specs for pipeline schedule actions.
@@ -109,7 +110,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:     rolePipelineScheduleID,
 				ValueSource:      "Numeric schedule ID from a prior list, usually shown in the schedule URL.",
-				ExampleBinding:   "params.schedule_id:13",
+				ExampleBinding:   exampleScheduleID,
 				CommonConfusions: []string{"schedule_id is the database ID, not the schedule description or cron string."},
 			},
 		},
@@ -142,7 +143,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to edit, from a prior list or get.",
-				ExampleBinding: "params.schedule_id:13",
+				ExampleBinding: exampleScheduleID,
 			},
 		},
 		description: "Update a pipeline schedule. Returns: the updated schedule with cron, ref, owner, and inputs. See also: gitlab_pipeline_schedule_get, gitlab_pipeline_schedule_take_ownership.",
@@ -155,7 +156,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to delete, from a prior list or get.",
-				ExampleBinding: "params.schedule_id:13",
+				ExampleBinding: exampleScheduleID,
 			},
 		},
 		description: "Delete a pipeline schedule permanently. Returns: a success confirmation. See also: gitlab_pipeline_schedule_get, gitlab_pipeline_schedule_list.",
@@ -168,7 +169,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule to trigger, from a prior list or get.",
-				ExampleBinding: "params.schedule_id:13",
+				ExampleBinding: exampleScheduleID,
 			},
 		},
 		description: "Run a pipeline schedule immediately. Returns: the schedule's current state after triggering. See also: gitlab_pipeline_schedule_get, gitlab_pipeline_schedule_list_triggered_pipelines.",
@@ -181,7 +182,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule whose ownership to take.",
-				ExampleBinding: "params.schedule_id:13",
+				ExampleBinding: exampleScheduleID,
 			},
 		},
 		description: "Take ownership of a pipeline schedule. Returns: the schedule with the caller as owner. See also: gitlab_pipeline_schedule_update, gitlab_pipeline_schedule_run.",
@@ -234,7 +235,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
 				ValueSource:    "Numeric ID of the schedule whose triggered pipelines to list.",
-				ExampleBinding: "params.schedule_id:13",
+				ExampleBinding: exampleScheduleID,
 			},
 		},
 		description: "List pipelines triggered by a schedule. Returns: triggered pipelines with status, ref, sha, web URL, and pagination metadata. See also: gitlab_pipeline_schedule_get, gitlab_pipeline_schedule_run.",

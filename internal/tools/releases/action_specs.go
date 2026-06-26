@@ -15,6 +15,7 @@ const (
 	actionReleaseLinkList = "release_link.list"
 	paramTagName          = "tag_name"
 	roleGitTag            = "git_tag"
+	hintReleaseTagName    = "Release tag name from list output or task context."
 )
 
 // ActionSpecs returns canonical specs for release actions.
@@ -88,7 +89,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,
-				ValueSource:      "Release tag name from list output or task context.",
+				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
 				CommonConfusions: []string{"Use tag_name for release lookup; do not pass release title in this field."},
 			},
@@ -131,7 +132,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,
-				ValueSource:      "Release tag name from list output or task context.",
+				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
 				CommonConfusions: []string{"tag_name identifies the release to edit; it cannot be changed by this action."},
 			},
@@ -144,7 +145,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,
-				ValueSource:      "Release tag name from list output or task context.",
+				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
 				CommonConfusions: []string{"Deleting the release does not delete the Git tag; use gitlab_tag_delete to remove the tag."},
 			},
