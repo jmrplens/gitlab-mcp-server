@@ -64,7 +64,7 @@ type Output struct {
 	ExtraSharedRunnersMinutesLimit int64                   `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
 	NamespaceID                    int64                   `json:"namespace_id,omitempty"`
 	Identities                     []IdentityOutput        `json:"identities,omitempty"`
-	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
+	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty" tier:"premium"`
 	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
 }
