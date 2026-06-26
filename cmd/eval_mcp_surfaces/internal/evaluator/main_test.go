@@ -2531,7 +2531,7 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		"For project access tokens, scope names go in params.scopes as an array",
 		"expiring dates go in params.expires_at",
 		"For broadcast messages, saying maps to params.message",
-		"For job.play variables, use params.variables as an array",
+		"For job.play variables, use params.job_variables_attributes as an array",
 		"For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id",
 		"for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id",
 		"use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied",
