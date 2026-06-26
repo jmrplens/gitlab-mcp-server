@@ -103,18 +103,23 @@ var usageSignalKeywords = []string{
 }
 
 // severityFor reports the effective severity for a flag, applying the
-// cluster-aware upgrade for empty_related and weak_aliases.
+// cluster-aware upgrade for empty_related, weak_aliases, and
+// weak_individual_description. The upgrade is only applied when the
+// cluster has a non-CRUD variant suffix (_batch/_bulk/_all/_directory/
+// _single) — pure CRUD families (create/get/list/delete/update on the
+// same resource) are not escalated because the verb is itself the
+// disambiguator and the action name is the natural description.
 func severityFor(flagName string, inCluster bool) string {
 	switch flagName {
 	case "generic_usage", "missing_disambiguation":
 		return "error"
 	case "weak_aliases":
-		if inCluster {
+		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
 			return "error"
 		}
 		return "warning"
 	case "empty_related":
-		if inCluster {
+		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
 			return "error"
 		}
 		return "warning"
@@ -125,9 +130,27 @@ func severityFor(flagName string, inCluster bool) string {
 	case "empty_output_description":
 		return "info"
 	case "weak_individual_description":
+		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
+			return "error"
+		}
 		return "warning"
 	}
 	return "info"
+}
+
+// currentClusterMembers is set by buildReport before iterating packages so
+// severityFor can apply the cluster-variant guard without threading the
+// cluster membership through every call site. Reset to nil for any auditor
+// use that doesn't set it (e.g. unit tests of severityFor).
+var currentClusterMembers []string
+
+// withClusterMembers returns a copy of fn invoked with currentClusterMembers
+// set to members, then resets the global. Used by buildReport to scope
+// severityFor's cluster-variant lookups to the current spec's cluster.
+func withClusterMembers(members []string, fn func()) {
+	currentClusterMembers = members
+	defer func() { currentClusterMembers = nil }()
+	fn()
 }
 
 // actionFinding records the discovery-completeness flags raised for one action.
@@ -279,9 +302,24 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 		return report{}, err
 	}
 
-	// First pass: collect all specs grouped by package. Some packages register
-	// the same (owner, name) from multiple scope helpers (e.g. project+group
-	// badges), so we dedupe by (owner, name) before clustering.
+	allClusters := collectAllClusters(client)
+
+	packagesOut := buildPackageReports(client, allClusters, projected, minAliases, gapsOnly)
+	clustersOut := sortClusters(allClusters)
+
+	return report{
+		SchemaVersion: schemaVersion,
+		Summary:       summarize(packagesOut),
+		Clusters:      clustersOut,
+		Packages:      packagesOut,
+	}, nil
+}
+
+// collectAllClusters gathers the catalog and builds sibling clusters across
+// all owner packages. Some packages register the same (owner, name) from
+// multiple scope helpers (e.g. project+group badges), so we dedupe by
+// (owner, name) before clustering.
+func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 	specsByOwner := map[string][]toolutil.ActionSpec{}
 	seen := map[string]bool{}
 	for _, group := range tools.CollectActionSpecs(client, true) {
@@ -295,37 +333,44 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 			specsByOwner[owner] = append(specsByOwner[owner], spec)
 		}
 	}
+	return siblingClusters(flattenSpecs(specsByOwner))
+}
 
-	// Build clusters keyed by (owner, stem) across the whole catalog so a
-	// cross-package sibling split can still be assigned whole to one owner.
-	allClusters := siblingClusters(flattenSpecs(specsByOwner))
-
+// buildPackageReports analyzes every spec and returns the per-package reports
+// ready for JSON output. Gaps-only mode filters clean packages.
+func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
-	for owner, specs := range specsByOwner {
-		pr := packageFor(byPackage, owner)
-		pr.Actions += len(specs)
-		for _, spec := range specs {
+	for _, group := range tools.CollectActionSpecs(client, true) {
+		for _, spec := range group.Actions {
+			owner := ownerPackage(group, spec)
 			clusterMembers := clusterMembersFor(allClusters, owner, spec.Name)
-			finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
-			if len(finding.Flags) == 0 && gapsOnly {
-				continue
-			}
-			if len(finding.Flags) > 0 {
+			withClusterMembers(clusterMembers, func() {
+				pr := packageFor(byPackage, owner)
+				pr.Actions++
+				finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
+				if len(finding.Flags) == 0 {
+					return
+				}
+				if gapsOnly {
+					pr.Findings = append(pr.Findings, finding)
+					return
+				}
 				pr.Findings = append(pr.Findings, finding)
-			}
+			})
 		}
 	}
-
 	packagesOut := make([]packageReport, 0, len(byPackage))
 	for _, pr := range byPackage {
-		if gapsOnly && len(pr.Findings) == 0 {
-			continue
-		}
 		sort.Slice(pr.Findings, func(i, j int) bool { return pr.Findings[i].Action < pr.Findings[j].Action })
 		packagesOut = append(packagesOut, *pr)
 	}
 	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
+	return packagesOut
+}
 
+// sortClusters returns a copy of clusters sorted by (package, stem) for
+// deterministic JSON output.
+func sortClusters(allClusters []clusterRecord) []clusterRecord {
 	clustersOut := append([]clusterRecord(nil), allClusters...)
 	sort.Slice(clustersOut, func(i, j int) bool {
 		if clustersOut[i].Package != clustersOut[j].Package {
@@ -333,13 +378,7 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 		}
 		return clustersOut[i].Stem < clustersOut[j].Stem
 	})
-
-	return report{
-		SchemaVersion: schemaVersion,
-		Summary:       summarize(packagesOut),
-		Clusters:      clustersOut,
-		Packages:      packagesOut,
-	}, nil
+	return clustersOut
 }
 
 // flattenSpecs merges the owner-grouped specs into a single slice while
