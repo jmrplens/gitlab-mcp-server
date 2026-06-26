@@ -54,9 +54,24 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.Aliases = []string{"delete release link", "remove release asset link", "detach release download"}
 		options.RelatedActions = []string{"release.link_get", "release.link_list", "release.get"}
 	}
+	if actionName == "link_create_batch" {
+		options.Usage = "Create MULTIPLE release asset links in one call. Provide the release tag_name and a links array, each entry with a name and an absolute url. Use this instead of repeated link_create when attaching several assets at once, for example one link per file uploaded by package.publish_directory."
+		options.Aliases = []string{"create multiple release links", "batch create release asset links", "add several release links at once", "link multiple package files to a release", "create release asset links in one call", "attach multiple assets to release", "link each uploaded file to release"}
+		options.RelatedActions = []string{"release.link_create", "release.create", "package.publish_directory", "package.publish"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"links": {
+				SemanticRole: "release_asset_link_batch",
+				ValueSource:  "An array of {name, url} objects, one per asset. For package assets, use the absolute URLs returned by package publish actions; do not construct package registry URLs manually.",
+				CommonConfusions: []string{
+					"Do not call link_create once per asset when several are requested; pass them all in the links array of link_create_batch.",
+					"Do not put a single name/url at top level; each link goes inside the links array.",
+				},
+			},
+		}
+	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {
-			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
+			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url. To create several links at once (e.g. one per uploaded package file), use link_create_batch instead."
 			options.Aliases = []string{"create release link", "add release asset link", "link release asset"}
 		} else {
 			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."

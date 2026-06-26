@@ -97,7 +97,7 @@ type packageActionMeta struct {
 // Usage, toolname-only Aliases, or empty RelatedActions (1:1 audit R-META).
 var packageActionMetadata = map[string]packageActionMeta{
 	"publish": {
-		usage:       "Upload a single file as a Generic Package Registry asset. Provide project_id, package_name, package_version, and file_name plus the local file to stream; optional status and select fields control visibility and processing.",
+		usage:       "Upload a single file as a Generic Package Registry asset. Provide project_id, package_name, package_version, and file_name plus the local file to stream; optional status and select fields control visibility and processing. To upload ALL files from a local directory in one call, use publish_directory instead.",
 		aliases:     []string{"upload generic package file", "publish package asset", "push file to package registry", "create generic package version"},
 		related:     []string{"package.publish_and_link", "package.publish_directory", "package.list", "package.file_list"},
 		description: "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
