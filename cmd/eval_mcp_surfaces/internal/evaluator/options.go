@@ -91,6 +91,11 @@ func parseFlags() options {
 	flag.IntVar(&opts.Retries, "retries", 3, "Retries for transient model-provider 429/5xx responses")
 	// --retry-wait sets the fallback wait between retries.
 	flag.DurationVar(&opts.RetryWait, "retry-wait", 65*time.Second, "Fallback wait before retrying model-provider 429 responses")
+	// --max-output-retries re-runs a task when it fails only because the model
+	// emitted malformed tool-call output (unparseable arguments), a stochastic
+	// generation glitch. Wrong tool/action/param choices and schema/MCP/GitLab
+	// errors are NOT retried. 2 = up to 3 total attempts.
+	flag.IntVar(&opts.MaxOutputRetries, "max-output-retries", 2, "Retries for tasks that fail solely due to malformed model tool-call output (0 disables)")
 	// --pause inserts a delay between tasks.
 	flag.DurationVar(&opts.Pause, "pause", 0, "Optional pause between tasks")
 	// --input-cost-per-mtok sets the USD/M token price for input tokens.

@@ -48,6 +48,7 @@ type options struct {
 	MaxTokens              int
 	Retries                int
 	RetryWait              time.Duration
+	MaxOutputRetries       int
 	Pause                  time.Duration
 	Pricing                pricingOptions
 	DryRun                 bool

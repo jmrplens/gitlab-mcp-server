@@ -561,6 +561,19 @@ func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec m
 	results := make([]taskResult, 0, len(run.tasks))
 	for taskIndex, task := range run.tasks {
 		result := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
+		retries := 0
+		for retries < run.opts.MaxOutputRetries && isRetriableModelOutputFailure(result) {
+			retries++
+			terminalPrintf("retry: model=%s run=%d %s: malformed tool-call output, re-running (attempt %d/%d)\n", spec.String(), runIndex, task.ID, retries, run.opts.MaxOutputRetries)
+			result = evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
+		}
+		if retries > 0 {
+			outcome := "still failed"
+			if result.FinalSuccess {
+				outcome = "recovered"
+			}
+			result.Notes = append(result.Notes, fmt.Sprintf("malformed-output retry: %d attempt(s), %s", retries, outcome))
+		}
 		if taskIndex == 0 {
 			if err := fatalInitialProviderError(result); err != nil {
 				return nil, err
@@ -569,6 +582,28 @@ func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec m
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+// isRetriableModelOutputFailure reports whether a failed task result failed
+// SOLELY because the model emitted malformed tool-call output (empty or
+// unparseable arguments) — a stochastic generation glitch where the tool never
+// executed, so re-running is side-effect-free. It returns false for successful
+// results and for genuine failures (wrong tool/action/param choice, or
+// schema/MCP/GitLab errors), which are real model-quality results and must not
+// be retried.
+func isRetriableModelOutputFailure(result taskResult) bool {
+	if result.FinalSuccess {
+		return false
+	}
+	for _, event := range result.Trace.Events {
+		if event.Kind != "model_error" {
+			continue
+		}
+		if strings.Contains(event.Content, markerInvalidToolArgs) || strings.Contains(event.Content, markerEmptyToolArgs) {
+			return true
+		}
+	}
+	return false
 }
 
 func fatalInitialProviderError(result taskResult) error {

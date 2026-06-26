@@ -577,17 +577,27 @@ func openAIUserOrToolMessages(message modelMessage) []openAIMessage {
 	return out
 }
 
+// markerEmptyToolArgs and markerInvalidToolArgs identify malformed model
+// tool-call output (empty or unparseable arguments). They are the single source
+// of truth shared by the error messages here and the retry classifier
+// (isRetriableModelOutputFailure): such failures are stochastic generation
+// glitches, safe to re-run because the tool never executed.
+const (
+	markerEmptyToolArgs   = "returned empty JSON arguments"
+	markerInvalidToolArgs = "returned invalid JSON arguments"
+)
+
 // openAIToolUseBlocks coordinates OpenAI tool use blocks and returns [[]modelContentBlock].
 func openAIToolUseBlocks(message openAIMessage) ([]modelContentBlock, error) {
 	blocks := make([]modelContentBlock, 0, len(message.ToolCalls))
 	for _, call := range message.ToolCalls {
 		arguments := strings.TrimSpace(call.Function.Arguments)
 		if arguments == "" {
-			return nil, fmt.Errorf("%s tool call %s returned empty JSON arguments", call.Function.Name, call.ID)
+			return nil, fmt.Errorf("%s tool call %s %s", call.Function.Name, call.ID, markerEmptyToolArgs)
 		}
 		input, err := parseOpenAIToolArguments(arguments)
 		if err != nil {
-			return nil, fmt.Errorf("%s tool call %s returned invalid JSON arguments: %w; raw=%s", call.Function.Name, call.ID, err, truncateForDiagnostics(arguments, 300))
+			return nil, fmt.Errorf("%s tool call %s %s: %w; raw=%s", call.Function.Name, call.ID, markerInvalidToolArgs, err, truncateForDiagnostics(arguments, 300))
 		}
 		blocks = append(blocks, modelContentBlock{Type: "tool_use", ID: call.ID, Name: call.Function.Name, Input: input})
 	}
