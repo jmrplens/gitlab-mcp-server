@@ -1,9 +1,9 @@
 package issuelinks
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Canonical output shapes mirrored from client-go sub-objects. Per the 1:1

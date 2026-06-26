@@ -1,9 +1,9 @@
 package mergetrains
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Canonical output shapes mirrored from client-go sub-objects. Per the 1:1
