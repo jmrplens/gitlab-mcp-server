@@ -9,7 +9,7 @@ import (
 
 // userName returns the display username for a merge-train user sub-object, or
 // "" when the user is absent.
-func userName(u *BasicUserOutput) string {
+func userName(u *toolutil.BasicUserOutput) string {
 	if u == nil {
 		return ""
 	}

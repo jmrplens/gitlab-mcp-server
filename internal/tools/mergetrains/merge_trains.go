@@ -73,16 +73,16 @@ type MergeRequestOutput struct {
 // nested objects for the merge_request, user, and pipeline sub-objects.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int64              `json:"id"`
-	MergeRequest MergeRequestOutput `json:"merge_request"`
-	User         *BasicUserOutput   `json:"user,omitempty"`
-	Pipeline     *PipelineOutput    `json:"pipeline,omitempty"`
-	TargetBranch string             `json:"target_branch"`
-	Status       string             `json:"status"`
-	Duration     int64              `json:"duration"`
-	CreatedAt    string             `json:"created_at,omitempty"`
-	UpdatedAt    string             `json:"updated_at,omitempty"`
-	MergedAt     string             `json:"merged_at,omitempty"`
+	ID           int64                     `json:"id"`
+	MergeRequest MergeRequestOutput        `json:"merge_request"`
+	User         *toolutil.BasicUserOutput `json:"user,omitempty"`
+	Pipeline     *toolutil.PipelineOutput  `json:"pipeline,omitempty"`
+	TargetBranch string                    `json:"target_branch"`
+	Status       string                    `json:"status"`
+	Duration     int64                     `json:"duration"`
+	CreatedAt    string                    `json:"created_at,omitempty"`
+	UpdatedAt    string                    `json:"updated_at,omitempty"`
+	MergedAt     string                    `json:"merged_at,omitempty"`
 }
 
 // ListOutput wraps a list of merge train entries.
@@ -101,8 +101,8 @@ func toOutput(mt *gl.MergeTrain) Output {
 	}
 	out := Output{
 		ID:           mt.ID,
-		User:         basicUserOutput(mt.User),
-		Pipeline:     pipelineOutput(mt.Pipeline),
+		User:         toolutil.NewBasicUserOutput(mt.User),
+		Pipeline:     toolutil.NewPipelineOutput(mt.Pipeline),
 		TargetBranch: mt.TargetBranch,
 		Status:       mt.Status,
 		Duration:     mt.Duration,

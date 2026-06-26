@@ -98,7 +98,7 @@ func mrProjectPath(mr Output) string {
 }
 
 // userName returns the username of a basic-user object, or "" when nil.
-func userName(u *BasicUserOutput) string {
+func userName(u *toolutil.BasicUserOutput) string {
 	if u == nil {
 		return ""
 	}
@@ -106,7 +106,7 @@ func userName(u *BasicUserOutput) string {
 }
 
 // userNames maps a slice of basic-user objects to their usernames, skipping nil.
-func userNames(users []*BasicUserOutput) []string {
+func userNames(users []*toolutil.BasicUserOutput) []string {
 	out := make([]string, 0, len(users))
 	for _, u := range users {
 		if u == nil {

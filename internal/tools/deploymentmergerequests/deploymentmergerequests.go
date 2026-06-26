@@ -85,13 +85,13 @@ type Output struct {
 	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push,omitempty"`
 	DiscussionLocked            bool                        `json:"discussion_locked"`
 	RebaseInProgress            bool                        `json:"rebase_in_progress,omitempty"`
-	Author                      *BasicUserOutput            `json:"author,omitempty"`
-	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
-	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
-	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
-	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
-	Assignees                   []*BasicUserOutput          `json:"assignees"`
-	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
+	Author                      *toolutil.BasicUserOutput   `json:"author,omitempty"`
+	Assignee                    *toolutil.BasicUserOutput   `json:"assignee,omitempty"`
+	MergeUser                   *toolutil.BasicUserOutput   `json:"merge_user,omitempty"`
+	MergedBy                    *toolutil.BasicUserOutput   `json:"merged_by,omitempty"`
+	ClosedBy                    *toolutil.BasicUserOutput   `json:"closed_by,omitempty"`
+	Assignees                   []*toolutil.BasicUserOutput `json:"assignees"`
+	Reviewers                   []*toolutil.BasicUserOutput `json:"reviewers"`
 	Labels                      []string                    `json:"labels"`
 	LabelDetails                []*LabelDetailsOutput       `json:"label_details,omitempty"`
 	Milestone                   *MilestoneOutput            `json:"milestone,omitempty"`
@@ -114,7 +114,7 @@ type Output struct {
 	User                        *MergeRequestUserOutput     `json:"user,omitempty"`
 	DiffRefs                    *DiffRefsOutput             `json:"diff_refs,omitempty"`
 	Pipeline                    *PipelineInfoOutput         `json:"pipeline,omitempty"`
-	HeadPipeline                *PipelineOutput             `json:"head_pipeline,omitempty"`
+	HeadPipeline                *toolutil.PipelineOutput    `json:"head_pipeline,omitempty"`
 	LatestBuildStartedAt        string                      `json:"latest_build_started_at,omitempty"`
 	LatestBuildFinishedAt       string                      `json:"latest_build_finished_at,omitempty"`
 	FirstDeployedToProductionAt string                      `json:"first_deployed_to_production_at,omitempty"`
@@ -318,13 +318,13 @@ func toOutput(m *gl.MergeRequest) Output {
 		Upvotes:                     m.Upvotes,
 		Downvotes:                   m.Downvotes,
 		UserNotesCount:              m.UserNotesCount,
-		Author:                      basicUserOutput(m.Author),
-		Assignee:                    basicUserOutput(m.Assignee),
-		MergeUser:                   basicUserOutput(m.MergeUser),
-		ClosedBy:                    basicUserOutput(m.ClosedBy),
-		MergedBy:                    basicUserOutput(m.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
-		Assignees:                   basicUserOutputs(m.Assignees),
-		Reviewers:                   basicUserOutputs(m.Reviewers),
+		Author:                      toolutil.NewBasicUserOutput(m.Author),
+		Assignee:                    toolutil.NewBasicUserOutput(m.Assignee),
+		MergeUser:                   toolutil.NewBasicUserOutput(m.MergeUser),
+		ClosedBy:                    toolutil.NewBasicUserOutput(m.ClosedBy),
+		MergedBy:                    toolutil.NewBasicUserOutput(m.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+		Assignees:                   toolutil.NewBasicUserOutputs(m.Assignees),
+		Reviewers:                   toolutil.NewBasicUserOutputs(m.Reviewers),
 		Labels:                      []string(m.Labels),
 		LabelDetails:                labelDetailsOutputs(m.LabelDetails),
 		Milestone:                   milestoneOutput(m.Milestone),
@@ -340,7 +340,7 @@ func toOutput(m *gl.MergeRequest) Output {
 		WorkInProgress:              m.WorkInProgress, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
 		User:                        mergeRequestUserOutput(m.User),
 		Pipeline:                    pipelineInfoOutput(m.Pipeline),
-		HeadPipeline:                pipelineOutput(m.HeadPipeline),
+		HeadPipeline:                toolutil.NewPipelineOutput(m.HeadPipeline),
 		MergeAfter:                  toolutil.FormatTimePtr(m.MergeAfter),
 		LatestBuildStartedAt:        toolutil.FormatTimePtr(m.LatestBuildStartedAt),
 		LatestBuildFinishedAt:       toolutil.FormatTimePtr(m.LatestBuildFinishedAt),

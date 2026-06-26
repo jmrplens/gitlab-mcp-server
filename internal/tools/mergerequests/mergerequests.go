@@ -80,13 +80,13 @@ type Output struct {
 	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push,omitempty"`
 	DiscussionLocked            bool                        `json:"discussion_locked"`
 	RebaseInProgress            bool                        `json:"rebase_in_progress,omitempty"`
-	Author                      *BasicUserOutput            `json:"author,omitempty"`
-	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
-	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
-	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
-	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
-	Assignees                   []*BasicUserOutput          `json:"assignees"`
-	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
+	Author                      *toolutil.BasicUserOutput   `json:"author,omitempty"`
+	Assignee                    *toolutil.BasicUserOutput   `json:"assignee,omitempty"`
+	MergeUser                   *toolutil.BasicUserOutput   `json:"merge_user,omitempty"`
+	MergedBy                    *toolutil.BasicUserOutput   `json:"merged_by,omitempty"`
+	ClosedBy                    *toolutil.BasicUserOutput   `json:"closed_by,omitempty"`
+	Assignees                   []*toolutil.BasicUserOutput `json:"assignees"`
+	Reviewers                   []*toolutil.BasicUserOutput `json:"reviewers"`
 	Labels                      []string                    `json:"labels"`
 	LabelDetails                []*LabelDetailsOutput       `json:"label_details,omitempty"`
 	Milestone                   *MilestoneOutput            `json:"milestone,omitempty"`
@@ -109,7 +109,7 @@ type Output struct {
 	User                        *MergeRequestUserOutput     `json:"user,omitempty"`
 	DiffRefs                    *DiffRefsOutput             `json:"diff_refs,omitempty"`
 	Pipeline                    *PipelineInfoOutput         `json:"pipeline,omitempty"`
-	HeadPipeline                *PipelineOutput             `json:"head_pipeline,omitempty"`
+	HeadPipeline                *toolutil.PipelineOutput    `json:"head_pipeline,omitempty"`
 	LatestBuildStartedAt        string                      `json:"latest_build_started_at,omitempty"`
 	LatestBuildFinishedAt       string                      `json:"latest_build_finished_at,omitempty"`
 	FirstDeployedToProductionAt string                      `json:"first_deployed_to_production_at,omitempty"`
@@ -420,7 +420,7 @@ func ToOutput(m *gl.MergeRequest) Output {
 		}
 	}
 	out.Pipeline = pipelineInfoOutput(m.Pipeline)
-	out.HeadPipeline = pipelineOutput(m.HeadPipeline)
+	out.HeadPipeline = toolutil.NewPipelineOutput(m.HeadPipeline)
 	out.LatestBuildStartedAt = toolutil.FormatTimePtr(m.LatestBuildStartedAt)
 	out.LatestBuildFinishedAt = toolutil.FormatTimePtr(m.LatestBuildFinishedAt)
 	out.FirstDeployedToProductionAt = toolutil.FormatTimePtr(m.FirstDeployedToProductionAt)
@@ -472,18 +472,18 @@ func populatePeople(out *Output, m *gl.BasicMergeRequest) {
 	out.SquashCommitSHA = m.SquashCommitSHA
 	out.Upvotes = m.Upvotes
 	out.Downvotes = m.Downvotes
-	out.Author = basicUserOutput(m.Author)
-	out.Assignee = basicUserOutput(m.Assignee)
-	out.MergeUser = basicUserOutput(m.MergeUser)
-	out.ClosedBy = basicUserOutput(m.ClosedBy)
-	out.MergedBy = basicUserOutput(m.MergedBy) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
-	out.Assignees = basicUserOutputs(m.Assignees)
+	out.Author = toolutil.NewBasicUserOutput(m.Author)
+	out.Assignee = toolutil.NewBasicUserOutput(m.Assignee)
+	out.MergeUser = toolutil.NewBasicUserOutput(m.MergeUser)
+	out.ClosedBy = toolutil.NewBasicUserOutput(m.ClosedBy)
+	out.MergedBy = toolutil.NewBasicUserOutput(m.MergedBy) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+	out.Assignees = toolutil.NewBasicUserOutputs(m.Assignees)
 	if out.Assignees == nil {
-		out.Assignees = []*BasicUserOutput{}
+		out.Assignees = []*toolutil.BasicUserOutput{}
 	}
-	out.Reviewers = basicUserOutputs(m.Reviewers)
+	out.Reviewers = toolutil.NewBasicUserOutputs(m.Reviewers)
 	if out.Reviewers == nil {
-		out.Reviewers = []*BasicUserOutput{}
+		out.Reviewers = []*toolutil.BasicUserOutput{}
 	}
 	out.Labels = []string(m.Labels)
 	if out.Labels == nil {

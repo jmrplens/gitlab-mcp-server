@@ -21,50 +21,6 @@ import (
 // (PipelineInfoOutput), user (MergeRequestUserOutput), and diff_refs
 // (DiffRefsOutput, defined in mergerequests.go).
 
-// BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in
-// merge-request payloads (author, assignee, assignees, reviewers, merge_user,
-// closed_by, merged_by).
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-// basicUserOutput converts a single gl.BasicUser to its output shape, returning
-// nil when the SDK value is nil.
-func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	return &BasicUserOutput{
-		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
-	}
-}
-
-// basicUserOutputs converts a slice of gl.BasicUser, skipping nil elements and
-// returning nil for an empty or all-nil slice.
-func basicUserOutputs(users []*gl.BasicUser) []*BasicUserOutput {
-	if len(users) == 0 {
-		return nil
-	}
-	out := make([]*BasicUserOutput, 0, len(users))
-	for _, u := range users {
-		if u == nil {
-			continue
-		}
-		out = append(out, basicUserOutput(u))
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
 // MilestoneOutput mirrors gl.Milestone (the merge-request milestone object).
 type MilestoneOutput struct {
 	ID          int64  `json:"id"`
@@ -199,81 +155,6 @@ func pipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
 	}
 }
 
-// PipelineDetailedStatusOutput mirrors gl.DetailedStatus (the head_pipeline
-// detailed_status object).
-type PipelineDetailedStatusOutput struct {
-	Icon         string                                    `json:"icon"`
-	Text         string                                    `json:"text"`
-	Label        string                                    `json:"label"`
-	Group        string                                    `json:"group"`
-	Tooltip      string                                    `json:"tooltip"`
-	HasDetails   bool                                      `json:"has_details"`
-	DetailsPath  string                                    `json:"details_path"`
-	Illustration *PipelineDetailedStatusIllustrationOutput `json:"illustration,omitempty"`
-	Favicon      string                                    `json:"favicon"`
-}
-
-// PipelineDetailedStatusIllustrationOutput mirrors gl.DetailedStatusIllustration
-// (the detailed_status.illustration object).
-type PipelineDetailedStatusIllustrationOutput struct {
-	Image string `json:"image"`
-}
-
-func pipelineDetailedStatusOutput(s *gl.DetailedStatus) *PipelineDetailedStatusOutput {
-	if s == nil {
-		return nil
-	}
-	out := &PipelineDetailedStatusOutput{
-		Icon: s.Icon, Text: s.Text, Label: s.Label, Group: s.Group,
-		Tooltip: s.Tooltip, HasDetails: s.HasDetails, DetailsPath: s.DetailsPath, Favicon: s.Favicon,
-	}
-	if s.Illustration.Image != "" {
-		out.Illustration = &PipelineDetailedStatusIllustrationOutput{Image: s.Illustration.Image}
-	}
-	return out
-}
-
-// PipelineOutput mirrors gl.Pipeline (the full head_pipeline object).
-type PipelineOutput struct {
-	ID             int64                         `json:"id"`
-	IID            int64                         `json:"iid"`
-	ProjectID      int64                         `json:"project_id"`
-	Status         string                        `json:"status"`
-	Source         string                        `json:"source"`
-	Ref            string                        `json:"ref"`
-	Name           string                        `json:"name"`
-	SHA            string                        `json:"sha"`
-	BeforeSHA      string                        `json:"before_sha"`
-	Tag            bool                          `json:"tag"`
-	YamlErrors     string                        `json:"yaml_errors"`
-	User           *BasicUserOutput              `json:"user,omitempty"`
-	UpdatedAt      string                        `json:"updated_at,omitempty"`
-	CreatedAt      string                        `json:"created_at,omitempty"`
-	StartedAt      string                        `json:"started_at,omitempty"`
-	FinishedAt     string                        `json:"finished_at,omitempty"`
-	CommittedAt    string                        `json:"committed_at,omitempty"`
-	Duration       int64                         `json:"duration"`
-	QueuedDuration int64                         `json:"queued_duration"`
-	Coverage       string                        `json:"coverage"`
-	WebURL         string                        `json:"web_url"`
-	DetailedStatus *PipelineDetailedStatusOutput `json:"detailed_status,omitempty"`
-}
-
-func pipelineOutput(p *gl.Pipeline) *PipelineOutput {
-	if p == nil {
-		return nil
-	}
-	return &PipelineOutput{
-		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
-		Source: string(p.Source), Ref: p.Ref, Name: p.Name, SHA: p.SHA, BeforeSHA: p.BeforeSHA,
-		Tag: p.Tag, YamlErrors: p.YamlErrors, User: basicUserOutput(p.User),
-		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
-		StartedAt: toolutil.FormatTimePtr(p.StartedAt), FinishedAt: toolutil.FormatTimePtr(p.FinishedAt),
-		CommittedAt: toolutil.FormatTimePtr(p.CommittedAt), Duration: p.Duration, QueuedDuration: p.QueuedDuration,
-		Coverage: p.Coverage, WebURL: p.WebURL, DetailedStatus: pipelineDetailedStatusOutput(p.DetailedStatus),
-	}
-}
-
 // BlockingMergeRequestOutput mirrors gl.BlockingMergeRequest (the
 // blocking_merge_request object on a merge-request dependency). It is a
 // BasicMergeRequest-shaped object surfaced 1:1 with the SDK field set.
@@ -289,10 +170,10 @@ type BlockingMergeRequestOutput struct {
 	UpdatedAt                   string                      `json:"updated_at,omitempty"`
 	Upvotes                     int64                       `json:"upvotes"`
 	Downvotes                   int64                       `json:"downvotes"`
-	Author                      *BasicUserOutput            `json:"author,omitempty"`
-	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
-	Assignees                   []*BasicUserOutput          `json:"assignees,omitempty"`
-	Reviewers                   []*BasicUserOutput          `json:"reviewers,omitempty"`
+	Author                      *toolutil.BasicUserOutput   `json:"author,omitempty"`
+	Assignee                    *toolutil.BasicUserOutput   `json:"assignee,omitempty"`
+	Assignees                   []*toolutil.BasicUserOutput `json:"assignees,omitempty"`
+	Reviewers                   []*toolutil.BasicUserOutput `json:"reviewers,omitempty"`
 	SourceProjectID             int64                       `json:"source_project_id"`
 	TargetProjectID             int64                       `json:"target_project_id"`
 	Labels                      []string                    `json:"labels"`
@@ -302,7 +183,7 @@ type BlockingMergeRequestOutput struct {
 	AutoMerge                   bool                        `json:"auto_merge"`
 	DetailedMergeStatus         string                      `json:"detailed_merge_status"`
 	MergedAt                    string                      `json:"merged_at,omitempty"`
-	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
+	ClosedBy                    *toolutil.BasicUserOutput   `json:"closed_by,omitempty"`
 	ClosedAt                    string                      `json:"closed_at,omitempty"`
 	SHA                         string                      `json:"sha"`
 	MergeCommitSHA              string                      `json:"merge_commit_sha"`
@@ -318,7 +199,7 @@ type BlockingMergeRequestOutput struct {
 	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 	HasConflicts                bool                        `json:"has_conflicts"`
 	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
-	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
+	MergeUser                   *toolutil.BasicUserOutput   `json:"merge_user,omitempty"`
 	MergeAfter                  string                      `json:"merge_after,omitempty"`
 	Imported                    bool                        `json:"imported"`
 	ImportedFrom                string                      `json:"imported_from"`
@@ -326,7 +207,7 @@ type BlockingMergeRequestOutput struct {
 	SquashOnMerge               bool                        `json:"squash_on_merge"`
 	WorkInProgress              bool                        `json:"work_in_progress"`
 	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds"`
-	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
+	MergedBy                    *toolutil.BasicUserOutput   `json:"merged_by,omitempty"`
 	ApprovalsBeforeMerge        *int64                      `json:"approvals_before_merge,omitempty" tier:"premium"`
 	Reference                   string                      `json:"reference"`
 	MergeStatus                 string                      `json:"merge_status"`
@@ -341,12 +222,12 @@ func blockingMergeRequestOutput(b gl.BlockingMergeRequest) *BlockingMergeRequest
 		ProjectID: b.ProjectID, Title: b.Title, State: b.State,
 		CreatedAt: formatTimeValue(b.CreatedAt), UpdatedAt: formatTimeValue(b.UpdatedAt),
 		Upvotes: b.Upvotes, Downvotes: b.Downvotes,
-		Author: basicUserOutput(b.Author), Assignee: basicUserOutput(b.Assignee),
-		Assignees: basicUserOutputs(b.Assignees), Reviewers: basicUserOutputs(b.Reviewers),
+		Author: toolutil.NewBasicUserOutput(b.Author), Assignee: toolutil.NewBasicUserOutput(b.Assignee),
+		Assignees: toolutil.NewBasicUserOutputs(b.Assignees), Reviewers: toolutil.NewBasicUserOutputs(b.Reviewers),
 		SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID,
 		Labels: labelOptionsToStrings(b.Labels), Description: b.Description, Draft: b.Draft,
 		Milestone: derefString(b.Milestone), AutoMerge: b.AutoMerge, DetailedMergeStatus: b.DetailedMergeStatus,
-		MergedAt: toolutil.FormatTimePtr(b.MergedAt), ClosedBy: basicUserOutput(b.ClosedBy), ClosedAt: toolutil.FormatTimePtr(b.ClosedAt),
+		MergedAt: toolutil.FormatTimePtr(b.MergedAt), ClosedBy: toolutil.NewBasicUserOutput(b.ClosedBy), ClosedAt: toolutil.FormatTimePtr(b.ClosedAt),
 		SHA: b.Sha, MergeCommitSHA: b.MergeCommitSha, SquashCommitSHA: b.SquashCommitSha,
 		UserNotesCount: b.UserNotesCount, ShouldRemoveSourceBranch: b.ShouldRemoveSourceBranch,
 		ForceRemoveSourceBranch: b.ForceRemoveSourceBranch, WebURL: b.WebURL,
@@ -354,15 +235,15 @@ func blockingMergeRequestOutput(b gl.BlockingMergeRequest) *BlockingMergeRequest
 		TimeStats: timeStatsPtr(b.TimeStats), Squash: b.Squash,
 		TaskCompletionStatus: taskCompletionStatusOutput(b.TaskCompletionStatus),
 		HasConflicts:         b.HasConflicts, BlockingDiscussionsResolved: b.BlockingDiscussionsResolved,
-		MergeUser: basicUserOutput(b.MergeUser), MergeAfter: formatTimeValue(b.MergeAfter),
+		MergeUser: toolutil.NewBasicUserOutput(b.MergeUser), MergeAfter: formatTimeValue(b.MergeAfter),
 		Imported: b.Imported, ImportedFrom: b.ImportedFrom, PreparedAt: toolutil.FormatTimePtr(b.PreparedAt),
 		SquashOnMerge:             b.SquashOnMerge,
-		WorkInProgress:            b.WorkInProgress,            //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
-		MergeWhenPipelineSucceeds: b.MergeWhenPipelineSucceeds, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use AutoMerge.
-		MergedBy:                  basicUserOutput(b.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
-		ApprovalsBeforeMerge:      b.ApprovalsBeforeMerge,      //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity.
-		Reference:                 b.Reference,                 //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use References.
-		MergeStatus:               b.MergeStatus,               //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use DetailedMergeStatus.
+		WorkInProgress:            b.WorkInProgress,                        //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
+		MergeWhenPipelineSucceeds: b.MergeWhenPipelineSucceeds,             //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use AutoMerge.
+		MergedBy:                  toolutil.NewBasicUserOutput(b.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+		ApprovalsBeforeMerge:      b.ApprovalsBeforeMerge,                  //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity.
+		Reference:                 b.Reference,                             //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use References.
+		MergeStatus:               b.MergeStatus,                           //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use DetailedMergeStatus.
 	}
 	return out
 }
