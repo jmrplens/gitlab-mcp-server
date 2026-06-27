@@ -135,6 +135,13 @@ func severityFor(flagName string, inCluster bool) string {
 		return "warning"
 	case "empty_output_description":
 		return "info"
+	case "param_enum_candidate":
+		// Backlog signal for INPUT-ENUM: an input field describes a fixed value
+		// set in prose but lacks a structured JSON Schema enum. Info-level so it
+		// is visible in -gaps-only without failing the gate while the fills are
+		// in progress; promote to warning once the backlog is drained to prevent
+		// regression.
+		return "info"
 	case "missing_parameter_guidance":
 		return "warning"
 	case "aliases_only_toolname":
@@ -208,6 +215,7 @@ type reportSummary struct {
 	MissingNextSteps          int `json:"missing_next_steps"`
 	EmptyParamDescription     int `json:"empty_param_description"`
 	EmptyOutputDescription    int `json:"empty_output_description"`
+	ParamEnumCandidate        int `json:"param_enum_candidate"`
 	MissingDisambiguation     int `json:"missing_disambiguation"`
 	WeakIndividualDescription int `json:"weak_individual_description"`
 	MissingParameterGuidance  int `json:"missing_parameter_guidance"`
@@ -469,18 +477,9 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	// awareness but does NOT count toward `errors` or `warnings` and does
 	// NOT fail `make audit-discovery-check`. If the policy changes, raise
 	// the severity in `severityForFlag` and re-evaluate the audit gate.
-	var fields []fieldFinding
-	for _, p := range emptyParamDescriptions(spec.Route.InputSchema) {
-		fields = append(fields, fieldFinding{Param: p, Flag: "empty_param_description"})
-	}
-	for _, p := range emptyParamDescriptions(spec.Route.OutputSchema) {
-		fields = append(fields, fieldFinding{Param: p, Flag: "empty_output_description"})
-	}
-	if hasInputEmptyFields(fields, "empty_param_description") {
-		addFlag("empty_param_description")
-	}
-	if hasInputEmptyFields(fields, "empty_output_description") {
-		addFlag("empty_output_description")
+	fields, fieldFlags := collectFieldFindings(spec)
+	for _, f := range fieldFlags {
+		addFlag(f)
 	}
 
 	// Check C: sibling-cluster disambiguation.
@@ -514,6 +513,31 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 		Fields:    fields,
 		HasSchema: len(spec.Route.InputSchema) > 0,
 	}
+}
+
+// collectFieldFindings gathers all field-level findings for a spec — empty input
+// and output descriptions plus INPUT-ENUM candidates — and returns them with the
+// distinct action-level flags they imply. INPUT-ENUM flags scalar input fields
+// whose prose enumerates a fixed value set but expose no structured JSON Schema
+// enum (the model-authoritative way to constrain a value); normalized/flexible
+// fields (access_level family, handled by actioncompat) and free-form fields are
+// excluded because a strict enum would reject valid input.
+func collectFieldFindings(spec toolutil.ActionSpec) (fields []fieldFinding, flags []string) {
+	for _, p := range emptyParamDescriptions(spec.Route.InputSchema) {
+		fields = append(fields, fieldFinding{Param: p, Flag: "empty_param_description"})
+	}
+	for _, p := range emptyParamDescriptions(spec.Route.OutputSchema) {
+		fields = append(fields, fieldFinding{Param: p, Flag: "empty_output_description"})
+	}
+	for _, p := range enumCandidates(spec.Route.InputSchema) {
+		fields = append(fields, fieldFinding{Param: p, Flag: "param_enum_candidate"})
+	}
+	for _, f := range []string{"empty_param_description", "empty_output_description", "param_enum_candidate"} {
+		if hasInputEmptyFields(fields, f) {
+			flags = append(flags, f)
+		}
+	}
+	return fields, flags
 }
 
 // hasInputEmptyFields reports whether any field has the given flag.
@@ -866,6 +890,145 @@ func emptyParamDescriptions(schema map[string]any) []string {
 	return out
 }
 
+// enumCandidates returns input-schema field paths whose description implies a
+// fixed value set (e.g. "asc or desc", "(running, pending, finished)") but which
+// lack a structured JSON Schema "enum". These are INPUT-ENUM backlog candidates:
+// a structured enum lets the model and MCP clients constrain the value
+// authoritatively instead of parsing prose.
+func enumCandidates(schema map[string]any) []string {
+	if len(schema) == 0 {
+		return nil
+	}
+	return walkSchemaForEnumCandidates(schema, "", map[uintptr]bool{})
+}
+
+// walkSchemaForEnumCandidates mirrors walkSchemaForEmptyDescriptions but flags
+// scalar properties whose prose describes an enumerable set without a structured
+// enum keyword.
+func walkSchemaForEnumCandidates(schema map[string]any, path string, visited map[uintptr]bool) []string {
+	if schema == nil {
+		return nil
+	}
+	key := schemaPointer(schema)
+	if visited[key] {
+		return nil
+	}
+	visited[key] = true
+
+	resolved := resolveSchemaRef(schema)
+	if schemaPointer(resolved) != key {
+		key2 := schemaPointer(resolved)
+		if visited[key2] {
+			return nil
+		}
+		visited[key2] = true
+		schema = resolved
+	}
+
+	props, hasProps := schema["properties"].(map[string]any)
+	if !hasProps {
+		return nil
+	}
+	keys := make([]string, 0, len(props))
+	for k := range props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []string
+	for _, k := range keys {
+		child, _ := props[k].(map[string]any)
+		if child == nil {
+			continue
+		}
+		childPath := k
+		if path != "" {
+			childPath = path + "." + k
+		}
+		if isEnumCandidate(k, child) {
+			out = append(out, childPath)
+		}
+		out = append(out, walkSchemaForEnumCandidates(child, childPath, visited)...)
+		if items, hasItems := child["items"].(map[string]any); hasItems {
+			out = append(out, walkSchemaForEnumCandidates(items, childPath, visited)...)
+		}
+	}
+	return out
+}
+
+// isEnumCandidate reports whether a scalar property describes a fixed value set
+// in prose but lacks a structured enum and is not a normalized/flexible field.
+func isEnumCandidate(name string, propSchema map[string]any) bool {
+	if _, hasEnum := propSchema["enum"]; hasEnum {
+		return false
+	}
+	switch propSchema["type"] {
+	case "string", "integer", "number":
+	default:
+		return false
+	}
+	if isNormalizedEnumParam(name) || isFreeFormParam(name) {
+		return false
+	}
+	desc, _ := propSchema["description"].(string)
+	return descriptionImpliesEnum(desc)
+}
+
+// freeFormParamTokens are substrings of field names that denote free-form values
+// (paths, identifiers, free text, secrets) which never have a fixed enum domain.
+// Excluding them keeps the INPUT-ENUM backlog free of prose heuristic false
+// positives (e.g. a file_path description containing a "/" separator).
+var freeFormParamTokens = []string{
+	"path", "file", "content", "base64", "url", "sha", "email", "token",
+	"password", "secret", "regex", "pattern", "name", "title", "body",
+	"message", "description", "_key", "value", "ref", "branch", "tag",
+}
+
+// isFreeFormParam reports whether a field name denotes a free-form value with no
+// fixed enum domain.
+func isFreeFormParam(name string) bool {
+	n := strings.ToLower(name)
+	for _, tok := range freeFormParamTokens {
+		if strings.Contains(n, tok) {
+			return true
+		}
+	}
+	return false
+}
+
+// enumProseOneOf / enumProseAscDesc / enumProseList detect prose that enumerates
+// a fixed value set: an explicit "one of", a bare asc/desc sort direction, or a
+// colon/paren-introduced list of >=2 lowercase tokens joined by comma, slash, or
+// "or" (e.g. "Sort direction (asc, desc)", "strategy: wildcard, regex, or all").
+var (
+	enumProseOneOf   = regexp.MustCompile(`(?i)\bone of\b`)
+	enumProseAscDesc = regexp.MustCompile(`(?i)\b(asc|desc)\b`)
+	enumProseList    = regexp.MustCompile(`(?i)[:(]\s*[a-z][a-z0-9_]*\s*(?:,|/|\bor\b)\s*[a-z][a-z0-9_]*`)
+)
+
+// descriptionImpliesEnum reports whether a property description enumerates a
+// fixed value set in prose.
+func descriptionImpliesEnum(desc string) bool {
+	d := strings.TrimSpace(desc)
+	if d == "" {
+		return false
+	}
+	return enumProseOneOf.MatchString(d) ||
+		enumProseAscDesc.MatchString(d) ||
+		enumProseList.MatchString(d)
+}
+
+// isNormalizedEnumParam reports whether a field accepts normalized/flexible input
+// (handled by internal/tools/actioncompat), where a strict enum would reject
+// valid calls — e.g. access_level accepts both "Maintainer" and 40, and
+// protected-environment access-level/approval-rule arrays carry normalized
+// numeric levels.
+func isNormalizedEnumParam(name string) bool {
+	n := strings.ToLower(name)
+	return strings.Contains(n, "access_level") ||
+		n == "approval_rules" ||
+		n == "deploy_access_levels"
+}
+
 // walkSchemaForEmptyDescriptions performs a recursive walk over the schema,
 // returning the list of property paths whose description is missing or
 // boilerplate. The visited set prevents cycles in $ref-resolved schemas
@@ -1064,6 +1227,8 @@ func summarize(packages []packageReport) reportSummary {
 					s.EmptyParamDescription++
 				case "empty_output_description":
 					s.EmptyOutputDescription++
+				case "param_enum_candidate":
+					s.ParamEnumCandidate++
 				case "missing_disambiguation":
 					s.MissingDisambiguation++
 				case "weak_individual_description":

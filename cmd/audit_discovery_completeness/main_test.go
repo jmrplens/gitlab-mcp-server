@@ -816,3 +816,61 @@ func TestIsScopeSuggestiveName(t *testing.T) {
 		}
 	}
 }
+
+// TestDescriptionImpliesEnum verifies the INPUT-ENUM prose heuristic flags
+// descriptions that enumerate a fixed value set (explicit "one of", a bare
+// asc/desc sort direction, or a colon/paren-introduced comma/slash/"or" list)
+// while leaving free-text descriptions and single-value mentions unflagged.
+func TestDescriptionImpliesEnum(t *testing.T) {
+	yes := []string{
+		"Sort order: asc or desc",
+		"Sort direction (asc, desc)",
+		"Branch filter strategy: wildcard, regex, or all_branches",
+		"Filter by state (one of opened, closed)",
+		"Aggregation interval: daily, monthly, all",
+	}
+	no := []string{
+		"Project ID or URL-encoded path",
+		"Note body text in Markdown",
+		"Return events created after this RFC3339 timestamp",
+		"",
+		"Numeric merge request IID",
+	}
+	for _, d := range yes {
+		if !descriptionImpliesEnum(d) {
+			t.Errorf("descriptionImpliesEnum(%q) = false, want true", d)
+		}
+	}
+	for _, d := range no {
+		if descriptionImpliesEnum(d) {
+			t.Errorf("descriptionImpliesEnum(%q) = true, want false", d)
+		}
+	}
+}
+
+// TestIsEnumCandidate verifies the INPUT-ENUM field gate: a scalar string/integer
+// property whose prose enumerates values and which has no structured enum is a
+// candidate, while properties with an existing enum, non-scalar types,
+// normalized fields (access_level family), and free-form names (paths, content)
+// are excluded.
+func TestIsEnumCandidate(t *testing.T) {
+	cand := func(name string, p map[string]any) bool { return isEnumCandidate(name, p) }
+	if !cand("sort", map[string]any{"type": "string", "description": "Sort direction (asc, desc)"}) {
+		t.Error("sort with asc/desc prose should be a candidate")
+	}
+	if cand("sort", map[string]any{"type": "string", "enum": []any{"asc", "desc"}, "description": "Sort direction (asc, desc)"}) {
+		t.Error("field with existing enum must NOT be a candidate")
+	}
+	if cand("access_level", map[string]any{"type": "integer", "description": "Access level: 10=Guest, 30=Developer"}) {
+		t.Error("normalized access_level must NOT be a candidate (actioncompat accepts names)")
+	}
+	if cand("file_path", map[string]any{"type": "string", "description": "Path like dir/sub or root"}) {
+		t.Error("free-form file_path must NOT be a candidate")
+	}
+	if cand("labels", map[string]any{"type": "array", "description": "one of the label sets"}) {
+		t.Error("non-scalar array must NOT be a candidate")
+	}
+	if cand("title", map[string]any{"type": "string", "description": "Free text, e.g. asc or desc placeholder"}) {
+		t.Error("free-form title name must NOT be a candidate")
+	}
+}
