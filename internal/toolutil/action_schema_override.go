@@ -60,6 +60,59 @@ var canonicalParamEnums = map[string][]string{
 	"variable_type": {"env_var", "file"},
 }
 
+// canonicalParamFormats maps GitLab-universal date/time input parameters to
+// their JSON Schema `format`. GitLab dates are always ISO 8601 — never locale
+// ordered (DD/MM vs MM/DD): timestamp filters take an ISO 8601 date-time and
+// date-only fields take YYYY-MM-DD. These names carry the same format across
+// every endpoint, so the format is injected centrally (single source of truth)
+// by [NewActionSpec]. Field-specific date params whose granularity varies by
+// endpoint (e.g. expires_at, which is date-only for tokens) are set per action
+// via InputSchemaOverrides, not here.
+var canonicalParamFormats = map[string]string{
+	"created_after":        "date-time",
+	"created_before":       "date-time",
+	"updated_after":        "date-time",
+	"updated_before":       "date-time",
+	"last_used_after":      "date-time",
+	"last_used_before":     "date-time",
+	"last_activity_after":  "date-time",
+	"last_activity_before": "date-time",
+	"started_after":        "date-time",
+	"started_before":       "date-time",
+	"finished_after":       "date-time",
+	"finished_before":      "date-time",
+	"deployed_after":       "date-time",
+	"deployed_before":      "date-time",
+	"expires_after":        "date-time",
+	"expires_before":       "date-time",
+	"due_date":             "date",
+	"start_date":           "date",
+}
+
+// applyCanonicalParamFormats injects [canonicalParamFormats] into top-level
+// string properties of schema that do not already declare a `format`. Per-action
+// InputSchemaOverrides win (applied first by [NewActionSpec]); a property that
+// already carries a format is left untouched.
+func applyCanonicalParamFormats(schema map[string]any) {
+	if schema == nil {
+		return
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, format := range canonicalParamFormats {
+		prop, isMap := props[name].(map[string]any)
+		if !isMap || prop["type"] != "string" {
+			continue
+		}
+		if _, has := prop["format"]; has {
+			continue
+		}
+		prop["format"] = format
+	}
+}
+
 // applyCanonicalParamEnums injects the [canonicalParamEnums] value sets into the
 // top-level string properties of schema that do not already declare an enum.
 // Per-action InputSchemaOverrides are applied before this (see [NewActionSpec])

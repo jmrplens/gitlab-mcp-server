@@ -15343,6 +15343,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "full_path": {
@@ -15410,6 +15411,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "title": {
@@ -21194,10 +21196,12 @@
         },
         "finished_after": {
           "description": "Return deployments finished after this RFC3339 timestamp (GitLab 14+ only)",
+          "format": "date-time",
           "type": "string"
         },
         "finished_before": {
           "description": "Return deployments finished before this RFC3339 timestamp (GitLab 14+ only)",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -21253,10 +21257,12 @@
         },
         "updated_after": {
           "description": "Return deployments updated after this RFC3339 timestamp (GitLab \u003c 14 only)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return deployments updated before this RFC3339 timestamp (GitLab \u003c 14 only)",
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -25941,6 +25947,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "full_path": {
@@ -25968,6 +25975,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "title": {
@@ -27141,10 +27149,12 @@
         },
         "created_after": {
           "description": "Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "first": {
@@ -27234,10 +27244,12 @@
         },
         "updated_after": {
           "description": "Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return epics updated on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "with_labels_details": {
@@ -28062,6 +28074,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "epic_iid": {
@@ -28100,6 +28113,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "state_event": {
@@ -33415,6 +33429,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         }
       },
@@ -33805,10 +33820,12 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -33858,10 +33875,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -34842,10 +34861,12 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "iids": {
@@ -34900,10 +34921,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -36342,6 +36365,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         }
       },
@@ -36601,10 +36625,12 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "iids": {
@@ -36654,10 +36680,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -41078,18 +41106,22 @@
       "properties": {
         "created_after": {
           "description": "Return tokens created on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return tokens created on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_after": {
           "description": "Return tokens that expire on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_before": {
           "description": "Return tokens that expire on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -41098,10 +41130,12 @@
         },
         "last_used_after": {
           "description": "Return tokens last used on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_before": {
           "description": "Return tokens last used on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -51168,10 +51202,12 @@
         },
         "created_after": {
           "description": "Return users created after this RFC3339 timestamp (e.g. 2024-01-02T15:04:05Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return users created before this RFC3339 timestamp (e.g. 2024-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -53041,6 +53077,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -53049,6 +53086,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "title": {
@@ -53501,6 +53539,7 @@
         },
         "start_date": {
           "description": "Return milestones with a start date on or after this date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "state": {
@@ -53517,10 +53556,12 @@
         },
         "updated_after": {
           "description": "Return milestones updated after date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return milestones updated before date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -53827,6 +53868,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -53839,6 +53881,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "state_event": {
@@ -57539,10 +57582,12 @@
         },
         "created_after": {
           "description": "Return users created after this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return users created before this timestamp (RFC3339, e.g. 2026-01-02T15:04:05Z)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -58910,18 +58955,22 @@
       "properties": {
         "created_after": {
           "description": "Return tokens created after this RFC3339 timestamp",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return tokens created before this RFC3339 timestamp",
+          "format": "date-time",
           "type": "string"
         },
         "expires_after": {
           "description": "Return tokens expiring after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_before": {
           "description": "Return tokens expiring before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -58930,10 +58979,12 @@
         },
         "last_used_after": {
           "description": "Return tokens last used after this RFC3339 timestamp",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_before": {
           "description": "Return tokens last used before this RFC3339 timestamp",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -68165,6 +68216,7 @@
         },
         "due_date": {
           "description": "Due date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "epic_id": {
@@ -74762,14 +74814,17 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "due_date": {
           "description": "Filter by due date (0=no due date, overdue, week, month, next_month_and_previous_two_weeks)",
+          "format": "date",
           "type": "string"
         },
         "iids": {
@@ -74944,10 +74999,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "with_labels_details": {
@@ -75734,14 +75791,17 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "due_date": {
           "description": "Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)",
+          "format": "date",
           "type": "string"
         },
         "iids": {
@@ -75928,10 +75988,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "with_labels_details": {
@@ -76715,14 +76777,17 @@
         },
         "created_after": {
           "description": "Return issues created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return issues created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "due_date": {
           "description": "Filter by due date (0, overdue, week, month, next_month_and_previous_two_weeks)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -76901,10 +76966,12 @@
         },
         "updated_after": {
           "description": "Return issues updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return issues updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "with_labels_details": {
@@ -84830,6 +84897,7 @@
         },
         "due_date": {
           "description": "New due date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "epic_id": {
@@ -94120,10 +94188,12 @@
         },
         "created_after": {
           "description": "Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "deployment_id": {
@@ -94235,10 +94305,12 @@
         },
         "updated_after": {
           "description": "Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "view": {
@@ -95549,10 +95621,12 @@
         },
         "created_after": {
           "description": "Filter users created after this date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Filter users created before this date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -97078,10 +97152,12 @@
       "properties": {
         "created_after": {
           "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -98749,10 +98825,12 @@
       "properties": {
         "created_after": {
           "description": "Return tokens created on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return tokens created on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -98761,10 +98839,12 @@
         },
         "last_used_after": {
           "description": "Return tokens last used on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_before": {
           "description": "Return tokens last used on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -99281,18 +99361,22 @@
       "properties": {
         "created_after": {
           "description": "Return keys created on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return keys created on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_after": {
           "description": "Return keys expiring on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_before": {
           "description": "Return keys expiring on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -99575,10 +99659,12 @@
       "properties": {
         "created_after": {
           "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "page": {
@@ -101507,10 +101593,12 @@
       "properties": {
         "created_after": {
           "description": "Return events created after this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return events created before this date (ISO 8601 YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "page": {
@@ -106312,10 +106400,12 @@
         },
         "created_after": {
           "description": "Filter users created after this date (RFC3339)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Filter users created before this date (RFC3339)",
+          "format": "date-time",
           "type": "string"
         },
         "exclude_active": {
@@ -107569,6 +107659,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "project_id": {
@@ -107577,6 +107668,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "title": {
@@ -108348,6 +108440,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "milestone_iid": {
@@ -108360,6 +108453,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "state_event": {
@@ -122123,18 +122217,22 @@
         },
         "created_after": {
           "description": "Return MRs created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "deployed_after": {
           "description": "Return MRs deployed after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "deployed_before": {
           "description": "Return MRs deployed before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "draft": {
@@ -122269,10 +122367,12 @@
         },
         "updated_after": {
           "description": "Return MRs updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "view": {
@@ -123333,10 +123433,12 @@
         },
         "created_after": {
           "description": "Return MRs created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return MRs created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "draft": {
@@ -123456,10 +123558,12 @@
         },
         "updated_after": {
           "description": "Return MRs updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "view": {
@@ -124509,10 +124613,12 @@
         },
         "created_after": {
           "description": "Return MRs created after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return MRs created before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "draft": {
@@ -124636,10 +124742,12 @@
         },
         "updated_after": {
           "description": "Return MRs updated after date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return MRs updated before date (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "view": {
@@ -137459,26 +137567,32 @@
       "properties": {
         "created_after": {
           "description": "Return tokens created on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return tokens created on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_after": {
           "description": "Return tokens that expire on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "expires_before": {
           "description": "Return tokens that expire on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_after": {
           "description": "Return tokens last used on or after this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_before": {
           "description": "Return tokens last used on or before this date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -138659,10 +138773,12 @@
       "properties": {
         "created_after": {
           "description": "Return pipelines created after date (ISO 8601 format). Applies to the list fallback.",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return pipelines created before date (ISO 8601 format). Applies to the list fallback.",
+          "format": "date-time",
           "type": "string"
         },
         "name": {
@@ -138750,10 +138866,12 @@
         },
         "updated_after": {
           "description": "Return pipelines updated after date (ISO 8601 format). Applies to the list fallback.",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return pipelines updated before date (ISO 8601 format). Applies to the list fallback.",
+          "format": "date-time",
           "type": "string"
         },
         "username": {
@@ -138967,10 +139085,12 @@
       "properties": {
         "created_after": {
           "description": "Return pipelines created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Return pipelines created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "name": {
@@ -139058,10 +139178,12 @@
         },
         "updated_after": {
           "description": "Return pipelines updated after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
           "type": "string"
         },
         "updated_before": {
           "description": "Return pipelines updated before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "username": {
@@ -154750,10 +154872,12 @@
         },
         "last_activity_after": {
           "description": "Return projects with last activity after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "last_activity_before": {
           "description": "Return projects with last activity before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "membership": {
@@ -155927,10 +156051,12 @@
         },
         "last_activity_after": {
           "description": "Return forks with last activity after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "last_activity_before": {
           "description": "Return forks with last activity before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "membership": {
@@ -157681,10 +157807,12 @@
         },
         "last_activity_after": {
           "description": "Return projects with last activity after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "last_activity_before": {
           "description": "Return projects with last activity before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "membership": {
@@ -158865,10 +158993,12 @@
         },
         "last_activity_after": {
           "description": "Return projects with last activity after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "last_activity_before": {
           "description": "Return projects with last activity before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "membership": {
@@ -160049,10 +160179,12 @@
         },
         "last_activity_after": {
           "description": "Return projects with last activity after date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "last_activity_before": {
           "description": "Return projects with last activity before date (ISO 8601 format)",
+          "format": "date-time",
           "type": "string"
         },
         "membership": {
@@ -164142,26 +164274,32 @@
       "properties": {
         "created_after": {
           "description": "Filter tokens created after RFC3339 datetime or YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Filter tokens created before RFC3339 datetime or YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "expires_after": {
           "description": "Filter tokens expiring after YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "expires_before": {
           "description": "Filter tokens expiring before YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_after": {
           "description": "Filter tokens last used after RFC3339 datetime or YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "last_used_before": {
           "description": "Filter tokens last used before RFC3339 datetime or YYYY-MM-DD date",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -193436,10 +193574,12 @@
       "properties": {
         "created_after": {
           "description": "Filter snippets created after (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "created_before": {
           "description": "Filter snippets created before (ISO 8601)",
+          "format": "date-time",
           "type": "string"
         },
         "order_by": {
@@ -201198,6 +201338,7 @@
         },
         "due_date": {
           "description": "Due date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "full_path": {
@@ -201246,6 +201387,7 @@
         },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "state_event": {

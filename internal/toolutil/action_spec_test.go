@@ -1221,6 +1221,33 @@ func TestApplyCanonicalParamEnums(t *testing.T) {
 	}
 }
 
+// TestApplyCanonicalParamFormats verifies the central injection of GitLab date
+// formats: a string created_after/due_date without a format receives date-time /
+// date respectively; a property that already declares a format is left untouched;
+// non-string and unrelated properties are ignored.
+func TestApplyCanonicalParamFormats(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"created_after": map[string]any{"type": "string", "description": "ISO 8601"},
+		"due_date":      map[string]any{"type": "string"},
+		"title":         map[string]any{"type": "string"},
+		"expires_at":    map[string]any{"type": "string", "format": "date"}, // pre-set, must be kept
+	}}
+	props := schema["properties"].(map[string]any)
+	applyCanonicalParamFormats(schema)
+	if props["created_after"].(map[string]any)["format"] != "date-time" {
+		t.Errorf("created_after format = %v, want date-time", props["created_after"].(map[string]any)["format"])
+	}
+	if props["due_date"].(map[string]any)["format"] != "date" {
+		t.Errorf("due_date format = %v, want date", props["due_date"].(map[string]any)["format"])
+	}
+	if _, has := props["title"].(map[string]any)["format"]; has {
+		t.Error("title must not receive a format")
+	}
+	if props["expires_at"].(map[string]any)["format"] != "date" {
+		t.Error("pre-existing expires_at format must be preserved")
+	}
+}
+
 // TestFilterOverridesForSchema verifies that overrides whose property path no
 // longer resolves against the (tier-pruned) schema are dropped, while overrides
 // for present properties and root-level (empty path) overrides are kept — so a
