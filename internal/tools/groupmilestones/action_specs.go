@@ -131,7 +131,7 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 	},
 	"gitlab_group_milestone_delete": {
 		usage:       "Permanently delete a group milestone. Destructive and irreversible; confirm group_id and milestone_iid before calling. Requires Owner role.",
-		aliases:     []string{"delete group milestone", "remove group milestone"},
+		aliases:     []string{"delete group milestone", "remove group milestone", "destroy group milestone", "drop group milestone"},
 		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
 		description: "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",
 	},
