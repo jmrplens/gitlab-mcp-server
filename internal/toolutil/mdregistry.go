@@ -139,3 +139,42 @@ func RegisteredMarkdownTypeNames() []string {
 	})
 	return names
 }
+
+// HasRegisteredMarkdownFormatter reports whether a Markdown formatter
+// has been registered for the concrete type of v. v may be a value or
+// a pointer; pointer values are dereferenced to their element type for
+// the registry lookup. Returns false for nil and for unregistered types.
+//
+// This is the authoritative source for "is there a Markdown formatter
+// for this output type?" queries from external tools (e.g.
+// cmd/audit_discovery_completeness uses it to gate the
+// `missing_next_steps` check).
+func HasRegisteredMarkdownFormatter(v any) bool {
+	if v == nil {
+		return false
+	}
+	t := reflect.TypeOf(v)
+	if t == nil {
+		return false
+	}
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if _, ok := stringFormatters.Load(t); ok {
+		return true
+	}
+	if _, ok := resultFormatters.Load(t); ok {
+		return true
+	}
+	return false
+}
+
+// MarkdownFormatterCount returns the number of registered Markdown
+// formatters (string + result variants). Useful for sanity checks in
+// tests and tools that need to know "are formatters even loaded?".
+func MarkdownFormatterCount() int {
+	n := 0
+	stringFormatters.Range(func(_, _ any) bool { n++; return true })
+	resultFormatters.Range(func(_, _ any) bool { n++; return true })
+	return n
+}

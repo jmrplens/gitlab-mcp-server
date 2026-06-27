@@ -134,6 +134,10 @@ func severityFor(flagName string, inCluster bool) string {
 			return "error"
 		}
 		return "warning"
+	case "missing_parameter_guidance":
+		return "warning"
+	case "aliases_only_toolname":
+		return "warning"
 	}
 	return "info"
 }
@@ -205,6 +209,8 @@ type reportSummary struct {
 	EmptyOutputDescription    int `json:"empty_output_description"`
 	MissingDisambiguation     int `json:"missing_disambiguation"`
 	WeakIndividualDescription int `json:"weak_individual_description"`
+	MissingParameterGuidance  int `json:"missing_parameter_guidance"`
+	AliasesOnlyToolname       int `json:"aliases_only_toolname"`
 	Errors                    int `json:"errors"`
 	Warnings                  int `json:"warnings"`
 }
@@ -417,10 +423,34 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 		addFlag("weak_individual_description")
 	}
 
-	// TODO(META-001 Phase 1): wire missing_next_steps to toolutil.HasRegisteredMarkdownFormatter
-	// once the helper is exported. Phase 0 leaves the flag at zero to avoid
-	// false positives on actions with empty OutputType.
-	_ = isListOrDetailContent(spec)
+	// missing_next_steps: list/detail content kinds SHOULD have a registered
+	// Markdown formatter so the next-step hint section can be extracted. We
+	// detect this via toolutil.HasRegisteredMarkdownFormatter on the
+	// spec.Route.OutputType reflect.Type. Actions without an OutputType (e.g.
+	// constructed via the untyped Route constructor) are skipped — those are
+	// typically ad-hoc helpers that don't carry a formatter contract.
+	if needsMarkdownFormatter(spec) && spec.Route.OutputType != nil &&
+		!toolutil.HasRegisteredMarkdownFormatter(spec.Route.OutputType) {
+		addFlag("missing_next_steps")
+	}
+
+	// aliases_only_toolname: aliases carry no natural-language signal beyond
+	// the canonical tool name. Models cannot disambiguate via alias lookup,
+	// so the spec fails its discoverability contract even though the count
+	// test passes.
+	if aliasesOnlyToolname(spec) {
+		addFlag("aliases_only_toolname")
+	}
+
+	// missing_parameter_guidance: actions with sibling-confusable parameters
+	// (e.g. project_id vs group_id, ref vs branch) need explicit guidance
+	// entries. We detect the heuristic pattern: the action has an input
+	// parameter that carries a known scope-style name (id/_id with a
+	// project/group/user/integer prefix), AND the spec has no ParameterGuidance
+	// entries at all.
+	if missingParameterGuidance(spec) {
+		addFlag("missing_parameter_guidance")
+	}
 
 	// Field-level (Check B): walk input schema, flag empty/boilerplate descriptions.
 	//
@@ -1037,6 +1067,10 @@ func summarize(packages []packageReport) reportSummary {
 					s.MissingDisambiguation++
 				case "weak_individual_description":
 					s.WeakIndividualDescription++
+				case "missing_parameter_guidance":
+					s.MissingParameterGuidance++
+				case "aliases_only_toolname":
+					s.AliasesOnlyToolname++
 				}
 				switch severityFor(flag, inCluster) {
 				case "error":
@@ -1059,4 +1093,98 @@ func writeReport(outputPath string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(outputPath, content, 0o600)
+}
+
+// needsMarkdownFormatter reports whether the spec represents list/detail
+// content where the next-step hint section is expected to be present.
+// Destructive actions never need it (they're terminal in the workflow
+// sense — there's no "next step" after a delete).
+func needsMarkdownFormatter(spec toolutil.ActionSpec) bool {
+	if spec.Destructive {
+		return false
+	}
+	if isListOrDetailContent(spec) {
+		return true
+	}
+	if spec.Name == "" {
+		return false
+	}
+	return true
+}
+
+// aliasesOnlyToolname reports whether the spec's Aliases carry no
+// discoverability signal beyond the canonical tool name. The check is:
+// every alias either equals the tool name (gitlab_foo_bar), equals the
+// canonical action name (foo_bar), or is empty. Empty aliases are
+// counted as no-signal.
+func aliasesOnlyToolname(spec toolutil.ActionSpec) bool {
+	toolName := spec.IndividualTool.Name
+	canonical := spec.Name
+	if len(spec.Aliases) == 0 {
+		return false // weak_aliases handles this case
+	}
+	hasSignal := false
+	for _, a := range spec.Aliases {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			continue
+		}
+		if a != toolName && a != canonical {
+			hasSignal = true
+			break
+		}
+	}
+	return !hasSignal
+}
+
+// missingParameterGuidance reports whether an action with sibling-
+// confusable parameters (project_id vs group_id, ref vs branch, etc.)
+// has no ParameterGuidance entries. The heuristic:
+//   - The action has at least one input parameter whose name matches a
+//     known scope-suggestive pattern (id/_id with project/group/user/
+//     instance prefix, or "ref", "branch", "tag").
+//   - The spec has zero ParameterGuidance entries.
+//
+// Mutating actions are prioritized (they fail with confusing 400s when
+// the wrong scope is chosen); read-only actions are still flagged but
+// with warning severity rather than escalating to error.
+func missingParameterGuidance(spec toolutil.ActionSpec) bool {
+	if len(spec.ParameterGuidance) > 0 {
+		return false
+	}
+	// Walk the InputSchema properties for scope-suggestive parameter
+	// names. We deliberately look at the schema (not the Go type) so
+	// this works for both typed and untyped routes.
+	props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	for name := range props {
+		lname := strings.ToLower(name)
+		if isScopeSuggestiveName(lname) {
+			return true
+		}
+	}
+	return false
+}
+
+// isScopeSuggestiveName matches parameter names that frequently confuse
+// models because the same parameter type means different scopes across
+// GitLab APIs (e.g. project_id in one endpoint accepts a project path
+// in another, or ref means "branch name" in commits but "branch or tag"
+// in protected branches).
+func isScopeSuggestiveName(name string) bool {
+	// Exact matches for the most-confused single-word names.
+	switch name {
+	case "ref", "branch", "tag", "sha", "path", "iid":
+		return true
+	}
+	// Suffix matches for *_id parameters that scope to project/group/user.
+	scopeSuffixes := []string{
+		"project_id", "group_id", "user_id", "instance_id",
+		"namespace_id", "milestone_id", "epic_id",
+	}
+	for _, s := range scopeSuffixes {
+		if name == s {
+			return true
+		}
+	}
+	return false
 }

@@ -665,3 +665,152 @@ func containsStr(slice []string, s string) bool {
 // Compile-time guard: keep the imports referenced even when some helpers are
 // only used by future tests.
 var _ = gitlabclient.Client{}
+
+// TestNeedsMarkdownFormatter pins the heuristic for missing_next_steps:
+// list/detail content kinds always need it; destructive actions don't.
+func TestNeedsMarkdownFormatter(t *testing.T) {
+	listSpec := toolutil.ActionSpec{ContentKind: toolutil.ActionSpecContentList}
+	if !needsMarkdownFormatter(listSpec) {
+		t.Errorf("list content must need a formatter")
+	}
+	destructive := toolutil.ActionSpec{ContentKind: toolutil.ActionSpecContentDetail, Destructive: true}
+	if needsMarkdownFormatter(destructive) {
+		t.Errorf("destructive detail should not require formatter")
+	}
+}
+
+// TestAliasesOnlyToolname verifies the alias-content heuristic against
+// gold-standard inputs.
+func TestAliasesOnlyToolname(t *testing.T) {
+	cases := []struct {
+		name string
+		spec toolutil.ActionSpec
+		want bool
+	}{
+		{
+			name: "all aliases equal toolname",
+			spec: toolutil.ActionSpec{
+				Name:           "foo_create",
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_foo_create"},
+				Aliases:        []string{"gitlab_foo_create", "foo_create"},
+			},
+			want: true,
+		},
+		{
+			name: "natural-language alias present",
+			spec: toolutil.ActionSpec{
+				Name:           "foo_create",
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_foo_create"},
+				Aliases:        []string{"gitlab_foo_create", "create foo", "add foo"},
+			},
+			want: false,
+		},
+		{
+			name: "empty aliases (handled by weak_aliases)",
+			spec: toolutil.ActionSpec{
+				Name:           "foo_create",
+				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_foo_create"},
+				Aliases:        nil,
+			},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := aliasesOnlyToolname(tc.spec); got != tc.want {
+				t.Errorf("aliasesOnlyToolname = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMissingParameterGuidance pins the scope-suggestive heuristic.
+func TestMissingParameterGuidance(t *testing.T) {
+	cases := []struct {
+		name string
+		spec toolutil.ActionSpec
+		want bool
+	}{
+		{
+			name: "scope-suggestive id without guidance",
+			spec: toolutil.ActionSpec{
+				Route: toolutil.ActionRoute{
+					InputSchema: map[string]any{
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"name":       map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "scope-suggestive name without guidance",
+			spec: toolutil.ActionSpec{
+				Route: toolutil.ActionRoute{
+					InputSchema: map[string]any{
+						"properties": map[string]any{
+							"ref": map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "guidance present",
+			spec: toolutil.ActionSpec{
+				Route: toolutil.ActionRoute{
+					InputSchema: map[string]any{
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+						},
+					},
+				},
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{
+					"project_id": {SemanticRole: "scope_project"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "no scope-suggestive names",
+			spec: toolutil.ActionSpec{
+				Route: toolutil.ActionRoute{
+					InputSchema: map[string]any{
+						"properties": map[string]any{
+							"name":  map[string]any{"type": "string"},
+							"color": map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := missingParameterGuidance(tc.spec); got != tc.want {
+				t.Errorf("missingParameterGuidance = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsScopeSuggestiveName covers the exact and suffix matches.
+func TestIsScopeSuggestiveName(t *testing.T) {
+	yes := []string{"ref", "branch", "tag", "sha", "path", "iid",
+		"project_id", "group_id", "user_id", "instance_id", "milestone_id", "epic_id"}
+	no := []string{"name", "color", "description", "content", "labels"}
+	for _, n := range yes {
+		if !isScopeSuggestiveName(n) {
+			t.Errorf("%q should be scope-suggestive", n)
+		}
+	}
+	for _, n := range no {
+		if isScopeSuggestiveName(n) {
+			t.Errorf("%q should NOT be scope-suggestive", n)
+		}
+	}
+}
