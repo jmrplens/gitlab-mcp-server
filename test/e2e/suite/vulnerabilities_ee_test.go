@@ -7,6 +7,7 @@ package suite
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -163,20 +164,45 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 	// input. These match standard Semgrep rules (python.lang.security
 	// .audit.formatted-sql-query, python.lang.security.audit.dangerous-system-call,
 	// python.lang.security.audit.eval).
+	// Multiple vulnerability patterns to maximize Semgrep rule matches
+	// against the GitLab SAST default ruleset. Each function has a clear
+	// taint source (input() builtin) flowing into a classic dangerous sink.
+	// Patterns covered:
+	//   - SQL injection via concat, % formatting, f-string, .format
+	//     (rules: python.lang.security.audit.formatted-sql-query and
+	//     python.flask.security.audit.sql-injection-taint, etc.)
+	//   - Command injection via os.system, os.popen, subprocess with
+	//     shell=True
+	//     (rules: python.lang.security.audit.dangerous-system-call)
+	//   - Code injection via eval, exec
+	//     (rules: python.lang.security.audit.eval, python.lang.security
+	//     .audit.exec)
 	const vulnerablePy = `# E2E fixture: intentionally vulnerable code for SAST.
-def get_user(username):
-    # SQL injection (CWE-89): taint from user input flows into a
-    # formatted SQL query without parameterization.
-    cursor.execute("SELECT * FROM users WHERE name = '" + username + "'")
-    return cursor.fetchone()
+import os
+import subprocess
+import sqlite3
+db = sqlite3.connect(":memory:")
+cur = db.cursor()
 
-def run_command(cmd):
-    # Command injection (CWE-78): unsanitized input into os.system.
-    os.system("ls " + cmd)
+# CWE-89: SQL injection — clear taint source (input) into multiple
+# concatenation/formatting patterns.
+user = input("username: ")
+cur.execute("SELECT * FROM users WHERE name = '" + user + "'")
+cur.execute("SELECT * FROM users WHERE id = %s" % user)
+cur.execute(f"SELECT * FROM users WHERE email = '{user}'")
+cur.execute("SELECT * FROM users WHERE name = '{}'".format(user))
 
-def calc(expr):
-    # Code injection (CWE-95): eval on user input.
-    return eval(expr)
+# CWE-78: command injection — taint source into shell-invoking calls.
+cmd = input("cmd: ")
+os.system("ls " + cmd)
+os.system(cmd)
+os.popen("cat " + cmd)
+subprocess.call("echo " + cmd, shell=True)
+
+# CWE-95: code injection — eval/exec on user input.
+expr = input("expr: ")
+result = eval(expr)
+exec(expr)
 `
 	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
 		"app.py",
@@ -211,16 +237,47 @@ def calc(expr):
 
 	// 5. List vulnerabilities for the project. SAST creates CRITICAL
 	// findings (SQL injection, command injection, eval) from the
-	// intentionally vulnerable Python file.
-	listed, err := callToolOn[vulnerabilities.ListOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
-		"action": "list",
-		"params": map[string]any{
-			"project_path": proj.Path,
-		},
-	})
-	requireNoError(t, err, "vulnerability list for lifecycle")
+	// intentionally vulnerable file. The vulnerability report is
+	// generated asynchronously after the pipeline job completes, so
+	// the GraphQL list endpoint can return an empty page for a few
+	// seconds even when the SAST job ran successfully. Poll with
+	// backoff up to 90 s before declaring the fixture broken — this
+	// covers the slow path on a heavily-loaded Docker runner while
+	// still failing fast when the scanner is actually missing.
+	var (
+		listed      vulnerabilities.ListOutput
+		listErr     error
+		listDeadline = time.Now().Add(90 * time.Second)
+		listDelay    = 2 * time.Second
+	)
+	for {
+		listed, listErr = callToolOn[vulnerabilities.ListOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
+			"action": "list",
+			"params": map[string]any{
+				"project_path": proj.Path,
+			},
+		})
+		if listErr == nil && len(listed.Vulnerabilities) > 0 {
+			break
+		}
+		if listErr != nil {
+			break
+		}
+		if time.Now().After(listDeadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			listErr = fmt.Errorf("context canceled while waiting for SAST report: %w", ctx.Err())
+		case <-time.After(listDelay):
+		}
+		if listDelay < 8*time.Second {
+			listDelay *= 2
+		}
+	}
+	requireNoError(t, listErr, "vulnerability list for lifecycle")
 	if len(listed.Vulnerabilities) == 0 {
-		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s); SAST scanner did not flag the intentionally vulnerable fixture — check that the Security/SAST.gitlab-ci.yml template is available and the runner has the semgrep analyzer installed",
+		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s) and 90s of polling; SAST scanner did not flag the intentionally vulnerable fixture — check that the Security/SAST.gitlab-ci.yml template is available and the runner has the semgrep analyzer installed",
 			proj.Path, pipelineID, pipelineStatus)
 	}
 	var vulnGID string
