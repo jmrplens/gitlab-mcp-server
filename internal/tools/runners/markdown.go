@@ -158,4 +158,8 @@ func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown)
 	toolutil.RegisterMarkdown(FormatDetailsMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatJobListMarkdown)
+	toolutil.RegisterMarkdown(FormatAuthTokenMarkdown)
+	toolutil.RegisterMarkdown(FormatRegTokenMarkdown)
+	toolutil.RegisterMarkdown(FormatManagerListMarkdown)
 }
