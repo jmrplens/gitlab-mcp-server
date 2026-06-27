@@ -105,7 +105,7 @@ func decorateEpicMeta(opts *toolutil.ActionSpecOptions, individualTool string) {
 		opts.IndividualTool.Description = "Update an existing epic; supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete."
 	case "gitlab_epic_delete":
 		opts.Usage = "Permanently delete an epic by full_path plus epic_iid. Destructive; requires confirmation and Owner role at the group level."
-		opts.Aliases = []string{individualTool, "delete epic", "remove epic"}
+		opts.Aliases = []string{individualTool, "delete epic", "remove epic", "destroy epic", "drop epic"}
 		opts.RelatedActions = []string{actionEpicGet, actionEpicList, actionEpicUpdate}
 		opts.IndividualTool.Description = "Permanently delete an epic from a group. Returns: a success confirmation naming the epic and group. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update."
 	}
