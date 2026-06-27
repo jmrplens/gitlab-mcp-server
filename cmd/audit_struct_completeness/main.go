@@ -762,8 +762,9 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	if fn.Type.Results == nil || len(fn.Type.Results.List) == 0 {
 		return
 	}
-	resultType := pkg.TypesInfo.TypeOf(fn.Type.Results.List[0].Type)
-	mcpNamed, mcpStruct, ok := localNamedStruct(pkg, resultType)
+	resultExpr := fn.Type.Results.List[0].Type
+	resultType := pkg.TypesInfo.TypeOf(resultExpr)
+	mcpStruct, mcpName, ok := localOrAliasNamedStruct(pkg, resultExpr, resultType)
 	if !ok {
 		return
 	}
@@ -800,12 +801,12 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	// real exported Output/DetailOutput), not serialized MCP output structs. Their
 	// fields carry no json tags, so pairing them against the SDK result would flag
 	// every SDK field as missing. Real MCP output structs are always exported.
-	if name := mcpNamed.Obj().Name(); name == "" || !ast.IsExported(name) {
+	if mcpName == "" || !ast.IsExported(mcpName) {
 		return
 	}
-	key := [2]string{mcpNamed.Obj().Name(), sdkNamed.Obj().Name()}
+	key := [2]string{mcpName, sdkNamed.Obj().Name()}
 	out[key] = structPair{
-		mcpName: mcpNamed.Obj().Name(), mcpType: mcpStruct,
+		mcpName: mcpName, mcpType: mcpStruct,
 		sdkName: sdkTypeName(sdkNamed), sdkType: sdkStruct, sdkURLTags: false,
 	}
 }
@@ -1153,6 +1154,55 @@ func localNamedStruct(pkg *packages.Package, t types.Type) (*types.Named, *types
 		return nil, nil, false
 	}
 	return named, st, true
+}
+
+// localOrAliasNamedStruct resolves the converter result type to its underlying
+// struct and the name to attribute the MCP output pair under. It accepts two
+// shapes:
+//
+//   - a struct named in the converter's own package (the original case), or
+//   - a struct reached through a LOCAL alias declared in that package, e.g.
+//     `type Output = toolutil.MergeRequestOutput`. Shared output shapes were
+//     lifted into internal/toolutil to remove duplication; without following
+//     the alias the converter would be dropped and the type would silently fall
+//     out of 1:1 audit coverage. The pair is attributed under the local alias
+//     name (e.g. "Output"), keeping per-package accept-list keys stable.
+//
+// resultExpr is the AST result-type expression (used to detect the alias);
+// resultType is its resolved go/types type (the alias target).
+func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultType types.Type) (*types.Struct, string, bool) {
+	if named, st, ok := localNamedStruct(pkg, resultType); ok {
+		return st, named.Obj().Name(), true
+	}
+	ident := identForExpr(resultExpr)
+	if ident == nil {
+		return nil, "", false
+	}
+	aliasObj, isTypeName := pkg.TypesInfo.Uses[ident].(*types.TypeName)
+	if !isTypeName || !aliasObj.IsAlias() ||
+		aliasObj.Pkg() == nil || aliasObj.Pkg().Path() != pkg.PkgPath {
+		return nil, "", false
+	}
+	// Go materializes type aliases as *types.Alias; unwrap to the target named
+	// struct (e.g. Output -> toolutil.MergeRequestOutput) before reading fields.
+	_, st, ok := derefNamedStruct(types.Unalias(resultType))
+	if !ok {
+		return nil, "", false
+	}
+	return st, aliasObj.Name(), true
+}
+
+// identForExpr returns the identifier naming the type in a result expression,
+// unwrapping a single pointer (so both `Output` and `*Output` resolve to the
+// `Output` identifier). It returns nil for any other expression shape.
+func identForExpr(expr ast.Expr) *ast.Ident {
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	if ident, ok := expr.(*ast.Ident); ok {
+		return ident
+	}
+	return nil
 }
 
 // clientGoNamedStruct returns the named struct if t (deref'd) is a struct in the
