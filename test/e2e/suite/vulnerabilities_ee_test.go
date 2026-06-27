@@ -220,7 +220,8 @@ def calc(expr):
 	})
 	requireNoError(t, err, "vulnerability list for lifecycle")
 	if len(listed.Vulnerabilities) == 0 {
-		t.Skipf("no vulnerabilities reported for project %s after pipeline %d; cannot exercise lifecycle actions", proj.Path, pipelineID)
+		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s); SAST scanner did not flag the intentionally vulnerable fixture — check that the Security/SAST.gitlab-ci.yml template is available and the runner has the semgrep analyzer installed",
+			proj.Path, pipelineID, pipelineStatus)
 	}
 	var vulnGID string
 	for _, v := range listed.Vulnerabilities {

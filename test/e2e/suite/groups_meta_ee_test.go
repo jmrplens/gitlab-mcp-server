@@ -763,8 +763,8 @@ func runMetaGroupHookOperations(t *testing.T, ctx context.Context, groupID int64
 	t.Run("HookList", func(t *testing.T) { metaGroupHookList(t, ctx, groupID, groupIDStr) })
 	t.Run("HookGet", func(t *testing.T) { metaGroupHookGet(t, ctx, groupID, groupIDStr, &hookID) })
 	t.Run("HookEdit", func(t *testing.T) { metaGroupHookEdit(t, ctx, groupID, groupIDStr, &hookID) })
-	t.Run("HookDelete", func(t *testing.T) { metaGroupHookDelete(t, ctx, groupID, groupIDStr, &hookID) })
 	t.Run("HookNewEventFields", func(t *testing.T) { metaGroupHookNewEventFields(t, ctx, groupID, groupIDStr, &hookID) })
+	t.Run("HookDelete", func(t *testing.T) { metaGroupHookDelete(t, ctx, groupID, groupIDStr, &hookID) })
 }
 
 // The following metaGroupHook* helpers are the bodies of each subtest
