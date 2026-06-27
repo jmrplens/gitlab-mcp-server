@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	actionPagesDomainList = "pages.domain_list"
-	actionPagesDomainGet  = "pages.domain_get"
+	actionPagesDomainList   = "pages.domain_list"
+	actionPagesDomainGet    = "pages.domain_get"
+	actionPagesDomainCreate = "pages.domain_create"
 )
 
 // ActionSpecs returns canonical specs for project Pages actions
@@ -148,7 +149,7 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_update": {
 		usage:   "Update a project's GitLab Pages settings such as force-HTTPS, unique-domain, and the primary domain.",
 		aliases: []string{"update pages settings", "configure pages https", "set pages primary domain"},
-		related: []string{"pages.get", "pages.unpublish", "pages.domain_create"},
+		related: []string{"pages.get", "pages.unpublish", actionPagesDomainCreate},
 	},
 	"pages_unpublish": {
 		usage:   "Unpublish and tear down a project's GitLab Pages site, removing the deployed content.",
@@ -158,12 +159,12 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_domain_list_all": {
 		usage:   "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of pages_domain_list when you need every domain on the instance, not just those attached to a single project.",
 		aliases: []string{"list all pages domains", "audit pages custom domains", "show instance pages domains", "enumerate every custom domain"},
-		related: []string{actionPagesDomainList, actionPagesDomainGet, "pages.domain_create"},
+		related: []string{actionPagesDomainList, actionPagesDomainGet, actionPagesDomainCreate},
 	},
 	"pages_domain_list": {
 		usage:   "List the custom Pages domains attached to a project, with verification and SSL status.",
 		aliases: []string{"list project pages domains", "show custom domains", "find pages domains for project"},
-		related: []string{actionPagesDomainGet, "pages.domain_create", "pages.domain_list_all"},
+		related: []string{actionPagesDomainGet, actionPagesDomainCreate, "pages.domain_list_all"},
 	},
 	"pages_domain_get": {
 		usage:   "Fetch one custom Pages domain by name, including its verification code and certificate details.",

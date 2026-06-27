@@ -7,6 +7,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// Canonical related-action IDs referenced across deploy-token discovery metadata.
+const (
+	actionDeployTokenListProject = "access.deploy_token_list_project"
+	actionProjectGet             = "project.get"
+)
+
 // ActionSpecs returns canonical specs for deploy token actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -52,7 +58,7 @@ func deployTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := deployTokenOptions("deploy_token_delete_project", "gitlab_deploy_token_delete_project")
-	options.RelatedActions = []string{"access.deploy_token_list_project", "access.deploy_token_get_project", "access.deploy_token_create_project"}
+	options.RelatedActions = []string{actionDeployTokenListProject, "access.deploy_token_get_project", "access.deploy_token_create_project"}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole: "scope_owner_project",
@@ -69,7 +75,7 @@ func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSp
 
 func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	usage := "Manage deploy tokens across instance, project, and group scopes."
-	relatedActions := []string{"access.deploy_key_list_project", "project.get", "group.get"}
+	relatedActions := []string{"access.deploy_key_list_project", actionProjectGet, "group.get"}
 	guidance := map[string]toolutil.ParameterGuidance{}
 
 	switch actionName {
@@ -79,7 +85,7 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ValueSource:    "Project ID or path owning the deploy token.",
 			ExampleBinding: `params.project_id:"group/project"`,
 		}
-		relatedActions = []string{"access.deploy_token_list_project", "project.get"}
+		relatedActions = []string{actionDeployTokenListProject, actionProjectGet}
 	case "deploy_token_list_group", "deploy_token_get_group", "deploy_token_create_group", "deploy_token_delete_group":
 		guidance["group_id"] = toolutil.ParameterGuidance{
 			SemanticRole:   "scope_group",
@@ -88,7 +94,7 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 		relatedActions = []string{"access.deploy_token_list_group", "group.get"}
 	case "deploy_token_list_all":
-		relatedActions = []string{"access.deploy_token_list_project", "access.deploy_token_list_group", "project.get"}
+		relatedActions = []string{actionDeployTokenListProject, "access.deploy_token_list_group", actionProjectGet}
 	}
 
 	if actionName == "deploy_token_get_project" || actionName == "deploy_token_get_group" || actionName == "deploy_token_delete_project" || actionName == "deploy_token_delete_group" {

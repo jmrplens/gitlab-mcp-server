@@ -122,12 +122,9 @@ func severityFor(flagName string, inCluster bool) string {
 	switch flagName {
 	case "generic_usage", "missing_disambiguation":
 		return "error"
-	case "weak_aliases":
-		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
-			return "error"
-		}
-		return "warning"
-	case "empty_related":
+	case "weak_aliases", "empty_related", "weak_individual_description":
+		// These three flags share the same escalation rule: only an error when
+		// the action sits in a cluster that contains a non-CRUD variant.
 		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
 			return "error"
 		}
@@ -138,11 +135,6 @@ func severityFor(flagName string, inCluster bool) string {
 		return "warning"
 	case "empty_output_description":
 		return "info"
-	case "weak_individual_description":
-		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
-			return "error"
-		}
-		return "warning"
 	case "missing_parameter_guidance":
 		return "warning"
 	case "aliases_only_toolname":
