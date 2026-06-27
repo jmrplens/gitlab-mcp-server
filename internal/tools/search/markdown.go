@@ -302,4 +302,12 @@ func truncateBody(s string, maxLen int) string {
 func init() {
 	toolutil.RegisterMarkdown(FormatCodeMarkdown)
 	toolutil.RegisterMarkdown(FormatMRsMarkdown)
+	toolutil.RegisterMarkdown(FormatIssuesMarkdown)
+	toolutil.RegisterMarkdown(FormatCommitsMarkdown)
+	toolutil.RegisterMarkdown(FormatMilestonesMarkdown)
+	toolutil.RegisterMarkdown(FormatNotesMarkdown)
+	toolutil.RegisterMarkdown(FormatProjectsMarkdown)
+	toolutil.RegisterMarkdown(FormatSnippetsMarkdown)
+	toolutil.RegisterMarkdown(FormatUsersMarkdown)
+	toolutil.RegisterMarkdown(FormatWikiMarkdown)
 }
