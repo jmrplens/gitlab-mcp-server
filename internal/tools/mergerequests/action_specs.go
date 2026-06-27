@@ -255,7 +255,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 		},
 		"approve": {
 			usage:       "Add the caller's approval to a merge request; pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).",
-			aliases:     []string{"approve merge request", "approve mr"},
+			aliases:     []string{"approve merge request", "approve mr", "add my approval to mr", "sign off on mr", "lgtm this mr"},
 			related:     []string{"merge_request.unapprove", actionMRMerge, actionMRGet},
 			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
 		},
