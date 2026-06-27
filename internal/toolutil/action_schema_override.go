@@ -47,6 +47,46 @@ func applyInputSchemaOverrides(schema map[string]any, overrides []InputSchemaOve
 	}
 }
 
+// canonicalParamEnums maps GitLab-universal input parameter names to their fixed
+// value set. These parameters carry the SAME enum across every endpoint that
+// accepts them, so the enum is injected centrally (single source of truth) into
+// every action's input schema by [NewActionSpec], rather than repeated per
+// action. Only add a parameter here when its value set is identical across ALL
+// GitLab endpoints; resource-specific value sets (order_by, state, scope, type,
+// ...) differ per endpoint and must be set per action via InputSchemaOverrides.
+var canonicalParamEnums = map[string][]string{
+	"sort":       {"asc", "desc"},
+	"visibility": {"private", "internal", "public"},
+}
+
+// applyCanonicalParamEnums injects the [canonicalParamEnums] value sets into the
+// top-level string properties of schema that do not already declare an enum.
+// Per-action InputSchemaOverrides are applied before this (see [NewActionSpec])
+// and therefore win: a property that already carries an enum is left untouched.
+func applyCanonicalParamEnums(schema map[string]any) {
+	if schema == nil {
+		return
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, values := range canonicalParamEnums {
+		prop, isMap := props[name].(map[string]any)
+		if !isMap || prop["type"] != "string" {
+			continue
+		}
+		if _, has := prop["enum"]; has {
+			continue
+		}
+		enum := make([]any, len(values))
+		for i, v := range values {
+			enum[i] = v
+		}
+		prop["enum"] = enum
+	}
+}
+
 func validateInputSchemaOverrides(spec ActionSpec) error {
 	if len(spec.InputSchemaOverrides) == 0 {
 		return nil

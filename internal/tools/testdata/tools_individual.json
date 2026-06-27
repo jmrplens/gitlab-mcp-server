@@ -293,6 +293,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -444,6 +448,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -3846,6 +3854,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -4889,6 +4901,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -6470,6 +6486,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -8115,6 +8135,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -8717,6 +8741,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -9152,6 +9180,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "unidiff": {
@@ -9518,6 +9550,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "trailers": {
@@ -9890,6 +9926,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "type": {
@@ -10536,6 +10576,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "stage": {
@@ -18729,6 +18773,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -18951,6 +18999,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -19100,6 +19152,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -19941,6 +19997,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -20102,6 +20162,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -21094,6 +21158,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc (default: asc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -24352,6 +24420,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "states": {
@@ -27017,6 +27089,10 @@
         },
         "sort": {
           "description": "Sort order (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -28640,6 +28716,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -29328,6 +29408,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -39895,6 +39979,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -40058,6 +40146,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "type": {
@@ -40838,6 +40930,10 @@
         },
         "sort": {
           "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -42309,6 +42405,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -43279,6 +43379,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -44433,6 +44537,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "web_based_commit_signing_enabled": {
@@ -45493,6 +45602,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -45767,6 +45880,10 @@
         },
         "sort": {
           "description": "Sort direction for embedded projects (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -47671,6 +47788,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -48277,6 +48398,10 @@
         },
         "sort": {
           "description": "Sort order for keyset-paginated results: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -48435,6 +48560,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -49345,6 +49474,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_counts": {
@@ -50160,6 +50293,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "statistics": {
@@ -50172,6 +50309,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -50821,6 +50963,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "username": {
@@ -52212,6 +52358,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_ids": {
@@ -52530,6 +52680,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -52908,6 +53062,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -53087,6 +53245,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "start_date": {
@@ -53280,6 +53442,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -53571,6 +53737,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -53583,6 +53753,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -53937,6 +54112,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -55090,6 +55269,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -55853,6 +56036,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -57123,6 +57310,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "username": {
@@ -58221,6 +58412,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -58513,6 +58708,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -59089,6 +59288,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -59100,6 +59303,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -59288,10 +59496,19 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -60465,6 +60682,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -61605,6 +61826,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "web_based_commit_signing_enabled": {
@@ -63023,6 +63249,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -64461,6 +64691,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -68783,6 +69017,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -70516,6 +70754,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -70898,6 +71140,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -74331,6 +74577,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -75272,6 +75522,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -76202,6 +76456,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -77168,6 +77426,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -78115,6 +78377,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -78858,6 +79124,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -80236,6 +80506,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -80695,6 +80969,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -82341,6 +82619,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -84895,6 +85177,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -87087,6 +87373,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -87588,6 +87878,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -87953,6 +88247,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -90047,6 +90345,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_counts": {
@@ -90543,6 +90845,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -90688,6 +90994,10 @@
         },
         "sort": {
           "description": "For keyset pagination: sort order (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -90939,6 +91249,10 @@
         },
         "sort": {
           "description": "Sort order (e.g. name_asc, name_desc, last_activity_on_asc, last_activity_on_desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -91101,6 +91415,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -91446,6 +91764,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -91602,6 +91924,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -92002,6 +92328,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -92153,6 +92483,10 @@
         },
         "sort": {
           "description": "Sort order: NAME_ASC (default), NAME_DESC, LATEST_RELEASED_AT_ASC, LATEST_RELEASED_AT_DESC, STAR_COUNT_ASC, STAR_COUNT_DESC",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -92292,6 +92626,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -92417,6 +92755,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -92574,6 +92916,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -92749,6 +93095,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -93426,6 +93776,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source_branch": {
@@ -94480,6 +94834,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -94655,6 +95013,10 @@
         },
         "sort": {
           "description": "Sort direction for ordered results: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -94784,6 +95146,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "two_factor": {
@@ -95335,6 +95701,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -95663,6 +96033,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -95806,6 +96180,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -96018,6 +96396,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -96491,6 +96873,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -96635,6 +97021,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -97011,6 +97401,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -97173,6 +97567,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -97951,6 +98349,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -98116,6 +98518,10 @@
         },
         "sort": {
           "description": "Sort order for results: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -98464,6 +98870,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -98600,6 +99010,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -99304,6 +99718,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -99485,6 +99903,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -99617,6 +100039,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -99752,6 +100178,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -99923,6 +100353,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -100423,6 +100857,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -100848,6 +101286,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -100992,6 +101434,10 @@
         },
         "sort": {
           "description": "Sort order for keyset-paginated results: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -101174,6 +101620,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -101519,6 +101969,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -101931,6 +102385,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -102120,6 +102578,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -102253,6 +102715,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -102444,6 +102910,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "template_type": {
@@ -102856,6 +103326,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -103351,6 +103825,10 @@
         },
         "sort": {
           "description": "Sort direction (asc/desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -103440,6 +103918,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -103617,6 +104099,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -103747,6 +104233,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -103884,6 +104374,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -105049,6 +105543,10 @@
         },
         "sort": {
           "description": "Sort order for keyset-paginated results: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -105197,6 +105695,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "target_type": {
@@ -105437,6 +105939,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "two_factor": {
@@ -105888,6 +106394,10 @@
         },
         "sort": {
           "description": "Sort order: severity_desc, severity_asc, detected_desc, detected_asc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -106312,6 +106822,10 @@
         },
         "sort": {
           "description": "Sort order",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -106863,6 +107377,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -107026,6 +107544,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -107214,6 +107736,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -111797,6 +112323,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "unidiff": {
@@ -111940,6 +112470,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -114937,6 +115471,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -115998,6 +116536,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -117870,6 +118412,10 @@
         },
         "sort": {
           "description": "Sort: asc or desc (default)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -118798,6 +119344,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -119941,6 +120491,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -120859,6 +121413,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -121191,6 +121749,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source_branch": {
@@ -122347,6 +122909,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source_branch": {
@@ -123500,6 +124066,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source_branch": {
@@ -125709,6 +126279,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -126597,6 +127171,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -127331,6 +127909,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -127982,6 +128564,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -129184,6 +129770,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -132614,6 +133204,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "top_level_only": {
@@ -134312,6 +134906,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -135499,6 +136097,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -136308,6 +136910,10 @@
         },
         "sort": {
           "description": "Sort order: created_asc, created_desc, expires_asc, expires_desc, last_used_asc, last_used_desc, name_asc, name_desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -137493,6 +138099,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc). Applies to the list fallback.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source": {
@@ -137770,6 +138380,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "source": {
@@ -138879,6 +139493,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -139161,6 +139779,10 @@
         },
         "sort": {
           "description": "Sort direction for triggered pipelines: asc or desc (default asc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -140702,6 +141324,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc. Defaults to the API ordering.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -142149,6 +142775,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -143772,6 +144402,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -145776,6 +146410,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_access_level": {
@@ -147215,6 +147854,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_access_level": {
@@ -148826,6 +149470,10 @@
         },
         "sort": {
           "description": "Sort order (asc or desc, default desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "target_type": {
@@ -149366,6 +150014,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         }
       },
@@ -152569,6 +153222,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -153111,6 +153768,10 @@
         },
         "sort": {
           "description": "Sort order for keyset-paginated results: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -153436,6 +154097,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_checksum_failed": {
@@ -154576,6 +155242,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -154598,6 +155268,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_checksum_failed": {
@@ -155674,6 +156349,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_shared": {
@@ -155837,6 +156516,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -155986,6 +156669,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -156295,6 +156982,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -156321,6 +157012,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_checksum_failed": {
@@ -157460,6 +158156,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -157486,6 +158186,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_checksum_failed": {
@@ -158625,6 +159330,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -158651,6 +159360,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_checksum_failed": {
@@ -159706,6 +160420,10 @@
         },
         "sort": {
           "description": "Keyset sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -160763,6 +161481,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "user_ids": {
@@ -162386,6 +163108,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -162681,6 +163407,10 @@
         },
         "sort": {
           "description": "Sort expression",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -163247,6 +163977,11 @@
         },
         "visibility": {
           "description": "Visibility: private, internal, or public; defaults to private when omitted",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         }
       },
@@ -163622,6 +164357,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -163885,6 +164624,11 @@
         },
         "visibility": {
           "description": "New visibility: private, internal, or public",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         }
       },
@@ -168462,6 +169206,11 @@
         },
         "visibility": {
           "description": "Visibility level (private, internal, public)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "wiki_access_level": {
@@ -170568,6 +171317,10 @@
         },
         "sort": {
           "description": "Sort order for keyset pagination: 'asc' or 'desc'",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -171240,6 +171993,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -171615,6 +172372,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -173007,6 +173768,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -173216,6 +173981,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "tags": {
@@ -173437,6 +174206,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -176219,6 +176992,10 @@
         },
         "sort": {
           "description": "Sort direction (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "tag_name": {
@@ -176476,6 +177253,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -178451,6 +179232,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc (default: asc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -178851,6 +179636,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset pagination: 'asc' or 'desc' (only used with pagination='keyset')",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -179199,6 +179988,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -179359,6 +180152,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -179535,6 +180332,10 @@
         },
         "sort": {
           "description": "Sort direction: 'asc' or 'desc'. Maps to the GitLab sort query parameter.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -179729,6 +180530,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only used when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -179896,6 +180701,10 @@
         },
         "sort": {
           "description": "Sort direction for keyset-paginated results: asc or desc. Only applies when pagination='keyset'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -180079,6 +180888,10 @@
         },
         "sort": {
           "description": "Sort direction: 'asc' or 'desc'. Maps to the GitLab sort query parameter.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -180896,6 +181709,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -181459,6 +182276,10 @@
         },
         "sort": {
           "description": "Sort order: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -182232,6 +183053,10 @@
         },
         "sort": {
           "description": "Sort direction: asc, desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -182725,6 +183550,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -182917,6 +183746,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -183102,6 +183935,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -183394,6 +184231,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
@@ -190390,6 +191231,11 @@
         },
         "visibility": {
           "description": "Visibility: private, internal, or public; defaults to private when omitted",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         }
       },
@@ -190887,6 +191733,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -191066,6 +191916,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -191500,6 +192354,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -191735,6 +192593,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -192593,6 +193455,10 @@
         },
         "sort": {
           "description": "Sort order: 'asc' or 'desc'.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -193051,6 +193917,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -193700,6 +194570,11 @@
         },
         "visibility": {
           "description": "New visibility: private, internal, or public",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         }
       },
@@ -194047,6 +194922,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "statistics": {
@@ -194059,6 +194938,11 @@
         },
         "visibility": {
           "description": "Filter by visibility (public, internal, private)",
+          "enum": [
+            "private",
+            "internal",
+            "public"
+          ],
           "type": "string"
         },
         "with_custom_attributes": {
@@ -195222,6 +196106,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -195439,6 +196327,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         }
       },
@@ -195862,6 +196754,10 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc.",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "state": {
@@ -200055,6 +200951,10 @@
         },
         "sort": {
           "description": "Sort order (asc or desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "target_type": {

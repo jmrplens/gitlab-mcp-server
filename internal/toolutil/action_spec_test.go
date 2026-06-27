@@ -1187,3 +1187,46 @@ func TestFillScopeParameterGuidance_AcceptsEmptyInput(t *testing.T) {
 		t.Errorf("FillScopeParameterGuidance([]) = %v, want empty", got)
 	}
 }
+
+// TestApplyCanonicalParamEnums verifies the central injection of GitLab-universal
+// input enums: a string "sort"/"visibility" property without an enum receives the
+// canonical value set; a property that already declares an enum is left untouched
+// (per-action overrides win); non-string and unrelated properties are ignored.
+func TestApplyCanonicalParamEnums(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"sort":         map[string]any{"type": "string", "description": "Sort direction (asc, desc)"},
+		"visibility":   map[string]any{"type": "string", "description": "Project visibility"},
+		"order_by":     map[string]any{"type": "string", "description": "Column to order by"},
+		"sort_already": map[string]any{"type": "string"},
+	}}
+	// Pre-set an explicit enum on a "sort"-typed prop to confirm it is preserved.
+	props := schema["properties"].(map[string]any)
+	props["sort_custom"] = map[string]any{"type": "string", "enum": []any{"x", "y"}}
+
+	applyCanonicalParamEnums(schema)
+
+	sortEnum, _ := props["sort"].(map[string]any)["enum"].([]any)
+	if len(sortEnum) != 2 || sortEnum[0] != "asc" || sortEnum[1] != "desc" {
+		t.Errorf("sort enum = %v, want [asc desc]", props["sort"].(map[string]any)["enum"])
+	}
+	visEnum, _ := props["visibility"].(map[string]any)["enum"].([]any)
+	if len(visEnum) != 3 {
+		t.Errorf("visibility enum = %v, want 3 values", props["visibility"].(map[string]any)["enum"])
+	}
+	if _, has := props["order_by"].(map[string]any)["enum"]; has {
+		t.Error("order_by must NOT receive a canonical enum (resource-specific)")
+	}
+	if got := props["sort_custom"].(map[string]any)["enum"].([]any); len(got) != 2 || got[0] != "x" {
+		t.Errorf("pre-existing enum must be preserved, got %v", got)
+	}
+}
+
+// TestApplyCanonicalParamEnums_NilAndMalformed verifies the injector is a no-op
+// for a nil schema, a schema without a properties map, and non-map property
+// entries, never panicking.
+func TestApplyCanonicalParamEnums_NilAndMalformed(t *testing.T) {
+	applyCanonicalParamEnums(nil)
+	applyCanonicalParamEnums(map[string]any{})
+	applyCanonicalParamEnums(map[string]any{"properties": "not-a-map"})
+	applyCanonicalParamEnums(map[string]any{"properties": map[string]any{"sort": "not-a-map"}})
+}
