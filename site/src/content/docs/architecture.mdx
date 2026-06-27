@@ -114,6 +114,10 @@ Every ordinary GitLab operation is defined once in the canonical action catalog.
 
 Because all surfaces share the same catalog entry, schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, Markdown formatting, and JSON output stay consistent across modes.
 
+### Tier-gating
+
+Catalog entries are also tier-aware: each action and input/output schema is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it. At startup the server resolves the active tier (`GITLAB_TIER` / `--tier`, or auto-detection via `GET /license`) and calls `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`) to drop premium/ultimate-only actions and to prune per-field schema entries that are gated by edition. This keeps meta-tools, individual tools, and the dynamic surface consistent: a Premium-only action is hidden everywhere once the tier resolves to `free`.
+
 ```mermaid
 graph LR
     catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Enterprise"]

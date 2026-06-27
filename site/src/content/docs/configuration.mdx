@@ -35,13 +35,16 @@ This must be set for the server to start in stdio mode:
 | `META_TOOLS`             | legacy               | Deprecated compatibility selector. `true` maps to `meta`, `false` maps to `individual`, and dynamic values map to the matching `TOOL_SURFACE` value when `TOOL_SURFACE` is absent                        |
 | `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps the `gitlab://tools` manifest, and disables optional resources, prompts, and workflow guides |
 | `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (6.5x opaque size), or `full` (11.9x opaque size). Applies to meta-tool `tools/list` schemas only                                         |
-| `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                                                |
+| `GITLAB_TIER`            | _(auto-detect)_      | GitLab edition selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools and prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`)                                                          |
 | `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                      |
 | `GITLAB_SAFE_MODE`       | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                                        |
 | `EMBEDDED_RESOURCES`     | `true`               | Embed canonical `gitlab://` MCP resource URIs in get-tool results; set `false` for clients that do not tolerate duplicate content blocks                                                                 |
 | `EXCLUDE_TOOLS`          | —                    | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)                                                                                                               |
 | `GITLAB_IGNORE_SCOPES`   | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                                       |
 | `LOG_LEVEL`              | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                          |
+| `EVAL_SURFACE_ENTERPRISE`| `false`              | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus                                                                                                                            |
+| `EVAL_SURFACE_CASE_SET`  | `ce`                 | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only) or `all` (CE+Enterprise)                                                                                                                       |
+| `EVAL_SURFACE_FIXTURE_SMOKE` | `false`         | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check)                                                                                                                           |
 
 :::tip
 **Dynamic mode** (`TOOL_SURFACE=dynamic`) is the default and lowest-token catalog. It exposes `gitlab_find_action` and `gitlab_execute_action`, while the same GitLab actions remain available through the canonical action catalog.
@@ -81,7 +84,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 # Optional
 GITLAB_SKIP_TLS_VERIFY=false
 TOOL_SURFACE=dynamic
-GITLAB_ENTERPRISE=false
+GITLAB_TIER=free
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
 EXCLUDE_TOOLS=
@@ -268,7 +271,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--meta-tools`           | _(unset)_                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                       |
 | `--meta-param-schema`    | `opaque`                     | Meta-tool `params` schema mode: `opaque`, `compact`, or `full`; applies to meta-tool schemas only                                                                                    |
 | `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`; minimal keeps the `gitlab://tools` manifest, and omits optional resources, workflow guides, and prompts |
-| `--enterprise`           | `false`                      | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL entry                                                                                    |
+| `--tier`                 | _(auto-detect)_              | Force GitLab edition: `free`/`ce`, `premium`, or `ultimate`; omit to auto-detect CE/EE per token+URL entry. Replaces the deprecated `--enterprise` flag                                                  |
 | `--read-only`            | `false`                      | Read-only mode                                                                                                                                                                       |
 | `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                         |
 | `--embedded-resources`   | `true`                       | Embed canonical MCP resource URIs in get-tool results                                                                                                                                |
@@ -287,6 +290,15 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                         |
 | `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                  |
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`)                                                                           |
+
+**Surface evaluator flags** (used by `cmd/eval_mcp_surfaces` only):
+
+| Flag                    | Default | Description                                                                                                                                                                |
+| ----------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--max-output-retries`  | `2`     | Re-run a task when it fails solely due to malformed model tool-call output                                                                                                |
+| `--case-set`            | `ce`    | Case-set selector: `ce` (CE only) or `all` (CE+Enterprise)                                                                                                                  |
+| `--enterprise-case-set` | `false` | Run the enterprise case set on top of the base corpus                                                                                                                      |
+| `--fixture-smoke`       | `false` | Limit the run to fixture-smoke cases (fast smoke check)                                                                                                                    |
 
 **General flags** (both stdio and HTTP modes):
 
