@@ -515,4 +515,5 @@ func init() {
 	toolutil.RegisterMarkdown(FormatCreateTodoMarkdown)
 	toolutil.RegisterMarkdown(FormatDependencyMarkdown)
 	toolutil.RegisterMarkdown(FormatDependenciesMarkdown)
+	toolutil.RegisterMarkdown(FormatCreatePipelineMarkdown)
 }
