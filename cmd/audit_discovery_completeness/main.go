@@ -885,8 +885,12 @@ func emptyParamDescriptions(schema map[string]any) []string {
 	if len(schema) == 0 {
 		return nil
 	}
-	visited := map[uintptr]bool{}
-	out := walkSchemaForEmptyDescriptions(schema, "", visited)
+	var out []string
+	walkSchemaProperties(schema, "", map[uintptr]bool{}, func(_, childPath string, child map[string]any) {
+		if isEmptyOrBoilerplateDescription(child) {
+			out = append(out, childPath)
+		}
+	})
 	return out
 }
 
@@ -899,19 +903,26 @@ func enumCandidates(schema map[string]any) []string {
 	if len(schema) == 0 {
 		return nil
 	}
-	return walkSchemaForEnumCandidates(schema, "", map[uintptr]bool{})
+	var out []string
+	walkSchemaProperties(schema, "", map[uintptr]bool{}, func(name, childPath string, child map[string]any) {
+		if isEnumCandidate(name, child) {
+			out = append(out, childPath)
+		}
+	})
+	return out
 }
 
-// walkSchemaForEnumCandidates mirrors walkSchemaForEmptyDescriptions but flags
-// scalar properties whose prose describes an enumerable set without a structured
-// enum keyword.
-func walkSchemaForEnumCandidates(schema map[string]any, path string, visited map[uintptr]bool) []string {
+// walkSchemaProperties recurses schema's properties — resolving a single-level
+// $ref and array items, and guarding against cycles — invoking visit for every
+// property with its name and dotted path. It is the shared traversal behind
+// emptyParamDescriptions and enumCandidates.
+func walkSchemaProperties(schema map[string]any, path string, visited map[uintptr]bool, visit func(name, childPath string, child map[string]any)) {
 	if schema == nil {
-		return nil
+		return
 	}
 	key := schemaPointer(schema)
 	if visited[key] {
-		return nil
+		return
 	}
 	visited[key] = true
 
@@ -919,7 +930,7 @@ func walkSchemaForEnumCandidates(schema map[string]any, path string, visited map
 	if schemaPointer(resolved) != key {
 		key2 := schemaPointer(resolved)
 		if visited[key2] {
-			return nil
+			return
 		}
 		visited[key2] = true
 		schema = resolved
@@ -927,14 +938,13 @@ func walkSchemaForEnumCandidates(schema map[string]any, path string, visited map
 
 	props, hasProps := schema["properties"].(map[string]any)
 	if !hasProps {
-		return nil
+		return
 	}
 	keys := make([]string, 0, len(props))
 	for k := range props {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var out []string
 	for _, k := range keys {
 		child, _ := props[k].(map[string]any)
 		if child == nil {
@@ -944,15 +954,12 @@ func walkSchemaForEnumCandidates(schema map[string]any, path string, visited map
 		if path != "" {
 			childPath = path + "." + k
 		}
-		if isEnumCandidate(k, child) {
-			out = append(out, childPath)
-		}
-		out = append(out, walkSchemaForEnumCandidates(child, childPath, visited)...)
+		visit(k, childPath, child)
+		walkSchemaProperties(child, childPath, visited, visit)
 		if items, hasItems := child["items"].(map[string]any); hasItems {
-			out = append(out, walkSchemaForEnumCandidates(items, childPath, visited)...)
+			walkSchemaProperties(items, childPath, visited, visit)
 		}
 	}
-	return out
 }
 
 // isEnumCandidate reports whether a scalar property describes a fixed value set
@@ -1033,55 +1040,6 @@ func isNormalizedEnumParam(name string) bool {
 // returning the list of property paths whose description is missing or
 // boilerplate. The visited set prevents cycles in $ref-resolved schemas
 // from re-emitting the same path.
-func walkSchemaForEmptyDescriptions(schema map[string]any, path string, visited map[uintptr]bool) []string {
-	if schema == nil {
-		return nil
-	}
-	key := schemaPointer(schema)
-	if visited[key] {
-		return nil
-	}
-	visited[key] = true
-
-	resolved := resolveSchemaRef(schema)
-	if schemaPointer(resolved) != key {
-		key2 := schemaPointer(resolved)
-		if visited[key2] {
-			return nil
-		}
-		visited[key2] = true
-		schema = resolved
-	}
-
-	props, hasProps := schema["properties"].(map[string]any)
-	if !hasProps {
-		return nil
-	}
-	keys := make([]string, 0, len(props))
-	for k := range props {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var out []string
-	for _, key := range keys {
-		child, _ := props[key].(map[string]any)
-		if child == nil {
-			continue
-		}
-		childPath := key
-		if path != "" {
-			childPath = path + "." + key
-		}
-		if isEmptyOrBoilerplateDescription(child) {
-			out = append(out, childPath)
-		}
-		out = append(out, walkSchemaForEmptyDescriptions(child, childPath, visited)...)
-		if items, hasItems := child["items"].(map[string]any); hasItems {
-			out = append(out, walkSchemaForEmptyDescriptions(items, childPath, visited)...)
-		}
-	}
-	return out
-}
 
 // schemaPointer returns a stable identifier for a map. Using the address of
 // the first byte via reflect.Value.Pointer is fragile for map headers, so we
