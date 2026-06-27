@@ -1,12 +1,3 @@
-// Package toolutil — note shapes shared across the note-family packages
-// (issuenotes, mrnotes, snippetnotes, mrdiscussions, commitdiscussions).
-//
-// The structs and converters here were originally duplicated in each
-// note-family package per the 1:1 audit policy (DEDUP-001 Option B
-// consolidation). The shapes are byte-identical across the family, so
-// they live here once. Note that epicnotes uses a deliberately reduced
-// user shape (no Email/State fields) and is therefore NOT a consumer
-// of these types — see internal/tools/epicnotes/shapes.go.
 package toolutil
 
 import (

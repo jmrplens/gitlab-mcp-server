@@ -1,15 +1,3 @@
-// Package toolutil — issue shape types shared across the issue-cluster
-// packages (issues). The four user-shape types inside the issues
-// package (IssueAuthorOutput, IssueAssigneeOutput, IssueCloserOutput,
-// EpicAuthorOutput) are structurally identical — the 6-field subset
-// of gl.BasicUser with field names matching the issue-resource JSON
-// documentation. They collapse to a single shared `IssueUserOutput`
-// here; per-package call sites use the shared type directly.
-//
-// Issues-only shapes (no other package carries these structs):
-//   - IssueLinksOutput (the GitLab _links object on an issue)
-//   - IterationOutput  (gl.Iteration)
-//   - EpicOutput       (gl.Epic)
 package toolutil
 
 import (

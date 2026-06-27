@@ -1,23 +1,3 @@
-// Package toolutil — merge-request (MR) shape types shared across the
-// MR-cluster packages (mergerequests, deploymentmergerequests, issues).
-//
-// Per the 1:1 audit policy (DEDUP-001 Option B consolidation), each
-// package used to mirror every client-go sub-object as a local struct
-// (zero-import-cycle constraint C-IMPORTS). Six of those structs are
-// byte-identical across two-or-more packages and live here:
-//
-//   - MRMilestoneOutput           (mergerequests, deploymentmergerequests, issues)
-//   - ReferencesOutput            (mergerequests, deploymentmergerequests, issues)
-//   - LabelDetailsOutput          (mergerequests, deploymentmergerequests, issues)
-//   - TaskCompletionStatusOutput  (mergerequests, deploymentmergerequests, issues)
-//   - PipelineInfoOutput          (mergerequests, deploymentmergerequests)
-//   - MergeRequestUserOutput      (mergerequests, deploymentmergerequests)
-//
-// MRMilestoneOutput is intentionally renamed from the per-package
-// `MilestoneOutput` to avoid collision with the release-milestone shape
-// in toolutil.MilestoneOutput (different fields: MR-style has
-// `GroupID`/`ProjectID` and `Expired *bool`; release-style has `int64`
-// issue counts and `*ISOTime` start/due dates).
 package toolutil
 
 import (

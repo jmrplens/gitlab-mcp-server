@@ -1,10 +1,3 @@
-// Package toolutil — pipeline shapes shared across the pipeline-cluster
-// packages (mergerequests, mergetrains, deploymentmergerequests).
-//
-// The structs and converters here were originally duplicated in each
-// pipeline-cluster package per the 1:1 audit policy (DEDUP-001 Option B
-// consolidation). The shapes are byte-identical across the family, so
-// they live here once.
 package toolutil
 
 import (

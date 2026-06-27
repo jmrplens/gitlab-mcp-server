@@ -1,17 +1,3 @@
-// Package toolutil — release shapes shared across the release-cluster
-// packages (releases, groupreleases).
-//
-// The structs and converters here were originally duplicated in each
-// release package per the 1:1 audit policy (DEDUP-001 Option B
-// consolidation). 8 of the 9 release shapes are byte-identical across
-// the family; the ninth (CommitOutput) differs slightly (groupreleases
-// carries an extra WebURL field) and remains a package-local type
-// because the divergence is API-driven.
-//
-// This consolidation also corrects several fields in the local copies
-// that did not exist on the client-go SDK types (the previous per-package
-// types were aspirational and were never populated by the converters);
-// the canonical types below use only the documented SDK fields.
 package toolutil
 
 import (
