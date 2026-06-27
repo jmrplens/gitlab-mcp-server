@@ -75,7 +75,7 @@ For this repository, use `cmd/eval_mcp_surfaces` to validate model-facing MCP be
 Dry-run the current catalog without model calls:
 
 ```bash
-GITLAB_ENTERPRISE=false timeout 180s go run ./cmd/eval_mcp_surfaces \
+GITLAB_TIER=free timeout 180s go run ./cmd/eval_mcp_surfaces \
   --dry-run \
   --repeat=1 \
   --out /tmp/eval-dry.md
