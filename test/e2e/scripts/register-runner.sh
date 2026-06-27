@@ -240,6 +240,28 @@ docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --docker-network-mode "${COMPOSE_NETWORK}" \
     --description "e2e-docker-runner"
 
+# Pre-pull the images the runner will need to spin up. The runner's
+# Docker socket is mounted read-only in docker-compose.yml, so the
+# runner itself cannot pull — the host has to. Without this, the
+# vulnerability SAST pipeline's first run can stall on a network
+# pull (or fail entirely if the runner's daemon has no network),
+# making TestMeta_VulnerabilityLifecycle flake. The default job image
+# is also pre-pulled so the very first job does not pay the cold-pull
+# cost. Both pulls are idempotent (cached images are no-ops) and
+# best-effort: a failure is logged as a warning and the run continues
+# so the runner's if-not-present policy can still attempt the pull
+# on first use.
+echo "    Pre-pulling runner job images..."
+for image in \
+    "alpine:latest" \
+    "registry.gitlab.com/security-products/semgrep:latest"; do
+    if docker pull "$image" >/dev/null 2>&1; then
+        echo "    Pulled $image"
+    else
+        echo "    WARN: failed to pre-pull $image (network/DNS/rate-limit); runner will retry on first job"
+    fi
+done
+
 # Bump concurrent jobs and prefer cached images so the vulnerability
 # SAST pipeline (which uses a heavy analyzer image) doesn't have to
 # re-pull on every run. Without this, single-job runners and cold pulls
