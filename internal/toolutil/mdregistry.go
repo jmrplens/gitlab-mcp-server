@@ -141,9 +141,12 @@ func RegisteredMarkdownTypeNames() []string {
 }
 
 // HasRegisteredMarkdownFormatter reports whether a Markdown formatter
-// has been registered for the concrete type of v. v may be a value or
-// a pointer; pointer values are dereferenced to their element type for
-// the registry lookup. Returns false for nil and for unregistered types.
+// has been registered for the given Go type. Accepts either a reflect.Type
+// (the canonical lookup path — matches spec.Route.OutputType) or a value
+// of any kind (used by tests). Pointer types are dereferenced to their
+// element type for the registry lookup. Returns false for nil, for the
+// special "interface" reflect.Type returned by reflect.TypeOf on a
+// nil/untyped interface, and for unregistered types.
 //
 // This is the authoritative source for "is there a Markdown formatter
 // for this output type?" queries from external tools (e.g.
@@ -153,8 +156,14 @@ func HasRegisteredMarkdownFormatter(v any) bool {
 	if v == nil {
 		return false
 	}
-	t := reflect.TypeOf(v)
-	if t == nil {
+	var t reflect.Type
+	switch x := v.(type) {
+	case reflect.Type:
+		t = x
+	default:
+		t = reflect.TypeOf(v)
+	}
+	if t == nil || t == reflect.TypeOf((*any)(nil)).Elem() {
 		return false
 	}
 	if t.Kind() == reflect.Ptr {
