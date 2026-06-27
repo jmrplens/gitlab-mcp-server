@@ -100,9 +100,35 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 	verb := strings.TrimPrefix(actionName, "badge_")
 	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
 	if scope == "group" {
-		options.Aliases = []string{verb + " group badge", verb + " badge in group"}
+		switch verb {
+		case "list":
+			options.Aliases = []string{"list group badges", "browse group badges", "enumerate group badges"}
+		case "get":
+			options.Aliases = []string{"get group badge", "show group badge", "fetch group badge"}
+		case "add":
+			options.Aliases = []string{"add group badge", "create group badge", "new group badge"}
+		case "edit":
+			options.Aliases = []string{"edit group badge", "update group badge", "modify group badge"}
+		case "delete":
+			options.Aliases = []string{"delete group badge", "remove group badge", "drop group badge"}
+		case "preview":
+			options.Aliases = []string{"preview group badge", "render group badge", "test group badge"}
+		}
 	} else {
-		options.Aliases = []string{verb + " project badge", verb + " badge in project"}
+		switch verb {
+		case "list":
+			options.Aliases = []string{"list project badges", "browse project badges", "enumerate project badges"}
+		case "get":
+			options.Aliases = []string{"get project badge", "show project badge", "fetch project badge"}
+		case "add":
+			options.Aliases = []string{"add project badge", "create project badge", "new project badge"}
+		case "edit":
+			options.Aliases = []string{"edit project badge", "update project badge", "modify project badge"}
+		case "delete":
+			options.Aliases = []string{"delete project badge", "remove project badge", "drop project badge"}
+		case "preview":
+			options.Aliases = []string{"preview project badge", "render project badge", "test project badge"}
+		}
 	}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		idParam: {
