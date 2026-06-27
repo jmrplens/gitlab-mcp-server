@@ -314,13 +314,14 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 		}
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
-				"enum":        []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at"},
-				"description": "Order projects by id, name, path, created_at, updated_at, or last_activity_at.",
+				"enum":        []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity", "star_count"},
+				"description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
 			}),
 			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
 		}
 	}
 	decorateProjectMeta(&options, individualTool)
+	decorateProjectSchemaOverrides(&options, individualTool)
 	return options
 }
 
@@ -690,4 +691,72 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		related:     []string{"project.target_branch_rule_list", "project.target_branch_rule_create"},
 		description: "Delete a target branch rule. Returns: a success confirmation naming the rule. See also: gitlab_project_list_target_branch_rules, gitlab_project_create_target_branch_rule.",
 	},
+}
+
+// projectListOrderByOverride is the shared order_by enum for project list
+// endpoints that proxy the full ListProjectsOptions parameter set.
+// "similarity" is only meaningful when a search query is also provided;
+// "star_count" is valid on all project list calls.
+var projectListOrderByOverride = toolutil.SchemaPropertyOverride("order_by", map[string]any{
+	"enum":        []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity", "star_count"},
+	"description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+})
+
+// projectSettingsEnumOverrides are the input-schema enum constraints shared by
+// project create and update operations for fixed-value CI/CD and merge settings
+// parameters whose valid set is enumerated in the GitLab API documentation.
+var projectSettingsEnumOverrides = []toolutil.InputSchemaOverride{
+	toolutil.SchemaPropertyOverride("merge_method", map[string]any{
+		"enum":        []any{"merge", "rebase_merge", "ff"},
+		"description": "Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).",
+	}),
+	toolutil.SchemaPropertyOverride("squash_option", map[string]any{
+		"enum":        []any{"never", "always", "default_on", "default_off"},
+		"description": "Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).",
+	}),
+	toolutil.SchemaPropertyOverride("build_git_strategy", map[string]any{
+		"enum":        []any{"fetch", "clone"},
+		"description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
+	}),
+	toolutil.SchemaPropertyOverride("auto_devops_deploy_strategy", map[string]any{
+		"enum":        []any{"continuous", "manual", "timed_incremental"},
+		"description": "Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).",
+	}),
+	toolutil.SchemaPropertyOverride("auto_cancel_pending_pipelines", map[string]any{
+		"enum":        []any{"enabled", "disabled"},
+		"description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
+	}),
+	toolutil.SchemaPropertyOverride("resource_group_default_process_mode", map[string]any{
+		"enum":        []any{"unordered", "oldest_first", "newest_first"},
+		"description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+	}),
+}
+
+// projectActionSchemaOverrides maps individual project tool names to their
+// additional input-schema enum overrides. decorateProjectSchemaOverrides
+// appends these onto any overrides already set by projectOptionsForAction so
+// that inline and map-based overrides coexist without conflict.
+//
+//nolint:gochecknoglobals // Intentional package-level lookup table; mirrors projectActionMeta pattern.
+var projectActionSchemaOverrides = map[string][]toolutil.InputSchemaOverride{
+	"gitlab_project_create":                projectSettingsEnumOverrides,
+	"gitlab_project_update":                projectSettingsEnumOverrides,
+	"gitlab_project_create_for_user":       projectSettingsEnumOverrides,
+	"gitlab_project_list_forks":            {projectListOrderByOverride},
+	"gitlab_project_list_user_projects":    {projectListOrderByOverride},
+	"gitlab_project_list_user_contributed": {projectListOrderByOverride},
+	"gitlab_project_list_user_starred":     {projectListOrderByOverride},
+}
+
+// decorateProjectSchemaOverrides appends input-schema enum overrides for
+// project actions that expose fixed enumerated values on specific parameters.
+// It appends to any overrides already set in projectOptionsForAction (e.g. the
+// inline order_by/sort overrides on the list action) so both coexist without
+// conflict.
+func decorateProjectSchemaOverrides(options *toolutil.ActionSpecOptions, individualTool string) {
+	overrides, ok := projectActionSchemaOverrides[individualTool]
+	if !ok {
+		return
+	}
+	options.InputSchemaOverrides = append(options.InputSchemaOverrides, overrides...)
 }

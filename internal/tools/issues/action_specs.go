@@ -109,6 +109,37 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// issueListEnumOverrides returns the InputSchemaOverrides shared by the three
+// issue list actions (list, list_all, list_group). Each override constrains a
+// fixed-vocabulary filter parameter to a JSON Schema enum so model tool calls
+// are validated before reaching the GitLab API. sort is omitted here because
+// it is already handled centrally via canonicalParamEnums.
+func issueListEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state", map[string]any{
+			"enum": []any{"opened", "closed", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
+		toolutil.SchemaPropertyOverride("scope", map[string]any{
+			"enum": []any{"created_by_me", "assigned_to_me", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("in", map[string]any{
+			"enum": []any{"title", "description", "title,description"},
+		}),
+		toolutil.SchemaPropertyOverride("not_in", map[string]any{
+			"enum": []any{"title", "description", "title,description"},
+		}),
+		toolutil.SchemaPropertyOverride("order_by", map[string]any{
+			"enum": []any{
+				"created_at", "due_date", "id", "label_priority", "milestone_due",
+				"popularity", "priority", "relative_position", "title", "updated_at", "weight",
+			},
+		}),
+	}
+}
+
 // issueReadSpec builds a read-only [toolutil.ActionSpec] for an issue
 // action and fills in the usage, related actions, and parameter guidance
 // for the most common individual tools.
@@ -158,11 +189,16 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 			},
 		}
 		options.IndividualTool.Description = "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	case "gitlab_issue_list_all":
 		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
 		options.RelatedActions = []string{actionIssueList, "issue.list_group", actionSearchIssues}
 		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
+	case toolIssueListGroup:
+		decorateIssueMeta(&options, individualTool)
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	default:
 		decorateIssueMeta(&options, individualTool)
 	}
@@ -337,6 +373,11 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 		},
 	}
 	options.IndividualTool.Description = "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update."
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
+	}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -372,6 +413,9 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 				"description": "State transition; set to close or reopen when changing issue state.",
 			},
 		},
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
 	}
 	return toolutil.NewUpdateActionSpec("update", toolutil.RouteAction(client, Update), options)
 }
@@ -413,6 +457,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 			},
 		}
 		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	}
 	return toolutil.NewReadActionSpec(name, route, options)
 }

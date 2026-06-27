@@ -396,6 +396,35 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		options.IndividualTool.Description = meta.description
 	}
 	switch actionName {
+	case "list":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at", "title"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+		}
+	case "list_global":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+			toolutil.SchemaPropertyOverride("approved", map[string]any{"enum": []any{"yes", "no"}}),
+		}
+	case "list_group":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+		}
+	case "update":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "reopen"}}),
+		}
 	case "merge":
 		options.Usage = "Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use " + pipelineWaitAction + " unless the task only asks to wait for an existing pipeline."
 		options.Aliases = []string{"merge merge request", "merge mr", "merge when pipeline succeeds"}

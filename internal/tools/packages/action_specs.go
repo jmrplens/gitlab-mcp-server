@@ -210,6 +210,10 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 				schemaEnum:        []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"},
 				schemaDescription: "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
 			}),
+			toolutil.SchemaPropertyOverride("package_type", map[string]any{
+				schemaEnum:        []any{"composer", "conan", "generic", "golang", "helm", "maven", "npm", "nuget", "pypi", "terraform_module"},
+				schemaDescription: "Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.",
+			}),
 		}
 	}
 	if actionName == actionNameGroupList {
@@ -232,6 +236,22 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 			toolutil.SchemaPropertyOverride("status", map[string]any{
 				schemaEnum:        []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"},
 				schemaDescription: "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
+			}),
+			toolutil.SchemaPropertyOverride("package_type", map[string]any{
+				schemaEnum:        []any{"composer", "conan", "generic", "golang", "helm", "maven", "npm", "nuget", "pypi", "terraform_module"},
+				schemaDescription: "Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.",
+			}),
+		}
+	}
+	if actionName == "publish" {
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				schemaEnum:        []any{"default", "hidden"},
+				schemaDescription: "Package visibility on publish: default (publicly visible) or hidden.",
+			}),
+			toolutil.SchemaPropertyOverride("select", map[string]any{
+				schemaEnum:        []any{"package_file"},
+				schemaDescription: "Response detail selector. Use package_file to receive the published file metadata (id, size, checksums).",
 			}),
 		}
 	}

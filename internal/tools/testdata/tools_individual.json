@@ -20319,6 +20319,10 @@
         },
         "status": {
           "description": "Approval status: approved or rejected",
+          "enum": [
+            "approved",
+            "rejected"
+          ],
           "type": "string"
         }
       },
@@ -20380,6 +20384,13 @@
         },
         "status": {
           "description": "Deployment status: created or running or success or failed or canceled",
+          "enum": [
+            "created",
+            "running",
+            "success",
+            "failed",
+            "canceled"
+          ],
           "type": "string"
         },
         "tag": {
@@ -21134,6 +21145,14 @@
         },
         "order_by": {
           "description": "Order by id or iid or created_at or updated_at or finished_at or ref (default: id)",
+          "enum": [
+            "id",
+            "iid",
+            "created_at",
+            "updated_at",
+            "finished_at",
+            "ref"
+          ],
           "type": "string"
         },
         "page": {
@@ -21166,6 +21185,13 @@
         },
         "status": {
           "description": "Filter by status: created or running or success or failed or canceled",
+          "enum": [
+            "created",
+            "running",
+            "success",
+            "failed",
+            "canceled"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -21579,6 +21605,14 @@
         },
         "status": {
           "description": "New deployment status: created or running or success or failed or canceled",
+          "enum": [
+            "created",
+            "running",
+            "success",
+            "failed",
+            "canceled",
+            "blocked"
+          ],
           "type": "string"
         }
       },
@@ -33673,6 +33707,11 @@
         },
         "scope": {
           "description": "Scope: created_by_me, assigned_to_me, all",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -34683,6 +34722,11 @@
         },
         "in": {
           "description": "Fields the search query applies to (title, description, or title,description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "labels": {
@@ -34705,6 +34749,11 @@
         },
         "scope": {
           "description": "Scope: created_by_me, assigned_to_me, all",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -36443,6 +36492,11 @@
         },
         "scope": {
           "description": "Scope: created_by_me, assigned_to_me, all",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -44377,6 +44431,11 @@
         },
         "duo_availability": {
           "description": "GitLab Duo availability (default_on, default_off, never_on)",
+          "enum": [
+            "default_on",
+            "default_off",
+            "never_on"
+          ],
           "type": "string"
         },
         "emails_disabled": {
@@ -44395,6 +44454,11 @@
         },
         "enabled_git_access_protocol": {
           "description": "Allowed Git access protocol (ssh, http, all)",
+          "enum": [
+            "ssh",
+            "http",
+            "all"
+          ],
           "type": "string"
         },
         "experiment_features_enabled": {
@@ -44460,6 +44524,11 @@
         },
         "project_creation_level": {
           "description": "Who can create projects (noone, maintainer, developer)",
+          "enum": [
+            "noone",
+            "maintainer",
+            "developer"
+          ],
           "type": "string"
         },
         "request_access_enabled": {
@@ -44492,6 +44561,10 @@
         },
         "subgroup_creation_level": {
           "description": "Who can create subgroups (owner, maintainer)",
+          "enum": [
+            "owner",
+            "maintainer"
+          ],
           "type": "string"
         },
         "two_factor_grace_period": {
@@ -44553,6 +44626,11 @@
         },
         "wiki_access_level": {
           "description": "Wiki access level (disabled, private, enabled)",
+          "enum": [
+            "disabled",
+            "private",
+            "enabled"
+          ],
           "type": "string"
         }
       },
@@ -50251,6 +50329,12 @@
         },
         "order_by": {
           "description": "Order groups by field (name, path, id, similarity)",
+          "enum": [
+            "name",
+            "path",
+            "id",
+            "similarity"
+          ],
           "type": "string"
         },
         "owned": {
@@ -52327,6 +52411,13 @@
         },
         "order_by": {
           "description": "Order members by field (id, name, username, access_level, last_activity_on)",
+          "enum": [
+            "id",
+            "name",
+            "username",
+            "access_level",
+            "last_activity_on"
+          ],
           "type": "string"
         },
         "page": {
@@ -53705,6 +53796,15 @@
         },
         "order_by": {
           "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at, similarity)",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at",
+            "similarity"
+          ],
           "type": "string"
         },
         "owned": {
@@ -61598,6 +61698,11 @@
         },
         "duo_availability": {
           "description": "GitLab Duo availability (default_on, default_off, never_on)",
+          "enum": [
+            "default_on",
+            "default_off",
+            "never_on"
+          ],
           "type": "string"
         },
         "duo_features_enabled": {
@@ -61623,6 +61728,11 @@
         },
         "enabled_git_access_protocol": {
           "description": "Allowed Git access protocol (ssh, http, all)",
+          "enum": [
+            "ssh",
+            "http",
+            "all"
+          ],
           "type": "string"
         },
         "experiment_features_enabled": {
@@ -61741,6 +61851,11 @@
         },
         "project_creation_level": {
           "description": "Who can create projects (noone, maintainer, developer)",
+          "enum": [
+            "noone",
+            "maintainer",
+            "developer"
+          ],
           "type": "string"
         },
         "request_access_enabled": {
@@ -61773,6 +61888,11 @@
         },
         "shared_runners_setting": {
           "description": "Shared runners setting (enabled, disabled_and_overridable, disabled_and_unoverridable)",
+          "enum": [
+            "enabled",
+            "disabled_and_overridable",
+            "disabled_and_unoverridable"
+          ],
           "type": "string"
         },
         "step_up_auth_required_oauth_provider": {
@@ -61781,6 +61901,10 @@
         },
         "subgroup_creation_level": {
           "description": "Who can create subgroups (owner, maintainer)",
+          "enum": [
+            "owner",
+            "maintainer"
+          ],
           "type": "string"
         },
         "two_factor_grace_period": {
@@ -61842,6 +61966,11 @@
         },
         "wiki_access_level": {
           "description": "Wiki access level (disabled, private, enabled)",
+          "enum": [
+            "disabled",
+            "private",
+            "enabled"
+          ],
           "type": "string"
         }
       },
@@ -67867,6 +67996,12 @@
         },
         "issue_type": {
           "description": "Issue type (issue, incident, test_case, task)",
+          "enum": [
+            "issue",
+            "incident",
+            "test_case",
+            "task"
+          ],
           "type": "string"
         },
         "labels": {
@@ -74468,10 +74603,21 @@
         },
         "in": {
           "description": "Fields the search query applies to (title, description, or title,description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "issue_type": {
           "description": "Filter by issue type (issue, incident, test_case, task)",
+          "enum": [
+            "issue",
+            "incident",
+            "test_case",
+            "task"
+          ],
           "type": "string"
         },
         "iteration_id": {
@@ -74523,6 +74669,11 @@
         },
         "not_in": {
           "description": "Fields the negated search query applies to (title, description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "not_labels": {
@@ -74545,6 +74696,19 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "enum": [
+            "created_at",
+            "due_date",
+            "id",
+            "label_priority",
+            "milestone_due",
+            "popularity",
+            "priority",
+            "relative_position",
+            "title",
+            "updated_at",
+            "weight"
+          ],
           "type": "string"
         },
         "page": {
@@ -74569,6 +74733,11 @@
         },
         "scope": {
           "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -74585,6 +74754,11 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "all"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -75401,10 +75575,21 @@
         },
         "in": {
           "description": "Fields the search query applies to (title, description, or title,description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "issue_type": {
           "description": "Filter by issue type (issue, incident, test_case, task)",
+          "enum": [
+            "issue",
+            "incident",
+            "test_case",
+            "task"
+          ],
           "type": "string"
         },
         "iteration_id": {
@@ -75462,6 +75647,11 @@
         },
         "not_in": {
           "description": "Fields the negated search query applies to (title, description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "not_labels": {
@@ -75494,6 +75684,19 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "enum": [
+            "created_at",
+            "due_date",
+            "id",
+            "label_priority",
+            "milestone_due",
+            "popularity",
+            "priority",
+            "relative_position",
+            "title",
+            "updated_at",
+            "weight"
+          ],
           "type": "string"
         },
         "page": {
@@ -75514,6 +75717,11 @@
         },
         "scope": {
           "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -75530,6 +75738,11 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "all"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -76347,10 +76560,21 @@
         },
         "in": {
           "description": "Fields the search query applies to (title, description, or title,description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "issue_type": {
           "description": "Filter by issue type (issue, incident, test_case, task)",
+          "enum": [
+            "issue",
+            "incident",
+            "test_case",
+            "task"
+          ],
           "type": "string"
         },
         "iteration_id": {
@@ -76402,6 +76626,11 @@
         },
         "not_in": {
           "description": "Fields the negated search query applies to (title, description)",
+          "enum": [
+            "title",
+            "description",
+            "title,description"
+          ],
           "type": "string"
         },
         "not_labels": {
@@ -76428,6 +76657,19 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, priority, due_date, relative_position, label_priority, milestone_due, popularity, weight)",
+          "enum": [
+            "created_at",
+            "due_date",
+            "id",
+            "label_priority",
+            "milestone_due",
+            "popularity",
+            "priority",
+            "relative_position",
+            "title",
+            "updated_at",
+            "weight"
+          ],
           "type": "string"
         },
         "page": {
@@ -76448,6 +76690,11 @@
         },
         "scope": {
           "description": "Scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -76464,6 +76711,11 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "all"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -84409,6 +84661,12 @@
         },
         "issue_type": {
           "description": "Issue type (issue, incident, test_case, task)",
+          "enum": [
+            "issue",
+            "incident",
+            "test_case",
+            "task"
+          ],
           "type": "string"
         },
         "labels": {
@@ -97940,7 +98198,19 @@
           "type": "string"
         },
         "package_type": {
-          "description": "Filter by type (generic, npm, maven, etc.)",
+          "description": "Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.",
+          "enum": [
+            "composer",
+            "conan",
+            "generic",
+            "golang",
+            "helm",
+            "maven",
+            "npm",
+            "nuget",
+            "pypi",
+            "terraform_module"
+          ],
           "type": "string"
         },
         "page": {
@@ -121709,6 +121979,11 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at, title)",
+          "enum": [
+            "created_at",
+            "updated_at",
+            "title"
+          ],
           "type": "string"
         },
         "page": {
@@ -121741,6 +122016,11 @@
         },
         "scope": {
           "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -121761,6 +122041,13 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, merged, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "locked",
+            "merged",
+            "all"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -121777,10 +122064,17 @@
         },
         "view": {
           "description": "Set to 'simple' to return only basic MR fields",
+          "enum": [
+            "simple"
+          ],
           "type": "string"
         },
         "wip": {
           "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "enum": [
+            "yes",
+            "no"
+          ],
           "type": "string"
         },
         "with_labels_details": {
@@ -122786,6 +123080,10 @@
       "properties": {
         "approved": {
           "description": "Filter by approval status: 'yes' or 'no' (Premium)",
+          "enum": [
+            "yes",
+            "no"
+          ],
           "type": "string"
         },
         "approved_by_ids": {
@@ -122873,6 +123171,10 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -122901,6 +123203,11 @@
         },
         "scope": {
           "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -122921,6 +123228,13 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, merged, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "locked",
+            "merged",
+            "all"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -122937,10 +123251,17 @@
         },
         "view": {
           "description": "Set to 'simple' to return only basic MR fields",
+          "enum": [
+            "simple"
+          ],
           "type": "string"
         },
         "wip": {
           "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "enum": [
+            "yes",
+            "no"
+          ],
           "type": "string"
         },
         "with_labels_details": {
@@ -124030,6 +124351,10 @@
         },
         "order_by": {
           "description": "Order by field (created_at, updated_at)",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -124058,6 +124383,11 @@
         },
         "scope": {
           "description": "Filter by scope (created_by_me, assigned_to_me, all)",
+          "enum": [
+            "created_by_me",
+            "assigned_to_me",
+            "all"
+          ],
           "type": "string"
         },
         "search": {
@@ -124078,6 +124408,13 @@
         },
         "state": {
           "description": "Filter by state (opened, closed, merged, all)",
+          "enum": [
+            "opened",
+            "closed",
+            "locked",
+            "merged",
+            "all"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -124094,10 +124431,17 @@
         },
         "view": {
           "description": "Set to 'simple' to return only basic MR fields",
+          "enum": [
+            "simple"
+          ],
           "type": "string"
         },
         "wip": {
           "description": "Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft",
+          "enum": [
+            "yes",
+            "no"
+          ],
           "type": "string"
         },
         "with_labels_details": {
@@ -132085,6 +132429,10 @@
         },
         "state_event": {
           "description": "State transition (close, reopen)",
+          "enum": [
+            "close",
+            "reopen"
+          ],
           "type": "string"
         },
         "target_branch": {
@@ -135049,7 +135397,19 @@
           "type": "string"
         },
         "package_type": {
-          "description": "Filter by type (generic, npm, maven, etc.)",
+          "description": "Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.",
+          "enum": [
+            "composer",
+            "conan",
+            "generic",
+            "golang",
+            "helm",
+            "maven",
+            "npm",
+            "nuget",
+            "pypi",
+            "terraform_module"
+          ],
           "type": "string"
         },
         "package_version": {
@@ -135431,11 +135791,18 @@
           "type": "string"
         },
         "select": {
-          "description": "Response detail selector. Set to 'package_file' to receive the published file metadata (id, size, checksums). Defaults to 'package_file'.",
+          "description": "Response detail selector. Use package_file to receive the published file metadata (id, size, checksums).",
+          "enum": [
+            "package_file"
+          ],
           "type": "string"
         },
         "status": {
-          "description": "Package status: default or hidden",
+          "description": "Package visibility on publish: default (publicly visible) or hidden.",
+          "enum": [
+            "default",
+            "hidden"
+          ],
           "type": "string"
         }
       },
@@ -138063,6 +138430,13 @@
         },
         "order_by": {
           "description": "Order by field (id, status, ref, updated_at, user_id). Applies to the list fallback.",
+          "enum": [
+            "id",
+            "status",
+            "ref",
+            "updated_at",
+            "user_id"
+          ],
           "type": "string"
         },
         "page": {
@@ -138091,6 +138465,13 @@
         },
         "scope": {
           "description": "Filter by scope (running, pending, finished, branches, tags). Applies to the list fallback.",
+          "enum": [
+            "running",
+            "pending",
+            "finished",
+            "branches",
+            "tags"
+          ],
           "type": "string"
         },
         "sha": {
@@ -138111,6 +138492,19 @@
         },
         "status": {
           "description": "Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled). Applies to the list fallback.",
+          "enum": [
+            "created",
+            "waiting_for_resource",
+            "preparing",
+            "pending",
+            "running",
+            "success",
+            "failed",
+            "canceled",
+            "skipped",
+            "manual",
+            "scheduled"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -138344,6 +138738,13 @@
         },
         "order_by": {
           "description": "Order by field (id, status, ref, updated_at, user_id)",
+          "enum": [
+            "id",
+            "status",
+            "ref",
+            "updated_at",
+            "user_id"
+          ],
           "type": "string"
         },
         "page": {
@@ -138372,6 +138773,13 @@
         },
         "scope": {
           "description": "Filter by scope (running, pending, finished, branches, tags)",
+          "enum": [
+            "running",
+            "pending",
+            "finished",
+            "branches",
+            "tags"
+          ],
           "type": "string"
         },
         "sha": {
@@ -138392,6 +138800,19 @@
         },
         "status": {
           "description": "Filter by status (created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled)",
+          "enum": [
+            "created",
+            "waiting_for_resource",
+            "preparing",
+            "pending",
+            "running",
+            "success",
+            "failed",
+            "canceled",
+            "skipped",
+            "manual",
+            "scheduled"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -145932,11 +146353,20 @@
           "type": "integer"
         },
         "auto_cancel_pending_pipelines": {
-          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "auto_devops_deploy_strategy": {
-          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "description": "Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).",
+          "enum": [
+            "continuous",
+            "manual",
+            "timed_incremental"
+          ],
           "type": "string"
         },
         "auto_devops_enabled": {
@@ -145958,7 +146388,11 @@
           "type": "string"
         },
         "build_git_strategy": {
-          "description": "Git strategy for builds (fetch, clone)",
+          "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
+          "enum": [
+            "fetch",
+            "clone"
+          ],
           "type": "string"
         },
         "build_timeout": {
@@ -146137,7 +146571,12 @@
           "type": "string"
         },
         "merge_method": {
-          "description": "Merge method (merge, rebase_merge, ff)",
+          "description": "Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).",
+          "enum": [
+            "merge",
+            "rebase_merge",
+            "ff"
+          ],
           "type": "string"
         },
         "merge_pipelines_enabled": {
@@ -146322,7 +146761,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "enum": [
+            "unordered",
+            "oldest_first",
+            "newest_first"
+          ],
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -146366,7 +146810,13 @@
           "type": "string"
         },
         "squash_option": {
-          "description": "Squash option (never, always, default_on, default_off)",
+          "description": "Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).",
+          "enum": [
+            "never",
+            "always",
+            "default_on",
+            "default_off"
+          ],
           "type": "string"
         },
         "suggestion_commit_message": {
@@ -147372,11 +147822,20 @@
           "type": "integer"
         },
         "auto_cancel_pending_pipelines": {
-          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "auto_devops_deploy_strategy": {
-          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "description": "Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).",
+          "enum": [
+            "continuous",
+            "manual",
+            "timed_incremental"
+          ],
           "type": "string"
         },
         "auto_devops_enabled": {
@@ -147398,7 +147857,11 @@
           "type": "string"
         },
         "build_git_strategy": {
-          "description": "Git strategy for builds (fetch, clone)",
+          "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
+          "enum": [
+            "fetch",
+            "clone"
+          ],
           "type": "string"
         },
         "build_timeout": {
@@ -147577,7 +148040,12 @@
           "type": "string"
         },
         "merge_method": {
-          "description": "Merge method (merge, rebase_merge, ff)",
+          "description": "Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).",
+          "enum": [
+            "merge",
+            "rebase_merge",
+            "ff"
+          ],
           "type": "string"
         },
         "merge_pipelines_enabled": {
@@ -147762,7 +148230,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "enum": [
+            "unordered",
+            "oldest_first",
+            "newest_first"
+          ],
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -147806,7 +148279,13 @@
           "type": "string"
         },
         "squash_option": {
-          "description": "Squash option (never, always, default_on, default_off)",
+          "description": "Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).",
+          "enum": [
+            "never",
+            "always",
+            "default_on",
+            "default_off"
+          ],
           "type": "string"
         },
         "suggestion_commit_message": {
@@ -154012,14 +154491,16 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order projects by id, name, path, created_at, updated_at, or last_activity_at.",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
           "enum": [
             "id",
             "name",
             "path",
             "created_at",
             "updated_at",
-            "last_activity_at"
+            "last_activity_at",
+            "similarity",
+            "star_count"
           ],
           "type": "string"
         },
@@ -155187,7 +155668,17 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at",
+            "similarity",
+            "star_count"
+          ],
           "type": "string"
         },
         "owned": {
@@ -156931,7 +157422,17 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at",
+            "similarity",
+            "star_count"
+          ],
           "type": "string"
         },
         "owned": {
@@ -158105,7 +158606,17 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at",
+            "similarity",
+            "star_count"
+          ],
           "type": "string"
         },
         "owned": {
@@ -159279,7 +159790,17 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at",
+            "similarity",
+            "star_count"
+          ],
           "type": "string"
         },
         "owned": {
@@ -168630,11 +169151,20 @@
           "type": "integer"
         },
         "auto_cancel_pending_pipelines": {
-          "description": "Auto-cancel pending pipelines (enabled, disabled)",
+          "description": "Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "auto_devops_deploy_strategy": {
-          "description": "Auto DevOps deploy strategy (continuous, manual, timed_incremental)",
+          "description": "Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).",
+          "enum": [
+            "continuous",
+            "manual",
+            "timed_incremental"
+          ],
           "type": "string"
         },
         "auto_devops_enabled": {
@@ -168663,7 +169193,11 @@
           "type": "string"
         },
         "build_git_strategy": {
-          "description": "Git strategy for builds (fetch, clone)",
+          "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
+          "enum": [
+            "fetch",
+            "clone"
+          ],
           "type": "string"
         },
         "build_timeout": {
@@ -168899,7 +169433,12 @@
           "type": "string"
         },
         "merge_method": {
-          "description": "Merge method (merge, rebase_merge, ff)",
+          "description": "Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).",
+          "enum": [
+            "merge",
+            "rebase_merge",
+            "ff"
+          ],
           "type": "string"
         },
         "merge_pipelines_enabled": {
@@ -169126,7 +169665,12 @@
           ]
         },
         "resource_group_default_process_mode": {
-          "description": "Default resource group process mode (unordered, oldest_first, newest_first)",
+          "description": "Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.",
+          "enum": [
+            "unordered",
+            "oldest_first",
+            "newest_first"
+          ],
           "type": "string"
         },
         "restrict_user_defined_variables": {
@@ -169177,7 +169721,13 @@
           "type": "string"
         },
         "squash_option": {
-          "description": "Squash option (never, always, default_on, default_off)",
+          "description": "Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).",
+          "enum": [
+            "never",
+            "always",
+            "default_on",
+            "default_off"
+          ],
           "type": "string"
         },
         "suggestion_commit_message": {
@@ -183557,7 +184107,13 @@
           "type": "string"
         },
         "status": {
-          "description": "Runner status filter: online, offline, stale, never_contacted",
+          "description": "Runner status filter: online, offline, stale, or never_contacted.",
+          "enum": [
+            "online",
+            "offline",
+            "stale",
+            "never_contacted"
+          ],
           "type": "string"
         },
         "tag_list": {
@@ -183571,7 +184127,12 @@
           ]
         },
         "type": {
-          "description": "Runner type filter: instance_type, group_type, project_type",
+          "description": "Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).",
+          "enum": [
+            "instance_type",
+            "group_type",
+            "project_type"
+          ],
           "type": "string"
         }
       },
@@ -183753,7 +184314,13 @@
           "type": "string"
         },
         "status": {
-          "description": "Runner status filter: online, offline, stale, never_contacted",
+          "description": "Runner status filter: online, offline, stale, or never_contacted.",
+          "enum": [
+            "online",
+            "offline",
+            "stale",
+            "never_contacted"
+          ],
           "type": "string"
         },
         "tag_list": {
@@ -183767,7 +184334,12 @@
           ]
         },
         "type": {
-          "description": "Runner type filter: instance_type, group_type, project_type",
+          "description": "Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).",
+          "enum": [
+            "instance_type",
+            "group_type",
+            "project_type"
+          ],
           "type": "string"
         }
       },
@@ -183942,7 +184514,13 @@
           "type": "string"
         },
         "status": {
-          "description": "Runner status filter: online, offline, stale, never_contacted",
+          "description": "Runner status filter: online, offline, stale, or never_contacted.",
+          "enum": [
+            "online",
+            "offline",
+            "stale",
+            "never_contacted"
+          ],
           "type": "string"
         },
         "tag_list": {
@@ -183956,7 +184534,12 @@
           ]
         },
         "type": {
-          "description": "Runner type filter: instance_type, group_type, project_type",
+          "description": "Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).",
+          "enum": [
+            "instance_type",
+            "group_type",
+            "project_type"
+          ],
           "type": "string"
         }
       },
@@ -184238,7 +184821,13 @@
           "type": "string"
         },
         "status": {
-          "description": "Runner status filter: online, offline, stale, never_contacted",
+          "description": "Runner status filter: online, offline, stale, or never_contacted.",
+          "enum": [
+            "online",
+            "offline",
+            "stale",
+            "never_contacted"
+          ],
           "type": "string"
         },
         "tag_list": {
@@ -184252,7 +184841,12 @@
           ]
         },
         "type": {
-          "description": "Runner type filter: instance_type, group_type, project_type",
+          "description": "Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).",
+          "enum": [
+            "instance_type",
+            "group_type",
+            "project_type"
+          ],
           "type": "string"
         }
       },
@@ -194880,6 +195474,12 @@
         },
         "order_by": {
           "description": "Order subgroups by field (name, path, id, similarity)",
+          "enum": [
+            "name",
+            "path",
+            "id",
+            "similarity"
+          ],
           "type": "string"
         },
         "owned": {

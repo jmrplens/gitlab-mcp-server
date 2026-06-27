@@ -290,7 +290,7 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	if !strings.Contains(listSpec.Usage, "last_activity_at") || strings.Contains(listSpec.Usage, "last_activity_after as an order_by") && !strings.Contains(listSpec.Usage, "do not use") {
 		t.Fatalf("list Usage = %q, want last_activity_at ordering guidance", listSpec.Usage)
 	}
-	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "order_by"); !sameProjectStringSet(got, []string{"id", "name", "path", "created_at", "updated_at", "last_activity_at"}) {
+	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "order_by"); !sameProjectStringSet(got, []string{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity", "star_count"}) {
 		t.Fatalf("order_by enum = %v, want accepted project ordering fields", got)
 	}
 	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "sort"); !sameProjectStringSet(got, []string{"asc", "desc"}) {

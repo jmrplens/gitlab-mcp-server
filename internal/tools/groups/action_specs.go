@@ -423,7 +423,68 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 	}
 
+	applyGroupInputEnums(individualTool, &options)
 	return options
+}
+
+// applyGroupInputEnums injects model-authoritative JSON Schema enum constraints
+// for prose-described finite value sets in group action inputs. It is called
+// after the per-action switch in groupOptionsForAction so each action retains
+// its own usage/guidance while the enum injection stays in one place.
+func applyGroupInputEnums(individualTool string, options *toolutil.ActionSpecOptions) {
+	switch individualTool {
+	case "gitlab_group_list", "gitlab_subgroups_list":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum": []any{"name", "path", "id", "similarity"},
+			}),
+		}
+	case "gitlab_group_members_list":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum": []any{"id", "name", "username", "access_level", "last_activity_on"},
+			}),
+		}
+	case "gitlab_group_projects":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum": []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity"},
+			}),
+		}
+	case "gitlab_group_create":
+		options.InputSchemaOverrides = groupCreateUpdateEnumOverrides(false)
+	case "gitlab_group_update":
+		options.InputSchemaOverrides = groupCreateUpdateEnumOverrides(true)
+	}
+}
+
+// groupCreateUpdateEnumOverrides returns the shared enum overrides for group
+// create and update. When includeUpdateOnly is true, shared_runners_setting
+// (present only on UpdateInput) is appended.
+func groupCreateUpdateEnumOverrides(includeUpdateOnly bool) []toolutil.InputSchemaOverride {
+	overrides := []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("project_creation_level", map[string]any{
+			"enum": []any{"noone", "maintainer", "developer"},
+		}),
+		toolutil.SchemaPropertyOverride("subgroup_creation_level", map[string]any{
+			"enum": []any{"owner", "maintainer"},
+		}),
+		toolutil.SchemaPropertyOverride("duo_availability", map[string]any{
+			"enum": []any{"default_on", "default_off", "never_on"},
+		}),
+		toolutil.SchemaPropertyOverride("enabled_git_access_protocol", map[string]any{
+			"enum": []any{"ssh", "http", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("wiki_access_level", map[string]any{
+			"enum": []any{"disabled", "private", "enabled"},
+		}),
+	}
+	if includeUpdateOnly {
+		overrides = append(overrides, toolutil.SchemaPropertyOverride("shared_runners_setting", map[string]any{
+			"enum": []any{"enabled", "disabled_and_overridable", "disabled_and_unoverridable"},
+		}))
+	}
+	return overrides
 }
 
 // applyGroupShareTransferMetadata fills in discovery metadata for the group

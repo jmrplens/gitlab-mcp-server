@@ -109,16 +109,38 @@ func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool st
 func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	usage := "Use to execute runners domain action."
 	options := toolutil.ActionSpecOptions{
-		Aliases:           []string{individualTool},
-		Usage:             usage,
-		Tags:              []string{"runner"},
-		ParameterGuidance: runnerParameterGuidance(actionName),
-		OpenWorld:         true,
-		OwnerPackage:      "runners",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:              []string{individualTool},
+		Usage:                usage,
+		Tags:                 []string{"runner"},
+		ParameterGuidance:    runnerParameterGuidance(actionName),
+		InputSchemaOverrides: runnerListInputSchemaOverrides(actionName),
+		OpenWorld:            true,
+		OwnerPackage:         "runners",
+		IndividualTool:       toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	decorateRunnerMeta(&options, individualTool)
 	return options
+}
+
+// runnerListInputSchemaOverrides returns input-schema enum overrides for the
+// runner list actions (list, list_all, list_project, list_group). Returns nil
+// for all other actions.
+func runnerListInputSchemaOverrides(actionName string) []toolutil.InputSchemaOverride {
+	switch actionName {
+	case "list", "list_all", "list_project", "list_group":
+	default:
+		return nil
+	}
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("type", map[string]any{
+			"enum":        []any{"instance_type", "group_type", "project_type"},
+			"description": "Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).",
+		}),
+		toolutil.SchemaPropertyOverride("status", map[string]any{
+			"enum":        []any{"online", "offline", "stale", "never_contacted"},
+			"description": "Runner status filter: online, offline, stale, or never_contacted.",
+		}),
+	}
 }
 
 // decorateRunnerMeta fills the discovery metadata gap (R-META) for runner

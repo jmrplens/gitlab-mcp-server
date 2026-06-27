@@ -21033,7 +21033,7 @@ List packages across a group and its descendant projects with optional filters a
 - `include_versionless` (boolean): Include versionless packages
 - `order_by` (string): Order by group package registry field: created_at, name, version, type, or project_path.
 - `package_name` (string): Filter by package name
-- `package_type` (string): Filter by type (generic, npm, maven, etc.)
+- `package_type` (string): Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
@@ -23350,7 +23350,7 @@ List packages in a project with optional filters and ordering. Returns: matching
 - `include_versionless` (boolean): Include versionless packages
 - `order_by` (string): Order by package registry field: created_at, name, version, or type.
 - `package_name` (string): Filter by package name
-- `package_type` (string): Filter by type (generic, npm, maven, etc.)
+- `package_type` (string): Filter by package type: composer, conan, generic, golang, helm, maven, npm, nuget, pypi, or terraform_module.
 - `package_version` (string): Filter by package version
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -23374,8 +23374,8 @@ Publish a single file to the Generic Package Registry. Returns: the published fi
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `select` (string): Response detail selector. Set to 'package_file' to receive the published file metadata (id, size, checksums). Defaults to 'package_file'.
-- `status` (string): Package status: default or hidden
+- `select` (string): Response detail selector. Use package_file to receive the published file metadata (id, size, checksums).
+- `status` (string): Package visibility on publish: default (publicly visible) or hidden.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -24282,12 +24282,12 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `allow_merge_on_skipped_pipeline` (boolean): Allow merge when pipeline is skipped
 - `analytics_access_level` (string): Analytics access level (disabled, private, enabled)
 - `approvals_before_merge` (integer): Number of approvals required before merge (deprecated: use Merge Request Approvals API)
-- `auto_cancel_pending_pipelines` (string): Auto-cancel pending pipelines (enabled, disabled)
-- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy (continuous, manual, timed_incremental)
+- `auto_cancel_pending_pipelines` (string): Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.
+- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
 - `build_coverage_regex` (string): Regex used to extract test coverage from job logs
-- `build_git_strategy` (string): Git strategy for builds (fetch, clone)
+- `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
@@ -24316,7 +24316,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `jobs_enabled` (boolean): Enable CI/CD jobs (deprecated: use builds_access_level)
 - `lfs_enabled` (boolean): Enable Git LFS
 - `merge_commit_template` (string): Template for merge commit messages
-- `merge_method` (string): Merge method (merge, rebase_merge, ff)
+- `merge_method` (string): Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).
 - `merge_pipelines_enabled` (boolean): Enable merged results pipelines
 - `merge_request_title_regex` (string): Regex that MR titles must match
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
@@ -24351,7 +24351,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `request_access_enabled` (boolean): Allow users to request access
 - `requirements_access_level` (string): Requirements access level (disabled, private, enabled)
 - `resolve_outdated_diff_discussions` (boolean): Auto-resolve outdated diff discussions
-- `resource_group_default_process_mode` (string): Default resource group process mode (unordered, oldest_first, newest_first)
+- `resource_group_default_process_mode` (string): Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.
 - `security_and_compliance_access_level` (string): Security and compliance access level (disabled, private, enabled)
 - `service_desk_enabled` (boolean): Enable Service Desk
 - `shared_runners_enabled` (boolean): Enable shared runners
@@ -24359,7 +24359,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `snippets_access_level` (string): Snippets access level (disabled, private, enabled)
 - `snippets_enabled` (boolean): Enable snippets feature (deprecated: use snippets_access_level)
 - `squash_commit_template` (string): Template for squash commit messages
-- `squash_option` (string): Squash option (never, always, default_on, default_off)
+- `squash_option` (string): Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).
 - `suggestion_commit_message` (string): Default commit message for suggestions
 - `tag_list` (array of strings): Project tags (deprecated: use topics)
 - `template_name` (string): Built-in project template name to use
@@ -24381,12 +24381,12 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `allow_merge_on_skipped_pipeline` (boolean): Allow merge when pipeline is skipped
 - `analytics_access_level` (string): Analytics access level (disabled, private, enabled)
 - `approvals_before_merge` (integer): Number of approvals required before merge (deprecated: use Merge Request Approvals API)
-- `auto_cancel_pending_pipelines` (string): Auto-cancel pending pipelines (enabled, disabled)
-- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy (continuous, manual, timed_incremental)
+- `auto_cancel_pending_pipelines` (string): Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.
+- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
 - `build_coverage_regex` (string): Regex used to extract test coverage from job logs
-- `build_git_strategy` (string): Git strategy for builds (fetch, clone)
+- `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
@@ -24415,7 +24415,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `jobs_enabled` (boolean): Enable CI/CD jobs (deprecated: use builds_access_level)
 - `lfs_enabled` (boolean): Enable Git LFS
 - `merge_commit_template` (string): Template for merge commit messages
-- `merge_method` (string): Merge method (merge, rebase_merge, ff)
+- `merge_method` (string): Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).
 - `merge_pipelines_enabled` (boolean): Enable merged results pipelines
 - `merge_request_title_regex` (string): Regex that MR titles must match
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
@@ -24450,7 +24450,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `request_access_enabled` (boolean): Allow users to request access
 - `requirements_access_level` (string): Requirements access level (disabled, private, enabled)
 - `resolve_outdated_diff_discussions` (boolean): Auto-resolve outdated diff discussions
-- `resource_group_default_process_mode` (string): Default resource group process mode (unordered, oldest_first, newest_first)
+- `resource_group_default_process_mode` (string): Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.
 - `security_and_compliance_access_level` (string): Security and compliance access level (disabled, private, enabled)
 - `service_desk_enabled` (boolean): Enable Service Desk
 - `shared_runners_enabled` (boolean): Enable shared runners
@@ -24458,7 +24458,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `snippets_access_level` (string): Snippets access level (disabled, private, enabled)
 - `snippets_enabled` (boolean): Enable snippets feature (deprecated: use snippets_access_level)
 - `squash_commit_template` (string): Template for squash commit messages
-- `squash_option` (string): Squash option (never, always, default_on, default_off)
+- `squash_option` (string): Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).
 - `suggestion_commit_message` (string): Default commit message for suggestions
 - `tag_list` (array of strings): Project tags (deprecated: use topics)
 - `template_name` (string): Built-in project template name to use
@@ -24887,7 +24887,7 @@ List projects accessible to the user with filtering and pagination. Returns: pro
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where current user is a member
 - `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
-- `order_by` (string): Order projects by id, name, path, created_at, updated_at, or last_activity_at.
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -24928,7 +24928,7 @@ List a project's forks. Returns: forked projects with namespace, visibility, and
 - `last_activity_before` (string): Return forks with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to forks where the current user is a member
 - `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
-- `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to forks owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -25038,7 +25038,7 @@ List projects a user contributed to. Returns: projects with namespace, visibilit
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
 - `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
-- `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -25080,7 +25080,7 @@ List a user's owned projects. Returns: projects with namespace, visibility, and 
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
 - `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
-- `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -25122,7 +25122,7 @@ List projects a user starred. Returns: projects with namespace, visibility, and 
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where the current user is a member
 - `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
-- `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, last_activity_at, similarity (requires search query), or star_count.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
@@ -25586,13 +25586,13 @@ Update a project's settings. Returns: the updated project with its current confi
 - `allow_pipeline_trigger_approve_deployment` (boolean): Allow pipeline triggerer to approve deployment
 - `analytics_access_level` (string): Analytics access level (disabled, private, enabled)
 - `approvals_before_merge` (integer): Number of approvals required before merge
-- `auto_cancel_pending_pipelines` (string): Auto-cancel pending pipelines (enabled, disabled)
-- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy (continuous, manual, timed_incremental)
+- `auto_cancel_pending_pipelines` (string): Auto-cancel redundant pending pipelines when a newer pipeline starts: enabled or disabled.
+- `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `auto_duo_code_review_enabled` (boolean): Enable automatic GitLab Duo code review
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
 - `build_coverage_regex` (string): Regex used to extract test coverage from job logs
-- `build_git_strategy` (string): Git strategy for builds (fetch, clone)
+- `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
@@ -25630,7 +25630,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `lfs_enabled` (boolean): Enable Git LFS
 - `max_artifacts_size` (integer): Maximum artifacts size in MB
 - `merge_commit_template` (string): Template for merge commit messages
-- `merge_method` (string): Merge method (merge, rebase_merge, ff)
+- `merge_method` (string): Merge method: merge (default merge commit), rebase_merge (rebase then merge commit), or ff (fast-forward, no merge commit).
 - `merge_pipelines_enabled` (boolean): Enable merged results pipelines
 - `merge_request_title_regex` (string): Regex that MR titles must match
 - `merge_request_title_regex_description` (string): Human-readable description for the MR title regex
@@ -25671,7 +25671,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `request_access_enabled` (boolean): Allow users to request access
 - `requirements_access_level` (string): Requirements access level (disabled, private, enabled)
 - `resolve_outdated_diff_discussions` (boolean): Auto-resolve outdated diff discussions
-- `resource_group_default_process_mode` (string): Default resource group process mode (unordered, oldest_first, newest_first)
+- `resource_group_default_process_mode` (string): Default process mode for resource groups: unordered (run in parallel), oldest_first, or newest_first.
 - `restrict_user_defined_variables` (boolean): Restrict user-defined pipeline variables (deprecated: use ci_pipeline_variables_minimum_override_role)
 - `security_and_compliance_access_level` (string): Security and compliance access level (disabled, private, enabled)
 - `service_desk_enabled` (boolean): Enable Service Desk
@@ -25680,7 +25680,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `snippets_access_level` (string): Snippets access level (disabled, private, enabled)
 - `snippets_enabled` (boolean): Enable snippets feature (deprecated: use snippets_access_level)
 - `squash_commit_template` (string): Template for squash commit messages
-- `squash_option` (string): Squash option (never, always, default_on, default_off)
+- `squash_option` (string): Squash commits on merge: never (not allowed), always (always squash), default_on (squash by default, overridable per MR), or default_off (no squash by default, overridable per MR).
 - `suggestion_commit_message` (string): Default commit message for suggestions
 - `tag_list` (array of strings): Project tags (deprecated: use topics)
 - `topics` (array of strings): Topic tags for the project
@@ -26958,9 +26958,9 @@ List runners owned by the authenticated user, with type/status/tag/scope filters
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
-- `status` (string): Runner status filter: online, offline, stale, never_contacted
+- `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
-- `type` (string): Runner type filter: instance_type, group_type, project_type
+- `type` (string): Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -26978,9 +26978,9 @@ List every runner on the instance (admin token required), with type/status/tag/s
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
-- `status` (string): Runner status filter: online, offline, stale, never_contacted
+- `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
-- `type` (string): Runner type filter: instance_type, group_type, project_type
+- `type` (string): Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -26997,9 +26997,9 @@ List runners available in a group (specific and shared), with type/status/tag fi
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `sort` (string): Sort direction: asc or desc
-- `status` (string): Runner status filter: online, offline, stale, never_contacted
+- `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
-- `type` (string): Runner type filter: instance_type, group_type, project_type
+- `type` (string): Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -27028,9 +27028,9 @@ List runners assigned to a project, with type/status/tag/scope filters and pagin
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
-- `status` (string): Runner status filter: online, offline, stale, never_contacted
+- `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
-- `type` (string): Runner type filter: instance_type, group_type, project_type
+- `type` (string): Runner type filter: instance_type (instance-level shared runners), group_type (group runners), or project_type (project-specific runners).
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
