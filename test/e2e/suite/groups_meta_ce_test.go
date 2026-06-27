@@ -60,7 +60,6 @@ func TestMeta_GroupDeep(t *testing.T) {
 	}()
 
 	runMetaGroupCoreOperations(t, ctx, grpName, groupID, groupIDStr)
-	runMetaGroupHookOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupBadgeOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupMemberChecks(t, ctx, groupID, groupIDStr)
 	runMetaGroupLabelOperations(t, ctx, groupID, groupIDStr)

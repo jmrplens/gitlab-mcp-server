@@ -59,4 +59,5 @@ func TestEE_MetaGroupEnterpriseOperations(t *testing.T) {
 
 	runMetaGroupBoardOperations(t, ctx, out.ID, groupIDStr)
 	runMetaGroupEnterpriseOperations(t, ctx, groupName, out.ID, groupIDStr)
+	runMetaGroupHookOperations(t, ctx, out.ID, groupIDStr)
 }
