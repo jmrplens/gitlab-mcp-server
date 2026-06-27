@@ -380,7 +380,7 @@ var userToolMetadata = map[string]userToolMeta{
 	},
 	"gitlab_update_instance_service_account": {
 		usage:          "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Admin-only.",
-		aliases:        []string{"update instance service account", "modify service account"},
+		aliases:        []string{"update instance service account", "modify service account", "edit instance service account", "change instance service account"},
 		relatedActions: []string{"user.create_service_account", "user.list_service_accounts"},
 		description:    "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts.",
 	},
