@@ -117,15 +117,9 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		options.IndividualTool.Description = "List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("status", map[string]any{
-				"enum": []any{"created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"},
-			}),
-			toolutil.SchemaPropertyOverride("scope", map[string]any{
-				"enum": []any{"running", "pending", "finished", "branches", "tags"},
-			}),
-			toolutil.SchemaPropertyOverride("order_by", map[string]any{
-				"enum": []any{"id", "status", "ref", "updated_at", "user_id"},
-			}),
+			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
+			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
+			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
 		}
 	case "get":
 		options.Usage = "Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields."
@@ -212,15 +206,9 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		options.IndividualTool.Description = "Get the latest pipeline for a ref. Returns: full pipeline metadata for the most recent run. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_job_list_project."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("status", map[string]any{
-				"enum": []any{"created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"},
-			}),
-			toolutil.SchemaPropertyOverride("scope", map[string]any{
-				"enum": []any{"running", "pending", "finished", "branches", "tags"},
-			}),
-			toolutil.SchemaPropertyOverride("order_by", map[string]any{
-				"enum": []any{"id", "status", "ref", "updated_at", "user_id"},
-			}),
+			toolutil.SchemaEnumOverride("status", "created", "waiting_for_resource", "preparing", "pending", "running", "success", "failed", "canceled", "skipped", "manual", "scheduled"),
+			toolutil.SchemaEnumOverride("scope", "running", "pending", "finished", "branches", "tags"),
+			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
 		}
 	case "update_metadata":
 		options.Usage = "Update a pipeline's metadata (its display name) by project_id and pipeline_id. Use to rename a pipeline; requires Developer+ role and a non-archived pipeline."

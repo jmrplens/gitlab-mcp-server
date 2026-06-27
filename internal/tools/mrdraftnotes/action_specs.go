@@ -65,25 +65,25 @@ func publishAllOutput(ctx context.Context, client *gitlabclient.Client, input Pu
 
 func mrDraftNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := mrDraftNoteOptions(individualTool)
-	decorateDraftNoteMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, draftNoteActionMeta[individualTool])
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func mrDraftNoteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := mrDraftNoteOptions(individualTool)
-	decorateDraftNoteMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, draftNoteActionMeta[individualTool])
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func mrDraftNoteUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := mrDraftNoteOptions(individualTool)
-	decorateDraftNoteMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, draftNoteActionMeta[individualTool])
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func mrDraftNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := mrDraftNoteOptions(individualTool)
-	decorateDraftNoteMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, draftNoteActionMeta[individualTool])
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
@@ -95,40 +95,6 @@ func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 		OpenWorld:      true,
 		OwnerPackage:   "mrdraftnotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	}
-}
-
-// draftNoteMetaEntry is the discovery metadata for one draft note action.
-type draftNoteMetaEntry struct {
-	usage       string
-	aliases     []string
-	related     []string
-	guidance    map[string]toolutil.ParameterGuidance
-	description string
-}
-
-// decorateDraftNoteMeta fills non-generic Usage, natural-language Aliases,
-// canonical RelatedActions, ParameterGuidance, and the "Returns: … See also: …"
-// individual-tool description for each draft note action (1:1 audit R-META).
-func decorateDraftNoteMeta(options *toolutil.ActionSpecOptions, individualTool string) {
-	meta, ok := draftNoteActionMeta[individualTool]
-	if !ok {
-		return
-	}
-	if meta.usage != "" {
-		options.Usage = meta.usage
-	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string(nil), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if len(meta.guidance) > 0 {
-		options.ParameterGuidance = meta.guidance
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
 	}
 }
 
@@ -158,33 +124,33 @@ var noteIDGuidance = toolutil.ParameterGuidance{
 }
 
 // draftNoteActionMeta maps each individual draft note tool to its discovery metadata.
-var draftNoteActionMeta = map[string]draftNoteMetaEntry{
+var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_mr_draft_note_list": {
-		usage:   "List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.",
-		aliases: []string{"list draft notes", "show pending mr review comments", "list unpublished mr notes"},
-		related: []string{actionDraftNoteGet, "mrdraftnotes.draft_note_create", actionDraftNotePublishAll},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.",
+		Aliases: []string{"list draft notes", "show pending mr review comments", "list unpublished mr notes"},
+		Related: []string{actionDraftNoteGet, "mrdraftnotes.draft_note_create", actionDraftNotePublishAll},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 		},
-		description: "List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_create, gitlab_mr_draft_note_publish_all.",
+		Description: "List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_create, gitlab_mr_draft_note_publish_all.",
 	},
 	"gitlab_mr_draft_note_get": {
-		usage:   "Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.",
-		aliases: []string{"get draft note", "show draft note details", "fetch pending mr comment"},
-		related: []string{actionDraftNoteList, "mrdraftnotes.draft_note_update", actionDraftNotePublish},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.",
+		Aliases: []string{"get draft note", "show draft note details", "fetch pending mr comment"},
+		Related: []string{actionDraftNoteList, "mrdraftnotes.draft_note_update", actionDraftNotePublish},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			paramNoteID:          noteIDGuidance,
 		},
-		description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
+		Description: "Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_update, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_create": {
-		usage:   "Create a pending draft review note on a merge request. Omit position for a general comment; include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.",
-		aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
-		related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Create a pending draft review note on a merge request. Omit position for a general comment; include position with base_sha/start_sha/head_sha plus new_path/old_path and new_line/old_line to anchor the note to a specific diff line. The note stays author-private until published.",
+		Aliases: []string{"add draft note", "draft mr review comment", "create pending mr comment", "comment on mr diff line as draft"},
+		Related: []string{actionDraftNoteList, actionDraftNotePublish, actionDraftNotePublishAll},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			"note": {
@@ -198,13 +164,13 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 				CommonConfusions: []string{"Omit position entirely for a general MR comment; only set it to anchor the note to a changed line."},
 			},
 		},
-		description: "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",
+		Description: "Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish, gitlab_mr_draft_note_publish_all.",
 	},
 	"gitlab_mr_draft_note_update": {
-		usage:   "Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.",
-		aliases: []string{"edit draft note", "update pending mr comment", "modify draft review note"},
-		related: []string{actionDraftNoteGet, actionDraftNoteList, actionDraftNotePublish},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Edit the body or inline position of a pending draft note before it is published. Only the draft's author can update it.",
+		Aliases: []string{"edit draft note", "update pending mr comment", "modify draft review note"},
+		Related: []string{actionDraftNoteGet, actionDraftNoteList, actionDraftNotePublish},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			paramNoteID:          noteIDGuidance,
@@ -214,38 +180,38 @@ var draftNoteActionMeta = map[string]draftNoteMetaEntry{
 				ExampleBinding: `params.note:"Updated: use the shared helper instead."`,
 			},
 		},
-		description: "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
+		Description: "Update a pending draft note's body or position. Returns: the updated draft note. See also: gitlab_mr_draft_note_get, gitlab_mr_draft_note_publish.",
 	},
 	"gitlab_mr_draft_note_delete": {
-		usage:   "Discard a pending draft note so it is never published. Destructive and irreversible; only the draft's author can delete it.",
-		aliases: []string{"delete draft note", "discard pending mr comment", "remove draft review note"},
-		related: []string{actionDraftNoteList, actionDraftNoteGet},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Discard a pending draft note so it is never published. Destructive and irreversible; only the draft's author can delete it.",
+		Aliases: []string{"delete draft note", "discard pending mr comment", "remove draft review note"},
+		Related: []string{actionDraftNoteList, actionDraftNoteGet},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			paramNoteID:          noteIDGuidance,
 		},
-		description: "Delete a pending draft note permanently. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_get.",
+		Description: "Delete a pending draft note permanently. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_get.",
 	},
 	"gitlab_mr_draft_note_publish": {
-		usage:   "Publish one pending draft note, turning it into a regular merge request note visible to everyone. Cannot be undone; only the draft's author can publish it.",
-		aliases: []string{"publish draft note", "post draft mr comment", "submit single review comment"},
-		related: []string{actionDraftNoteList, actionDraftNotePublishAll, actionDraftNoteGet},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Publish one pending draft note, turning it into a regular merge request note visible to everyone. Cannot be undone; only the draft's author can publish it.",
+		Aliases: []string{"publish draft note", "post draft mr comment", "submit single review comment"},
+		Related: []string{actionDraftNoteList, actionDraftNotePublishAll, actionDraftNoteGet},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 			paramNoteID:          noteIDGuidance,
 		},
-		description: "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
+		Description: "Publish a single draft note as a regular merge request note. Returns: a success confirmation naming the note, merge request, and project. See also: gitlab_mr_draft_note_publish_all, gitlab_mr_draft_note_list.",
 	},
 	"gitlab_mr_draft_note_publish_all": {
-		usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone; review with gitlab_mr_draft_note_list first.",
-		aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review"},
-		related: []string{actionDraftNoteList, actionDraftNotePublish},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Publish all of the current user's pending draft notes on a merge request in one call, submitting a complete review. Cannot be undone; review with gitlab_mr_draft_note_list first.",
+		Aliases: []string{"publish all draft notes", "submit mr review", "post all pending comments", "finish mr review"},
+		Related: []string{actionDraftNoteList, actionDraftNotePublish},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
 		},
-		description: "Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",
+		Description: "Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project. See also: gitlab_mr_draft_note_list, gitlab_mr_draft_note_publish.",
 	},
 }

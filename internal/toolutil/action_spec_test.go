@@ -1281,3 +1281,33 @@ func TestApplyCanonicalParamEnums_NilAndMalformed(t *testing.T) {
 	applyCanonicalParamEnums(map[string]any{"properties": "not-a-map"})
 	applyCanonicalParamEnums(map[string]any{"properties": map[string]any{"sort": "not-a-map"}})
 }
+
+// TestSchemaEnumOverride verifies the enum-only override helper builds an
+// override targeting the given property path with an []any enum of the supplied
+// string values.
+func TestSchemaEnumOverride(t *testing.T) {
+	ov := SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all")
+	if ov.PropertyPath != "scope" {
+		t.Fatalf("PropertyPath = %q, want scope", ov.PropertyPath)
+	}
+	enum, ok := ov.Values["enum"].([]any)
+	if !ok {
+		t.Fatalf("enum not []any: %T", ov.Values["enum"])
+	}
+	want := []any{"created_by_me", "assigned_to_me", "all"}
+	if !reflect.DeepEqual(enum, want) {
+		t.Errorf("enum = %v, want %v", enum, want)
+	}
+}
+
+// TestSchemaFormatOverride verifies the format helper sets the JSON Schema
+// format key for the targeted property path.
+func TestSchemaFormatOverride(t *testing.T) {
+	ov := SchemaFormatOverride("expires_at", "date")
+	if ov.PropertyPath != "expires_at" {
+		t.Fatalf("PropertyPath = %q, want expires_at", ov.PropertyPath)
+	}
+	if ov.Values["format"] != "date" {
+		t.Errorf("format = %v, want date", ov.Values["format"])
+	}
+}

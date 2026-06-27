@@ -73,15 +73,6 @@ func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec("mirror_force_push", toolutil.DestructiveAction(client, forcePushOutput), options)
 }
 
-// mirrorMetaEntry is the discovery metadata for one project mirror action.
-type mirrorMetaEntry struct {
-	usage       string
-	aliases     []string
-	related     []string
-	guidance    map[string]toolutil.ParameterGuidance
-	description string
-}
-
 // projectIDGuidance is the shared parameter guidance for the project_id input,
 // which scopes every mirror action to its owning project.
 var projectIDGuidance = toolutil.ParameterGuidance{
@@ -101,12 +92,12 @@ var mirrorIDGuidance = toolutil.ParameterGuidance{
 }
 
 // mirrorActionMeta maps each individual mirror tool to its discovery metadata.
-var mirrorActionMeta = map[string]mirrorMetaEntry{
+var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_list_project_mirrors": {
-		usage:   "List every push (remote) mirror configured on a project, with their enabled state, URL, and last-update status. Use to discover mirror_id values before getting, editing, deleting, or force-pushing a specific mirror.",
-		aliases: []string{"list project mirrors", "show remote mirrors", "list push mirrors"},
-		related: []string{actionMirrorGet, actionMirrorAdd, actionPullMirrorGet},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "List every push (remote) mirror configured on a project, with their enabled state, URL, and last-update status. Use to discover mirror_id values before getting, editing, deleting, or force-pushing a specific mirror.",
+		Aliases: []string{"list project mirrors", "show remote mirrors", "list push mirrors"},
+		Related: []string{actionMirrorGet, actionMirrorAdd, actionPullMirrorGet},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"order_by": {
 				ValueSource:      "Column to order keyset-paginated results by, such as id.",
@@ -114,33 +105,33 @@ var mirrorActionMeta = map[string]mirrorMetaEntry{
 				CommonConfusions: []string{"order_by only applies when pagination='keyset'; combine it with sort."},
 			},
 		},
-		description: "List a project's push (remote) mirrors. Returns: each mirror with id, enabled state, redacted URL, last-update status, and pagination metadata. See also: gitlab_get_project_mirror, gitlab_add_project_mirror, gitlab_project_pull_mirror_get.",
+		Description: "List a project's push (remote) mirrors. Returns: each mirror with id, enabled state, redacted URL, last-update status, and pagination metadata. See also: gitlab_get_project_mirror, gitlab_add_project_mirror, gitlab_project_pull_mirror_get.",
 	},
 	"gitlab_get_project_mirror": {
-		usage:   "Get one push mirror by project_id plus mirror_id, including its enabled state, auth method, branch filtering, and last-update status and error. Use after listing mirrors when the target mirror_id is already known.",
-		aliases: []string{"get project mirror", "show remote mirror", "fetch push mirror"},
-		related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey, actionMirrorForcePush},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Get one push mirror by project_id plus mirror_id, including its enabled state, auth method, branch filtering, and last-update status and error. Use after listing mirrors when the target mirror_id is already known.",
+		Aliases: []string{"get project mirror", "show remote mirror", "fetch push mirror"},
+		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey, actionMirrorForcePush},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,
 		},
-		description: "Get a single push mirror of a project by mirror id. Returns: the mirror with enabled state, redacted URL, auth method, branch filtering, and last-update status/error. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_force_push_mirror_update.",
+		Description: "Get a single push mirror of a project by mirror id. Returns: the mirror with enabled state, redacted URL, auth method, branch filtering, and last-update status/error. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_force_push_mirror_update.",
 	},
 	"gitlab_get_project_mirror_public_key": {
-		usage:   "Get the SSH public key GitLab uses to authenticate an SSH-based push mirror, so it can be added as a deploy key on the remote. Only mirrors with ssh_public_key auth expose a public key.",
-		aliases: []string{"get mirror public key", "show mirror ssh key", "fetch remote mirror public key"},
-		related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Get the SSH public key GitLab uses to authenticate an SSH-based push mirror, so it can be added as a deploy key on the remote. Only mirrors with ssh_public_key auth expose a public key.",
+		Aliases: []string{"get mirror public key", "show mirror ssh key", "fetch remote mirror public key"},
+		Related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,
 		},
-		description: "Get the SSH public key for an SSH-authenticated push mirror. Returns: the public key to register on the remote. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
+		Description: "Get the SSH public key for an SSH-authenticated push mirror. Returns: the public key to register on the remote. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
 	},
 	"gitlab_add_project_mirror": {
-		usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role; supply credentials inline in the URL or via SSH auth.",
-		aliases: []string{"add project mirror", "create push mirror", "set up remote mirror"},
-		related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role; supply credentials inline in the URL or via SSH auth.",
+		Aliases: []string{"add project mirror", "create push mirror", "set up remote mirror"},
+		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"url": {
 				SemanticRole:     "mirror_url",
@@ -149,37 +140,37 @@ var mirrorActionMeta = map[string]mirrorMetaEntry{
 				CommonConfusions: []string{"Inline credentials are secrets; do not mirror a project to itself."},
 			},
 		},
-		description: "Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
+		Description: "Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
 	},
 	"gitlab_edit_project_mirror": {
-		usage:   "Update an existing push mirror's attributes: enable/disable it, toggle keep_divergent_refs or only_protected_branches, change the branch regex, or switch auth method. Identify the mirror with project_id plus mirror_id.",
-		aliases: []string{"edit project mirror", "update push mirror", "enable or disable remote mirror"},
-		related: []string{actionMirrorGet, actionMirrorList, actionMirrorForcePush},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Update an existing push mirror's attributes: enable/disable it, toggle keep_divergent_refs or only_protected_branches, change the branch regex, or switch auth method. Identify the mirror with project_id plus mirror_id.",
+		Aliases: []string{"edit project mirror", "update push mirror", "enable or disable remote mirror"},
+		Related: []string{actionMirrorGet, actionMirrorList, actionMirrorForcePush},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,
 		},
-		description: "Update a push mirror's attributes (enabled, branch filtering, divergent refs, auth method). Returns: the updated mirror. See also: gitlab_get_project_mirror, gitlab_force_push_mirror_update.",
+		Description: "Update a push mirror's attributes (enabled, branch filtering, divergent refs, auth method). Returns: the updated mirror. See also: gitlab_get_project_mirror, gitlab_force_push_mirror_update.",
 	},
 	"gitlab_delete_project_mirror": {
-		usage:   "Permanently delete a push mirror from a project. Destructive and irreversible; confirm project_id and mirror_id before calling.",
-		aliases: []string{"delete project mirror", "remove push mirror", "delete remote mirror"},
-		related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Permanently delete a push mirror from a project. Destructive and irreversible; confirm project_id and mirror_id before calling.",
+		Aliases: []string{"delete project mirror", "remove push mirror", "delete remote mirror"},
+		Related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,
 		},
-		description: "Delete a push mirror from a project permanently. Returns: a success confirmation naming the mirror and project. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
+		Description: "Delete a push mirror from a project permanently. Returns: a success confirmation naming the mirror and project. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
 	},
 	"gitlab_force_push_mirror_update": {
-		usage:   "Trigger an immediate update of a push mirror instead of waiting for the next scheduled sync. The mirror must be enabled and not in a failed-auth state.",
-		aliases: []string{"force push mirror update", "sync remote mirror now", "trigger mirror update"},
-		related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Trigger an immediate update of a push mirror instead of waiting for the next scheduled sync. The mirror must be enabled and not in a failed-auth state.",
+		Aliases: []string{"force push mirror update", "sync remote mirror now", "trigger mirror update"},
+		Related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,
 		},
-		description: "Trigger an immediate update of a push mirror. Returns: a confirmation that the update was triggered. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
+		Description: "Trigger an immediate update of a push mirror. Returns: a confirmation that the update was triggered. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
 	},
 }
 
@@ -192,29 +183,7 @@ func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if meta, ok := mirrorActionMeta[individualTool]; ok {
-		applyMirrorMeta(&options, meta)
+		toolutil.ApplyActionMeta(&options, meta)
 	}
 	return options
-}
-
-// applyMirrorMeta overlays a mirrorMetaEntry's non-empty discovery metadata
-// onto the generic ActionSpecOptions so flagged tools get action-specific
-// Usage, natural-language Aliases, canonical RelatedActions, ParameterGuidance,
-// and an individual-tool Description.
-func applyMirrorMeta(options *toolutil.ActionSpecOptions, meta mirrorMetaEntry) {
-	if meta.usage != "" {
-		options.Usage = meta.usage
-	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string(nil), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if len(meta.guidance) > 0 {
-		options.ParameterGuidance = meta.guidance
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
-	}
 }

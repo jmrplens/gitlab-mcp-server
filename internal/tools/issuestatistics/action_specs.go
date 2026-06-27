@@ -55,12 +55,8 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 		options.RelatedActions = []string{"issuestatistics.statistics_get_group", "issuestatistics.statistics_get_project", "issue.list_all"}
 		options.IndividualTool.Description = "Get global issue count statistics across all visible projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("scope", map[string]any{
-				"enum": []any{"created_by_me", "assigned_to_me", "all"},
-			}),
-			toolutil.SchemaPropertyOverride("in", map[string]any{
-				"enum": []any{"title", "description", "title,description"},
-			}),
+			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
+			toolutil.SchemaEnumOverride("in", "title", "description", "title,description"),
 		}
 	case "gitlab_get_group_issue_statistics":
 		options.Usage = "Get aggregate issue counts (all, opened, closed) for a group and its descendant projects, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search."
@@ -68,9 +64,7 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 		options.RelatedActions = []string{"issuestatistics.statistics_get", "issuestatistics.statistics_get_project", "issue.list_group"}
 		options.IndividualTool.Description = "Get issue count statistics for a group and its descendant projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_issue_statistics, gitlab_get_project_issue_statistics, gitlab_group_get."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("scope", map[string]any{
-				"enum": []any{"created_by_me", "assigned_to_me", "all"},
-			}),
+			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
 		}
 	case "gitlab_get_project_issue_statistics":
 		options.Usage = "Get aggregate issue counts (all, opened, closed) for a single project, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search."
@@ -78,9 +72,7 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 		options.RelatedActions = []string{"issuestatistics.statistics_get", "issuestatistics.statistics_get_group", "issue.list"}
 		options.IndividualTool.Description = "Get issue count statistics for a single project. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_issue_statistics, gitlab_get_group_issue_statistics, gitlab_project_get."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("scope", map[string]any{
-				"enum": []any{"created_by_me", "assigned_to_me", "all"},
-			}),
+			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
 		}
 	}
 }

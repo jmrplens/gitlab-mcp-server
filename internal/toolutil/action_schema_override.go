@@ -10,6 +10,26 @@ func SchemaPropertyOverride(propertyPath string, values map[string]any) InputSch
 	return InputSchemaOverride{PropertyPath: strings.TrimSpace(propertyPath), Values: cloneSchemaMap(values)}
 }
 
+// SchemaEnumOverride returns an input-schema override that constrains the string
+// parameter at propertyPath to a fixed set of enum values. It collapses the
+// repeated `SchemaPropertyOverride(path, map[string]any{"enum": []any{...}})`
+// block used across domains into a single call so the fixed-vocabulary
+// constraint is expressed once per action without structural duplication.
+func SchemaEnumOverride(propertyPath string, values ...string) InputSchemaOverride {
+	enum := make([]any, len(values))
+	for i, v := range values {
+		enum[i] = v
+	}
+	return SchemaPropertyOverride(propertyPath, map[string]any{"enum": enum})
+}
+
+// SchemaFormatOverride returns an input-schema override that sets the JSON
+// Schema `format` of the string parameter at propertyPath (e.g. "date" for a
+// YYYY-MM-DD field or "uri" for a URL field).
+func SchemaFormatOverride(propertyPath, format string) InputSchemaOverride {
+	return SchemaPropertyOverride(propertyPath, map[string]any{"format": format})
+}
+
 // SchemaRootOverride returns an input-schema override applied at the schema root.
 func SchemaRootOverride(values map[string]any) InputSchemaOverride {
 	return InputSchemaOverride{Values: cloneSchemaMap(values)}
@@ -68,25 +88,32 @@ var canonicalParamEnums = map[string][]string{
 // by [NewActionSpec]. Field-specific date params whose granularity varies by
 // endpoint (e.g. expires_at, which is date-only for tokens) are set per action
 // via InputSchemaOverrides, not here.
+// JSON Schema `format` values for date/time string parameters. GitLab timestamp
+// filters take an ISO 8601 date-time; date-only fields take YYYY-MM-DD.
+const (
+	formatDateTime = "date-time"
+	formatDate     = "date"
+)
+
 var canonicalParamFormats = map[string]string{
-	"created_after":        "date-time",
-	"created_before":       "date-time",
-	"updated_after":        "date-time",
-	"updated_before":       "date-time",
-	"last_used_after":      "date-time",
-	"last_used_before":     "date-time",
-	"last_activity_after":  "date-time",
-	"last_activity_before": "date-time",
-	"started_after":        "date-time",
-	"started_before":       "date-time",
-	"finished_after":       "date-time",
-	"finished_before":      "date-time",
-	"deployed_after":       "date-time",
-	"deployed_before":      "date-time",
-	"expires_after":        "date-time",
-	"expires_before":       "date-time",
-	"due_date":             "date",
-	"start_date":           "date",
+	"created_after":        formatDateTime,
+	"created_before":       formatDateTime,
+	"updated_after":        formatDateTime,
+	"updated_before":       formatDateTime,
+	"last_used_after":      formatDateTime,
+	"last_used_before":     formatDateTime,
+	"last_activity_after":  formatDateTime,
+	"last_activity_before": formatDateTime,
+	"started_after":        formatDateTime,
+	"started_before":       formatDateTime,
+	"finished_after":       formatDateTime,
+	"finished_before":      formatDateTime,
+	"deployed_after":       formatDateTime,
+	"deployed_before":      formatDateTime,
+	"expires_after":        formatDateTime,
+	"expires_before":       formatDateTime,
+	"due_date":             formatDate,
+	"start_date":           formatDate,
 }
 
 // applyCanonicalParamFormats injects [canonicalParamFormats] into top-level
