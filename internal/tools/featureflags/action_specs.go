@@ -112,7 +112,7 @@ var featureFlagActionMeta = map[string]featureFlagActionMetaEntry{
 	},
 	"gitlab_feature_flag_delete": {
 		usage:       "Permanently delete a feature flag by name. Destructive and irreversible; confirm project_id and name before calling. Requires Maintainer+ on a Premium/Ultimate project.",
-		aliases:     []string{"delete project feature flag", "remove project feature flag"},
+		aliases:     []string{"delete project feature flag", "remove project feature flag", "destroy project feature flag", "drop project feature flag"},
 		related:     []string{actionFeatureFlagGet, actionFeatureFlagList},
 		description: "Delete a feature flag permanently. Returns: a success confirmation naming the flag. See also: gitlab_feature_flag_get, gitlab_feature_flag_list.",
 	},
