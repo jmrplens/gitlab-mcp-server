@@ -121,12 +121,10 @@ type Output struct {
 	UserNotesCount              int64                                `json:"user_notes_count,omitempty"`
 }
 
-// DiffRefsOutput represents the diff refs (base, head, start SHAs) of a merge request.
-type DiffRefsOutput struct {
-	BaseSHA  string `json:"base_sha"`
-	HeadSHA  string `json:"head_sha"`
-	StartSHA string `json:"start_sha"`
-}
+// DiffRefsOutput is the diff refs object (base, head, start SHAs) of a merge
+// request. The canonical definition lives in toolutil.DiffRefsOutput; this
+// alias preserves all existing references within the package unchanged.
+type DiffRefsOutput = toolutil.DiffRefsOutput
 
 // GetInput defines parameters for retrieving a merge request.
 type GetInput struct {

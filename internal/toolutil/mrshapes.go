@@ -167,6 +167,17 @@ func NewPipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
 	}
 }
 
+// DiffRefsOutput mirrors the diff_refs object on a merge request, carrying the
+// base, head, and start SHAs of the diff. It is byte-identical across the
+// mergerequests and deploymentmergerequests domains; the canonical copy lives
+// here so both packages can alias it without introducing import cycles
+// (ADR-0004).
+type DiffRefsOutput struct {
+	BaseSHA  string `json:"base_sha"`
+	HeadSHA  string `json:"head_sha"`
+	StartSHA string `json:"start_sha"`
+}
+
 // MergeRequestUserOutput mirrors gl.MergeRequestUser (the user object
 // inside MR.user_notes_count type contexts — only the CanMerge flag
 // is part of the documented subset).

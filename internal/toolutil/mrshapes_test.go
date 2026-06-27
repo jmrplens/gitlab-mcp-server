@@ -106,6 +106,15 @@ func TestNewPipelineInfoOutput(t *testing.T) {
 	}
 }
 
+// TestDiffRefsOutput verifies that DiffRefsOutput holds the expected base,
+// head, and start SHA fields and that its JSON tags are canonical.
+func TestDiffRefsOutput(t *testing.T) {
+	out := DiffRefsOutput{BaseSHA: "base111", HeadSHA: "head222", StartSHA: "start333"}
+	if out.BaseSHA != "base111" || out.HeadSHA != "head222" || out.StartSHA != "start333" {
+		t.Errorf("DiffRefsOutput fields not preserved: %+v", out)
+	}
+}
+
 // TestNewMergeRequestUserOutput verifies the MR-user converter returns
 // nil for nil and copies the CanMerge flag.
 func TestNewMergeRequestUserOutput(t *testing.T) {

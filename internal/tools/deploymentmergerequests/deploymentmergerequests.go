@@ -127,12 +127,10 @@ type Output struct {
 }
 
 // DiffRefsOutput mirrors gl.MergeRequestDiffRefs (the diff_refs object with the
-// base, head, and start SHAs of a merge request).
-type DiffRefsOutput struct {
-	BaseSHA  string `json:"base_sha"`
-	HeadSHA  string `json:"head_sha"`
-	StartSHA string `json:"start_sha"`
-}
+// base, head, and start SHAs of a merge request). The canonical definition
+// lives in toolutil.DiffRefsOutput; this alias preserves all existing
+// references within the package unchanged.
+type DiffRefsOutput = toolutil.DiffRefsOutput
 
 // ListOutput is the output for listing deployment merge requests.
 type ListOutput struct {
