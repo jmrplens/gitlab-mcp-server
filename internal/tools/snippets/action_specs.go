@@ -173,7 +173,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 	},
 	"gitlab_snippet_delete": {
 		usage:       "Permanently delete a personal snippet by snippet_id. Destructive; confirm the snippet ID before calling.",
-		aliases:     []string{"delete snippet", "remove snippet"},
+		aliases:     []string{"delete snippet", "remove snippet", "destroy snippet", "drop snippet"},
 		related:     []string{actionSnippetGet, actionSnippetList},
 		description: "Delete a personal snippet permanently. Returns: a success confirmation. See also: gitlab_snippet_get, gitlab_snippet_list.",
 	},
@@ -215,7 +215,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 	},
 	"gitlab_project_snippet_delete": {
 		usage:       "Permanently delete a project snippet by project_id and snippet_id. Destructive; confirm both identifiers before calling.",
-		aliases:     []string{"delete project snippet", "remove project snippet"},
+		aliases:     []string{"delete project snippet", "remove project snippet", "destroy project snippet", "drop project snippet"},
 		related:     []string{actionSnippetProjectGet, actionSnippetProjectList},
 		description: "Delete a project snippet permanently. Returns: a success confirmation. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",
 	},
