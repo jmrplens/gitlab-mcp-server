@@ -423,6 +423,21 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	_ = isListOrDetailContent(spec)
 
 	// Field-level (Check B): walk input schema, flag empty/boilerplate descriptions.
+	//
+	// Note on the output schema walk: `empty_output_description` is intentionally
+	// classified at info severity (not warning/error). Per the team's 1:1 audit
+	// policy (see plan/discovery-metadata-completeness.md §9 "Output godoc"),
+	// Output struct fields intentionally lack jsonschema tags because:
+	//   1. The MCP protocol uses ActionSpec.Description (not OutputSchema
+	//      property descriptions) for model-facing tool selection.
+	//   2. Output structs mirror client-go SDK types 1:1; adding jsonschema
+	//      tags per-field would drift the wire-format shape from the SDK.
+	//   3. Output descriptions would bloat the model's startup context for
+	//      zero functional benefit.
+	// The info-level finding remains visible in the gaps-only summary for
+	// awareness but does NOT count toward `errors` or `warnings` and does
+	// NOT fail `make audit-discovery-check`. If the policy changes, raise
+	// the severity in `severityForFlag` and re-evaluate the audit gate.
 	var fields []fieldFinding
 	for _, p := range emptyParamDescriptions(spec.Route.InputSchema) {
 		fields = append(fields, fieldFinding{Param: p, Flag: "empty_param_description"})
