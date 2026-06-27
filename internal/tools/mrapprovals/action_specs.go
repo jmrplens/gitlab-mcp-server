@@ -220,7 +220,7 @@ var approvalActionMeta = map[string]approvalActionMetaEntry{
 	},
 	"gitlab_mr_approval_rule_delete": {
 		usage:   "Delete an approval rule from a merge request. Destructive and irreversible; confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
-		aliases: []string{"delete mr approval rule", "remove merge request approval rule"},
+		aliases: []string{"delete mr approval rule", "remove merge request approval rule", "destroy mr approval rule", "drop merge request approval rule"},
 		related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleCreate},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
