@@ -182,6 +182,14 @@ func formatSetIntegrationMarkdownString(out SetIntegrationOutput) string {
 	return sb.String()
 }
 
+// formatSetJiraMarkdownString renders the Jira integration upsert response.
+func formatSetJiraMarkdownString(out SetJiraOutput) string {
+	var sb strings.Builder
+	sb.WriteString(formatIntegrationItemString("Jira Integration Updated", out.Integration))
+	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to read the stored configuration; Jira credentials (username/password or API token) are write-only and never returned")
+	return sb.String()
+}
+
 // formatGroupIntegrationListString renders a ListGroupIntegrationsOutput as a
 // Markdown table string.
 func formatGroupIntegrationListString(out ListGroupIntegrationsOutput) string {
@@ -264,4 +272,5 @@ func init() {
 	toolutil.RegisterMarkdown(formatGroupIntegrationListString)
 	toolutil.RegisterMarkdown(formatGetGroupIntegrationString)
 	toolutil.RegisterMarkdown(formatSetGroupIntegrationString)
+	toolutil.RegisterMarkdown(formatSetJiraMarkdownString)
 }
