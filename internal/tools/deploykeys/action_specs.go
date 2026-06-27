@@ -112,23 +112,23 @@ func deployKeyDescription(actionName string) string {
 func deployKeyAliases(actionName string) []string {
 	switch actionName {
 	case "deploy_key_list_project":
-		return []string{"list project deploy keys", "project deploy keys"}
+		return []string{"list project deploy keys", "project deploy keys", "show project deploy keys", "browse project deploy keys"}
 	case "deploy_key_get":
-		return []string{"get deploy key", "fetch deploy key"}
+		return []string{"get deploy key", "fetch deploy key", "show deploy key", "lookup deploy key"}
 	case "deploy_key_add":
-		return []string{"add project deploy key", "create project deploy key"}
+		return []string{"add project deploy key", "create project deploy key", "new project deploy key", "register project deploy key"}
 	case "deploy_key_update":
-		return []string{"update deploy key", "edit deploy key"}
+		return []string{"update deploy key", "edit deploy key", "modify deploy key", "change deploy key"}
 	case "deploy_key_delete":
-		return []string{"delete deploy key", "remove deploy key"}
+		return []string{"delete deploy key", "remove deploy key", "drop deploy key", "destroy deploy key"}
 	case "deploy_key_enable":
-		return []string{"enable deploy key", "attach deploy key to project"}
+		return []string{"enable deploy key", "attach deploy key to project", "activate project deploy key", "add deploy key to project"}
 	case "deploy_key_list_all":
 		return []string{"list all instance deploy keys", "all ssh deploy keys", "instance-wide deploy keys", "list every deploy key"}
 	case "deploy_key_add_instance":
-		return []string{"add instance deploy key", "create instance deploy key"}
+		return []string{"add instance deploy key", "create instance deploy key", "new instance deploy key", "register instance deploy key"}
 	case "deploy_key_list_user_project":
-		return []string{"list user project deploy keys", "user project deploy keys"}
+		return []string{"list user project deploy keys", "user project deploy keys", "show user project deploy keys", "browse user project deploy keys"}
 	default:
 		return nil
 	}
