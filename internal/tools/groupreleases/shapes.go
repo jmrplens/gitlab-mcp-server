@@ -73,15 +73,11 @@ func commitOutput(c gl.Commit) *CommitOutput {
 
 // AssetsOutput mirrors gl.ReleaseAssets (the assets object on a release).
 
-
 // LinksOutput mirrors gl.ReleaseLinks (the release _links object).
-
 
 // MilestoneIssueStatsOutput mirrors gl.ReleaseMilestoneIssueStats.
 
 // MilestoneOutput mirrors gl.ReleaseMilestone (a milestone associated with a
 // release).
 
-
 // EvidenceOutput mirrors gl.ReleaseEvidence (a release evidence record).
-

@@ -88,7 +88,7 @@ func TestNewPipelineOutput(t *testing.T) {
 			State: "active", AvatarURL: "https://gl/a.png", WebURL: "https://gl/admin",
 			CreatedAt: &now,
 		},
-		UpdatedAt:      &now, CreatedAt: &now, StartedAt: &now, FinishedAt: &now, CommittedAt: &now,
+		UpdatedAt: &now, CreatedAt: &now, StartedAt: &now, FinishedAt: &now, CommittedAt: &now,
 		Duration: 60, QueuedDuration: 5, Coverage: "90", WebURL: "https://gl/pipe/200",
 		DetailedStatus: &gl.DetailedStatus{Label: "passed", Illustration: gl.DetailedStatusIllustration{Image: "img.png"}},
 	})

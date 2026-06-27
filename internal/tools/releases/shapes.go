@@ -52,7 +52,6 @@ func assetLinkOption(l AssetLinkInput) *gl.ReleaseAssetLinkOptions {
 // state, avatar_url, web_url; created_at is not part of the release author
 // subset and is intentionally omitted).
 
-
 // CommitOutput is the documented reference subset of the commit the release tag
 // points to per doc/api/releases/_index.md. The documented release commit JSON
 // surfaces id, short_id, title, created_at, parent_ids, message, author_name,
@@ -99,5 +98,3 @@ func releaseAuthorOutput(u gl.BasicUser) *toolutil.AuthorOutput {
 	a := toolutil.NewAuthorOutputFromBasicUser(u)
 	return &a
 }
-
-
