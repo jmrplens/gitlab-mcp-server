@@ -64,7 +64,10 @@ func TestNewLinksOutput(t *testing.T) {
 		t.Fatal("populated links must return non-nil")
 	}
 	want := `{"self":"https://self","edit_url":"https://edit","opened_issues_url":"https://o-i","opened_merge_requests_url":"https://o-m","merged_merge_requests_url":"https://m-m","closed_issues_url":"https://c-i","closed_merge_requests_url":"https://c-m"}`
-	raw, _ := json.Marshal(got)
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
 	if string(raw) != want {
 		t.Errorf("links JSON mismatch:\n want %s\n  got %s", want, raw)
 	}
@@ -141,7 +144,10 @@ func TestNewMilestoneIssueStatsOutput(t *testing.T) {
 	if got == nil || got.Total != 9 || got.Closed != 4 {
 		t.Errorf("stats: %+v", got)
 	}
-	raw, _ := json.Marshal(got)
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
 	if strings.Contains(string(raw), `"open"`) {
 		t.Errorf("stats JSON must not contain an open field (SDK has none): %s", raw)
 	}

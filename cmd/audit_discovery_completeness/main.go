@@ -86,6 +86,15 @@ var crudSuffixes = []string{"_list", "_get", "_delete", "_update", "_create"}
 // scope or aggregation. Stripped AFTER crudSuffixes.
 var scopeSuffixes = []string{"_project", "_user", "_group", "_instance"}
 
+// scopeIDSuffixes are *_id parameter names that frequently confuse models
+// because the same identifier means a different scope across GitLab APIs
+// (project_id accepts a path in some endpoints, a numeric ID in others).
+// Used by isScopeSuggestiveName for the membership check below.
+var scopeIDSuffixes = []string{
+	"project_id", "group_id", "user_id", "instance_id",
+	"namespace_id", "milestone_id", "epic_id",
+}
+
 // usageSignalKeywords are heuristic markers that a Usage string mentions a
 // distinguishing signal for sibling-cluster disambiguation. The list is
 // intentionally conservative: only phrases that strongly imply a comparison
@@ -1176,15 +1185,5 @@ func isScopeSuggestiveName(name string) bool {
 	case "ref", "branch", "tag", "sha", "path", "iid":
 		return true
 	}
-	// Suffix matches for *_id parameters that scope to project/group/user.
-	scopeSuffixes := []string{
-		"project_id", "group_id", "user_id", "instance_id",
-		"namespace_id", "milestone_id", "epic_id",
-	}
-	for _, s := range scopeSuffixes {
-		if name == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(scopeIDSuffixes, name)
 }

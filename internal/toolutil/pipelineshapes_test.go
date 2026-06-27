@@ -23,7 +23,7 @@ func TestNewBasicUserOutput(t *testing.T) {
 	}
 	got := NewBasicUserOutput(&gl.BasicUser{
 		ID: 7, Username: "u", Name: "U", State: "active",
-		AvatarURL: "av", WebURL: "w", CreatedAt: timePtr(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+		AvatarURL: "av", WebURL: "w", CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 	})
 	if got == nil || got.ID != 7 || got.Username != "u" || got.Name != "U" || got.State != "active" ||
 		got.AvatarURL != "av" || got.WebURL != "w" || got.CreatedAt == "" {
@@ -147,6 +147,3 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		}
 	}
 }
-
-// timePtr is a tiny helper for the tests above.
-func timePtr(t time.Time) *time.Time { return &t }

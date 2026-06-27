@@ -115,7 +115,7 @@ func accessTokenAliases(scope, operation string) []string {
 	switch operation {
 	case "list":
 		return []string{
-			fmt.Sprintf("%s access tokens", scope),
+			scope + " access tokens",
 			fmt.Sprintf("list %s access tokens", scope),
 			fmt.Sprintf("show %s access tokens", scope),
 			fmt.Sprintf("browse %s access tokens", scope),

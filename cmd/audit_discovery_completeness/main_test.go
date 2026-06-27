@@ -800,8 +800,10 @@ func TestMissingParameterGuidance(t *testing.T) {
 
 // TestIsScopeSuggestiveName covers the exact and suffix matches.
 func TestIsScopeSuggestiveName(t *testing.T) {
-	yes := []string{"ref", "branch", "tag", "sha", "path", "iid",
-		"project_id", "group_id", "user_id", "instance_id", "milestone_id", "epic_id"}
+	yes := []string{
+		"ref", "branch", "tag", "sha", "path", "iid",
+		"project_id", "group_id", "user_id", "instance_id", "milestone_id", "epic_id",
+	}
 	no := []string{"name", "color", "description", "content", "labels"}
 	for _, n := range yes {
 		if !isScopeSuggestiveName(n) {

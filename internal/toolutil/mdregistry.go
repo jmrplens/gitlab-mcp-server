@@ -163,10 +163,10 @@ func HasRegisteredMarkdownFormatter(v any) bool {
 	default:
 		t = reflect.TypeOf(v)
 	}
-	if t == nil || t == reflect.TypeOf((*any)(nil)).Elem() {
+	if t == nil || t == reflect.TypeFor[any]() {
 		return false
 	}
-	if t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Ptr { //nolint:govet // reflect.Ptr reads better than its numeric value (22).
 		t = t.Elem()
 	}
 	if _, ok := stringFormatters.Load(t); ok {
