@@ -3,7 +3,7 @@
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
 	lint fmt clean version release release-check checksum \
-	golangci-lint govulncheck \
+	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
@@ -417,6 +417,18 @@ golangci-lint:
 govulncheck:
 	@echo === govulncheck ===
 	govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+
+## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
+## upload via sonar-scanner, poll the Compute Engine task, then print the quality
+## gate and key measures. Reads SONARQUBE_TOKEN from .env; analyzes the current
+## git branch (override with SONAR_BRANCH=<name>). Exits non-zero if the gate fails.
+sonar:
+	@./scripts/sonar-scan.sh
+
+## sonar-status: fetch and print the latest SonarCloud quality gate for the
+## current branch without re-running tests or re-uploading (SONAR_BRANCH overrides).
+sonar-status:
+	@./scripts/sonar-scan.sh --no-scan
 
 ## mdlint: lint Markdown files for style, consistency, and correctness.
 ## Excludes plan/ directory (working drafts). Uses .markdownlint-cli2.jsonc.

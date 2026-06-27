@@ -171,6 +171,25 @@ make mdlint-fix
 
 Make excludes `plan/` because it contains working drafts that are not versioned as polished documentation.
 
+## SonarCloud (local)
+
+`make sonar` reproduces the CI SonarCloud pipeline locally: it runs the unit
+tests with coverage (`go test -coverpkg=./cmd/...,./internal/...`), uploads the
+analysis with `sonar-scanner` (configuration from `sonar-project.properties`),
+polls the SonarCloud Compute Engine task until the analysis is processed, and
+prints the quality gate result with its per-condition status and key measures.
+It reads `SONARQUBE_TOKEN` from `.env` and analyzes the current git branch
+(override with `SONAR_BRANCH=<name>`); it exits non-zero when the gate fails.
+
+`make sonar-status` fetches and prints the latest gate for the current branch
+without re-running tests or re-uploading — useful for re-checking a result.
+
+```bash
+make sonar                       # full pipeline: tests + upload + poll + report
+make sonar SONAR_BRANCH=main     # analyze a specific branch
+make sonar-status                # just print the latest gate (no re-scan)
+```
+
 ## CI Integration
 
 GitHub Actions uses the same separation as Make:
