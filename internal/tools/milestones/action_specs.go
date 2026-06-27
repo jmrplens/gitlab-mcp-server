@@ -130,7 +130,7 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.IndividualTool.Description = "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list."
 	case "milestone_delete":
 		options.Usage = "Delete a milestone from a project by milestone_iid. Requires Maintainer or Owner role."
-		options.Aliases = []string{"delete milestone", "remove milestone"}
+		options.Aliases = []string{"delete milestone", "remove milestone", "destroy milestone", "drop milestone"}
 		options.RelatedActions = []string{actionMilestoneGet, "milestone.update", actionMilestoneList}
 		options.IndividualTool.Description = "Delete a milestone permanently from a project by milestone IID. Returns: a success confirmation naming the milestone and project. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list."
 	case "milestone_issues":
