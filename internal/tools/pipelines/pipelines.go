@@ -154,28 +154,28 @@ type GetInput struct {
 // DetailOutput represents a single pipeline with full details.
 type DetailOutput struct {
 	toolutil.HintableOutput
-	ID             int64            `json:"id"`
-	IID            int64            `json:"iid"`
-	ProjectID      int64            `json:"project_id"`
-	Status         string           `json:"status"`
-	Source         string           `json:"source"`
-	Ref            string           `json:"ref"`
-	SHA            string           `json:"sha"`
-	BeforeSHA      string           `json:"before_sha,omitempty"`
-	Name           string           `json:"name"`
-	Tag            bool             `json:"tag"`
-	YamlErrors     string           `json:"yaml_errors,omitempty"`
-	Duration       int64            `json:"duration"`
-	QueuedDuration int64            `json:"queued_duration"`
-	Coverage       string           `json:"coverage,omitempty"`
-	User           *BasicUserOutput `json:"user,omitempty"`
-	DetailedStatus *StatusOutput    `json:"detailed_status,omitempty"`
-	WebURL         string           `json:"web_url"`
-	CreatedAt      string           `json:"created_at"`
-	UpdatedAt      string           `json:"updated_at"`
-	StartedAt      string           `json:"started_at,omitempty"`
-	FinishedAt     string           `json:"finished_at,omitempty"`
-	CommittedAt    string           `json:"committed_at,omitempty"`
+	ID             int64                     `json:"id"`
+	IID            int64                     `json:"iid"`
+	ProjectID      int64                     `json:"project_id"`
+	Status         string                    `json:"status"`
+	Source         string                    `json:"source"`
+	Ref            string                    `json:"ref"`
+	SHA            string                    `json:"sha"`
+	BeforeSHA      string                    `json:"before_sha,omitempty"`
+	Name           string                    `json:"name"`
+	Tag            bool                      `json:"tag"`
+	YamlErrors     string                    `json:"yaml_errors,omitempty"`
+	Duration       int64                     `json:"duration"`
+	QueuedDuration int64                     `json:"queued_duration"`
+	Coverage       string                    `json:"coverage,omitempty"`
+	User           *toolutil.BasicUserOutput `json:"user,omitempty"`
+	DetailedStatus *StatusOutput             `json:"detailed_status,omitempty"`
+	WebURL         string                    `json:"web_url"`
+	CreatedAt      string                    `json:"created_at"`
+	UpdatedAt      string                    `json:"updated_at"`
+	StartedAt      string                    `json:"started_at,omitempty"`
+	FinishedAt     string                    `json:"finished_at,omitempty"`
+	CommittedAt    string                    `json:"committed_at,omitempty"`
 }
 
 // Get retrieves a single pipeline by ID from a GitLab project.
@@ -232,7 +232,7 @@ func DetailToOutput(p *gl.Pipeline) DetailOutput {
 	if p.CommittedAt != nil {
 		out.CommittedAt = p.CommittedAt.Format(time.RFC3339)
 	}
-	out.User = basicUserOutput(p.User)
+	out.User = toolutil.NewBasicUserOutput(p.User)
 	out.DetailedStatus = detailedStatusOutput(p.DetailedStatus)
 	return out
 }

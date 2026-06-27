@@ -1249,14 +1249,6 @@ func TestToOutput_LineCodeAndLineRange(t *testing.T) {
 	}
 }
 
-// TestToLinePositionOutput_Nil verifies the output line-position converter
-// returns nil when the source range boundary is absent.
-func TestToLinePositionOutput_Nil(t *testing.T) {
-	if toLinePositionOutput(nil) != nil {
-		t.Error("expected nil for nil input")
-	}
-}
-
 // TestDraftNoteList_Keyset verifies keyset pagination parameters are forwarded.
 func TestDraftNoteList_Keyset(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

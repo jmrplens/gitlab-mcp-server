@@ -2018,6 +2018,10 @@ func assertPopulatedPeople(t *testing.T, out Output) {
 	}
 }
 
+// TestToOutput_Populated verifies that ToOutput maps every populated field of a
+// fully specified gl.Issue — including nested author, milestone, assignees, epic,
+// references, task-completion, and time-stats sub-objects — onto the corresponding
+// MCP output fields without dropping or mistranslating any value.
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{

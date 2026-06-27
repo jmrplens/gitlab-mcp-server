@@ -232,7 +232,7 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 	}
 }
 
-// TestExtraOutputFields_OnlyOutputKind verifies diffPair attaches ExtraFields for
+// TestExtraOutputFields_DiffPairKindGating verifies diffPair attaches ExtraFields for
 // output pairs but never for input pairs (MCP inputs carry path ids legitimately).
 func TestExtraOutputFields_DiffPairKindGating(t *testing.T) {
 	// Synthesize via the real diffPair against the repository to confirm input

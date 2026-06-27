@@ -1433,7 +1433,7 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 		StartedAt:   "2026-03-01T10:00:05Z",
 		FinishedAt:  "2026-03-01T10:05:00Z",
 		CommittedAt: "2026-02-28T09:00:00Z",
-		User:        &BasicUserOutput{Username: "testuser"},
+		User:        &toolutil.BasicUserOutput{Username: "testuser"},
 	}
 	md := FormatDetailMarkdown(out)
 

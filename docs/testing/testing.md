@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,521 |
-| Unit test functions                                   | 11,239 |
+| Total test functions                                  | 11,520 |
+| Unit test functions                                   | 11,238 |
 | E2E test functions                                    |    282 |
 | cmd test functions                                    |    847 |
 | Test files (internal/)                                |    452 |
 | Test files (cmd/)                                     |     59 |
-| Test files (test/e2e/suite/)                          |    138 |
+| Test files (test/e2e/suite/)                          |    139 |
 | Tool sub-packages tested                              |    174 |
 | Core packages tested                                  |     17 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  91.0% |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,275 | 89.2% |
+| `TestFunc_Scenario` (2-part)           | 10,274 | 89.2% |
 | `TestFunc` (no underscore)             |    919 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,845 |         91 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (174) |          8,264 |        348 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            282 |        138 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (174) |          8,263 |        348 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            282 |        139 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            847 |         59 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,521** |    **649** |                                                                                                 |
+| **Total**               |     **11,520** |    **650** |                                                                                                 |
 
 ### Core Packages
 
@@ -225,7 +225,7 @@
 | mrchanges               |        37 |          1 |   100.0% |         4 |
 | mrcontextcommits        |        22 |          1 |   100.0% |         3 |
 | mrdiscussions           |        58 |          1 |   100.0% |         7 |
-| mrdraftnotes            |        72 |          2 |   100.0% |         7 |
+| mrdraftnotes            |        71 |          2 |   100.0% |         7 |
 | mrnotes                 |        49 |          2 |   100.0% |         5 |
 | namespaces              |        37 |          1 |    99.1% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
@@ -286,7 +286,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |    99.4% |         6 |
 | workitems               |        80 |          2 |   100.0% |         6 |
-| **Total**               | **8,264** |    **348** |          | **1,163** |
+| **Total**               | **8,263** |    **348** |          | **1,163** |
 
 </details>
 

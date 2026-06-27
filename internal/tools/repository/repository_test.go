@@ -78,6 +78,9 @@ func assertQueryParams(t *testing.T, q url.Values, want map[string]string) {
 	}
 }
 
+// TestRepositoryTree_WithOptions verifies that Tree forwards every optional
+// parameter (path, ref, recursive, order_by, sort, and keyset pagination with a
+// page token) as the expected query string and returns the decoded tree entries.
 func TestRepositoryTree_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {

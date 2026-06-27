@@ -749,7 +749,7 @@ func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 	p := pipelines.DetailOutput{
 		ID: 100, IID: 10, Status: "success", Source: "push", Ref: "main",
 		SHA: "abc123", Duration: 120, QueuedDuration: 5, Coverage: "85.5",
-		YamlErrors: "", User: &pipelines.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
+		YamlErrors: "", User: &toolutil.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
 	}
 	md := pipelines.FormatDetailMarkdown(p)
 	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: admin"}

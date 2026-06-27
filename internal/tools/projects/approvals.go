@@ -123,8 +123,8 @@ type ApprovalRuleOutput struct {
 	RuleType                      string                      `json:"rule_type,omitempty"`
 	ReportType                    string                      `json:"report_type,omitempty"`
 	ApprovalsRequired             int64                       `json:"approvals_required"`
-	EligibleApprovers             []*BasicUserOutput          `json:"eligible_approvers,omitempty"`
-	Users                         []*BasicUserOutput          `json:"users,omitempty"`
+	EligibleApprovers             []*toolutil.BasicUserOutput `json:"eligible_approvers,omitempty"`
+	Users                         []*toolutil.BasicUserOutput `json:"users,omitempty"`
 	Groups                        []*ApprovalGroupOutput      `json:"groups,omitempty"`
 	ProtectedBranches             []*ProtectedBranchRefOutput `json:"protected_branches,omitempty"`
 	ContainsHiddenGroups          bool                        `json:"contains_hidden_groups"`
@@ -145,8 +145,8 @@ func approvalRuleToOutput(r *gl.ProjectApprovalRule) ApprovalRuleOutput {
 		RuleType:                      r.RuleType,
 		ReportType:                    r.ReportType,
 		ApprovalsRequired:             r.ApprovalsRequired,
-		EligibleApprovers:             basicUserOutputs(r.EligibleApprovers),
-		Users:                         basicUserOutputs(r.Users),
+		EligibleApprovers:             toolutil.NewBasicUserOutputs(r.EligibleApprovers),
+		Users:                         toolutil.NewBasicUserOutputs(r.Users),
 		Groups:                        approvalGroupsOutput(r.Groups),
 		ProtectedBranches:             protectedBranchRefsOutput(r.ProtectedBranches),
 		ContainsHiddenGroups:          r.ContainsHiddenGroups,

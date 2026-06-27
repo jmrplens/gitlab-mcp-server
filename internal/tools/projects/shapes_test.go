@@ -49,12 +49,6 @@ func TestShapeConverters_NilInputs(t *testing.T) {
 	if customAttributesOutput(nil) != nil {
 		t.Error("customAttributesOutput(nil) != nil")
 	}
-	if basicUserOutput(nil) != nil {
-		t.Error("basicUserOutput(nil) != nil")
-	}
-	if basicUserOutputs(nil) != nil {
-		t.Error("basicUserOutputs(nil) != nil")
-	}
 	if approvalGroupsOutput(nil) != nil {
 		t.Error("approvalGroupsOutput(nil) != nil")
 	}
@@ -80,9 +74,6 @@ func TestShapeConverters_NilInputs(t *testing.T) {
 func TestShapeConverters_NilElements(t *testing.T) {
 	if got := customAttributesOutput([]*gl.CustomAttribute{nil}); got != nil {
 		t.Errorf("customAttributesOutput all-nil = %v, want nil", got)
-	}
-	if got := basicUserOutputs([]*gl.BasicUser{nil}); got != nil {
-		t.Errorf("basicUserOutputs all-nil = %v, want nil", got)
 	}
 	if got := approvalGroupsOutput([]*gl.Group{nil}); got != nil {
 		t.Errorf("approvalGroupsOutput all-nil = %v, want nil", got)
@@ -157,10 +148,6 @@ func TestShapeConverters_Collections(t *testing.T) {
 		customAttributesOutput([]*gl.CustomAttribute{nil, {Key: "k", Value: "v"}}),
 		[]CustomAttributeOutput{{Key: "k", Value: "v"}})
 
-	checkEqual(t, "basicUserOutputs",
-		basicUserOutputs([]*gl.BasicUser{nil, {ID: 1, Username: "u", Name: "U", State: "active", AvatarURL: "a", WebURL: "w", CreatedAt: &now}}),
-		[]*BasicUserOutput{{ID: 1, Username: "u", Name: "U", State: "active", AvatarURL: "a", WebURL: "w", CreatedAt: rfc}})
-
 	checkEqual(t, "approvalGroupsOutput",
 		approvalGroupsOutput([]*gl.Group{nil, {ID: 2, Name: "g", Path: "p", FullName: "fn", FullPath: "fp", Visibility: gl.PrivateVisibility, AvatarURL: "a", WebURL: "w"}}),
 		[]*ApprovalGroupOutput{{ID: 2, Name: "g", Path: "p", FullName: "fn", FullPath: "fp", Visibility: "private", AvatarURL: "a", WebURL: "w"}})
@@ -171,7 +158,7 @@ func TestShapeConverters_Collections(t *testing.T) {
 
 	checkEqual(t, "approverUsersOutput",
 		approverUsersOutput([]*gl.MergeRequestApproverUser{nil, {User: &gl.BasicUser{Username: "a"}, ApprovedAt: &now}}),
-		[]*ApproverUserOutput{{User: &BasicUserOutput{Username: "a"}, ApprovedAt: rfc}})
+		[]*ApproverUserOutput{{User: &toolutil.BasicUserOutput{Username: "a"}, ApprovedAt: rfc}})
 
 	checkEqual(t, "approverGroupsOutput",
 		approverGroupsOutput([]*gl.MergeRequestApproverGroup{nil, {Group: gl.MergeRequestApproverNestedGroup{ID: 4, Name: "ag", Path: "p", Description: "d", Visibility: "private", AvatarURL: "a", WebURL: "w", FullName: "fn", FullPath: "fp", LFSEnabled: true, RequestAccessEnabled: true}}}),
@@ -195,7 +182,7 @@ func TestUserGroupNames_NilElements(t *testing.T) {
 	if groupNames(nil) != nil {
 		t.Error("groupNames(nil) != nil")
 	}
-	if got := userNames([]*BasicUserOutput{nil, {Username: "a"}}); len(got) != 1 || got[0] != "a" {
+	if got := userNames([]*toolutil.BasicUserOutput{nil, {Username: "a"}}); len(got) != 1 || got[0] != "a" {
 		t.Errorf("userNames = %v", got)
 	}
 	if got := groupNames([]*ApprovalGroupOutput{nil, {Name: "g"}}); len(got) != 1 || got[0] != "g" {

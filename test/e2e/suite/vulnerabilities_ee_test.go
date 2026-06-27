@@ -245,8 +245,8 @@ exec(expr)
 	// covers the slow path on a heavily-loaded Docker runner while
 	// still failing fast when the scanner is actually missing.
 	var (
-		listed      vulnerabilities.ListOutput
-		listErr     error
+		listed       vulnerabilities.ListOutput
+		listErr      error
 		listDeadline = time.Now().Add(90 * time.Second)
 		listDelay    = 2 * time.Second
 	)

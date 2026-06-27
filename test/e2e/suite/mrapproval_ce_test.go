@@ -196,4 +196,3 @@ func TestMeta_MRApproval(t *testing.T) {
 		t.Logf("Merged MR !%d via meta-tool", mr.IID)
 	})
 }
-

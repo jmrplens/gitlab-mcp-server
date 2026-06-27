@@ -205,7 +205,7 @@ func TestToProjectEventOutput_EmptySubObjects(t *testing.T) {
 	}
 }
 
-// TestToProjectEventDataOutput_CommitWithoutOptionalSubObjects covers a commit
+// TestToProjectEventDataOutput_MinimalCommit covers a commit
 // with nil stats/pipeline and timestamps, and a data block with nil repository.
 func TestToProjectEventDataOutput_MinimalCommit(t *testing.T) {
 	d := gl.ProjectEventData{

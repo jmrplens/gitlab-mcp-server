@@ -27,6 +27,9 @@ const (
 	testCustomRepo     = "custom/group/project"
 )
 
+// TestMain redirects HOME and USERPROFILE to a throwaway temp directory for the
+// duration of the package tests so config loading never reads or writes the real
+// user home, then removes the directory and propagates the test exit code.
 func TestMain(m *testing.M) {
 	homeDir, err := os.MkdirTemp("", "gitlab-mcp-config-test-home-")
 	if err != nil {

@@ -270,6 +270,9 @@ func TestUnmarshalParams_NormalizesActiveAndFilePathAliases(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_CoercesStructuredAccessLevelShapes verifies that UnmarshalParams
+// coerces human-readable access-level names to their integer codes across scalar fields,
+// nested object fields (deploy_access_levels), and object arrays (approval_rules).
 func TestUnmarshalParams_CoercesStructuredAccessLevelShapes(t *testing.T) {
 	got, err := UnmarshalParams[testStructuredInput](map[string]any{
 		"push_access_level":    "Maintainer",
@@ -290,6 +293,9 @@ func TestUnmarshalParams_CoercesStructuredAccessLevelShapes(t *testing.T) {
 	}
 }
 
+// TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers verifies gitLabRoleAccessLevel
+// rejects values that overflow the valid access-level range (oversized strings, ints,
+// and floats) while still accepting an in-range numeric string.
 func TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers(t *testing.T) {
 	for _, value := range []any{"9223372036854775807", int64(1 << 62), float64(1e20)} {
 		if got, ok := gitLabRoleAccessLevel(value); ok {
@@ -302,6 +308,9 @@ func TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_CoercesPaginationBoolean verifies that UnmarshalParams maps a
+// boolean pagination flag (first=true) to the default page size rather than failing to
+// decode it into the integer pagination field.
 func TestUnmarshalParams_CoercesPaginationBoolean(t *testing.T) {
 	got, err := UnmarshalParams[testPaginationInput](map[string]any{"first": true})
 	if err != nil {
@@ -312,6 +321,9 @@ func TestUnmarshalParams_CoercesPaginationBoolean(t *testing.T) {
 	}
 }
 
+// TestUnmarshalParams_DropsDiscussionIDWhenNoteIDIsCanonical verifies that UnmarshalParams
+// keeps the canonical note_id and drops a conflicting discussion_id so the decoded input
+// carries only the authoritative identifier.
 func TestUnmarshalParams_DropsDiscussionIDWhenNoteIDIsCanonical(t *testing.T) {
 	got, err := UnmarshalParams[testNoteInput](map[string]any{"note_id": 44, "discussion_id": "abc123"})
 	if err != nil {
@@ -3152,11 +3164,6 @@ func TestInputSchemaForType_PointerInputCacheHit(t *testing.T) {
 	}
 }
 
-// TestMarkWriteOnlySecretFields_IgnoresMissingProperties verifies secret-field
-// marking leaves schemas without a properties map unchanged.
-//
-// The test passes a primitive schema and expects no writeOnly flag to be added,
-// preserving non-object schemas generated for unusual inputs.
 // TestFieldTiers_ReadsTierTag verifies FieldTiers extracts the per-field
 // `tier:` struct tag (keyed by JSON name, lowercased), flattens anonymous
 // embeds, and returns nil when no field declares a tier.
@@ -3195,6 +3202,9 @@ func TestFieldTiers_ReadsTierTag(t *testing.T) {
 	}
 }
 
+// TestMarkWriteOnlySecretFields_IgnoresMissingProperties verifies secret-field
+// marking leaves schemas without a properties map unchanged: passing a primitive
+// schema adds no writeOnly flag, preserving non-object schemas generated for unusual inputs.
 func TestMarkWriteOnlySecretFields_IgnoresMissingProperties(t *testing.T) {
 	schema := map[string]any{"type": "string"}
 	markWriteOnlySecretFields(schema, reflect.TypeFor[string]())
