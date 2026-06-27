@@ -160,7 +160,7 @@ setup script installs those without echoing the license:
 ```bash
 timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" docker compose -f test/e2e/docker-compose.yml up -d
 timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
-timeout 1800s GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+timeout 1800s GITLAB_TIER=ultimate ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
 
