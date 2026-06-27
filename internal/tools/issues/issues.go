@@ -64,45 +64,45 @@ type Output struct {
 	State       string   `json:"state"`
 	Labels      []string `json:"labels"`
 	// Author is the full author object mirrored from the SDK (1:1 fidelity).
-	Author *IssueAuthorOutput `json:"author,omitempty"`
+	Author *toolutil.IssueUserOutput `json:"author,omitempty"`
 	// Assignees is the list of full assignee objects mirrored from the SDK.
-	Assignees []*IssueAssigneeOutput `json:"assignees"`
+	Assignees []*toolutil.IssueUserOutput `json:"assignees"`
 	// Assignee is the singular (deprecated upstream) assignee object.
-	Assignee *IssueAssigneeOutput `json:"assignee,omitempty"`
+	Assignee *toolutil.IssueUserOutput `json:"assignee,omitempty"`
 	// Milestone is the full milestone object mirrored from the SDK.
-	Milestone *MilestoneOutput `json:"milestone,omitempty"`
+	Milestone *toolutil.MRMilestoneOutput `json:"milestone,omitempty"`
 	// ClosedBy is the full closer object mirrored from the SDK.
-	ClosedBy          *IssueCloserOutput `json:"closed_by,omitempty"`
-	WebURL            string             `json:"web_url"`
-	CreatedAt         string             `json:"created_at"`
-	UpdatedAt         string             `json:"updated_at"`
-	ClosedAt          string             `json:"closed_at"`
-	DueDate           string             `json:"due_date"`
-	Confidential      bool               `json:"confidential"`
-	DiscussionLocked  bool               `json:"discussion_locked"`
-	ProjectID         int64              `json:"project_id"`
-	Weight            int64              `json:"weight,omitempty" tier:"premium"`
-	IssueType         string             `json:"issue_type,omitempty"`
-	HealthStatus      string             `json:"health_status,omitempty" tier:"ultimate"`
-	MergeRequestCount int64              `json:"merge_requests_count,omitempty"`
-	UserNotesCount    int64              `json:"user_notes_count,omitempty"`
-	Upvotes           int64              `json:"upvotes,omitempty"`
-	Downvotes         int64              `json:"downvotes,omitempty"`
-	Subscribed        bool               `json:"subscribed"`
-	MovedToID         int64              `json:"moved_to_id,omitempty"`
-	EpicIssueID       int64              `json:"epic_issue_id,omitempty" tier:"premium"`
+	ClosedBy          *toolutil.IssueUserOutput `json:"closed_by,omitempty"`
+	WebURL            string                    `json:"web_url"`
+	CreatedAt         string                    `json:"created_at"`
+	UpdatedAt         string                    `json:"updated_at"`
+	ClosedAt          string                    `json:"closed_at"`
+	DueDate           string                    `json:"due_date"`
+	Confidential      bool                      `json:"confidential"`
+	DiscussionLocked  bool                      `json:"discussion_locked"`
+	ProjectID         int64                     `json:"project_id"`
+	Weight            int64                     `json:"weight,omitempty" tier:"premium"`
+	IssueType         string                    `json:"issue_type,omitempty"`
+	HealthStatus      string                    `json:"health_status,omitempty" tier:"ultimate"`
+	MergeRequestCount int64                     `json:"merge_requests_count,omitempty"`
+	UserNotesCount    int64                     `json:"user_notes_count,omitempty"`
+	Upvotes           int64                     `json:"upvotes,omitempty"`
+	Downvotes         int64                     `json:"downvotes,omitempty"`
+	Subscribed        bool                      `json:"subscribed"`
+	MovedToID         int64                     `json:"moved_to_id,omitempty"`
+	EpicIssueID       int64                     `json:"epic_issue_id,omitempty" tier:"premium"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
-	ExternalID           string                      `json:"external_id,omitempty"`
-	IssueLinkID          int64                       `json:"issue_link_id,omitempty"`
-	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
-	References           *ReferencesOutput           `json:"references,omitempty"`
-	Epic                 *EpicOutput                 `json:"epic,omitempty" tier:"premium"`
-	LabelDetails         []*LabelDetailsOutput       `json:"label_details,omitempty"`
-	Iteration            *IterationOutput            `json:"iteration,omitempty" tier:"premium"`
-	Links                *LinksOutput                `json:"_links,omitempty"`
-	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
-	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	ExternalID           string                               `json:"external_id,omitempty"`
+	IssueLinkID          int64                                `json:"issue_link_id,omitempty"`
+	ServiceDeskReplyTo   string                               `json:"service_desk_reply_to,omitempty"`
+	References           *toolutil.ReferencesOutput           `json:"references,omitempty"`
+	Epic                 *toolutil.EpicOutput                 `json:"epic,omitempty" tier:"premium"`
+	LabelDetails         []*toolutil.LabelDetailsOutput       `json:"label_details,omitempty"`
+	Iteration            *toolutil.IterationOutput            `json:"iteration,omitempty" tier:"premium"`
+	Links                *toolutil.IssueLinksOutput           `json:"_links,omitempty"`
+	TimeStats            *TimeStatsOutput                     `json:"time_stats,omitempty"`
+	TaskCompletionStatus *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 }
 
 // GetInput defines parameters for retrieving a single issue.
@@ -246,16 +246,16 @@ func ToOutput(issue *gl.Issue) Output {
 	if out.Labels == nil {
 		out.Labels = []string{}
 	}
-	out.Author = issueAuthorOutput(issue.Author)
-	out.Milestone = milestoneOutput(issue.Milestone)
-	out.Assignees = issueAssigneeOutputs(issue.Assignees)
+	out.Author = toolutil.NewIssueUserOutputFromIssueAuthor(issue.Author)
+	out.Milestone = mrMilestoneOutputPtr(issue.Milestone)
+	out.Assignees = toolutil.NewIssueUserOutputsFromIssueAssignees(issue.Assignees)
 	if out.Assignees == nil {
-		out.Assignees = []*IssueAssigneeOutput{}
+		out.Assignees = []*toolutil.IssueUserOutput{}
 	}
 	// The singular Assignee field is deprecated upstream in favor of Assignees,
 	// but the 1:1 audit requires surfacing every SDK field, so it is mirrored
 	// verbatim.
-	out.Assignee = issueAssigneeOutput(issue.Assignee) //nolint:staticcheck // SA1019: surfaced for 1:1 SDK fidelity
+	out.Assignee = toolutil.NewIssueUserOutputFromIssueAssignee(issue.Assignee) //nolint:staticcheck // SA1019: surfaced for 1:1 SDK fidelity
 	if issue.CreatedAt != nil {
 		out.CreatedAt = issue.CreatedAt.Format(time.RFC3339)
 	}
@@ -277,8 +277,8 @@ func ToOutput(issue *gl.Issue) Output {
 	if issue.IssueType != nil {
 		out.IssueType = *issue.IssueType
 	}
-	out.ClosedBy = issueCloserOutput(issue.ClosedBy)
-	out.References = referencesOutput(issue.References)
+	out.ClosedBy = toolutil.NewIssueUserOutputFromIssueCloser(issue.ClosedBy)
+	out.References = toolutil.NewReferencesOutput(issue.References)
 	out.UserNotesCount = issue.UserNotesCount
 	out.Upvotes = issue.Upvotes
 	out.Downvotes = issue.Downvotes
@@ -288,12 +288,12 @@ func ToOutput(issue *gl.Issue) Output {
 	out.ExternalID = issue.ExternalID
 	out.IssueLinkID = issue.IssueLinkID
 	out.ServiceDeskReplyTo = issue.ServiceDeskReplyTo
-	out.Epic = epicOutput(issue.Epic)
-	out.LabelDetails = labelDetailsOutputs(issue.LabelDetails)
-	out.Iteration = iterationOutput(issue.Iteration)
-	out.Links = linksOutput(issue.Links)
+	out.Epic = toolutil.NewEpicOutput(issue.Epic)
+	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)
+	out.Iteration = toolutil.NewIterationOutputFromGroupIteration(issue.Iteration)
+	out.Links = toolutil.NewIssueLinksOutput(issue.Links)
 	out.TimeStats = timeStatsPtr(issue.TimeStats)
-	out.TaskCompletionStatus = taskCompletionStatusOutput(issue.TaskCompletionStatus)
+	out.TaskCompletionStatus = toolutil.NewTaskCompletionStatusOutput(issue.TaskCompletionStatus)
 	return out
 }
 
@@ -1180,63 +1180,63 @@ func GetParticipants(ctx context.Context, client *gitlabclient.Client, input Get
 // returned by the closing-MR and related-MR issue endpoints. Per the 1:1 audit
 // policy it surfaces every SDK field with the correct type: user objects
 // (author, assignee, assignees, reviewers, merge_user, merged_by, closed_by)
-// are full *BasicUserOutput/[]*BasicUserOutput rather than flattened
+// are full *toolutil.BasicUserOutput/[]*toolutil.BasicUserOutput rather than flattened
 // usernames, and milestone/references/time_stats/task_completion_status/
 // label_details are full nested objects reusing the issue sub-object shapes.
 //
 // The canonical author key carries the full user object. The MR's own internal
 // id is surfaced on iid (the BasicMergeRequest.iid field).
 type RelatedMROutput struct {
-	ID                          int64                       `json:"id"`
-	IID                         int64                       `json:"iid"`
-	ProjectID                   int64                       `json:"project_id"`
-	Title                       string                      `json:"title"`
-	State                       string                      `json:"state"`
-	Description                 string                      `json:"description"`
-	SourceBranch                string                      `json:"source_branch"`
-	TargetBranch                string                      `json:"target_branch"`
-	SourceProjectID             int64                       `json:"source_project_id"`
-	TargetProjectID             int64                       `json:"target_project_id"`
-	Author                      *BasicUserOutput            `json:"author"`
-	Assignee                    *BasicUserOutput            `json:"assignee"`
-	Assignees                   []*BasicUserOutput          `json:"assignees"`
-	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
-	MergeUser                   *BasicUserOutput            `json:"merge_user"`
-	MergedBy                    *BasicUserOutput            `json:"merged_by"`
-	ClosedBy                    *BasicUserOutput            `json:"closed_by"`
-	Milestone                   *MilestoneOutput            `json:"milestone"`
-	Labels                      []string                    `json:"labels"`
-	LabelDetails                []*LabelDetailsOutput       `json:"label_details"`
-	References                  *ReferencesOutput           `json:"references"`
-	TimeStats                   *TimeStatsOutput            `json:"time_stats"`
-	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status"`
-	Draft                       bool                        `json:"draft"`
-	Imported                    bool                        `json:"imported"`
-	ImportedFrom                string                      `json:"imported_from"`
-	DetailedMergeStatus         string                      `json:"detailed_merge_status"`
-	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds"`
-	SHA                         string                      `json:"sha"`
-	MergeCommitSHA              string                      `json:"merge_commit_sha"`
-	SquashCommitSHA             string                      `json:"squash_commit_sha"`
-	Squash                      bool                        `json:"squash"`
-	SquashOnMerge               bool                        `json:"squash_on_merge"`
-	ShouldRemoveSourceBranch    bool                        `json:"should_remove_source_branch"`
-	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch"`
-	AllowCollaboration          bool                        `json:"allow_collaboration"`
-	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push"`
-	DiscussionLocked            bool                        `json:"discussion_locked"`
-	HasConflicts                bool                        `json:"has_conflicts"`
-	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
-	Upvotes                     int64                       `json:"upvotes"`
-	Downvotes                   int64                       `json:"downvotes"`
-	UserNotesCount              int64                       `json:"user_notes_count"`
-	CreatedAt                   string                      `json:"created_at,omitempty"`
-	UpdatedAt                   string                      `json:"updated_at,omitempty"`
-	MergedAt                    string                      `json:"merged_at,omitempty"`
-	MergeAfter                  string                      `json:"merge_after,omitempty"`
-	PreparedAt                  string                      `json:"prepared_at,omitempty"`
-	ClosedAt                    string                      `json:"closed_at,omitempty"`
-	WebURL                      string                      `json:"web_url"`
+	ID                          int64                                `json:"id"`
+	IID                         int64                                `json:"iid"`
+	ProjectID                   int64                                `json:"project_id"`
+	Title                       string                               `json:"title"`
+	State                       string                               `json:"state"`
+	Description                 string                               `json:"description"`
+	SourceBranch                string                               `json:"source_branch"`
+	TargetBranch                string                               `json:"target_branch"`
+	SourceProjectID             int64                                `json:"source_project_id"`
+	TargetProjectID             int64                                `json:"target_project_id"`
+	Author                      *toolutil.BasicUserOutput            `json:"author"`
+	Assignee                    *toolutil.BasicUserOutput            `json:"assignee"`
+	Assignees                   []*toolutil.BasicUserOutput          `json:"assignees"`
+	Reviewers                   []*toolutil.BasicUserOutput          `json:"reviewers"`
+	MergeUser                   *toolutil.BasicUserOutput            `json:"merge_user"`
+	MergedBy                    *toolutil.BasicUserOutput            `json:"merged_by"`
+	ClosedBy                    *toolutil.BasicUserOutput            `json:"closed_by"`
+	Milestone                   *toolutil.MRMilestoneOutput          `json:"milestone"`
+	Labels                      []string                             `json:"labels"`
+	LabelDetails                []*toolutil.LabelDetailsOutput       `json:"label_details"`
+	References                  *toolutil.ReferencesOutput           `json:"references"`
+	TimeStats                   *TimeStatsOutput                     `json:"time_stats"`
+	TaskCompletionStatus        *toolutil.TaskCompletionStatusOutput `json:"task_completion_status"`
+	Draft                       bool                                 `json:"draft"`
+	Imported                    bool                                 `json:"imported"`
+	ImportedFrom                string                               `json:"imported_from"`
+	DetailedMergeStatus         string                               `json:"detailed_merge_status"`
+	MergeWhenPipelineSucceeds   bool                                 `json:"merge_when_pipeline_succeeds"`
+	SHA                         string                               `json:"sha"`
+	MergeCommitSHA              string                               `json:"merge_commit_sha"`
+	SquashCommitSHA             string                               `json:"squash_commit_sha"`
+	Squash                      bool                                 `json:"squash"`
+	SquashOnMerge               bool                                 `json:"squash_on_merge"`
+	ShouldRemoveSourceBranch    bool                                 `json:"should_remove_source_branch"`
+	ForceRemoveSourceBranch     bool                                 `json:"force_remove_source_branch"`
+	AllowCollaboration          bool                                 `json:"allow_collaboration"`
+	AllowMaintainerToPush       bool                                 `json:"allow_maintainer_to_push"`
+	DiscussionLocked            bool                                 `json:"discussion_locked"`
+	HasConflicts                bool                                 `json:"has_conflicts"`
+	BlockingDiscussionsResolved bool                                 `json:"blocking_discussions_resolved"`
+	Upvotes                     int64                                `json:"upvotes"`
+	Downvotes                   int64                                `json:"downvotes"`
+	UserNotesCount              int64                                `json:"user_notes_count"`
+	CreatedAt                   string                               `json:"created_at,omitempty"`
+	UpdatedAt                   string                               `json:"updated_at,omitempty"`
+	MergedAt                    string                               `json:"merged_at,omitempty"`
+	MergeAfter                  string                               `json:"merge_after,omitempty"`
+	PreparedAt                  string                               `json:"prepared_at,omitempty"`
+	ClosedAt                    string                               `json:"closed_at,omitempty"`
+	WebURL                      string                               `json:"web_url"`
 }
 
 // RelatedMRsOutput holds a paginated list of merge requests related to an issue.
@@ -1261,22 +1261,22 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 		TargetBranch:    mr.TargetBranch,
 		SourceProjectID: mr.SourceProjectID,
 		TargetProjectID: mr.TargetProjectID,
-		Author:          basicUserOutput(mr.Author),
-		Assignee:        basicUserOutput(mr.Assignee),
-		Assignees:       basicUserOutputs(mr.Assignees),
-		Reviewers:       basicUserOutputs(mr.Reviewers),
-		MergeUser:       basicUserOutput(mr.MergeUser),
+		Author:          toolutil.NewBasicUserOutput(mr.Author),
+		Assignee:        toolutil.NewBasicUserOutput(mr.Assignee),
+		Assignees:       toolutil.NewBasicUserOutputs(mr.Assignees),
+		Reviewers:       toolutil.NewBasicUserOutputs(mr.Reviewers),
+		MergeUser:       toolutil.NewBasicUserOutput(mr.MergeUser),
 		// MergedBy is deprecated in the SDK in favor of MergeUser, but the 1:1
 		// audit requires surfacing every BasicMergeRequest field the API still
 		// returns, so it is mirrored additively under merged_by.
-		MergedBy:                    basicUserOutput(mr.MergedBy), //nolint:staticcheck // SA1019: intentional 1:1 fidelity for deprecated merged_by
-		ClosedBy:                    basicUserOutput(mr.ClosedBy),
-		Milestone:                   milestoneOutput(mr.Milestone),
+		MergedBy:                    toolutil.NewBasicUserOutput(mr.MergedBy), //nolint:staticcheck // SA1019: intentional 1:1 fidelity for deprecated merged_by
+		ClosedBy:                    toolutil.NewBasicUserOutput(mr.ClosedBy),
+		Milestone:                   mrMilestoneOutputPtr(mr.Milestone),
 		Labels:                      []string(mr.Labels),
-		LabelDetails:                labelDetailsOutputs(mr.LabelDetails),
-		References:                  referencesOutput(mr.References),
+		LabelDetails:                toolutil.NewLabelDetailsOutputs(mr.LabelDetails),
+		References:                  toolutil.NewReferencesOutput(mr.References),
 		TimeStats:                   timeStatsPtr(mr.TimeStats),
-		TaskCompletionStatus:        taskCompletionStatusOutput(mr.TaskCompletionStatus),
+		TaskCompletionStatus:        toolutil.NewTaskCompletionStatusOutput(mr.TaskCompletionStatus),
 		Draft:                       mr.Draft,
 		Imported:                    mr.Imported,
 		ImportedFrom:                mr.ImportedFrom,

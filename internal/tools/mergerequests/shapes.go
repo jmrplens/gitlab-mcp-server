@@ -22,91 +22,12 @@ import (
 // (DiffRefsOutput, defined in mergerequests.go).
 
 // MilestoneOutput mirrors gl.Milestone (the merge-request milestone object).
-type MilestoneOutput struct {
-	ID          int64  `json:"id"`
-	IID         int64  `json:"iid"`
-	GroupID     int64  `json:"group_id"`
-	ProjectID   int64  `json:"project_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	State       string `json:"state"`
-	WebURL      string `json:"web_url"`
-	StartDate   string `json:"start_date,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	Expired     *bool  `json:"expired,omitempty"`
-}
-
-func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
-	if m == nil {
-		return nil
-	}
-	return &MilestoneOutput{
-		ID: m.ID, IID: m.IID, GroupID: m.GroupID, ProjectID: m.ProjectID,
-		Title: m.Title, Description: m.Description, State: m.State, WebURL: m.WebURL,
-		StartDate: toolutil.FormatISOTimePtr(m.StartDate), DueDate: toolutil.FormatISOTimePtr(m.DueDate),
-		CreatedAt: toolutil.FormatTimePtr(m.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(m.UpdatedAt),
-		Expired: m.Expired,
-	}
-}
 
 // ReferencesOutput mirrors gl.IssueReferences (the merge-request references object).
-type ReferencesOutput struct {
-	Short    string `json:"short"`
-	Relative string `json:"relative"`
-	Full     string `json:"full"`
-}
-
-func referencesOutput(r *gl.IssueReferences) *ReferencesOutput {
-	if r == nil {
-		return nil
-	}
-	return &ReferencesOutput{Short: r.Short, Relative: r.Relative, Full: r.Full}
-}
 
 // LabelDetailsOutput mirrors gl.LabelDetails.
-type LabelDetailsOutput struct {
-	ID              int64  `json:"id"`
-	Name            string `json:"name"`
-	Color           string `json:"color"`
-	Description     string `json:"description"`
-	DescriptionHTML string `json:"description_html"`
-	TextColor       string `json:"text_color"`
-}
-
-func labelDetailsOutputs(details []*gl.LabelDetails) []*LabelDetailsOutput {
-	if len(details) == 0 {
-		return nil
-	}
-	out := make([]*LabelDetailsOutput, 0, len(details))
-	for _, d := range details {
-		if d == nil {
-			continue
-		}
-		out = append(out, &LabelDetailsOutput{
-			ID: d.ID, Name: d.Name, Color: d.Color, Description: d.Description,
-			DescriptionHTML: d.DescriptionHTML, TextColor: d.TextColor,
-		})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
 
 // TaskCompletionStatusOutput mirrors gl.TasksCompletionStatus.
-type TaskCompletionStatusOutput struct {
-	Count          int64 `json:"count"`
-	CompletedCount int64 `json:"completed_count"`
-}
-
-func taskCompletionStatusOutput(t *gl.TasksCompletionStatus) *TaskCompletionStatusOutput {
-	if t == nil {
-		return nil
-	}
-	return &TaskCompletionStatusOutput{Count: t.Count, CompletedCount: t.CompletedCount}
-}
 
 // timeStatsPtr converts gl.TimeStats to the package TimeStatsOutput pointer,
 // reusing the standalone TimeStatsOutput type, or nil when the SDK value is nil.
@@ -120,97 +41,66 @@ func timeStatsPtr(t *gl.TimeStats) *TimeStatsOutput {
 
 // MergeRequestUserOutput mirrors gl.MergeRequestUser (the MR "user" object,
 // describing the current user's relationship to the merge request).
-type MergeRequestUserOutput struct {
-	CanMerge bool `json:"can_merge"`
-}
-
-func mergeRequestUserOutput(u gl.MergeRequestUser) *MergeRequestUserOutput {
-	return &MergeRequestUserOutput{CanMerge: u.CanMerge}
-}
 
 // PipelineInfoOutput mirrors gl.PipelineInfo (the compact pipeline object on the
 // merge-request "pipeline" key).
-type PipelineInfoOutput struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid"`
-	ProjectID int64  `json:"project_id"`
-	Status    string `json:"status"`
-	Source    string `json:"source"`
-	Ref       string `json:"ref"`
-	SHA       string `json:"sha"`
-	Name      string `json:"name"`
-	WebURL    string `json:"web_url"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-func pipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
-	if p == nil {
-		return nil
-	}
-	return &PipelineInfoOutput{
-		ID: p.ID, IID: p.IID, ProjectID: p.ProjectID, Status: p.Status,
-		Source: p.Source, Ref: p.Ref, SHA: p.SHA, Name: p.Name, WebURL: p.WebURL,
-		UpdatedAt: toolutil.FormatTimePtr(p.UpdatedAt), CreatedAt: toolutil.FormatTimePtr(p.CreatedAt),
-	}
-}
 
 // BlockingMergeRequestOutput mirrors gl.BlockingMergeRequest (the
 // blocking_merge_request object on a merge-request dependency). It is a
 // BasicMergeRequest-shaped object surfaced 1:1 with the SDK field set.
 type BlockingMergeRequestOutput struct {
-	ID                          int64                       `json:"id"`
-	IID                         int64                       `json:"iid"`
-	TargetBranch                string                      `json:"target_branch"`
-	SourceBranch                string                      `json:"source_branch"`
-	ProjectID                   int64                       `json:"project_id"`
-	Title                       string                      `json:"title"`
-	State                       string                      `json:"state"`
-	CreatedAt                   string                      `json:"created_at,omitempty"`
-	UpdatedAt                   string                      `json:"updated_at,omitempty"`
-	Upvotes                     int64                       `json:"upvotes"`
-	Downvotes                   int64                       `json:"downvotes"`
-	Author                      *toolutil.BasicUserOutput   `json:"author,omitempty"`
-	Assignee                    *toolutil.BasicUserOutput   `json:"assignee,omitempty"`
-	Assignees                   []*toolutil.BasicUserOutput `json:"assignees,omitempty"`
-	Reviewers                   []*toolutil.BasicUserOutput `json:"reviewers,omitempty"`
-	SourceProjectID             int64                       `json:"source_project_id"`
-	TargetProjectID             int64                       `json:"target_project_id"`
-	Labels                      []string                    `json:"labels"`
-	Description                 string                      `json:"description"`
-	Draft                       bool                        `json:"draft"`
-	Milestone                   string                      `json:"milestone,omitempty"`
-	AutoMerge                   bool                        `json:"auto_merge"`
-	DetailedMergeStatus         string                      `json:"detailed_merge_status"`
-	MergedAt                    string                      `json:"merged_at,omitempty"`
-	ClosedBy                    *toolutil.BasicUserOutput   `json:"closed_by,omitempty"`
-	ClosedAt                    string                      `json:"closed_at,omitempty"`
-	SHA                         string                      `json:"sha"`
-	MergeCommitSHA              string                      `json:"merge_commit_sha"`
-	SquashCommitSHA             string                      `json:"squash_commit_sha"`
-	UserNotesCount              int64                       `json:"user_notes_count"`
-	ShouldRemoveSourceBranch    *bool                       `json:"should_remove_source_branch,omitempty"`
-	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch"`
-	WebURL                      string                      `json:"web_url"`
-	References                  *ReferencesOutput           `json:"references,omitempty"`
-	DiscussionLocked            *bool                       `json:"discussion_locked,omitempty"`
-	TimeStats                   *TimeStatsOutput            `json:"time_stats,omitempty"`
-	Squash                      bool                        `json:"squash"`
-	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
-	HasConflicts                bool                        `json:"has_conflicts"`
-	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
-	MergeUser                   *toolutil.BasicUserOutput   `json:"merge_user,omitempty"`
-	MergeAfter                  string                      `json:"merge_after,omitempty"`
-	Imported                    bool                        `json:"imported"`
-	ImportedFrom                string                      `json:"imported_from"`
-	PreparedAt                  string                      `json:"prepared_at,omitempty"`
-	SquashOnMerge               bool                        `json:"squash_on_merge"`
-	WorkInProgress              bool                        `json:"work_in_progress"`
-	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds"`
-	MergedBy                    *toolutil.BasicUserOutput   `json:"merged_by,omitempty"`
-	ApprovalsBeforeMerge        *int64                      `json:"approvals_before_merge,omitempty" tier:"premium"`
-	Reference                   string                      `json:"reference"`
-	MergeStatus                 string                      `json:"merge_status"`
+	ID                          int64                                `json:"id"`
+	IID                         int64                                `json:"iid"`
+	TargetBranch                string                               `json:"target_branch"`
+	SourceBranch                string                               `json:"source_branch"`
+	ProjectID                   int64                                `json:"project_id"`
+	Title                       string                               `json:"title"`
+	State                       string                               `json:"state"`
+	CreatedAt                   string                               `json:"created_at,omitempty"`
+	UpdatedAt                   string                               `json:"updated_at,omitempty"`
+	Upvotes                     int64                                `json:"upvotes"`
+	Downvotes                   int64                                `json:"downvotes"`
+	Author                      *toolutil.BasicUserOutput            `json:"author,omitempty"`
+	Assignee                    *toolutil.BasicUserOutput            `json:"assignee,omitempty"`
+	Assignees                   []*toolutil.BasicUserOutput          `json:"assignees,omitempty"`
+	Reviewers                   []*toolutil.BasicUserOutput          `json:"reviewers,omitempty"`
+	SourceProjectID             int64                                `json:"source_project_id"`
+	TargetProjectID             int64                                `json:"target_project_id"`
+	Labels                      []string                             `json:"labels"`
+	Description                 string                               `json:"description"`
+	Draft                       bool                                 `json:"draft"`
+	Milestone                   string                               `json:"milestone,omitempty"`
+	AutoMerge                   bool                                 `json:"auto_merge"`
+	DetailedMergeStatus         string                               `json:"detailed_merge_status"`
+	MergedAt                    string                               `json:"merged_at,omitempty"`
+	ClosedBy                    *toolutil.BasicUserOutput            `json:"closed_by,omitempty"`
+	ClosedAt                    string                               `json:"closed_at,omitempty"`
+	SHA                         string                               `json:"sha"`
+	MergeCommitSHA              string                               `json:"merge_commit_sha"`
+	SquashCommitSHA             string                               `json:"squash_commit_sha"`
+	UserNotesCount              int64                                `json:"user_notes_count"`
+	ShouldRemoveSourceBranch    *bool                                `json:"should_remove_source_branch,omitempty"`
+	ForceRemoveSourceBranch     bool                                 `json:"force_remove_source_branch"`
+	WebURL                      string                               `json:"web_url"`
+	References                  *toolutil.ReferencesOutput           `json:"references,omitempty"`
+	DiscussionLocked            *bool                                `json:"discussion_locked,omitempty"`
+	TimeStats                   *TimeStatsOutput                     `json:"time_stats,omitempty"`
+	Squash                      bool                                 `json:"squash"`
+	TaskCompletionStatus        *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	HasConflicts                bool                                 `json:"has_conflicts"`
+	BlockingDiscussionsResolved bool                                 `json:"blocking_discussions_resolved"`
+	MergeUser                   *toolutil.BasicUserOutput            `json:"merge_user,omitempty"`
+	MergeAfter                  string                               `json:"merge_after,omitempty"`
+	Imported                    bool                                 `json:"imported"`
+	ImportedFrom                string                               `json:"imported_from"`
+	PreparedAt                  string                               `json:"prepared_at,omitempty"`
+	SquashOnMerge               bool                                 `json:"squash_on_merge"`
+	WorkInProgress              bool                                 `json:"work_in_progress"`
+	MergeWhenPipelineSucceeds   bool                                 `json:"merge_when_pipeline_succeeds"`
+	MergedBy                    *toolutil.BasicUserOutput            `json:"merged_by,omitempty"`
+	ApprovalsBeforeMerge        *int64                               `json:"approvals_before_merge,omitempty" tier:"premium"`
+	Reference                   string                               `json:"reference"`
+	MergeStatus                 string                               `json:"merge_status"`
 }
 
 // blockingMergeRequestOutput converts gl.BlockingMergeRequest to its output
@@ -231,9 +121,9 @@ func blockingMergeRequestOutput(b gl.BlockingMergeRequest) *BlockingMergeRequest
 		SHA: b.Sha, MergeCommitSHA: b.MergeCommitSha, SquashCommitSHA: b.SquashCommitSha,
 		UserNotesCount: b.UserNotesCount, ShouldRemoveSourceBranch: b.ShouldRemoveSourceBranch,
 		ForceRemoveSourceBranch: b.ForceRemoveSourceBranch, WebURL: b.WebURL,
-		References: referencesOutput(b.References), DiscussionLocked: b.DiscussionLocked,
+		References: toolutil.NewReferencesOutput(b.References), DiscussionLocked: b.DiscussionLocked,
 		TimeStats: timeStatsPtr(b.TimeStats), Squash: b.Squash,
-		TaskCompletionStatus: taskCompletionStatusOutput(b.TaskCompletionStatus),
+		TaskCompletionStatus: toolutil.NewTaskCompletionStatusOutput(b.TaskCompletionStatus),
 		HasConflicts:         b.HasConflicts, BlockingDiscussionsResolved: b.BlockingDiscussionsResolved,
 		MergeUser: toolutil.NewBasicUserOutput(b.MergeUser), MergeAfter: formatTimeValue(b.MergeAfter),
 		Imported: b.Imported, ImportedFrom: b.ImportedFrom, PreparedAt: toolutil.FormatTimePtr(b.PreparedAt),
@@ -271,4 +161,12 @@ func labelOptionsToStrings(l *gl.LabelOptions) []string {
 		return []string{}
 	}
 	return []string(*l)
+}
+
+// mergeRequestUserOutputPtr converts a gl.MergeRequestUser value (passed
+// by value in the SDK) into the canonical MergeRequestUserOutput pointer.
+// The wrapper exists so the call site reads naturally alongside the
+// other output converters in this file.
+func mergeRequestUserOutputPtr(u gl.MergeRequestUser) *toolutil.MergeRequestUserOutput {
+	return toolutil.NewMergeRequestUserOutput(&u)
 }
