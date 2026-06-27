@@ -97,13 +97,16 @@ func TestMeta_Vulnerabilities(t *testing.T) {
 
 // TestMeta_VulnerabilityLifecycle exercises the full vulnerability mutation
 // lifecycle via gitlab_vulnerability: get, dismiss, confirm, resolve,
-// revert, and pipeline_security_summary. The fixture is a project with
-// a SAST-enabled CI pipeline (Security/SAST.gitlab-ci.yml template)
-// and an intentionally vulnerable Python file (SQL injection,
-// command injection, eval) so GitLab's Semgrep-based SAST analyzer
-// reports real CRITICAL findings on the pipeline run.
+// revert, and pipeline_security_summary. The fixture is a project whose
+// pipeline publishes a deterministic gl-sast-report.json as an
+// artifacts:reports:sast report (three CRITICAL findings: SQL injection,
+// command injection, eval). GitLab ingests it into the project Vulnerability
+// Report exactly as a real scan would, so the test validates our vulnerability
+// MCP tools — not GitLab's Semgrep analyzer, whose version-pinned image is
+// unreliable to pull on the ephemeral Docker runner.
 //
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// Requires GitLab Ultimate (the project Vulnerability Report is Ultimate-only;
+// GITLAB_ENTERPRISE=true / an Ultimate license).
 // Skips on CE or when the runner is not configured (E2E_MODE=ce) or
 // when the pipeline cannot complete (e.g. resource pressure on the
 // ephemeral GitLab instance).
@@ -133,81 +136,127 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 		})
 	})
 
-	// 1. Commit a .gitlab-ci.yml that runs SAST with the standard
-	// GitLab Semgrep analyzer. We pin the major version of the
-	// template so the job is reproducible across GitLab releases. The
-	// Semgrep ruleset reliably flags SQL injection, command
-	// injection, and eval() patterns on Python as CRITICAL.
-	// Per https://docs.gitlab.com/user/application_security/sast/
-	// the Standard analyzer template works for all languages GitLab
-	// supports out of the box.
-	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
-		".gitlab-ci.yml",
-		`include:
-  - template: Security/SAST.gitlab-ci.yml
-`,
-		"add SAST pipeline")
+	// This fixture verifies the GitLab vulnerability *reporting* path and our
+	// vulnerability MCP tools end-to-end — NOT GitLab's Semgrep analyzer itself.
+	// Earlier revisions ran the real `Security/SAST.gitlab-ci.yml` template, but
+	// that job pulls a heavy, version-pinned analyzer image
+	// (registry.gitlab.com/security-products/semgrep:<major>) which is unreliable
+	// on the ephemeral Docker runner: when the pull fails the job's default
+	// `allow_failure: true` leaves the pipeline "success" with no security
+	// report, so the lifecycle silently finds zero vulnerabilities. Instead we
+	// publish a deterministic, schema-valid `gl-sast-report.json` as an
+	// `artifacts:reports:sast` artifact from a tiny job on the already-pre-pulled
+	// alpine image. GitLab ingests it into the project Vulnerability Report
+	// exactly as it would a real scan (Ultimate, default-branch pipeline), which
+	// is what exercises gitlab_vulnerability list/get/resolve/etc.
 
-	// 2. Commit a benign file first, so the vulnerable code is
-	// introduced in a non-initial commit. The SAST analyzer scans
-	// the diff; introducing the flaw in a follow-up commit
-	// guarantees there is a diff to scan.
-	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
-		"placeholder.txt",
-		"placeholder content\n",
-		"add placeholder file for fixture")
-
-	// 3. Commit a Python file with classic vulnerability patterns
-	// that GitLab's Semgrep-based SAST analyzer reliably flags as
-	// CRITICAL findings: SQL injection via string concatenation,
-	// command injection via os.system, and use of eval() on user
-	// input. These match standard Semgrep rules (python.lang.security
-	// .audit.formatted-sql-query, python.lang.security.audit.dangerous-system-call,
-	// python.lang.security.audit.eval).
-	// Multiple vulnerability patterns to maximize Semgrep rule matches
-	// against the GitLab SAST default ruleset. Each function has a clear
-	// taint source (input() builtin) flowing into a classic dangerous sink.
-	// Patterns covered:
-	//   - SQL injection via concat, % formatting, f-string, .format
-	//     (rules: python.lang.security.audit.formatted-sql-query and
-	//     python.flask.security.audit.sql-injection-taint, etc.)
-	//   - Command injection via os.system, os.popen, subprocess with
-	//     shell=True
-	//     (rules: python.lang.security.audit.dangerous-system-call)
-	//   - Code injection via eval, exec
-	//     (rules: python.lang.security.audit.eval, python.lang.security
-	//     .audit.exec)
-	const vulnerablePy = `# E2E fixture: intentionally vulnerable code for SAST.
+	// 1. Commit the intentionally vulnerable source the report points at. It is
+	// not scanned here, but keeps the fixture self-documenting and gives the
+	// report's `location.file` a real target.
+	const vulnerablePy = `# E2E fixture: intentionally vulnerable code referenced by the SAST report.
 import os
 import subprocess
 import sqlite3
 db = sqlite3.connect(":memory:")
 cur = db.cursor()
 
-# CWE-89: SQL injection — clear taint source (input) into multiple
-# concatenation/formatting patterns.
+# CWE-89: SQL injection.
 user = input("username: ")
 cur.execute("SELECT * FROM users WHERE name = '" + user + "'")
-cur.execute("SELECT * FROM users WHERE id = %s" % user)
-cur.execute(f"SELECT * FROM users WHERE email = '{user}'")
-cur.execute("SELECT * FROM users WHERE name = '{}'".format(user))
 
-# CWE-78: command injection — taint source into shell-invoking calls.
+# CWE-78: command injection.
 cmd = input("cmd: ")
 os.system("ls " + cmd)
-os.system(cmd)
-os.popen("cat " + cmd)
-subprocess.call("echo " + cmd, shell=True)
 
-# CWE-95: code injection — eval/exec on user input.
+# CWE-95: code injection.
 expr = input("expr: ")
 result = eval(expr)
-exec(expr)
 `
 	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
 		"app.py",
 		vulnerablePy,
 		"add intentionally vulnerable code for E2E SAST fixture")
+
+	// 2. Commit a deterministic SAST report (GitLab secure-report schema 15.x)
+	// with three CRITICAL findings (SQLi, command injection, eval) pointing at
+	// app.py. GitLab ingests this on the default-branch pipeline.
+	const sastReport = `{
+  "version": "15.0.6",
+  "scan": {
+    "analyzer": {"id": "e2e-fixture", "name": "E2E Fixture", "version": "1.0.0", "vendor": {"name": "gitlab-mcp-server"}},
+    "scanner": {"id": "e2e-fixture", "name": "E2E Fixture", "version": "1.0.0", "vendor": {"name": "gitlab-mcp-server"}},
+    "type": "sast",
+    "start_time": "2026-01-01T00:00:00",
+    "end_time": "2026-01-01T00:00:01",
+    "status": "success"
+  },
+  "vulnerabilities": [
+    {
+      "id": "e2e-sast-sqli-0001",
+      "category": "sast",
+      "name": "SQL Injection",
+      "message": "SQL Injection",
+      "description": "User input is concatenated into a SQL query (CWE-89).",
+      "severity": "Critical",
+      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
+      "location": {"file": "app.py", "start_line": 10, "end_line": 10},
+      "identifiers": [
+        {"type": "cwe", "name": "CWE-89", "value": "89", "url": "https://cwe.mitre.org/data/definitions/89.html"}
+      ]
+    },
+    {
+      "id": "e2e-sast-cmdi-0002",
+      "category": "sast",
+      "name": "OS Command Injection",
+      "message": "OS Command Injection",
+      "description": "User input flows into os.system (CWE-78).",
+      "severity": "Critical",
+      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
+      "location": {"file": "app.py", "start_line": 14, "end_line": 14},
+      "identifiers": [
+        {"type": "cwe", "name": "CWE-78", "value": "78", "url": "https://cwe.mitre.org/data/definitions/78.html"}
+      ]
+    },
+    {
+      "id": "e2e-sast-eval-0003",
+      "category": "sast",
+      "name": "Code Injection",
+      "message": "Code Injection",
+      "description": "User input is passed to eval (CWE-95).",
+      "severity": "Critical",
+      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
+      "location": {"file": "app.py", "start_line": 18, "end_line": 18},
+      "identifiers": [
+        {"type": "cwe", "name": "CWE-95", "value": "95", "url": "https://cwe.mitre.org/data/definitions/95.html"}
+      ]
+    }
+  ]
+}
+`
+	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
+		"gl-sast-report.json",
+		sastReport,
+		"add deterministic SAST report fixture")
+
+	// 3. Commit a .gitlab-ci.yml whose single job publishes the committed report
+	// as the pipeline's SAST security report. Uses the pre-pulled alpine image so
+	// no analyzer pull is needed; `when: always` ensures the report is uploaded.
+	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
+		".gitlab-ci.yml",
+		`stages:
+  - test
+
+sast:
+  stage: test
+  image: alpine:latest
+  script:
+    - test -f gl-sast-report.json
+  artifacts:
+    when: always
+    reports:
+      sast: gl-sast-report.json
+`,
+		"add SAST report-publishing pipeline")
 
 	// 4. Manually trigger a pipeline so the runner processes the
 	// SAST job.
@@ -235,15 +284,13 @@ exec(expr)
 	}
 	t.Logf("Pipeline %d status: %s", pipelineID, pipelineStatus)
 
-	// 5. List vulnerabilities for the project. SAST creates CRITICAL
-	// findings (SQL injection, command injection, eval) from the
-	// intentionally vulnerable file. The vulnerability report is
-	// generated asynchronously after the pipeline job completes, so
-	// the GraphQL list endpoint can return an empty page for a few
-	// seconds even when the SAST job ran successfully. Poll with
-	// backoff up to 90 s before declaring the fixture broken — this
-	// covers the slow path on a heavily-loaded Docker runner while
-	// still failing fast when the scanner is actually missing.
+	// 5. List vulnerabilities for the project. GitLab ingests the published
+	// gl-sast-report.json into the project Vulnerability Report after the
+	// default-branch pipeline finishes, creating the three CRITICAL findings.
+	// Ingestion is asynchronous, so the GraphQL list endpoint can return an
+	// empty page for a few seconds even after the pipeline succeeds. Poll with
+	// backoff up to 90 s before declaring the fixture broken — this covers the
+	// slow path on a heavily-loaded Docker instance while still failing fast.
 	var (
 		listed       vulnerabilities.ListOutput
 		listErr      error
@@ -268,7 +315,7 @@ exec(expr)
 		}
 		select {
 		case <-ctx.Done():
-			listErr = fmt.Errorf("context canceled while waiting for SAST report: %w", ctx.Err())
+			listErr = fmt.Errorf("context canceled while waiting for vulnerability report: %w", ctx.Err())
 		case <-time.After(listDelay):
 		}
 		if listDelay < 8*time.Second {
@@ -277,7 +324,7 @@ exec(expr)
 	}
 	requireNoError(t, listErr, "vulnerability list for lifecycle")
 	if len(listed.Vulnerabilities) == 0 {
-		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s) and 90s of polling; SAST scanner did not flag the intentionally vulnerable fixture — check that the Security/SAST.gitlab-ci.yml template is available and the runner has the semgrep analyzer installed",
+		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s) and 90s of polling; the committed gl-sast-report.json was not ingested — verify the pipeline 'sast' job uploaded the artifacts:reports:sast report and the instance is Ultimate (the project Vulnerability Report is Ultimate-only)",
 			proj.Path, pipelineID, pipelineStatus)
 	}
 	var vulnGID string
