@@ -54,7 +54,7 @@ type Output struct {
 	CreatedAt       string                      `json:"created_at"`
 	ReleasedAt      string                      `json:"released_at"`
 	Author          *toolutil.AuthorOutput      `json:"author,omitempty"`
-	Commit          *CommitOutput               `json:"commit,omitempty"`
+	Commit          *toolutil.CommitOutput      `json:"commit,omitempty"`
 	UpcomingRelease bool                        `json:"upcoming_release,omitempty"`
 	Milestones      []*toolutil.MilestoneOutput `json:"milestones,omitempty"`
 	CommitPath      string                      `json:"commit_path,omitempty"`
@@ -119,7 +119,7 @@ func ToOutput(r *gl.Release) Output {
 		Description:     r.Description,
 		DescriptionHTML: r.DescriptionHTML,
 		Author:          releaseAuthorOutput(r.Author),
-		Commit:          commitOutput(r.Commit),
+		Commit:          toolutil.NewCommitOutput(r.Commit),
 		UpcomingRelease: r.UpcomingRelease,
 		CommitPath:      r.CommitPath,
 		TagPath:         r.TagPath,

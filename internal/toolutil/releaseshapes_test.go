@@ -153,6 +153,63 @@ func TestNewMilestoneIssueStatsOutput(t *testing.T) {
 	}
 }
 
+// TestNewCommitOutput verifies the commit converter returns nil for an empty
+// commit ID, copies all base fields, and formats timestamps as RFC 3339.
+// web_url is intentionally excluded from the base type (it belongs to the
+// group-releases variant CommitOutput in the groupreleases package).
+func TestNewCommitOutput(t *testing.T) {
+	if got := NewCommitOutput(gl.Commit{}); got != nil {
+		t.Errorf("empty commit (no ID) must return nil, got %+v", got)
+	}
+	authored := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	committed := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)
+	got := NewCommitOutput(gl.Commit{
+		ID: "abc123", ShortID: "abc", Title: "chore: test",
+		AuthorName: "Alice", AuthorEmail: "alice@example.com", AuthoredDate: &authored,
+		CommitterName: "Bob", CommitterEmail: "bob@example.com", CommittedDate: &committed,
+		CreatedAt: &created, Message: "full message", ParentIDs: []string{"p1", "p2"},
+		// The following SDK fields are NOT part of the base CommitOutput
+		// (project-release subset) — they must be ignored.
+		WebURL: "https://should-not-appear",
+	})
+	if got == nil {
+		t.Fatal("populated commit must return non-nil")
+	}
+	if got.ID != "abc123" || got.ShortID != "abc" || got.Title != "chore: test" {
+		t.Errorf("scalar fields: %+v", got)
+	}
+	if got.AuthorName != "Alice" || got.AuthorEmail != "alice@example.com" {
+		t.Errorf("author fields: %+v", got)
+	}
+	if got.AuthoredDate != "2026-01-02T00:00:00Z" {
+		t.Errorf("AuthoredDate: %q", got.AuthoredDate)
+	}
+	if got.CommitterName != "Bob" || got.CommitterEmail != "bob@example.com" {
+		t.Errorf("committer fields: %+v", got)
+	}
+	if got.CommittedDate != "2026-01-03T00:00:00Z" {
+		t.Errorf("CommittedDate: %q", got.CommittedDate)
+	}
+	if got.CreatedAt != "2026-01-04T00:00:00Z" {
+		t.Errorf("CreatedAt: %q", got.CreatedAt)
+	}
+	if got.Message != "full message" {
+		t.Errorf("Message: %q", got.Message)
+	}
+	if len(got.ParentIDs) != 2 || got.ParentIDs[0] != "p1" || got.ParentIDs[1] != "p2" {
+		t.Errorf("ParentIDs: %v", got.ParentIDs)
+	}
+	// Verify the base type does not contain a WebURL field by checking JSON output.
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "web_url") {
+		t.Errorf("CommitOutput JSON must not contain web_url (belongs to groupreleases variant): %s", raw)
+	}
+}
+
 // TestNewAuthorOutputFromBasicUser verifies the release-author converter
 // copies every field of a BasicUser verbatim.
 func TestNewAuthorOutputFromBasicUser(t *testing.T) {

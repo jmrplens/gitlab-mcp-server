@@ -5,6 +5,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// actionDeployKeyListUserProject is the canonical action name for listing deploy
+// keys across a user's projects. It appears in ActionSpecs, deployKeyDescription,
+// and deployKeyAliases so is extracted here to prevent S1192 string duplication.
+const actionDeployKeyListUserProject = "deploy_key_list_user_project"
+
 // ActionSpecs returns canonical specs for deploy key actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -16,7 +21,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		deployKeyUpdateSpec("deploy_key_enable", toolutil.RouteAction(client, Enable), "gitlab_deploy_key_enable"),
 		deployKeyReadSpec("deploy_key_list_all", toolutil.RouteAction(client, ListAll), "gitlab_deploy_key_list_all"),
 		deployKeyCreateSpec("deploy_key_add_instance", toolutil.RouteAction(client, AddInstance), "gitlab_deploy_key_add_instance"),
-		deployKeyReadSpec("deploy_key_list_user_project", toolutil.RouteAction(client, ListUserProject), "gitlab_deploy_key_list_user_project"),
+		deployKeyReadSpec(actionDeployKeyListUserProject, toolutil.RouteAction(client, ListUserProject), "gitlab_deploy_key_list_user_project"),
 	}
 }
 
@@ -102,7 +107,7 @@ func deployKeyDescription(actionName string) string {
 		return "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of gitlab_deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project."
 	case "deploy_key_add_instance":
 		return "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable."
-	case "deploy_key_list_user_project":
+	case actionDeployKeyListUserProject:
 		return "List the deploy keys across a user's projects (admin only) with ordering and pagination. Returns: deploy keys with id, title, fingerprint, can_push, expiry, and pagination metadata. See also: gitlab_deploy_key_list_project, gitlab_deploy_key_get, gitlab_get_user."
 	default:
 		return ""
@@ -127,7 +132,7 @@ func deployKeyAliases(actionName string) []string {
 		return []string{"list all instance deploy keys", "all ssh deploy keys", "instance-wide deploy keys", "list every deploy key"}
 	case "deploy_key_add_instance":
 		return []string{"add instance deploy key", "create instance deploy key", "new instance deploy key", "register instance deploy key"}
-	case "deploy_key_list_user_project":
+	case actionDeployKeyListUserProject:
 		return []string{"list user project deploy keys", "user project deploy keys", "show user project deploy keys", "browse user project deploy keys"}
 	default:
 		return nil

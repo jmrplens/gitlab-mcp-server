@@ -113,3 +113,111 @@ func NewLineRangeOutput(lr *gl.LineRange) *LineRangeOutput {
 	}
 	return out
 }
+
+// NoteOutput mirrors every field of gl.Note as returned by the REST Notes API
+// (notes on merge requests, issues, snippets, etc.). It is the canonical shared
+// output shape for standalone note tools (mrnotes, issuenotes). Field order and
+// JSON tags are locked; any change is a breaking wire-format change.
+type NoteOutput struct {
+	HintableOutput
+	ID           int64               `json:"id"`
+	Body         string              `json:"body"`
+	Author       *NoteUserOutput     `json:"author,omitempty"`
+	Attachment   string              `json:"attachment,omitempty"`
+	Title        string              `json:"title,omitempty"`
+	FileName     string              `json:"file_name,omitempty"`
+	CreatedAt    string              `json:"created_at"`
+	UpdatedAt    string              `json:"updated_at"`
+	ExpiresAt    string              `json:"expires_at,omitempty"`
+	System       bool                `json:"system"`
+	Internal     bool                `json:"internal"`
+	Resolvable   bool                `json:"resolvable,omitempty"`
+	Resolved     bool                `json:"resolved,omitempty"`
+	ResolvedAt   string              `json:"resolved_at,omitempty"`
+	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
+	NoteableType string              `json:"noteable_type,omitempty"`
+	NoteableID   int64               `json:"noteable_id,omitempty"`
+	NoteableIID  int64               `json:"noteable_iid,omitempty"`
+	CommitID     string              `json:"commit_id,omitempty"`
+	Type         string              `json:"type,omitempty"`
+	Position     *NotePositionOutput `json:"position,omitempty"`
+	ProjectID    int64               `json:"project_id,omitempty"`
+	Confidential bool                `json:"confidential"`
+}
+
+// NoteOutputFromGitLab converts a [gl.Note] to the canonical [NoteOutput]
+// shape used by standalone note tools (mrnotes, issuenotes). Timestamps are
+// formatted as RFC 3339 strings. The Confidential field mirrors n.Internal
+// following the locked 1:1 audit policy for MR/issue notes.
+func NoteOutputFromGitLab(n *gl.Note) NoteOutput {
+	out := NoteOutput{
+		ID:           n.ID,
+		Body:         n.Body,
+		Author:       NewNoteUserOutputFromAuthor(n.Author),
+		Attachment:   n.Attachment,
+		Title:        n.Title,
+		FileName:     n.FileName,
+		System:       n.System,
+		Internal:     n.Internal,
+		Resolvable:   n.Resolvable,
+		Resolved:     n.Resolved,
+		ResolvedBy:   NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
+		NoteableType: n.NoteableType,
+		NoteableID:   n.NoteableID,
+		NoteableIID:  n.NoteableIID,
+		CommitID:     n.CommitID,
+		Type:         string(n.Type),
+		Position:     NewNotePositionOutput(n.Position),
+		ProjectID:    n.ProjectID,
+		Confidential: n.Internal,
+	}
+	out.CreatedAt = FormatTimePtr(n.CreatedAt)
+	out.UpdatedAt = FormatTimePtr(n.UpdatedAt)
+	out.ExpiresAt = FormatTimePtr(n.ExpiresAt)
+	out.ResolvedAt = FormatTimePtr(n.ResolvedAt)
+	return out
+}
+
+// DiscussionThreadNoteOutput mirrors every field of gl.Note as it appears
+// within a REST discussion thread (mrdiscussions, commitdiscussions). The shape
+// differs from [NoteOutput] in omitempty semantics: UpdatedAt carries omitempty
+// (absent on notes created without an update), while Resolved and Resolvable
+// are always emitted (never omitted) because thread resolution state is always
+// meaningful. Field order and JSON tags are locked.
+type DiscussionThreadNoteOutput struct {
+	HintableOutput
+	ID           int64               `json:"id"`
+	Body         string              `json:"body"`
+	Author       *NoteUserOutput     `json:"author,omitempty"`
+	Attachment   string              `json:"attachment,omitempty"`
+	Title        string              `json:"title,omitempty"`
+	FileName     string              `json:"file_name,omitempty"`
+	CreatedAt    string              `json:"created_at"`
+	UpdatedAt    string              `json:"updated_at,omitempty"`
+	ExpiresAt    string              `json:"expires_at,omitempty"`
+	Resolved     bool                `json:"resolved"`
+	Resolvable   bool                `json:"resolvable"`
+	ResolvedAt   string              `json:"resolved_at,omitempty"`
+	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
+	System       bool                `json:"system"`
+	Internal     bool                `json:"internal"`
+	Confidential bool                `json:"confidential"`
+	Type         string              `json:"type,omitempty"`
+	NoteableType string              `json:"noteable_type,omitempty"`
+	NoteableID   int64               `json:"noteable_id,omitempty"`
+	NoteableIID  int64               `json:"noteable_iid,omitempty"`
+	CommitID     string              `json:"commit_id,omitempty"`
+	Position     *NotePositionOutput `json:"position,omitempty"`
+	ProjectID    int64               `json:"project_id,omitempty"`
+}
+
+// DiscussionThreadOutput mirrors a gl.Discussion thread with its full note
+// payloads as returned by the REST Discussions API (mrdiscussions,
+// commitdiscussions). Notes are pointer elements because the SDK returns
+// []*gl.Note and individual notes may be nil in edge cases.
+type DiscussionThreadOutput struct {
+	HintableOutput
+	ID             string                        `json:"id"`
+	IndividualNote bool                          `json:"individual_note"`
+	Notes          []*DiscussionThreadNoteOutput `json:"notes"`
+}

@@ -20,36 +20,11 @@ type CreateInput struct {
 	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise."`
 }
 
-// Output represents a note (comment) on an issue. Per the 1:1 audit policy it
-// mirrors every field of gl.Note, surfacing the full author / resolved_by /
-// position sub-objects. Per the locked canonical-key convention the full
-// *NoteUserOutput author object is surfaced on the canonical `author` key.
-type Output struct {
-	toolutil.HintableOutput
-	ID           int64                        `json:"id"`
-	Body         string                       `json:"body"`
-	Author       *toolutil.NoteUserOutput     `json:"author,omitempty"`
-	Attachment   string                       `json:"attachment,omitempty"`
-	Title        string                       `json:"title,omitempty"`
-	FileName     string                       `json:"file_name,omitempty"`
-	CreatedAt    string                       `json:"created_at"`
-	UpdatedAt    string                       `json:"updated_at"`
-	ExpiresAt    string                       `json:"expires_at,omitempty"`
-	System       bool                         `json:"system"`
-	Internal     bool                         `json:"internal"`
-	Resolvable   bool                         `json:"resolvable,omitempty"`
-	Resolved     bool                         `json:"resolved,omitempty"`
-	ResolvedAt   string                       `json:"resolved_at,omitempty"`
-	ResolvedBy   *toolutil.NoteUserOutput     `json:"resolved_by,omitempty"`
-	NoteableType string                       `json:"noteable_type,omitempty"`
-	NoteableID   int64                        `json:"noteable_id,omitempty"`
-	NoteableIID  int64                        `json:"noteable_iid,omitempty"`
-	CommitID     string                       `json:"commit_id,omitempty"`
-	Type         string                       `json:"type,omitempty"`
-	Position     *toolutil.NotePositionOutput `json:"position,omitempty"`
-	ProjectID    int64                        `json:"project_id,omitempty"`
-	Confidential bool                         `json:"confidential"`
-}
+// Output is an alias of [toolutil.NoteOutput], the canonical REST note shape
+// shared between issuenotes and mrnotes. Field layout and JSON tags are
+// defined in toolutil; see [toolutil.NoteOutputFromGitLab] for the 1:1 audit
+// conversion logic.
+type Output = toolutil.NoteOutput
 
 // ListInput defines parameters for listing issue notes.
 type ListInput struct {
@@ -90,38 +65,11 @@ type DeleteInput struct {
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to delete,required"`
 }
 
-// ToOutput converts a GitLab API [gl.Note] to the MCP tool output format. Per
-// the locked canonical-key convention it surfaces the full author object on the
-// canonical `author` key, while additively surfacing the resolved_by / position
-// sub-objects and every other gl.Note field (1:1 audit policy). Timestamps are
-// formatted as RFC 3339 strings.
+// ToOutput converts a GitLab API [gl.Note] to the MCP tool [Output] shape.
+// Delegates to [toolutil.NoteOutputFromGitLab] which owns the 1:1 audit
+// field mapping and timestamp formatting.
 func ToOutput(n *gl.Note) Output {
-	out := Output{
-		ID:           n.ID,
-		Body:         n.Body,
-		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
-		Attachment:   n.Attachment,
-		Title:        n.Title,
-		FileName:     n.FileName,
-		System:       n.System,
-		Internal:     n.Internal,
-		Resolvable:   n.Resolvable,
-		Resolved:     n.Resolved,
-		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
-		NoteableType: n.NoteableType,
-		NoteableID:   n.NoteableID,
-		NoteableIID:  n.NoteableIID,
-		CommitID:     n.CommitID,
-		Type:         string(n.Type),
-		Position:     toolutil.NewNotePositionOutput(n.Position),
-		ProjectID:    n.ProjectID,
-		Confidential: n.Internal,
-	}
-	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
-	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
-	return out
+	return toolutil.NoteOutputFromGitLab(n)
 }
 
 // Create adds a new comment to the specified issue in a GitLab

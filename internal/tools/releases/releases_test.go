@@ -657,7 +657,7 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		Author:          &toolutil.AuthorOutput{Username: "admin"},
 		CreatedAt:       "2026-03-02T10:00:00Z",
 		ReleasedAt:      "2026-03-02T10:00:00Z",
-		Commit:          &CommitOutput{ID: "abc123"},
+		Commit:          &toolutil.CommitOutput{ID: "abc123"},
 		UpcomingRelease: true,
 		Milestones:      []*toolutil.MilestoneOutput{{Title: "m1"}, {Title: "m2"}},
 	})

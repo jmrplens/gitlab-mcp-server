@@ -231,3 +231,47 @@ func NewAuthorOutputFromBasicUser(u gl.BasicUser) AuthorOutput {
 		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
 }
+
+// CommitOutput is the documented reference subset of the commit object
+// surfaced on a release (per doc/api/releases/_index.md). The documented
+// release commit JSON surfaces id, short_id, title, created_at, parent_ids,
+// message, author_name, author_email, authored_date, committer_name,
+// committer_email, committed_date. SDK-only commit fields (stats, status,
+// project_id, web_url) are not part of the documented project-release commit
+// subset and are intentionally omitted from this base type. The group-releases
+// endpoint adds web_url; consumers that need it embed this type and add the
+// extra field.
+type CommitOutput struct {
+	ID             string   `json:"id"`
+	ShortID        string   `json:"short_id"`
+	Title          string   `json:"title"`
+	AuthorName     string   `json:"author_name"`
+	AuthorEmail    string   `json:"author_email"`
+	AuthoredDate   string   `json:"authored_date,omitempty"`
+	CommitterName  string   `json:"committer_name"`
+	CommitterEmail string   `json:"committer_email"`
+	CommittedDate  string   `json:"committed_date,omitempty"`
+	CreatedAt      string   `json:"created_at,omitempty"`
+	Message        string   `json:"message"`
+	ParentIDs      []string `json:"parent_ids,omitempty"`
+}
+
+// NewCommitOutput converts a gl.Commit into the canonical-key commit object,
+// returning nil when the commit ID is empty (no commit associated with the
+// release). Timestamps are formatted as RFC 3339 strings via FormatTimePtr.
+func NewCommitOutput(c gl.Commit) *CommitOutput {
+	if c.ID == "" {
+		return nil
+	}
+	return &CommitOutput{
+		ID: c.ID, ShortID: c.ShortID, Title: c.Title,
+		AuthorName: c.AuthorName, AuthorEmail: c.AuthorEmail,
+		AuthoredDate:   FormatTimePtr(c.AuthoredDate),
+		CommitterName:  c.CommitterName,
+		CommitterEmail: c.CommitterEmail,
+		CommittedDate:  FormatTimePtr(c.CommittedDate),
+		CreatedAt:      FormatTimePtr(c.CreatedAt),
+		Message:        c.Message,
+		ParentIDs:      c.ParentIDs,
+	}
+}
