@@ -8,9 +8,12 @@ package suite
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"testing"
 	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/vulnerabilities"
@@ -142,20 +145,23 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 	// that job pulls a heavy, version-pinned analyzer image
 	// (registry.gitlab.com/security-products/semgrep:<major>) which is unreliable
 	// on the ephemeral Docker runner: when the pull fails the job's default
-	// `allow_failure: true` leaves the pipeline "success" with no security
-	// report, so the lifecycle silently finds zero vulnerabilities. Instead we
-	// publish a deterministic, schema-valid `gl-sast-report.json` as an
-	// `artifacts:reports:sast` artifact from a tiny job on the already-pre-pulled
-	// alpine image. GitLab ingests it into the project Vulnerability Report
-	// exactly as it would a real scan (Ultimate, default-branch pipeline), which
-	// is what exercises gitlab_vulnerability list/get/resolve/etc.
+	// `allow_failure: true` left the pipeline "success" with no security report,
+	// so the lifecycle silently found zero vulnerabilities.
+	//
+	// Instead the pipeline *generates* a deterministic, schema-valid
+	// gl-sast-report.json in-job and publishes it as an artifacts:reports:sast
+	// report. The job runs on the pre-pulled alpine image with GIT_STRATEGY:none
+	// (no repo clone — the report is self-contained), so it depends on nothing
+	// the ephemeral runner might fail to pull or fetch. GitLab ingests the report
+	// into the project Vulnerability Report exactly as a real scan would
+	// (Ultimate, default-branch pipeline), which is what exercises
+	// gitlab_vulnerability list/get/resolve/etc.
 
 	// 1. Commit the intentionally vulnerable source the report points at. It is
-	// not scanned here, but keeps the fixture self-documenting and gives the
-	// report's `location.file` a real target.
+	// not scanned (GIT_STRATEGY:none), but keeps the fixture self-documenting and
+	// gives the report's `location.file` a real target in the repo.
 	const vulnerablePy = `# E2E fixture: intentionally vulnerable code referenced by the SAST report.
 import os
-import subprocess
 import sqlite3
 db = sqlite3.connect(":memory:")
 cur = db.cursor()
@@ -177,70 +183,13 @@ result = eval(expr)
 		vulnerablePy,
 		"add intentionally vulnerable code for E2E SAST fixture")
 
-	// 2. Commit a deterministic SAST report (GitLab secure-report schema 15.x)
-	// with three CRITICAL findings (SQLi, command injection, eval) pointing at
-	// app.py. GitLab ingests this on the default-branch pipeline.
-	const sastReport = `{
-  "version": "15.0.6",
-  "scan": {
-    "analyzer": {"id": "e2e-fixture", "name": "E2E Fixture", "version": "1.0.0", "vendor": {"name": "gitlab-mcp-server"}},
-    "scanner": {"id": "e2e-fixture", "name": "E2E Fixture", "version": "1.0.0", "vendor": {"name": "gitlab-mcp-server"}},
-    "type": "sast",
-    "start_time": "2026-01-01T00:00:00",
-    "end_time": "2026-01-01T00:00:01",
-    "status": "success"
-  },
-  "vulnerabilities": [
-    {
-      "id": "e2e-sast-sqli-0001",
-      "category": "sast",
-      "name": "SQL Injection",
-      "message": "SQL Injection",
-      "description": "User input is concatenated into a SQL query (CWE-89).",
-      "severity": "Critical",
-      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
-      "location": {"file": "app.py", "start_line": 10, "end_line": 10},
-      "identifiers": [
-        {"type": "cwe", "name": "CWE-89", "value": "89", "url": "https://cwe.mitre.org/data/definitions/89.html"}
-      ]
-    },
-    {
-      "id": "e2e-sast-cmdi-0002",
-      "category": "sast",
-      "name": "OS Command Injection",
-      "message": "OS Command Injection",
-      "description": "User input flows into os.system (CWE-78).",
-      "severity": "Critical",
-      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
-      "location": {"file": "app.py", "start_line": 14, "end_line": 14},
-      "identifiers": [
-        {"type": "cwe", "name": "CWE-78", "value": "78", "url": "https://cwe.mitre.org/data/definitions/78.html"}
-      ]
-    },
-    {
-      "id": "e2e-sast-eval-0003",
-      "category": "sast",
-      "name": "Code Injection",
-      "message": "Code Injection",
-      "description": "User input is passed to eval (CWE-95).",
-      "severity": "Critical",
-      "scanner": {"id": "e2e-fixture", "name": "E2E Fixture"},
-      "location": {"file": "app.py", "start_line": 18, "end_line": 18},
-      "identifiers": [
-        {"type": "cwe", "name": "CWE-95", "value": "95", "url": "https://cwe.mitre.org/data/definitions/95.html"}
-      ]
-    }
-  ]
-}
-`
-	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
-		"gl-sast-report.json",
-		sastReport,
-		"add deterministic SAST report fixture")
-
-	// 3. Commit a .gitlab-ci.yml whose single job publishes the committed report
-	// as the pipeline's SAST security report. Uses the pre-pulled alpine image so
-	// no analyzer pull is needed; `when: always` ensures the report is uploaded.
+	// 2. Commit a .gitlab-ci.yml whose single job writes a deterministic SAST
+	// report (GitLab secure-report schema 15.x, three CRITICAL findings:
+	// SQLi/command-injection/eval) and publishes it as the pipeline's SAST
+	// security report. printf with a single-quoted minified JSON payload avoids
+	// heredoc/indentation pitfalls; the JSON contains only double quotes so the
+	// single-quote wrapping is safe. `when: always` uploads the report even if a
+	// later step were to fail.
 	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
 		".gitlab-ci.yml",
 		`stages:
@@ -249,8 +198,12 @@ result = eval(expr)
 sast:
   stage: test
   image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
   script:
-    - test -f gl-sast-report.json
+    - |
+      printf '%s' '{"version":"15.0.6","scan":{"analyzer":{"id":"e2e-fixture","name":"E2E Fixture","version":"1.0.0","vendor":{"name":"gitlab-mcp-server"}},"scanner":{"id":"e2e-fixture","name":"E2E Fixture","version":"1.0.0","vendor":{"name":"gitlab-mcp-server"}},"type":"sast","start_time":"2026-01-01T00:00:00","end_time":"2026-01-01T00:00:01","status":"success"},"vulnerabilities":[{"id":"e2e-sast-sqli-0001","category":"sast","name":"SQL Injection","message":"SQL Injection","description":"User input concatenated into a SQL query (CWE-89).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":10,"end_line":10},"identifiers":[{"type":"cwe","name":"CWE-89","value":"89","url":"https://cwe.mitre.org/data/definitions/89.html"}]},{"id":"e2e-sast-cmdi-0002","category":"sast","name":"OS Command Injection","message":"OS Command Injection","description":"User input flows into os.system (CWE-78).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":14,"end_line":14},"identifiers":[{"type":"cwe","name":"CWE-78","value":"78","url":"https://cwe.mitre.org/data/definitions/78.html"}]},{"id":"e2e-sast-eval-0003","category":"sast","name":"Code Injection","message":"Code Injection","description":"User input passed to eval (CWE-95).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":18,"end_line":18},"identifiers":[{"type":"cwe","name":"CWE-95","value":"95","url":"https://cwe.mitre.org/data/definitions/95.html"}]}]}' > gl-sast-report.json
+      echo "wrote gl-sast-report.json ($(wc -c < gl-sast-report.json) bytes)"
   artifacts:
     when: always
     reports:
@@ -324,7 +277,10 @@ sast:
 	}
 	requireNoError(t, listErr, "vulnerability list for lifecycle")
 	if len(listed.Vulnerabilities) == 0 {
-		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s) and 90s of polling; the committed gl-sast-report.json was not ingested — verify the pipeline 'sast' job uploaded the artifacts:reports:sast report and the instance is Ultimate (the project Vulnerability Report is Ultimate-only)",
+		// Dump the pipeline's job statuses and the trace of any failed job so a
+		// fixture/runner regression is diagnosable from the test log alone.
+		logPipelineJobDiagnostics(ctx, t, proj.ID, pipelineID)
+		t.Fatalf("no vulnerabilities reported for project %s after pipeline %d (status: %s) and 90s of polling; the SAST report was not ingested — see the job diagnostics above, and verify the 'sast' job uploaded the artifacts:reports:sast report and the instance is Ultimate (the project Vulnerability Report is Ultimate-only)",
 			proj.Path, pipelineID, pipelineStatus)
 	}
 	var vulnGID string
@@ -404,4 +360,41 @@ sast:
 		t.Logf("Pipeline security summary: SAST=%v DAST=%v DepScanning=%v ContainerScanning=%v",
 			out.Sast != nil, out.Dast != nil, out.DependencyScanning != nil, out.ContainerScanning != nil)
 	})
+}
+
+// logPipelineJobDiagnostics logs every job of a pipeline (name, stage, status,
+// allow_failure) and the trace tail of any failed job. It is used when the
+// vulnerability lifecycle finds no findings so a runner/fixture regression
+// (image pull, artifact upload, report generation) is diagnosable from the test
+// log alone. All failures are logged, never fatal — this is best-effort
+// diagnostics around an already-failing assertion.
+func logPipelineJobDiagnostics(ctx context.Context, t *testing.T, projectID, pipelineID int64) {
+	t.Helper()
+	jobs, _, err := sess.glClient.GL().Jobs.ListPipelineJobs(projectID, pipelineID, nil, gl.WithContext(ctx))
+	if err != nil {
+		t.Logf("diagnostics: could not list jobs for pipeline %d: %v", pipelineID, err)
+		return
+	}
+	for _, j := range jobs {
+		t.Logf("diagnostics: job id=%d name=%q stage=%q status=%q allow_failure=%v",
+			j.ID, j.Name, j.Stage, j.Status, j.AllowFailure)
+		if j.Status != "failed" {
+			continue
+		}
+		trace, _, terr := sess.glClient.GL().Jobs.GetTraceFile(projectID, j.ID, gl.WithContext(ctx))
+		if terr != nil {
+			t.Logf("diagnostics: could not fetch trace for job %d: %v", j.ID, terr)
+			continue
+		}
+		raw, rerr := io.ReadAll(trace)
+		if rerr != nil {
+			t.Logf("diagnostics: could not read trace for job %d: %v", j.ID, rerr)
+			continue
+		}
+		out := string(raw)
+		if len(out) > 2000 {
+			out = "…" + out[len(out)-2000:]
+		}
+		t.Logf("diagnostics: job %d (%s) trace tail:\n%s", j.ID, j.Name, out)
+	}
 }
