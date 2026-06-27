@@ -109,7 +109,12 @@ func filterActionSpecGroupsByTier(groups []ActionSpecGroup, tier edition.Tier) [
 		kept := make([]toolutil.ActionSpec, 0, len(group.Actions))
 		for _, spec := range group.Actions {
 			if edition.TierFromEdition(spec.Edition) <= tier {
-				kept = append(kept, pruneSpecFieldsByTier(spec, tier))
+				pruned := pruneSpecFieldsByTier(spec, tier)
+				// Apply the default scope-parameter guidance after tier pruning
+				// so the guidance set never references a field that the tier
+				// filter has stripped from the input schema.
+				pruned = toolutil.FillScopeParameterGuidanceSingle(pruned)
+				kept = append(kept, pruned)
 			}
 		}
 		if len(kept) == 0 {

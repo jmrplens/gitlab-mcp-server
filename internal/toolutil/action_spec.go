@@ -339,6 +339,170 @@ func ActionSpecsToMap(specs []ActionSpec) ActionMap {
 	return routes
 }
 
+// FillScopeParameterGuidance returns a copy of specs with default
+// ParameterGuidance entries added for every scope-suggestive parameter
+// (project_id, group_id, user_id, instance_id, namespace_id, milestone_id,
+// epic_id, ref, branch, tag, sha, path, iid) present in each spec's input
+// schema that lacks an explicit guidance entry. The defaults use the
+// canonical SemanticRole for each scope name and the standard
+// "Project ID or URL-encoded path…" / "Branch or tag name…" ValueSource text.
+//
+// Packages call this from their ActionSpecs() function before returning so
+// that the discovery auditor's missing_parameter_guidance check is satisfied
+// without each action having to hand-write guidance for every common scope
+// parameter. Explicit guidance entries on a spec are preserved unchanged
+// (they take precedence over the defaults).
+func FillScopeParameterGuidance(specs []ActionSpec) []ActionSpec {
+	if len(specs) == 0 {
+		return specs
+	}
+	out := make([]ActionSpec, len(specs))
+	for i, spec := range specs {
+		out[i] = FillScopeParameterGuidanceSingle(spec)
+	}
+	return out
+}
+
+// FillScopeParameterGuidanceSingle is the single-spec form of
+// [FillScopeParameterGuidance]. The central tier filter calls this after
+// pruning tier-restricted fields from the input schema so that the default
+// guidance set never references a field the filter has stripped. Existing
+// guidance entries whose parameter has been removed from the schema are
+// dropped, while guidance for scope-suggestive parameters still present in
+// the schema is added when missing. Explicit guidance entries written by
+// package authors are preserved unchanged.
+func FillScopeParameterGuidanceSingle(spec ActionSpec) ActionSpec {
+	props, _ := spec.Route.InputSchema["properties"].(map[string]any)
+	guidance := spec.ParameterGuidance
+	changed := false
+
+	// Drop guidance entries that no longer correspond to a schema property
+	// (e.g. after tier pruning removed the parameter).
+	if len(guidance) > 0 {
+		for key := range guidance {
+			if _, ok := props[key]; !ok {
+				delete(guidance, key)
+				changed = true
+			}
+		}
+	}
+
+	// Add guidance for scope-suggestive parameters that lack an entry.
+	if len(props) > 0 {
+		for name := range props {
+			if !isScopeSuggestiveParameterName(name) {
+				continue
+			}
+			if _, ok := guidance[name]; ok {
+				continue
+			}
+			if guidance == nil {
+				guidance = map[string]ParameterGuidance{}
+			}
+			guidance[name] = defaultScopeParameterGuidance(name)
+			changed = true
+		}
+	}
+
+	if !changed {
+		return spec
+	}
+	spec.ParameterGuidance = guidance
+	return spec
+}
+
+// isScopeSuggestiveParameterName mirrors the audit heuristic for parameter
+// names that commonly confuse models because the same parameter type means
+// different scopes across GitLab APIs.
+func isScopeSuggestiveParameterName(name string) bool {
+	switch strings.ToLower(name) {
+	case "ref", "branch", "tag", "sha", "path", "iid":
+		return true
+	}
+	switch name {
+	case "project_id", "group_id", "user_id", "instance_id",
+		"namespace_id", "milestone_id", "epic_id":
+		return true
+	}
+	return false
+}
+
+func defaultScopeParameterGuidance(name string) ParameterGuidance {
+	switch name {
+	case "project_id":
+		return ParameterGuidance{
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or URL-encoded path (e.g. \"group/project\").",
+			ExampleBinding: `params.project_id:"group/project"`,
+		}
+	case "group_id":
+		return ParameterGuidance{
+			SemanticRole:   "scope_group",
+			ValueSource:    "Group ID or URL-encoded path (e.g. \"my-group\" or \"my-group/sub\").",
+			ExampleBinding: `params.group_id:"my-group"`,
+		}
+	case "user_id":
+		return ParameterGuidance{
+			SemanticRole: "scope_user",
+			ValueSource:  "Numeric user ID (the global GitLab user ID, not a username).",
+		}
+	case "instance_id":
+		return ParameterGuidance{
+			SemanticRole: "scope_instance",
+			ValueSource:  "Instance-level identifier (admin endpoint; not project- or group-scoped).",
+		}
+	case "namespace_id":
+		return ParameterGuidance{
+			SemanticRole:   "scope_namespace",
+			ValueSource:    "Namespace ID (numeric) of the target group or user namespace.",
+			ExampleBinding: `params.namespace_id:42`,
+		}
+	case "milestone_id":
+		return ParameterGuidance{
+			SemanticRole:   "milestone_id",
+			ValueSource:    "Milestone ID (project- or group-scoped, depending on the endpoint).",
+			ExampleBinding: `params.milestone_id:1`,
+		}
+	case "epic_id":
+		return ParameterGuidance{
+			SemanticRole: "epic_id",
+			ValueSource:  "Group-scoped epic IID (integer) within the parent group.",
+		}
+	case "ref":
+		return ParameterGuidance{
+			SemanticRole:     "branch_or_tag",
+			ValueSource:      "Branch or tag name (without the \"refs/heads/\" or \"refs/tags/\" prefix).",
+			CommonConfusions: []string{"Use \"sha\" for an exact commit hash, not \"ref\"."},
+		}
+	case "branch":
+		return ParameterGuidance{
+			SemanticRole: "branch_name",
+			ValueSource:  "Branch name (without the \"refs/heads/\" prefix).",
+		}
+	case "tag":
+		return ParameterGuidance{
+			SemanticRole: "tag_name",
+			ValueSource:  "Tag name (without the \"refs/tags/\" prefix).",
+		}
+	case "sha":
+		return ParameterGuidance{
+			SemanticRole: "commit_sha",
+			ValueSource:  "Full or short commit SHA that uniquely identifies a commit.",
+		}
+	case "path":
+		return ParameterGuidance{
+			SemanticRole: "path_component",
+			ValueSource:  "Path component relative to the project or repository root (no leading slash).",
+		}
+	case "iid":
+		return ParameterGuidance{
+			SemanticRole: "scope_iid",
+			ValueSource:  "Project- or group-scoped internal ID (IID), not the global ID.",
+		}
+	}
+	return ParameterGuidance{}
+}
+
 // ActionSpecsToMapWithError converts canonical action specs to a legacy ActionMap.
 func ActionSpecsToMapWithError(specs []ActionSpec) (ActionMap, error) {
 	routes := make(ActionMap, len(specs))

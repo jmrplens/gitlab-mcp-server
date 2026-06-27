@@ -1086,3 +1086,104 @@ func TestSchemaHasPropertyPathFrom_NilChildProperty(t *testing.T) {
 		t.Error("schemaHasPropertyPathFrom(nil child) = true, want false")
 	}
 }
+
+// TestFillScopeParameterGuidanceSingle_AddsDefaultsForScopeParams pins the
+// helper used by the central tier filter: every scope-suggestive parameter
+// present in the schema gets a default guidance entry, and any pre-existing
+// guidance whose key was removed from the schema (e.g. by tier pruning) is
+// dropped so validation cannot fail with "guidance for unknown parameter".
+func TestFillScopeParameterGuidanceSingle_AddsDefaultsForScopeParams(t *testing.T) {
+	cases := []struct {
+		name        string
+		schemaProps map[string]any
+		existing    map[string]ParameterGuidance
+		wantRoles   map[string]string
+		mustDrop    []string
+	}{
+		{
+			name: "adds scope_project for project_id",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"title":      map[string]any{"type": "string"},
+			},
+			existing:  nil,
+			wantRoles: map[string]string{"project_id": "scope_project"},
+		},
+		{
+			name: "preserves explicit guidance and adds missing scope entries",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"group_id":   map[string]any{"type": "string"},
+				"ref":        map[string]any{"type": "string"},
+			},
+			existing: map[string]ParameterGuidance{
+				"project_id": {SemanticRole: "custom_role"},
+			},
+			wantRoles: map[string]string{
+				"project_id": "custom_role",
+				"group_id":   "scope_group",
+				"ref":        "branch_or_tag",
+			},
+		},
+		{
+			name: "drops stale guidance for params missing from schema",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+			},
+			existing: map[string]ParameterGuidance{
+				"epic_id": {SemanticRole: "stale"},
+			},
+			wantRoles: map[string]string{"project_id": "scope_project"},
+			mustDrop:  []string{"epic_id"},
+		},
+		{
+			name: "ignores non-scope-suggestive parameters",
+			schemaProps: map[string]any{
+				"name":  map[string]any{"type": "string"},
+				"color": map[string]any{"type": "string"},
+			},
+			existing:  nil,
+			wantRoles: map[string]string{},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := ActionSpec{
+				Route: ActionRoute{
+					InputSchema: map[string]any{
+						"type":       "object",
+						"properties": tc.schemaProps,
+					},
+				},
+				ParameterGuidance: tc.existing,
+			}
+			out := FillScopeParameterGuidanceSingle(spec)
+			for _, key := range tc.mustDrop {
+				if _, ok := out.ParameterGuidance[key]; ok {
+					t.Errorf("guidance entry %q should have been dropped", key)
+				}
+			}
+			for key, role := range tc.wantRoles {
+				got, ok := out.ParameterGuidance[key]
+				if !ok {
+					t.Errorf("missing guidance for %q", key)
+					continue
+				}
+				if got.SemanticRole != role {
+					t.Errorf("guidance[%q].SemanticRole = %q, want %q", key, got.SemanticRole, role)
+				}
+			}
+		})
+	}
+}
+
+// TestFillScopeParameterGuidance_AcceptsEmptyInput makes sure the slice
+// form short-circuits on nil/empty input instead of panicking.
+func TestFillScopeParameterGuidance_AcceptsEmptyInput(t *testing.T) {
+	if got := FillScopeParameterGuidance(nil); got != nil {
+		t.Errorf("FillScopeParameterGuidance(nil) = %v, want nil", got)
+	}
+	if got := FillScopeParameterGuidance([]ActionSpec{}); len(got) != 0 {
+		t.Errorf("FillScopeParameterGuidance([]) = %v, want empty", got)
+	}
+}
