@@ -151,25 +151,27 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	}
 	p.mu.RUnlock()
 
-	// Slow path: write lock to create new entry.
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.getOrCreateLocked(key, token, gitlabURL)
+	// Slow path: build the new client and server WITHOUT holding p.mu. Client
+	// creation, tier/scope detection (entryConfig), and the factory all perform
+	// GitLab network I/O; doing that under the write lock would serialize every
+	// caller behind a single slow round-trip and can stall the whole pool when an
+	// instance is slow or unreachable. The freshly built entry is committed below
+	// under the lock with a double-check, so concurrent builders for the same key
+	// converge on one stored entry.
+	entry, err := p.buildEntry(token, gitlabURL)
+	if err != nil {
+		return nil, err
+	}
+	return p.insertEntry(key, token, entry), nil
 }
 
-// getOrCreateLocked returns an existing server or creates a new one while p.mu is held.
-func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Server, error) {
-	if server, ok := p.existingServerLocked(key); ok {
-		return server, nil
-	}
+// buildEntry creates the GitLab client, resolves the per-entry configuration,
+// and builds the MCP server for a new pool key. It performs network I/O and must
+// be called without holding p.mu. The returned entry has no LRU element or
+// timestamps yet; insertEntry finalizes those under the lock.
+func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	if p.factory == nil {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
-	}
-
-	p.metrics.Misses.Add(1)
-
-	if p.lru.Len() >= p.maxSize {
-		p.evictLRU()
 	}
 
 	client, err := gitlabclient.NewClientWithToken(
@@ -185,29 +187,51 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 	if err != nil {
 		return nil, fmt.Errorf("creating MCP server for pool: %w", err)
 	}
-	element := p.lru.PushFront(key)
-	now := time.Now()
-	p.entries[key] = &poolEntry{
-		server:        server,
-		client:        client,
-		serverConfig:  entryCfg,
-		element:       element,
-		createdAt:     now,
-		lastValidated: now,
+
+	return &poolEntry{
+		server:       server,
+		client:       client,
+		serverConfig: entryCfg,
+	}, nil
+}
+
+// insertEntry commits a freshly built entry under the write lock. If another
+// goroutine created an entry for the same key while this one was building, the
+// already-stored server is returned and the freshly built one is discarded — its
+// server holds no live sessions, mirroring [ServerPool.Close], which lets
+// servers expire naturally rather than terminating them.
+func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Server {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if server, ok := p.existingServerLocked(key); ok {
+		return server
 	}
+
+	p.metrics.Misses.Add(1)
+
+	if p.lru.Len() >= p.maxSize {
+		p.evictLRU()
+	}
+
+	now := time.Now()
+	entry.element = p.lru.PushFront(key)
+	entry.createdAt = now
+	entry.lastValidated = now
+	p.entries[key] = entry
 
 	slog.Info(
 		"server pool: created new entry",
 		"pool_size", len(p.entries),
-		"gitlab_url", entryCfg.GitLabURL,
-		"tier", entryCfg.Tier.String(),
-		"enterprise", entryCfg.Enterprise(),
+		"gitlab_url", entry.serverConfig.GitLabURL,
+		"tier", entry.serverConfig.Tier.String(),
+		"enterprise", entry.serverConfig.Enterprise(),
 		"tier_source", p.tierSource(),
-		"scopes_detected", entryCfg.TokenScopes != nil,
+		"scopes_detected", entry.serverConfig.TokenScopes != nil,
 		"token_suffix", tokenSuffix(token),
 	)
 
-	return server, nil
+	return entry.server
 }
 
 // existingServerLocked returns an existing server for key while p.mu is held.
