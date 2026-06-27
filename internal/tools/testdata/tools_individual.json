@@ -2437,6 +2437,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiration date in ISO 8601 format (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "key": {
@@ -2505,6 +2506,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiration date in ISO 8601 format (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "key": {
@@ -11744,6 +11746,7 @@
         },
         "expires_at": {
           "description": "Token expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "name": {
@@ -12836,6 +12839,7 @@
       "properties": {
         "expires_at": {
           "description": "Token expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "name": {
@@ -13558,6 +13562,7 @@
         },
         "expires_at": {
           "description": "Token expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "name": {
@@ -18376,6 +18381,7 @@
         },
         "expires_at": {
           "description": "Expiry date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "key": {
@@ -18456,6 +18462,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiry date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "key": {
@@ -19431,6 +19438,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiry date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "group_id": {
@@ -19529,6 +19537,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiry date (YYYY-MM-DD)",
+          "format": "date-time",
           "type": "string"
         },
         "name": {
@@ -40911,6 +40920,7 @@
         },
         "expires_at": {
           "description": "Expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -41387,6 +41397,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -41480,6 +41491,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -48578,6 +48590,7 @@
         },
         "expires_at": {
           "description": "Expiration date for the invitation (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -51582,6 +51595,7 @@
         },
         "expires_at": {
           "description": "Membership expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -51829,6 +51843,7 @@
         },
         "expires_at": {
           "description": "New membership expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -58847,6 +58862,7 @@
         },
         "expires_at": {
           "description": "Expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -59245,6 +59261,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiration date for the new token (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_id": {
@@ -59415,6 +59432,7 @@
       "properties": {
         "expires_at": {
           "description": "Share expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_access": {
@@ -59486,6 +59504,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiration date for the share (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_access": {
@@ -137885,6 +137904,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "token_id": {
@@ -137973,6 +137993,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         }
       },
@@ -143348,6 +143369,7 @@
         },
         "expires_at": {
           "description": "Expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "name": {
@@ -143783,6 +143805,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "project_id": {
@@ -143876,6 +143899,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiry date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "project_id": {
@@ -154557,6 +154581,7 @@
         },
         "expires_at": {
           "description": "Expiration date for the invitation (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "id": {
@@ -161472,6 +161497,7 @@
         },
         "expires_at": {
           "description": "Membership expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "member_role_id": {
@@ -161750,6 +161776,7 @@
         },
         "expires_at": {
           "description": "Membership expiration date (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "member_role_id": {
@@ -164166,6 +164193,7 @@
         },
         "expires_at": {
           "description": "Expiration date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "name": {
@@ -164564,6 +164592,7 @@
       "properties": {
         "expires_at": {
           "description": "New expiration date in YYYY-MM-DD format",
+          "format": "date",
           "type": "string"
         },
         "project_id": {
@@ -164736,6 +164765,7 @@
       "properties": {
         "expires_at": {
           "description": "Expiration date for the share (YYYY-MM-DD)",
+          "format": "date",
           "type": "string"
         },
         "group_access": {
@@ -191931,7 +191961,16 @@
           "type": "string"
         },
         "clear_status_after": {
-          "description": "Duration after which to clear status: 30_minutes | 3_hours | 8_hours | 1_day | 3_days | 7_days | 30_days",
+          "description": "Duration after which the status auto-clears: 30_minutes, 3_hours, 8_hours, 1_day, 3_days, 7_days, or 30_days.",
+          "enum": [
+            "30_minutes",
+            "3_hours",
+            "8_hours",
+            "1_day",
+            "3_days",
+            "7_days",
+            "30_days"
+          ],
           "type": "string"
         },
         "emoji": {

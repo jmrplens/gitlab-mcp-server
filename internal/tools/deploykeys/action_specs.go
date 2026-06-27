@@ -52,6 +52,12 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	options.IndividualTool.Description = deployKeyDescription(actionName)
+	if actionName == "deploy_key_add" || actionName == "deploy_key_add_instance" {
+		// GitLab deploy keys take a full ISO 8601 timestamp for expires_at
+		// (client-go *time.Time), unlike the date-only canonical default.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+			toolutil.SchemaFormatOverride("expires_at", "date-time"))
+	}
 	if actionName == "deploy_key_list_project" {
 		options.Usage = "Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested."
 	}

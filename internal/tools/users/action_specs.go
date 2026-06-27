@@ -485,11 +485,17 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 		}
 	case "gitlab_set_user_status":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#set-user-status
-		// SDK: AvailabilityValue consts: not_set, busy (types.go)
+		// SDK: AvailabilityValue consts: not_set, busy (types.go);
+		// ClearStatusAfterValue consts: 30_minutes, 3_hours, 8_hours, 1_day,
+		// 3_days, 7_days, 30_days (types.go)
 		return []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("availability", map[string]any{
 				"enum":        []any{"not_set", "busy"},
 				"description": "User availability: not_set (clear busy state) or busy.",
+			}),
+			toolutil.SchemaPropertyOverride("clear_status_after", map[string]any{
+				"enum":        []any{"30_minutes", "3_hours", "8_hours", "1_day", "3_days", "7_days", "30_days"},
+				"description": "Duration after which the status auto-clears: 30_minutes, 3_hours, 8_hours, 1_day, 3_days, 7_days, or 30_days.",
 			}),
 		}
 	case "gitlab_add_ssh_key", "gitlab_add_ssh_key_for_user":

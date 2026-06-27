@@ -123,6 +123,13 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		},
 	}
 
+	if actionName == "deploy_token_create_project" || actionName == "deploy_token_create_group" {
+		// GitLab deploy tokens take a full ISO 8601 timestamp for expires_at
+		// (client-go *time.Time), unlike the date-only canonical default.
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+			toolutil.SchemaFormatOverride("expires_at", "date-time"))
+	}
+
 	decorateDeployTokenMeta(&options, actionName)
 	return options
 }

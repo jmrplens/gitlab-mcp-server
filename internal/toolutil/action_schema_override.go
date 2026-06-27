@@ -80,14 +80,6 @@ var canonicalParamEnums = map[string][]string{
 	"variable_type": {"env_var", "file"},
 }
 
-// canonicalParamFormats maps GitLab-universal date/time input parameters to
-// their JSON Schema `format`. GitLab dates are always ISO 8601 — never locale
-// ordered (DD/MM vs MM/DD): timestamp filters take an ISO 8601 date-time and
-// date-only fields take YYYY-MM-DD. These names carry the same format across
-// every endpoint, so the format is injected centrally (single source of truth)
-// by [NewActionSpec]. Field-specific date params whose granularity varies by
-// endpoint (e.g. expires_at, which is date-only for tokens) are set per action
-// via InputSchemaOverrides, not here.
 // JSON Schema `format` values for date/time string parameters. GitLab timestamp
 // filters take an ISO 8601 date-time; date-only fields take YYYY-MM-DD.
 const (
@@ -95,6 +87,16 @@ const (
 	formatDate     = "date"
 )
 
+// canonicalParamFormats maps GitLab-universal date/time input parameters to
+// their JSON Schema `format`. GitLab dates are always ISO 8601 — never locale
+// ordered (DD/MM vs MM/DD): timestamp filters take an ISO 8601 date-time and
+// date-only fields take YYYY-MM-DD. These names carry the same format across
+// every endpoint, so the format is injected centrally (single source of truth)
+// by [NewActionSpec]. expires_at is date-only (YYYY-MM-DD) for the access
+// tokens, members, service accounts, invites, and share endpoints (client-go
+// *ISOTime); the two deploy endpoints that take a full ISO 8601 timestamp
+// (client-go *time.Time — deploy keys and deploy tokens) override it back to
+// date-time per action via [SchemaFormatOverride].
 var canonicalParamFormats = map[string]string{
 	"created_after":        formatDateTime,
 	"created_before":       formatDateTime,
@@ -112,6 +114,7 @@ var canonicalParamFormats = map[string]string{
 	"deployed_before":      formatDateTime,
 	"expires_after":        formatDateTime,
 	"expires_before":       formatDateTime,
+	"expires_at":           formatDate,
 	"due_date":             formatDate,
 	"start_date":           formatDate,
 }
