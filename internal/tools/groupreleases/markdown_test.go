@@ -32,7 +32,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						TagName:    "v1.0.0",
 						Name:       "First Release",
 						ReleasedAt: "2026-06-01",
-						Author:     &AuthorOutput{Username: "admin"},
+						Author:     &toolutil.AuthorOutput{Username: "admin"},
 					},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
@@ -46,8 +46,8 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "multiple releases renders all rows",
 			input: ListOutput{
 				Releases: []Output{
-					{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2026-07-01", Author: &AuthorOutput{Username: "dev1"}},
-					{TagName: "v1.0.0", Name: "First", ReleasedAt: "2026-06-01", Author: &AuthorOutput{Username: "dev2"}},
+					{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2026-07-01", Author: &toolutil.AuthorOutput{Username: "dev1"}},
+					{TagName: "v1.0.0", Name: "First", ReleasedAt: "2026-06-01", Author: &toolutil.AuthorOutput{Username: "dev2"}},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
 			},
@@ -60,7 +60,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "special characters in tag and name are escaped",
 			input: ListOutput{
 				Releases: []Output{
-					{TagName: "v1|beta", Name: "Rel|ease", ReleasedAt: "2026-01-01", Author: &AuthorOutput{Username: "user"}},
+					{TagName: "v1|beta", Name: "Rel|ease", ReleasedAt: "2026-01-01", Author: &toolutil.AuthorOutput{Username: "user"}},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
 			},
@@ -86,7 +86,7 @@ func TestFormatListMarkdown(t *testing.T) {
 					{
 						TagName: "v3.9.0",
 						Name:    "NoURL",
-						Links:   &LinksOutput{ClosedIssuesURL: "https://ci"},
+						Links:   &toolutil.LinksOutput{ClosedIssuesURL: "https://ci"},
 					},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
@@ -101,8 +101,8 @@ func TestFormatListMarkdown(t *testing.T) {
 					{
 						TagName: "v4.0.0",
 						Name:    "Linked",
-						Author:  &AuthorOutput{Username: "rel"},
-						Links:   &LinksOutput{Self: "https://git.example.com/g/p/-/releases/v4.0.0"},
+						Author:  &toolutil.AuthorOutput{Username: "rel"},
+						Links:   &toolutil.LinksOutput{Self: "https://git.example.com/g/p/-/releases/v4.0.0"},
 					},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
@@ -118,7 +118,7 @@ func TestFormatListMarkdown(t *testing.T) {
 					{
 						TagName: "v5.0.0",
 						Name:    "EditFallback",
-						Links:   &LinksOutput{EditURL: "https://git.example.com/g/p/-/releases/v5.0.0/edit"},
+						Links:   &toolutil.LinksOutput{EditURL: "https://git.example.com/g/p/-/releases/v5.0.0/edit"},
 					},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},

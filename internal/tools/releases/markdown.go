@@ -33,7 +33,7 @@ func releaseWebURL(r Output) string {
 
 // milestoneTitles extracts the milestone titles from the nested milestone
 // objects for compact Markdown rendering.
-func milestoneTitles(ms []*MilestoneOutput) []string {
+func milestoneTitles(ms []*toolutil.MilestoneOutput) []string {
 	if len(ms) == 0 {
 		return nil
 	}

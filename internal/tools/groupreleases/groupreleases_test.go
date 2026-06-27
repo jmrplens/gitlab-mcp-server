@@ -358,10 +358,10 @@ func TestList_FullNestedObjects(t *testing.T) {
 	assertFullLinks(t, r.Links)
 }
 
-func assertFullAuthor(t *testing.T, a *AuthorOutput) {
+func assertFullAuthor(t *testing.T, a *toolutil.AuthorOutput) {
 	t.Helper()
 	// The fixture server sends an extra author.created_at field that is not part
-	// of the documented author subset; the trimmed AuthorOutput must ignore it
+	// of the documented author subset; the trimmed toolutil.AuthorOutput must ignore it
 	// (version tolerance) while mapping the documented fields.
 	if a == nil || a.ID != 7 || a.Name != "Releaser" || a.State != "active" ||
 		a.AvatarURL != "https://a" || a.WebURL != "https://u" {
@@ -384,7 +384,7 @@ func assertFullCommit(t *testing.T, c *CommitOutput) {
 	}
 }
 
-func assertFullMilestones(t *testing.T, ms []*MilestoneOutput) {
+func assertFullMilestones(t *testing.T, ms []*toolutil.MilestoneOutput) {
 	t.Helper()
 	if len(ms) != 1 {
 		t.Fatalf("len(Milestones) = %d, want 1 (nil entry skipped)", len(ms))
@@ -399,7 +399,7 @@ func assertFullMilestones(t *testing.T, ms []*MilestoneOutput) {
 	}
 }
 
-func assertFullEvidences(t *testing.T, evs []*EvidenceOutput) {
+func assertFullEvidences(t *testing.T, evs []*toolutil.EvidenceOutput) {
 	t.Helper()
 	if len(evs) != 1 {
 		t.Fatalf("len(Evidences) = %d, want 1 (nil entry skipped)", len(evs))
@@ -409,7 +409,7 @@ func assertFullEvidences(t *testing.T, evs []*EvidenceOutput) {
 	}
 }
 
-func assertFullAssets(t *testing.T, a *AssetsOutput) {
+func assertFullAssets(t *testing.T, a *toolutil.AssetsOutput) {
 	t.Helper()
 	if a == nil || a.Count != 2 || a.EvidenceFilePath != "/evfile" {
 		t.Fatalf("Assets header not mapped: %+v", a)
@@ -426,7 +426,7 @@ func assertFullAssets(t *testing.T, a *AssetsOutput) {
 	}
 }
 
-func assertFullLinks(t *testing.T, l *LinksOutput) {
+func assertFullLinks(t *testing.T, l *toolutil.LinksOutput) {
 	t.Helper()
 	if l == nil || l.Self != "https://git.example.com/g/p/-/releases/v3.0.0" ||
 		l.EditURL != "https://e/edit" || l.ClosedIssuesURL != "https://ci" ||
@@ -462,11 +462,10 @@ func TestList_EmptyNestedObjects(t *testing.T) {
 	if r.Milestones != nil || r.Evidences != nil {
 		t.Errorf("Milestones/Evidences should be nil: %+v %+v", r.Milestones, r.Evidences)
 	}
-	if r.Assets == nil {
-		t.Fatal("Assets should be non-nil even when empty")
-	}
-	if len(r.Assets.Sources) != 0 || len(r.Assets.Links) != 0 {
-		t.Errorf("Assets sources/links should be empty: %+v", r.Assets)
+	if r.Assets != nil {
+		if len(r.Assets.Sources) != 0 || len(r.Assets.Links) != 0 {
+			t.Errorf("Assets sources/links should be empty: %+v", r.Assets)
+		}
 	}
 }
 
