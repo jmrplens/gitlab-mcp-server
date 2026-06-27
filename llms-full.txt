@@ -95,14 +95,27 @@ Action guidance:
 - token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 - token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 Parameter guidance:
+- approve_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - approve_group.user_id: user_id; source: User ID from request_list_group output.
+- approve_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - approve_project.user_id: user_id; source: User ID from request_list_project output.
+- deny_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- deny_group.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- deny_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deny_project.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- deploy_key_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deploy_key_delete.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_enable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deploy_key_get.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deploy_key_list_all.page: page_offset; source: Optional 1-based page index. Combine with per_page to iterate the full instance key set.
 - deploy_key_list_all.per_page: page_size; source: Items per page (1-100). For bulk enumeration prefer keyset pagination via order_by+sort+page_token instead of repeated offset pages.
+- deploy_key_list_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deploy_key_list_user_project.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_key_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deploy_token_create_group.group_id: scope_group; source: Group ID or path owning the deploy token.
 - deploy_token_create_project.project_id: scope_project; source: Project ID or path owning the deploy token.
 - deploy_token_delete_group.deploy_token_id: deploy_token; source: Deploy token ID returned by deploy token list/get actions.; avoid: Do not use deploy_key_id; deploy keys are a different access resource.
@@ -135,15 +148,28 @@ Parameter guidance:
 - request_list_project.order_by; source: Column to order keyset-paginated results by (e.g. id).; avoid: Combine order_by with sort (asc/desc); do not pass natural-language phrases as the field value.
 - request_list_project.project_id: scope_project; source: Project numeric ID or path where access requests are pending.
 - request_project.project_id: scope_project; source: Project numeric ID or path to request access to.
+- token_group_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- token_group_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - token_group_get.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- token_group_revoke.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - token_group_revoke.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_rotate.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - token_group_rotate.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_rotate_self.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - token_personal_get.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_list.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - token_personal_revoke.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
 - token_personal_rotate.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_project_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - token_project_get.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_project_revoke.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - token_project_revoke.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_rotate.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - token_project_rotate.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_rotate_self.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
@@ -687,9 +713,38 @@ Action guidance:
 - usage_data_track_event: Track a single internal usage event (admin only). Provide the event name and optional context for usage analytics.
 - usage_data_track_events: Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.
 Parameter guidance:
+- alert_metric_image_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- alert_metric_image_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- alert_metric_image_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- alert_metric_image_upload.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - appearance_update.message_background_color: hex_color; source: Hex color string such as #e75e40 for the appearance banner background.; avoid: Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples.
 - appearance_update.message_font_color: hex_color; source: Hex color string such as #ffffff for the appearance banner text.; avoid: Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples.
+- cluster_agent_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_register.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_revoke.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- dependency_proxy_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- error_tracking_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- error_tracking_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- error_tracking_get_settings.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- error_tracking_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- error_tracking_update_settings.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- import_cancel_github.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- secure_file_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- secure_file_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- secure_file_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- secure_file_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- terraform_state_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- terraform_state_lock.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - terraform_state_unlock.name: terraform_state_name; source: Terraform state name from the prompt or admin.terraform_state_list output.; avoid: Do not send the state name as id; use params.name.
+- terraform_state_unlock.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- terraform_version_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- usage_data_track_event.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- usage_data_track_event.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -1587,12 +1642,21 @@ Action guidance:
 - update_protected: Update an existing protected branch rule by project_id and branch_name. Use to change allow-force-push, CODEOWNERS approval, rename the rule, or replace fine-grained push/merge/unprotect access entries.
 Parameter guidance:
 - create.branch_name: git_branch; source: Name for the new branch to create.
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.ref: git_ref; source: Existing branch/tag/commit used as creation source.
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete_merged.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.branch_name: git_branch; source: Branch name from task context or branch list output.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- get_protected.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - list.project_id: scope_project; source: Project numeric ID or full path containing branches.
+- list_protected.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - rule_list.project_path: scope_project; source: Full project path used by GraphQL branch rule query.
+- unprotect.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update_protected.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
@@ -1782,16 +1846,26 @@ Action guidance:
 - update: Update an existing project CI/CD variable's value or flags by key (and optional environment scope). Use to rotate secrets or change protected/masked settings without recreating the variable.
 Parameter guidance:
 - create.key: ci_variable_key; source: Variable key name to create.
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.value: ci_variable_value; source: Variable value text (secret or plain based on masked/protected settings).
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.environment_scope: environment_scope; source: Optional environment scope string; use * for global variable scope.
 - get.key: ci_variable_key; source: Variable key from list output or task context.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- group_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_create.key: ci_variable_key; source: Variable key name to create.
 - group_create.value: ci_variable_value; source: Variable value text (secret or plain based on masked/protected settings).
+- group_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_get.environment_scope: environment_scope; source: Optional environment scope string; use * for global variable scope.
+- group_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_get.key: ci_variable_key; source: Variable key from list output or task context.
+- group_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - instance_create.key: ci_variable_key; source: Variable key name to create.
 - instance_create.value: ci_variable_value; source: Variable value text (secret or plain based on masked/protected settings).
 - instance_get.key: ci_variable_key; source: Variable key from list output or task context.
+- list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
 When to use: define / rotate / unmask / scope CI/CD variables at project, group, or instance level, both regular and secret (masked / masked_and_hidden), with environment scoping for per-env values.
@@ -2056,7 +2130,19 @@ Action guidance:
 - stop: Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
 - update: Update an existing environment by environment_id. Use to change its name, description, external URL, tier, cluster agent, Kubernetes namespace, Flux resource path, or auto-stop setting.
 Parameter guidance:
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_approve_or_reject.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_create.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- deployment_create.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- deployment_create.tag: tag_name; source: Tag name (without the "refs/tags/" prefix).
+- deployment_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deployment_get.deployment_id: deployment_id; source: Deployment numeric ID from deployment list output.
+- deployment_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_merge_requests.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deployment_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - freeze_create.project_id: scope_project; source: Project ID or path where the freeze window is configured.
 - freeze_delete.freeze_period_id: freeze_period_id; source: Freeze period numeric ID from list/get outputs.
 - freeze_delete.project_id: scope_project; source: Project ID or path where the freeze window is configured.
@@ -2066,6 +2152,10 @@ Parameter guidance:
 - freeze_update.freeze_period_id: freeze_period_id; source: Freeze period numeric ID from list/get outputs.
 - freeze_update.project_id: scope_project; source: Project ID or path where the freeze window is configured.
 - get.environment_id: environment_id; source: Environment numeric ID from environment list output.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- stop.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
@@ -2317,8 +2407,18 @@ Action guidance:
 - ff_user_list_list: List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset or keyset pagination; use it to discover a list's user_list_iid before getting, updating, or deleting it.
 - ff_user_list_update: Update a feature flag user list's name or its set of user_xids by user_list_iid to change which users a rollout cohort targets without recreating the list.
 Parameter guidance:
+- feature_flag_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- feature_flag_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- feature_flag_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- feature_flag_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- feature_flag_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- ff_user_list_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- ff_user_list_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_delete.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
+- ff_user_list_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_get.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
+- ff_user_list_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- ff_user_list_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_update.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
 
 Manage project feature flags and feature-flag user lists for gradual rollouts. Delete is destructive; setting active=false disables the flag but preserves history.
@@ -2539,6 +2639,26 @@ Parameter guidance:
 - create.path: group_path_segment; source: URL-safe group path segment.; avoid: path is a slug segment, not a full URL or namespace with slashes unless creating nested groups via parent_id.
 - delete.group_id: scope_group; source: Group numeric ID or full path to delete.; avoid: permanently_remove=true requires full_path and bypasses the retention window.
 - get.group_id: scope_group; source: Group numeric ID or full path from the prompt or prior discovery step.; avoid: Use group_id for path or ID; do not send project_id for group lookups.
+- group_board_create_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_delete_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_get_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_list_lists.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_board_update.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- group_board_update_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_export_download.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_export_schedule.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_import_file.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- group_label_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_subscribe.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_unsubscribe.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_label_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_member_add.access_level: access_level; source: Numeric role level for the membership.; avoid: Use the numeric level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), not the role name.
 - group_member_add.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
 - group_member_add.member_role_id: member_role_id; source: ID of a custom member role to assign (Premium/Ultimate); its base access level must match access_level.; avoid: member_role_id references a custom role definition, not access_level; it is only available on Premium/Ultimate.
@@ -2558,16 +2678,38 @@ Parameter guidance:
 - group_member_share.share_group_id: share_group_id; source: Numeric ID of the recipient group that should gain access.; avoid: share_group_id must be a numeric group ID, not a path, and is distinct from group_id (the group being shared).
 - group_member_unshare.group_id: scope_group; source: Group ID or full namespace path that owns the membership.; avoid: Use the group here, not a project path or project member action; project members use the project-member tools.
 - group_member_unshare.share_group_id: share_group_id; source: Numeric ID of the group whose share should be revoked.; avoid: share_group_id must be a numeric group ID, not a path, and is distinct from group_id (the group being shared).
+- group_milestone_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_issues.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_merge_requests.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_milestone_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_relations_list_status.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_relations_schedule.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_upload_delete_by_id.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_upload_delete_by_secret.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- group_upload_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- hook_add.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_add.url; source: HTTP(S) endpoint that should receive webhook payloads.; avoid: Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing.
+- hook_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_delete.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_delete_custom_header.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_delete_custom_header.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_delete_url_variable.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_delete_url_variable.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_edit.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_edit.url; source: HTTP(S) endpoint that should receive webhook payloads.; avoid: Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing.
+- hook_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_get.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
 - hook_list.group_id: scope_group; source: Group numeric ID or full path whose webhooks are listed.
+- hook_resend_event.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_resend_event.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_set_custom_header.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_set_custom_header.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_set_url_variable.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_set_url_variable.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
+- hook_test.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - hook_test.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
 - invited_groups.group_id: scope_group; source: Group numeric ID or full path whose invited groups are listed.
 - invited_groups.relation; source: Inheritance filter: direct, inherited, or both.; avoid: relation filters by how the invitation reaches the group; it is not an access level.
@@ -2578,19 +2720,33 @@ Parameter guidance:
 - release_list.group_id: scope_group; source: Group ID or full path whose projects' releases are listed.
 - restore.group_id: scope_group; source: Group numeric ID or full path that was marked for deletion.
 - search.query; source: Group name/path keywords from the user query.
+- service_account_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- service_account_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- service_account_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- service_account_pat_create.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- service_account_pat_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- service_account_pat_list.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- service_account_pat_revoke.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - service_account_pat_revoke.token_id: access_token; source: Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_pat_rotate.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - service_account_pat_rotate.token_id: access_token; source: Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - share_with_group.group_access; source: Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).
+- share_with_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - share_with_group.shared_group_id; source: Numeric ID of the group to grant access to.; avoid: group_id is the group being shared; shared_group_id is the group receiving access.
 - shared_projects.group_id: scope_group; source: Group numeric ID or full path whose shared projects are listed.; avoid: Lists projects shared *into* the group; use gitlab_group_projects for the group's own projects.
 - shared_with.group_id: scope_group; source: Group numeric ID or full path whose inbound shares are listed.; avoid: Lists groups shared *with* this group; it does not list this group's members or the projects it was shared into.
 - subgroups.group_id: scope_group; source: Group numeric ID or full path whose subgroups are listed.; avoid: Returns descendants at all depths; set top_level_only=true for direct children only.
+- transfer.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - transfer.parent_id; source: Numeric ID of the destination parent group; omit to promote to top level.; avoid: parent_id is the destination; group_id is the group being moved. Omit parent_id to make the group top-level.
 - transfer_locations.group_id: scope_group; source: Group numeric ID or full path that would be moved.; avoid: This lists destinations for moving the *group itself*; to move a project into a group, use gitlab_group_transfer_project.
+- transfer_project.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - transfer_project.project_id: scope_project; source: Numeric ID or full path of the project to move.; avoid: project_id is the project being moved; group_id is the destination group.
 - unarchive.group_id: scope_group; source: Group numeric ID or full path to unarchive.
+- unshare_from_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - unshare_from_group.shared_group_id; source: Numeric ID of the group whose share is removed.; avoid: Use gitlab_group_shared_with_list to find the shared group IDs first.
 - update.group_id: scope_group; source: Group numeric ID or full path to update.
+- update.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - upload_avatar.content_base64; source: Base64-encoded image bytes when no local file path is available.
 - upload_avatar.file_path; source: Absolute path to a local image file on the MCP server filesystem.; avoid: Provide exactly one of file_path or content_base64, not both; filename is always required.
 - upload_avatar.group_id: scope_group; source: Group numeric ID or full path whose avatar is set.
@@ -4213,8 +4369,12 @@ Action guidance:
 - work_item_update: Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid; set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change.
 Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
+- create.iid: scope_iid; source: Project- or group-scoped internal ID (IID), not the global ID.
+- create.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
 - create.project_id: scope_project; source: Project where the issue should be created.; avoid: Use the target project path or numeric ID; do not substitute group_id or repository URL.
 - create.title: issue_title; source: Short issue summary from the user's request.
+- create_todo.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - discussion_add_note.body: comment_body; source: Markdown text of the reply to append to the thread.
 - discussion_add_note.discussion_id: discussion_id; source: Discussion thread id from a prior gitlab_list_issue_discussions response.; avoid: The discussion_id is the thread hash, not a note id; pass note_id separately for note actions.
 - discussion_add_note.issue_iid: issue_iid; source: Issue number visible in the project, usually from the URL or prior issue list output.; avoid: Use issue_iid for the project-scoped issue number, not the global issue ID.
@@ -4252,6 +4412,12 @@ Parameter guidance:
 - emoji_issue_note_get.project_id: scope_project; source: Project ID or path that owns the issue.
 - emoji_issue_note_list.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
 - emoji_issue_note_list.project_id: scope_project; source: Project ID or path that owns the issue.
+- event_issue_label_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_issue_label_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_issue_milestone_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_issue_milestone_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_issue_state_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_issue_state_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.issue_iid: issue_iid; source: Issue number visible in the project, usually from the URL or prior issue list output.; avoid: Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action.
 - get.project_id: scope_project; source: Project ID or full namespace path that owns the issue.; avoid: Use the issue's parent project here, not a group path or global issue ID.
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
@@ -4270,6 +4436,10 @@ Parameter guidance:
 - list.order_by: issue_list_sort_field; source: Field requested for sorting recent or oldest issues, such as created_at or updated_at.; avoid: Combine order_by with sort; do not pass natural-language phrases like newest first as the field value.
 - list.project_id: scope_project; source: Project ID or namespace path whose issues should be listed.; avoid: Use project_id for the project scope; use group_id only with issue.list_group.
 - list.search; source: Keywords from the user's issue title or description request.; avoid: search narrows within the selected project; it does not replace project_id.
+- list_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- move.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- mrs_closing.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- mrs_related.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - note_create.body; source: The comment text the user wants to post; Markdown is supported.; avoid: body is the comment content, not a description update; updating the issue body is issue.update.
 - note_create.internal; source: Set true only when the user asks for a private/internal note.; avoid: internal notes are visible to project members only; do not set for public replies.
 - note_create.issue_iid: issue_iid; source: Issue number visible in the project, from the issue URL or prior issue list output.; avoid: Use the project-scoped issue IID, not the global issue database ID.
@@ -4287,7 +4457,22 @@ Parameter guidance:
 - note_update.issue_iid: issue_iid; source: Issue number visible in the project, from the issue URL or prior issue list output.; avoid: Use the project-scoped issue IID, not the global issue database ID.
 - note_update.note_id: note_id; source: Numeric note ID from a prior issue.note_list or issue.note_create result.; avoid: note_id is the comment ID, not the issue_iid; obtain it from issue.note_list.
 - note_update.project_id: scope_project; source: Project ID or full namespace path that owns the issue.; avoid: Use the issue's parent project here, not a group path or global issue ID.
+- participants.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- reorder.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- spent_time_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- spent_time_reset.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- statistics_get_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- statistics_get_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- subscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_estimate_reset.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_estimate_set.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_stats_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unsubscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - update.state_event: issue_state_transition; source: task intent when closing or reopening an issue; avoid: Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen.
+- work_item_create.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- work_item_update.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 When to use: issue lifecycle — create, update, close, move, comment, link, time-track, and manage Work Items (including Epics). NOT for: merge requests (use gitlab_merge_request), project settings (use gitlab_project), CI/CD (use gitlab_pipeline).
@@ -4957,6 +5142,13 @@ Parameter guidance:
 - play.project_id: scope_project; source: Project ID or full namespace path that owns the job.; avoid: Use project_id for project scope; pipeline_id and job_id are not substitutes for project_id.
 - retry.job_id: job_identifier; source: Numeric CI job ID from pipeline/job list output or user-provided context.; avoid: job_id is the global database ID, not the per-pipeline index; do not pass a pipeline ID as job_id.
 - retry.project_id: scope_project; source: Project ID or full namespace path that owns the job.; avoid: Use project_id for project scope; pipeline_id and job_id are not substitutes for project_id.
+- token_scope_add_group.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_add_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_list_groups.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_list_inbound.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_patch.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- token_scope_remove_group.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - token_scope_remove_project.project_id: scope_owner_project; source: Owning project whose CI job token allowlist is being changed.; avoid: Do not use the project being removed as project_id.
 - token_scope_remove_project.target_project_id: target_project; source: Project being removed from or added to the allowlist.; avoid: Do not put the allowlist owner project here.
 - trace.job_id: job_identifier; source: Numeric CI job ID from pipeline/job list output or user-provided context.; avoid: job_id is the global database ID, not the per-pipeline index; do not pass a pipeline ID as job_id.
@@ -5267,8 +5459,23 @@ Parameter guidance:
 - approval_config.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
 - approval_reset.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use the project-scoped merge_request_iid, not the merge request's global database ID.
 - approval_reset.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the merge request's global ID.
+- approve.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- approve.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- cancel_auto_merge.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- commits.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- context_commits_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- context_commits_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- context_commits_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- create.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
+- create_pipeline.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- create_todo.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- dependencies_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- dependency_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- dependency_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - emoji_mr_create.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
 - emoji_mr_create.project_id: scope_project; source: Project ID or path that owns the merge request.
 - emoji_mr_delete.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
@@ -5285,8 +5492,36 @@ Parameter guidance:
 - emoji_mr_note_get.project_id: scope_project; source: Project ID or path that owns the merge request.
 - emoji_mr_note_list.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
 - emoji_mr_note_list.project_id: scope_project; source: Project ID or path that owns the merge request.
+- event_mr_label_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_mr_label_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_mr_milestone_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_mr_milestone_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_mr_state_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- event_mr_state_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- issues_closed.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - merge.auto_merge: merge_scheduling; source: Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.; avoid: Do not call pipeline.wait for merge-when-pipeline-succeeds requests; use merge_request.merge with auto_merge=true.
 - merge.merge_request_iid: merge_request_iid; source: Project-scoped MR IID from merge_request.list or merge_request.get.; avoid: Do not use pipeline_id; merge_request.merge requires merge_request_iid.
+- merge.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- merge.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- participants.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- pipelines.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- rebase.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- related_issues.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- reviewers.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- spent_time_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- spent_time_reset.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- subscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_estimate_reset.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_estimate_set.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- time_stats.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unapprove.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unapprove.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- unsubscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -6244,11 +6479,38 @@ Action guidance:
 - registry_tag_rule_list: List container registry tag protection rules for a project.
 - registry_tag_rule_update: Update a container registry tag protection rule in a project.
 Parameter guidance:
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- download.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- group_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_list.order_by: group_package_list_sort_field; source: Use only GitLab group Package Registry ordering fields accepted by the group packages API.; avoid: Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.
 - list.order_by: package_list_sort_field; source: Use only GitLab Package Registry ordering fields accepted by the packages API.; avoid: Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.
+- list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- protection_rule_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- protection_rule_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- protection_rule_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- protection_rule_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- publish.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- publish_and_link.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - publish_directory.include_pattern: single_glob_filter; source: Optional single glob matched against file names inside directory_path; omit it to include all regular files.; avoid: Do not pass comma-separated filenames., Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.
+- publish_directory.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_list_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- registry_list_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_rule_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_rule_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_rule_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_rule_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_tag_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_tag_delete_bulk.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_tag_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_tag_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- registry_tag_rule_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - registry_tag_rule_create.tag_name_pattern: match_pattern; source: An RE2 regular expression matching the tags to protect.; avoid: tag_name_pattern is an RE2 regex, not a glob; omit both minimum access levels to make matching tags fully immutable.
+- registry_tag_rule_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - registry_tag_rule_list.project_id: scope_project; source: Project numeric ID or full path that owns the container registry.
+- registry_tag_rule_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
 When to use: publish / download / list / delete generic packages, browse npm/maven/conan/nuget/pypi/etc. metadata, browse and prune container images and tags, manage container and package protection rules.
@@ -6579,13 +6841,19 @@ Action guidance:
 - wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
 Parameter guidance:
 - cancel.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- cancel.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.project_id: scope_project; source: Project where the pipeline should be created.
 - create.ref: git_ref; source: Branch or tag to run the pipeline against.; avoid: Use ref for branch/tag names; do not send commit SHA when branch intent is requested.
 - delete.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - latest.project_id: scope_project; source: Project whose latest pipeline is requested.
 - latest.ref: git_ref; source: Branch or tag to scope the latest pipeline to; defaults to the project default branch.
+- latest.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
 - list.project_id: scope_project; source: Project ID or full path that owns the pipeline history.
+- list.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- list.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
 - list.status: pipeline_status_filter; source: Pipeline status requested by the task, such as failed, running, or success.
 - resource_group_edit.key: resource_group_key; source: Resource group key from resource group list output.
 - resource_group_edit.process_mode: resource_group_process_mode; source: Requested process mode (unordered, oldest_first, newest_first, newest_ready_first).
@@ -6596,32 +6864,54 @@ Parameter guidance:
 - resource_group_upcoming_jobs.key: resource_group_key; source: Resource group key from resource group list output.
 - resource_group_upcoming_jobs.project_id: scope_project; source: Project ID or path that owns the resource groups.
 - retry.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- retry.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_create.cron: cron_expression; source: Standard 5-field cron expression for when the pipeline should run.; avoid: Use a 5-field cron string; do not pass natural-language schedules like every night.
+- schedule_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_create.ref; source: Branch or tag the scheduled pipeline runs against.; avoid: ref must be an existing branch or tag in the project.
 - schedule_create_variable.key: ci_variable_key; source: Variable name matching /^[A-Za-z_][A-Za-z0-9_]*$/.; avoid: key must already not exist on the schedule; use the edit action to change an existing key.
+- schedule_create_variable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
+- schedule_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_delete.schedule_id: pipeline_schedule_id; source: Numeric ID of the schedule to delete, from a prior list or get.
 - schedule_delete_variable.key: ci_variable_key; source: Existing variable name on the schedule to delete.
+- schedule_delete_variable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_edit_variable.key: ci_variable_key; source: Existing variable name on the schedule to update.
+- schedule_edit_variable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
+- schedule_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_get.schedule_id: pipeline_schedule_id; source: Numeric schedule ID from a prior list, usually shown in the schedule URL.; avoid: schedule_id is the database ID, not the schedule description or cron string.
 - schedule_list.project_id: scope_project; source: Project ID or full namespace path whose pipeline schedules should be listed.
 - schedule_list.scope; source: active or inactive when the prompt asks only for enabled or disabled schedules.; avoid: scope accepts only active or inactive; it does not filter by ref or owner.
+- schedule_list_triggered_pipelines.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_list_triggered_pipelines.schedule_id: pipeline_schedule_id; source: Numeric ID of the schedule whose triggered pipelines to list.
+- schedule_run.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_run.schedule_id: pipeline_schedule_id; source: Numeric ID of the schedule to trigger, from a prior list or get.
+- schedule_take_ownership.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - schedule_take_ownership.schedule_id: pipeline_schedule_id; source: Numeric ID of the schedule whose ownership to take.
+- schedule_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- schedule_update.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - schedule_update.schedule_id: pipeline_schedule_id; source: Numeric ID of the schedule to edit, from a prior list or get.
 - test_report.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- test_report.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - test_report_summary.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- test_report_summary.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_create.description: trigger_description; source: Human-readable label describing what the token is for.
+- trigger_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- trigger_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- trigger_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_get.trigger_id: trigger_id; source: Numeric trigger token id, usually from a prior pipeline_trigger.list result.; avoid: trigger_id is the token's numeric id, not the token secret string.
 - trigger_list.project_id: scope_project; source: Project ID or full namespace path whose trigger tokens should be listed.; avoid: Trigger tokens are project-scoped; do not pass a group path.
+- trigger_run.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - trigger_run.ref: git_ref; source: Branch or tag name the pipeline should run on.; avoid: ref must be an existing branch or tag, not a commit SHA or MR id.
 - trigger_run.token: trigger_token; source: Trigger token secret string from pipeline_trigger.create or pipeline_trigger.list.; avoid: token is the secret string, not the numeric trigger_id.
+- trigger_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - update_metadata.name: display_name; source: New human-readable pipeline name to set.
 - update_metadata.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- update_metadata.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - variables.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- variables.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - wait.pipeline_id: pipeline_identifier; source: Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.; avoid: Do not use merge_request_iid; pipeline.wait requires pipeline_id.
+- wait.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -7073,6 +7363,7 @@ Action guidance:
 - upload_delete_by_secret: Use to permanently remove a project Markdown upload identified by the secret and filename from its /uploads/<secret>/<filename> URL when the numeric upload ID is unknown.
 - upload_list: Use to enumerate files uploaded into a project's Markdown attachments store.
 Parameter guidance:
+- archive.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_edit.name: badge_display_name; source: Optional replacement badge name. The parameter is named name.; avoid: Do not send new_name; badge_edit accepts name, link_url, and image_url.
@@ -7080,22 +7371,87 @@ Parameter guidance:
 - badge_get.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_list.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_preview.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- board_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list_create.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- board_list_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_list_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- board_update.milestone_id: milestone_id; source: Milestone ID (project- or group-scoped, depending on the endpoint).
+- board_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- create.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- create.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- create_for_user.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- create_for_user.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- create_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- create_fork_relation.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete_fork_relation.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete_shared_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- delete_shared_group.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- download_avatar.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - export_download.project_id: scope_project; source: Project ID or URL-encoded full path of the project being exported or imported.; avoid: Use the source project for export status/download; for import_status use the newly created target project, not the archive.
 - export_schedule.project_id: scope_project; source: Project ID or URL-encoded full path of the project being exported or imported.; avoid: Use the source project for export status/download; for import_status use the newly created target project, not the archive.
 - export_status.project_id: scope_project; source: Project ID or URL-encoded full path of the project being exported or imported.; avoid: Use the source project for export status/download; for import_status use the newly created target project, not the archive.
+- fork.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- fork.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- fork.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.project_id: scope_project; source: Concrete numeric project ID or full namespace path from the prompt or a prior project result.; avoid: Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query.
+- hook_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_delete_custom_header.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_delete_url_variable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_edit.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_set_custom_header.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_set_url_variable.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- hook_test.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - import_from_file.file_path: archive_source; source: Local filesystem path to the .tar.gz export archive (alternative to content_base).; avoid: Supply exactly one of file_path or content_base.
 - import_from_file.namespace: target_namespace; source: Group/user namespace (id or full path) to import into; defaults to the caller's namespace when omitted.; avoid: Omit to import into your own namespace.
 - import_from_file.path: new_project_path; source: URL-safe path (slug) for the imported project.; avoid: This names the NEW project; the source archive is supplied via file_path or content_base.
 - import_status.project_id: scope_project; source: Project ID or URL-encoded full path of the project being exported or imported.; avoid: Use the source project for export status/download; for import_status use the newly created target project, not the archive.
+- integration_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- integration_delete_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_delete_group_datadog.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- integration_get_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_get_group_datadog.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- integration_list_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_set.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- integration_set_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_set_group_datadog.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- integration_set_jira.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_create.color: hex_color; source: Hex color string for label background (for example #d9534f).; avoid: Provide hex color values; avoid named colors.
+- label_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_delete.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_get.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- label_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_promote.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_promote.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_subscribe.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_subscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_unsubscribe.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_unsubscribe.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - label_update.label_id: label_identifier; source: Label name or ID from task context or label list output.
+- label_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- languages.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - list.order_by: project_list_sort_field; source: Use only GitLab project list ordering fields accepted by the projects API.; avoid: Use last_activity_at to sort by recent activity; last_activity_after is a date filter, not an order_by value.
+- list_forks.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_groups.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_invited_groups.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_starrers.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_user_contributed.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- list_user_projects.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- list_user_starred.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- list_users.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - member_add.access_level: access_level; source: Numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers).; avoid: Use the numeric level, not a role name; set member_role_id for a custom role.
 - member_add.project_id: scope_project; source: Project ID or full namespace path (e.g. "group/project") that owns the membership.; avoid: Use the project here, not a group ID; for group memberships use the group member actions instead.
 - member_add.user_id: user_id; source: Numeric user ID to add; provide either user_id or username.; avoid: Provide user_id or username, not both; access_level is also required.
@@ -7109,7 +7465,14 @@ Parameter guidance:
 - member_inherited.project_id: scope_project; source: Project ID or full namespace path (e.g. "group/project") that owns the membership.; avoid: Use the project here, not a group ID; for group memberships use the group member actions instead.
 - member_inherited.user_id: user_id; source: Numeric user ID of the member, from gitlab_list_users or prior member list output.; avoid: Use the global user ID, not a username; pass username only on the add action.
 - members.project_id: scope_project; source: Project ID or full namespace path (e.g. "group/project") that owns the membership.; avoid: Use the project here, not a group ID; for group memberships use the group member actions instead.
+- milestone_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestone_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - milestone_get.milestone_iid: milestone_iid; source: Milestone IID from milestone list output or URL context.; avoid: Use milestone_iid (project-scoped IID), not global milestone ID.
+- milestone_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestone_issues.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestone_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestone_merge_requests.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestone_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - mirror_add.project_id: scope_project; source: Project ID or full namespace path that owns the remote mirror.; avoid: Use the project that owns the mirror, not a group path or the remote repository's project.
 - mirror_add.url: mirror_url; source: Remote Git URL to push to, optionally with inline credentials in the userinfo component.; avoid: Inline credentials are secrets; do not mirror a project to itself.
 - mirror_delete.mirror_id: mirror_id; source: Numeric remote-mirror id from a prior gitlab_list_project_mirrors response.; avoid: mirror_id is the remote-mirror's own id, not the project id and not the mirror URL.
@@ -7136,9 +7499,34 @@ Parameter guidance:
 - pages_get.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_unpublish.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_update.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- repository_storage_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- restore.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_pat_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_pat_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- service_account_pat_list.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- service_account_pat_revoke.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - service_account_pat_revoke.token_id: access_token; source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_pat_rotate.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - service_account_pat_rotate.token_id: access_token; source: Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create.; avoid: Do not use service_account_id as token_id; token_id identifies the personal access token itself.
+- service_account_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- share_with_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- share_with_group.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- star.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- start_housekeeping.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - statistics_get.project_id: scope_project; source: Project ID or URL-encoded path whose fetch statistics should be retrieved.; avoid: This returns git fetch (clone/pull) counts, not storage/size statistics; for repository or storage size use gitlab_project_get with statistics enabled.
+- transfer.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unarchive.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unstar.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload_avatar.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload_delete_by_secret.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -8448,16 +8836,26 @@ Action guidance:
 - list: List releases for one project. Use this when the task asks for recent releases, release history, or release notes discovery.
 - update: Update a release identified by project_id and tag_name. Use this to edit the title, notes, release date, or associated milestones.
 Parameter guidance:
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.ref: git_ref; source: Branch/tag/commit used to create tag when tag_name does not exist.; avoid: ref is only needed when creating a new tag; omit it when releasing an existing tag.
 - create.tag_name: git_tag; source: Release tag to publish.
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - delete.tag_name: git_tag; source: Release tag name from list output or task context.; avoid: Deleting the release does not delete the Git tag; use gitlab_tag_delete to remove the tag.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.tag_name: git_tag; source: Release tag name from list output or task context.; avoid: Use tag_name for release lookup; do not pass release title in this field.
 - get_latest.project_id: scope_project; source: Project ID or full path that owns releases.
+- link_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - link_create.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 - link_create_batch.links: release_asset_links; source: Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath); url must be absolute.; avoid: Prefer direct_asset_path over the deprecated filepath when setting a direct asset link., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
+- link_create_batch.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- link_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- link_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- link_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - link_update.link_id: release_asset_link_identifier; source: Use the release link ID returned by release.link_create, release.link_create_batch, or release.link_list.; avoid: Do not use link_update to create a new release asset link; call link_create or link_create_batch first.
+- link_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - link_update.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 - list.project_id: scope_project; source: Project ID or full path that owns releases.
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - update.tag_name: git_tag; source: Release tag name from list output or task context.; avoid: tag_name identifies the release to edit; it cannot be changed by this action.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
@@ -8641,10 +9039,19 @@ Action guidance:
 - tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
 - update_submodule: Move a submodule pointer to a new commit SHA, creating a commit on the target branch in the parent repository. Provide project_id, the submodule path, branch, and commit_sha; add commit_message to override the generated message. Use when bumping a submodule to a newer revision.
 Parameter guidance:
+- archive.path: path_component; source: Path component relative to the project or repository root (no leading slash).
+- archive.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- archive.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- blob.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- blob.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- changelog_add.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- changelog_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- changelog_generate.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - commit_cherry_pick.branch: git_branch; source: Target branch to receive the cherry-picked commit.
 - commit_cherry_pick.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_cherry_pick.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
 - commit_comment_create.note: comment_body; source: Markdown comment text to attach to the commit.
+- commit_comment_create.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - commit_comment_create.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_comment_create.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
 - commit_comments.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
@@ -8679,6 +9086,7 @@ Parameter guidance:
 - commit_discussion_update_note.project_id: scope_project; source: Project ID or full namespace path that owns the commit.
 - commit_get.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_get.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
+- commit_list.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - commit_list.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_merge_requests.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_merge_requests.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
@@ -8690,13 +9098,44 @@ Parameter guidance:
 - commit_signature.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_signature.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
 - commit_status_set.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
+- commit_status_set.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - commit_status_set.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
 - commit_status_set.state: status_state; source: Target state: pending, running, success, failed, or canceled.
 - commit_statuses.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
+- commit_statuses.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - commit_statuses.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
+- compare.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- contributors.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_blame.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_blame.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- file_create.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- file_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_delete.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- file_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_get.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- file_history.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - file_history.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
+- file_metadata.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_metadata.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- file_raw.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_raw.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- file_raw_metadata.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- file_raw_metadata.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- file_update.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- file_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_submodules.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_submodules.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- merge_base.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- raw_blob.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- raw_blob.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- read_submodule_file.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- read_submodule_file.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- tree.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - tree.project_id: scope_project; source: Project ID or path containing the repository.
 - tree.ref: git_ref; source: Branch/tag/commit to inspect; default branch when omitted.
+- update_submodule.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- update_submodule.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
 	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
@@ -9488,6 +9927,24 @@ Action guidance:
 - snippets: Search snippet titles globally (no group or project scope). Use to locate a snippet by its title keywords across the instance.
 - users: Search users by name or username across global, group (group_id), or project (project_id) scope. Use to resolve a person to their user record before assigning or mentioning them.
 - wiki: Search wiki page contents across global, group (group_id), or project (project_id) scope. Use to find wiki pages by their body or title keywords.
+Parameter guidance:
+- code.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- code.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- code.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- commits.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- commits.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- issues.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- issues.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- merge_requests.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- merge_requests.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- milestones.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- milestones.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- notes.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- projects.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- users.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- users.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- wiki.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- wiki.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -9675,6 +10132,7 @@ Parameter guidance:
 - emoji_snippet_note_get.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
 - emoji_snippet_note_list.project_id: scope_project; source: Project ID or path that owns the snippet.
 - emoji_snippet_note_list.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- file_content.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - note_create.body; source: The comment text the user wants to post; Markdown is supported.; avoid: body is the comment content, not a snippet content update; updating the snippet body is snippet.update.
 - note_create.created_at; source: Optional RFC 3339 timestamp to backdate the note; requires admin or owner permissions.; avoid: created_at is ignored unless you have administrator or project/group owner permissions.
 - note_create.project_id: scope_project; source: Project ID or full namespace path that owns the snippet.; avoid: Use the snippet's parent project here, not a group path or global snippet ID.
@@ -9692,6 +10150,12 @@ Parameter guidance:
 - note_update.note_id: note_id; source: Numeric note ID from a prior snippet.note_list or snippet.note_create result.; avoid: note_id is the comment ID, not the snippet_id; obtain it from snippet.note_list.
 - note_update.project_id: scope_project; source: Project ID or full namespace path that owns the snippet.; avoid: Use the snippet's parent project here, not a group path or global snippet ID.
 - note_update.snippet_id: snippet_id; source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result.; avoid: snippet_id is the project snippet ID, not the note_id.
+- project_content.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- project_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- project_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- project_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- project_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- project_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
 When to use: store/share standalone code or text outside a repo, comment on existing snippets, react with emoji on a snippet or snippet note, browse public snippets via explore.
@@ -10247,10 +10711,18 @@ Action guidance:
 - protect: Protect a tag or wildcard pattern with create access levels. Provide create_access_level for a simple rule, or allowed_to_create for granular user/group/deploy-key permissions.
 - unprotect: Remove protection from a tag or wildcard pattern by name. Destructive; allows the matched tags to be created or deleted again.
 Parameter guidance:
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create.ref: git_ref; source: Branch, tag, or commit to tag.; avoid: Use ref for source revision; do not pass project paths or URLs.
 - create.tag_name: git_tag; source: Tag name requested for the release/version.
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - get.tag_name: git_tag; source: Tag string from task context or tag list output.
+- get_protected.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- get_signature.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - list.project_id: scope_project; source: Project ID or path containing tags.
+- list_protected.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- protect.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unprotect.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
 When to use: create/list/delete tags, protect or unprotect tag patterns, verify a tag's GPG/X.509 signature.
@@ -10379,6 +10851,10 @@ Parameter guidance:
 - license_list.order_by: order_by; source: Column by which to order keyset-paginated results.
 - license_list.popular: popular_filter; source: Set true to restrict the listing to popular/featured license templates.
 - license_list.sort: sort; source: Sort direction for ordered results.
+- lint.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- lint.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
+- lint_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- lint_project.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - project_template_get.key: template_key; source: Template key from project template list output (e.g. mit, apache-2.0, Go, Python).
 - project_template_get.project_id: scope_project; source: Project ID or path whose template namespace is queried.
 - project_template_get.template_type: template_type; source: Template family, one of: dockerfiles, gitignores, gitlab_ci_ymls, licenses, issues, merge_requests.
@@ -10601,16 +11077,56 @@ Action guidance:
 - update_service_account: Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Admin-only.
 - upload_avatar: Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user; there is no user_id parameter.
 Parameter guidance:
+- activate.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- add_email_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- add_gpg_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- add_ssh_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- approve.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- associations_count.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
+- ban.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- block.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- contribution_events.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - create.email: email_address; source: New account email address from task requirements.; avoid: Provide a real email address; do not pass usernames in the email field.
 - create.username: username; source: GitLab username slug for the new account.; avoid: Use username without spaces; it is different from display name.
+- create_impersonation_token.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- create_personal_access_token.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- create_runner.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- create_runner.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- deactivate.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- delete.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- delete_email_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- delete_gpg_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- delete_identity.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- delete_ssh_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- disable_two_factor.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- emails_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - event_list_project.project_id: scope_project; source: Project ID or full namespace path whose activity events should be listed.; avoid: Use the project that owns the events; do not pass a group path or user ID here.
 - get.user_id: scope_user; source: Numeric GitLab user ID from prior list/get output or explicit task input.; avoid: Use numeric user_id; do not pass username where an ID is required.
+- get_gpg_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- get_impersonation_token.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- get_ssh_key_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- get_status.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- gpg_keys_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - list.search; source: Name, username, or email fragment from the user's request.; avoid: search narrows users globally; it is not a project/group membership filter.
+- list_impersonation_tokens.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- memberships.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- modify.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 - namespace_exists.id: namespace_identifier; source: Namespace numeric ID or full path from namespace list output.
 - namespace_get.id: namespace_identifier; source: Namespace numeric ID or full path from namespace list output.
 - namespace_search.query: search_query; source: User-provided namespace search text.
+- notification_group_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- notification_group_update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- notification_project_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- notification_project_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- reject.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- revoke_impersonation_token.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- ssh_keys_for_user.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- todo_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- todo_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- unban.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- unblock.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
 When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).
@@ -11324,6 +11840,14 @@ Action guidance:
 - list: List the wiki pages of a project. Set with_content only when the page bodies are needed, since it returns the full content of every page.
 - update: Update an existing wiki page identified by slug. Provide at least one of title, content, or format to change.
 - upload_attachment: Upload a file to the wiki's uploads folder so it can be referenced from wiki pages. Provide either content_base64 or file_path, plus a filename and optional branch.
+Parameter guidance:
+- create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- upload_attachment.branch: branch_name; source: Branch name (without the "refs/heads/" prefix).
+- upload_attachment.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
 When to use: read, write, or delete wiki pages of a project; attach images or files referenced from wiki content.
@@ -11459,6 +11983,11 @@ Action guidance:
 - list_group: List audit events for one group and its subgroups/projects. Use when the prompt asks for a group's security or compliance trail. Identify the group with group_id (ID or URL-encoded path), filter with created_after and created_before (ISO 8601 dates), and paginate with page and per_page. Requires the Owner role plus Premium/Ultimate.
 - list_instance: List instance-level audit events across the whole GitLab instance. Use when an administrator asks for a security or compliance trail spanning all groups and projects. Filter with created_after and created_before (ISO 8601 dates) and paginate with page and per_page. Requires administrator access on self-managed Premium/Ultimate.
 - list_project: List audit events for one project. Use when the prompt asks for a project's security or compliance trail. Identify the project with project_id (ID or URL-encoded path), filter with created_after and created_before (ISO 8601 dates), and paginate with page and per_page. Requires the Maintainer role plus Premium/Ultimate.
+Parameter guidance:
+- get_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- get_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- list_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 List and get GitLab audit events at instance, group, and project levels for compliance tracking.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -11638,6 +12167,9 @@ Action params schema: gitlab://tools/gitlab_dora_metrics.<action>.
 Action guidance:
 - group: Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a group_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter.
 - project: Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a project_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter.
+Parameter guidance:
+- group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
 	Returns: JSON with metric data. Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -11680,6 +12212,14 @@ Action guidance:
 - disable_2fa: Disable two-factor authentication for an enterprise user by group_id plus user_id. Use when a user is locked out of 2FA and the group administrator must reset it.
 - get: Get one enterprise user by group_id plus user_id. Use after a list result or when the prompt already names a concrete enterprise user.
 - list: List the enterprise users managed by a top-level group's enterprise namespace. Use filters such as username, search, active, blocked, two_factor, created_after/created_before, plus order_by/sort and offset or keyset pagination.
+Parameter guidance:
+- delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- delete.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- disable_2fa.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- disable_2fa.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- get.user_id: scope_user; source: Numeric user ID (the global GitLab user ID, not a username).
+- list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 
 Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -11744,6 +12284,16 @@ Action guidance:
 - retry_project: Retry a failed external status check for a merge request so the external service is re-invoked. The check must currently be in the failed state. Requires Maintainer role and a Premium/Ultimate license.
 - set_project_mr_status: Set the status (passed or failed) of an external status check for a merge request, identified by sha and external_status_check_id. Typically called by the HMAC-authenticated external service that owns the check.
 - update_project: Update a project external status check service: change its name, external_url, shared secret, or protected-branch scope. Requires Maintainer role and a Premium/Ultimate license.
+Parameter guidance:
+- create_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- delete_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_project_checks.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_project_mr_checks.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- retry_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- set_project_mr_status.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- set_project_mr_status.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- update_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage external status checks for MRs and projects. CRUD checks and set/retry status.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -11936,6 +12486,11 @@ Action guidance:
 - get: Fetch a single SCIM identity for a group by its SCIM external UID (Premium/Ultimate). Use this after listing identities, or when the prompt already names a SCIM external UID, to inspect which GitLab user that SAML SSO SCIM-provisioned identity maps to and whether it is active.
 - list: List every SCIM identity provisioned for a top-level group via SAML SSO SCIM (Premium/Ultimate). Use this to enumerate which user accounts were synchronized through the group's SCIM provisioning and to discover the SCIM external UIDs needed by get, update, and delete. SCIM identities only exist after SAML SSO SCIM has synced users.
 - update: Update the extern_uid field of an existing SCIM identity for a group (Premium/Ultimate). Use this when a SAML SSO SCIM-provisioned user's external identifier changed at the identity provider and must be re-pointed; it only rewrites the SCIM external UID, not the underlying GitLab user.
+Parameter guidance:
+- delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
+- update.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 
 Manage SCIM identities for GitLab group provisioning.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -12086,6 +12641,12 @@ Action guidance:
 - get: Fetch the merge train status of a single merge request by its IID. Use when the prompt names a concrete MR and asks whether or where it sits on a merge train.
 - list_branch: List the merge requests sitting on the merge train for one target branch. Use when work is scoped to a specific branch's merge train rather than the whole project.
 - list_project: List every merge train in a project. Use when the prompt asks for all merge trains, active trains, or completed trains in a known project, optionally filtered by scope and sorted.
+Parameter guidance:
+- add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- add.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
+- get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_branch.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
+- list_project.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -12148,6 +12709,9 @@ Action guidance:
 - schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
 - status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 - tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
+Parameter guidance:
+- graph_status.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- graph_status.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 GitLab orbit actions.
 
@@ -12277,6 +12841,9 @@ Action guidance:
 - delete: Permanently delete an editable custom security attribute by attribute_id. This destructive action removes the attribute and unassigns it from every project that uses it; template-provided attributes cannot be deleted.
 - project_update: Assign or unassign existing security attributes on a single project by project_id, supplying add_attribute_ids, remove_attribute_ids, or both. Use this to classify one project; for many targets at once use security_attribute.bulk_update instead.
 - update: Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color; template-provided attributes are not editable.
+Parameter guidance:
+- create.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- project_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 
 Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.
 Returns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.
@@ -12345,6 +12912,9 @@ Action guidance:
 - create: Create a security category in a namespace before adding security attributes under it. Provide the namespace_id, a name, and optionally a description and multiple_selection flag.
 - delete: Delete a custom security category and all security attributes associated with it. Provide the category_id; this is destructive and cannot be undone.
 - update: Rename a security category or change its description. Provide the category_id and at least one of name or description; only editable custom categories can be updated.
+Parameter guidance:
+- create.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
+- update.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
 
 Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.
 Returns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.
