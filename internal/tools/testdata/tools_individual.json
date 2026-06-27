@@ -18696,7 +18696,7 @@
   },
   {
     "name": "gitlab_deploy_key_list_all",
-    "description": "List all instance-level deploy keys (admin only) with ordering and pagination. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.",
+    "description": "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of gitlab_deploy_key_list_project when you need every key on the instance. Returns: instance deploy keys with id, title, fingerprint, expiry, projects_with_write_access, projects_with_readonly_access, and pagination metadata. See also: gitlab_deploy_key_add_instance, gitlab_deploy_key_enable, gitlab_deploy_key_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -19782,7 +19782,7 @@
   },
   {
     "name": "gitlab_deploy_token_list_all",
-    "description": "List all deploy tokens across the GitLab instance (admin only). Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group.",
+    "description": "List ALL deploy tokens across the GitLab instance in one call (admin only). Use this instead of gitlab_deploy_token_list_project or gitlab_deploy_token_list_group when you need every instance-wide token. Returns: deploy tokens with id, name, username, scopes, revoked/expired state, and pagination metadata. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_list_group, gitlab_deploy_token_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -28177,27 +28177,35 @@
             "additionalProperties": false,
             "properties": {
               "id": {
+                "description": "Strategy ID (only for update operations referencing an existing strategy)",
                 "type": "integer"
               },
               "name": {
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
                 "type": "string"
               },
               "parameters": {
                 "additionalProperties": false,
+                "description": "Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)",
                 "properties": {
                   "group_id": {
+                    "description": "Group ID for the gradualRolloutUserId strategy",
                     "type": "string"
                   },
                   "percentage": {
+                    "description": "Percentage of users to include for the gradualRolloutUserId strategy (e.g. 25)",
                     "type": "string"
                   },
                   "rollout": {
+                    "description": "Rollout duration (0-100) for the gradualRolloutUserId strategy",
                     "type": "string"
                   },
                   "stickiness": {
+                    "description": "Stickiness attribute used to bucket users (default, user, session, cookie)",
                     "type": "string"
                   },
                   "user_ids": {
+                    "description": "Comma-separated user IDs for the userWithId strategy",
                     "type": "string"
                   }
                 },
@@ -28207,10 +28215,12 @@
                 ]
               },
               "scopes": {
+                "description": "Environment scopes to which this strategy applies",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "environment_scope": {
+                      "description": "Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope",
                       "type": "string"
                     }
                   },
@@ -28870,27 +28880,35 @@
             "additionalProperties": false,
             "properties": {
               "id": {
+                "description": "Strategy ID (only for update operations referencing an existing strategy)",
                 "type": "integer"
               },
               "name": {
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
                 "type": "string"
               },
               "parameters": {
                 "additionalProperties": false,
+                "description": "Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)",
                 "properties": {
                   "group_id": {
+                    "description": "Group ID for the gradualRolloutUserId strategy",
                     "type": "string"
                   },
                   "percentage": {
+                    "description": "Percentage of users to include for the gradualRolloutUserId strategy (e.g. 25)",
                     "type": "string"
                   },
                   "rollout": {
+                    "description": "Rollout duration (0-100) for the gradualRolloutUserId strategy",
                     "type": "string"
                   },
                   "stickiness": {
+                    "description": "Stickiness attribute used to bucket users (default, user, session, cookie)",
                     "type": "string"
                   },
                   "user_ids": {
+                    "description": "Comma-separated user IDs for the userWithId strategy",
                     "type": "string"
                   }
                 },
@@ -28900,10 +28918,12 @@
                 ]
               },
               "scopes": {
+                "description": "Environment scopes to which this strategy applies",
                 "items": {
                   "additionalProperties": false,
                   "properties": {
                     "environment_scope": {
+                      "description": "Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope",
                       "type": "string"
                     }
                   },
@@ -56026,7 +56046,6 @@
                   "id",
                   "username",
                   "name",
-                  "state",
                   "avatar_url",
                   "web_url"
                 ],
@@ -56125,10 +56144,6 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "sha",
-                    "filepath"
-                  ],
                   "type": [
                     "null",
                     "object"
@@ -56168,10 +56183,6 @@
                           "type": "integer"
                         }
                       },
-                      "required": [
-                        "total",
-                        "closed"
-                      ],
                       "type": [
                         "null",
                         "object"
@@ -56197,13 +56208,7 @@
                     }
                   },
                   "required": [
-                    "id",
-                    "iid",
-                    "project_id",
-                    "title",
-                    "description",
-                    "state",
-                    "web_url"
+                    "title"
                   ],
                   "type": [
                     "null",
@@ -67374,7 +67379,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -67470,10 +67474,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -67513,10 +67513,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -67542,13 +67538,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",
@@ -135774,7 +135764,7 @@
   },
   {
     "name": "gitlab_pages_domain_list_all",
-    "description": "List every Pages custom domain across the instance (admin only). Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get.",
+    "description": "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of gitlab_pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -138298,15 +138288,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -138361,15 +138355,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -138811,15 +138809,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -139077,15 +139079,19 @@
                   "additionalProperties": false,
                   "properties": {
                     "destroy": {
+                      "description": "Set true to delete this input from the schedule (only honored on update)",
                       "type": [
                         "null",
                         "boolean"
                       ]
                     },
                     "name": {
+                      "description": "Pipeline input name (must match a defined input on the target pipeline)",
                       "type": "string"
                     },
-                    "value": true
+                    "value": {
+                      "description": "Pipeline input value; type depends on the input definition"
+                    }
                   },
                   "required": [
                     "name"
@@ -139442,15 +139448,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -139635,15 +139645,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -139812,15 +139826,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -139877,15 +139895,19 @@
             "additionalProperties": false,
             "properties": {
               "destroy": {
+                "description": "Set true to delete this input from the schedule (only honored on update)",
                 "type": [
                   "null",
                   "boolean"
                 ]
               },
               "name": {
+                "description": "Pipeline input name (must match a defined input on the target pipeline)",
                 "type": "string"
               },
-              "value": true
+              "value": {
+                "description": "Pipeline input value; type depends on the input definition"
+              }
             },
             "required": [
               "name"
@@ -174581,7 +174603,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -174677,10 +174698,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -174720,10 +174737,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -174749,13 +174762,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",
@@ -174968,7 +174975,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -175064,10 +175070,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -175107,10 +175109,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -175136,13 +175134,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",
@@ -175351,7 +175343,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -175447,10 +175438,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -175490,10 +175477,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -175519,13 +175502,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",
@@ -175730,7 +175707,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -175826,10 +175802,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -175869,10 +175841,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -175898,13 +175866,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",
@@ -176824,7 +176786,6 @@
                   "id",
                   "username",
                   "name",
-                  "state",
                   "avatar_url",
                   "web_url"
                 ],
@@ -176920,10 +176881,6 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "sha",
-                    "filepath"
-                  ],
                   "type": [
                     "null",
                     "object"
@@ -176963,10 +176920,6 @@
                           "type": "integer"
                         }
                       },
-                      "required": [
-                        "total",
-                        "closed"
-                      ],
                       "type": [
                         "null",
                         "object"
@@ -176992,13 +176945,7 @@
                     }
                   },
                   "required": [
-                    "id",
-                    "iid",
-                    "project_id",
-                    "title",
-                    "description",
-                    "state",
-                    "web_url"
+                    "title"
                   ],
                   "type": [
                     "null",
@@ -177242,7 +177189,6 @@
             "id",
             "username",
             "name",
-            "state",
             "avatar_url",
             "web_url"
           ],
@@ -177338,10 +177284,6 @@
                 "type": "string"
               }
             },
-            "required": [
-              "sha",
-              "filepath"
-            ],
             "type": [
               "null",
               "object"
@@ -177381,10 +177323,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "total",
-                  "closed"
-                ],
                 "type": [
                   "null",
                   "object"
@@ -177410,13 +177348,7 @@
               }
             },
             "required": [
-              "id",
-              "iid",
-              "project_id",
-              "title",
-              "description",
-              "state",
-              "web_url"
+              "title"
             ],
             "type": [
               "null",

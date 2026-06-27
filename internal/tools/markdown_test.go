@@ -272,9 +272,9 @@ func TestFormatMR_Markdown(t *testing.T) {
 		SourceBranch: "feature", TargetBranch: "main",
 		DetailedMergeStatus: "can_be_merged", Description: "Adds a feature",
 		WebURL: "https://gitlab.example.com/mr/15",
-		Author: &mergerequests.BasicUserOutput{Username: "dev1"}, Labels: []string{"enhancement"},
-		Assignees: []*mergerequests.BasicUserOutput{{Username: "dev2"}},
-		Reviewers: []*mergerequests.BasicUserOutput{{Username: "dev3"}},
+		Author: &toolutil.BasicUserOutput{Username: "dev1"}, Labels: []string{"enhancement"},
+		Assignees: []*toolutil.BasicUserOutput{{Username: "dev2"}},
+		Reviewers: []*toolutil.BasicUserOutput{{Username: "dev3"}},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 	md := mergerequests.FormatMarkdown(mr)
@@ -313,7 +313,7 @@ func TestFormatMRMarkdownDraft_Conflicts(t *testing.T) {
 func TestFormatMR_ListMarkdown(t *testing.T) {
 	out := mergerequests.ListOutput{
 		MergeRequests: []mergerequests.Output{
-			{IID: 1, Title: testTitleFixBug, State: "merged", SourceBranch: "fix", TargetBranch: "main", Author: &mergerequests.BasicUserOutput{Username: "dev"}},
+			{IID: 1, Title: testTitleFixBug, State: "merged", SourceBranch: "fix", TargetBranch: "main", Author: &toolutil.BasicUserOutput{Username: "dev"}},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
@@ -342,7 +342,7 @@ func TestFormatMR_ApproveMarkdown(t *testing.T) {
 // TestFormatMR_NoteMarkdown verifies MR note fields in Markdown and that
 // non-system notes do not include the system note marker.
 func TestFormatMR_NoteMarkdown(t *testing.T) {
-	n := mrnotes.Output{ID: 10, Body: "LGTM", Author: &mrnotes.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, System: false}
+	n := mrnotes.Output{ID: 10, Body: "LGTM", Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, System: false}
 	md := mrnotes.FormatOutputMarkdown(n)
 
 	if !strings.Contains(md, "## MR Note #10") {
@@ -368,7 +368,7 @@ func TestFormatMR_NotesListMarkdown(t *testing.T) {
 
 // TestFormatDiscussion_NoteMarkdown verifies discussion note fields in Markdown.
 func TestFormatDiscussion_NoteMarkdown(t *testing.T) {
-	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &mrdiscussions.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101, Resolved: false}
+	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &toolutil.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101, Resolved: false}
 	md := mrdiscussions.FormatNoteMarkdown(n)
 
 	if !strings.Contains(md, "## Discussion Note #5") {
@@ -386,8 +386,8 @@ func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 		ID:             "abc123",
 		IndividualNote: false,
 		Notes: []*mrdiscussions.NoteOutput{
-			{ID: 1, Body: "First note", Author: &mrdiscussions.NoteUserOutput{Username: "dev1"}},
-			{ID: 2, Body: "Reply", Author: &mrdiscussions.NoteUserOutput{Username: "dev2"}},
+			{ID: 1, Body: "First note", Author: &toolutil.NoteUserOutput{Username: "dev1"}},
+			{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "dev2"}},
 		},
 	}
 	md := mrdiscussions.FormatOutputMarkdown(d)
@@ -548,9 +548,9 @@ func TestFormatGroup_MemberListMarkdown(t *testing.T) {
 func TestFormatIssue_Markdown(t *testing.T) {
 	i := issues.Output{
 		ID: 1, IID: 5, Title: testTitleBugReport, State: "opened",
-		Author: &issues.IssueAuthorOutput{Username: "reporter"}, Labels: []string{"bug", "critical"},
-		Assignees: []*issues.IssueAssigneeOutput{{Username: "dev1"}},
-		Milestone: &issues.MilestoneOutput{Title: "v1.0"},
+		Author: &toolutil.IssueUserOutput{Username: "reporter"}, Labels: []string{"bug", "critical"},
+		Assignees: []*toolutil.IssueUserOutput{{Username: "dev1"}},
+		Milestone: &toolutil.MRMilestoneOutput{Title: "v1.0"},
 		DueDate:   "2026-03-01", CreatedAt: testDate20260101,
 		Description: "Something is broken",
 		WebURL:      "https://gitlab.example.com/issues/5",
@@ -574,8 +574,8 @@ func TestFormatIssue_Markdown(t *testing.T) {
 func TestFormatIssue_MarkdownConfidentialTasks(t *testing.T) {
 	i := issues.Output{
 		IID: 42, Title: "Secret task", State: "opened",
-		Author: &issues.IssueAuthorOutput{Username: "admin"}, Confidential: true,
-		TaskCompletionStatus: &issues.TaskCompletionStatusOutput{CompletedCount: 2, Count: 5},
+		Author: &toolutil.IssueUserOutput{Username: "admin"}, Confidential: true,
+		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{CompletedCount: 2, Count: 5},
 		UserNotesCount:       3,
 		WebURL:               "https://gitlab.example.com/issues/42",
 	}
@@ -595,7 +595,7 @@ func TestFormatIssue_MarkdownConfidentialTasks(t *testing.T) {
 func TestFormatIssue_ListMarkdown(t *testing.T) {
 	out := issues.ListOutput{
 		Issues: []issues.Output{
-			{IID: 1, Title: "Feature req", State: "opened", Author: &issues.IssueAuthorOutput{Username: "user1"}, Labels: []string{"enhancement"}},
+			{IID: 1, Title: "Feature req", State: "opened", Author: &toolutil.IssueUserOutput{Username: "user1"}, Labels: []string{"enhancement"}},
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
@@ -609,7 +609,7 @@ func TestFormatIssue_ListMarkdown(t *testing.T) {
 // markers in Markdown output.
 func TestFormatIssue_NoteMarkdown(t *testing.T) {
 	t.Run("regular note", func(t *testing.T) {
-		n := issuenotes.Output{ID: 1, Body: "Comment", Author: &issuenotes.NoteUserOutput{Username: "user"}, CreatedAt: testDate20260101, System: false, Internal: false}
+		n := issuenotes.Output{ID: 1, Body: "Comment", Author: &toolutil.NoteUserOutput{Username: "user"}, CreatedAt: testDate20260101, System: false, Internal: false}
 		md := issuenotes.FormatOutputMarkdown(n)
 		if !strings.Contains(md, "## Issue Note #1") {
 			t.Error(errMissingHeader)
@@ -620,7 +620,7 @@ func TestFormatIssue_NoteMarkdown(t *testing.T) {
 	})
 
 	t.Run("system internal note", func(t *testing.T) {
-		n := issuenotes.Output{ID: 2, Body: "Label added", Author: &issuenotes.NoteUserOutput{Username: "bot"}, CreatedAt: testDate20260101, System: true, Internal: true}
+		n := issuenotes.Output{ID: 2, Body: "Label added", Author: &toolutil.NoteUserOutput{Username: "bot"}, CreatedAt: testDate20260101, System: true, Internal: true}
 		md := issuenotes.FormatOutputMarkdown(n)
 		if !strings.Contains(md, "**System note**") {
 			t.Error("missing system marker")
@@ -954,7 +954,7 @@ func TestFormatMR_RebaseMarkdown(t *testing.T) {
 func TestFormatIssue_ListGroupMarkdown(t *testing.T) {
 	t.Run("with issues", func(t *testing.T) {
 		out := issues.ListGroupOutput{
-			Issues:     []issues.Output{{IID: 5, Title: "bug", State: "opened", Author: &issues.IssueAuthorOutput{Username: "user"}, Labels: []string{"bug", "critical"}}},
+			Issues:     []issues.Output{{IID: 5, Title: "bug", State: "opened", Author: &toolutil.IssueUserOutput{Username: "user"}, Labels: []string{"bug", "critical"}}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := issues.FormatListGroupMarkdown(out)
@@ -1830,7 +1830,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			result: issues.Output{
 				ID: 10, IID: 5, Title: "Fix login bug", State: "opened",
 				WebURL: "https://gitlab.example.com/group/project/-/issues/5",
-				Author: &issues.IssueAuthorOutput{Username: "alice"}, CreatedAt: "2026-02-01 09:00",
+				Author: &toolutil.IssueUserOutput{Username: "alice"}, CreatedAt: "2026-02-01 09:00",
 			},
 			expectWebURL: true,
 		},
@@ -1838,8 +1838,8 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "issues.ListOutput",
 			result: issues.ListOutput{
 				Issues: []issues.Output{
-					{ID: 10, IID: 5, Title: "Fix login", State: "opened", Author: &issues.IssueAuthorOutput{Username: "alice"}},
-					{ID: 11, IID: 6, Title: "Add tests", State: "closed", Author: &issues.IssueAuthorOutput{Username: "bob"}},
+					{ID: 10, IID: 5, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "alice"}},
+					{ID: 11, IID: 6, Title: "Add tests", State: "closed", Author: &toolutil.IssueUserOutput{Username: "bob"}},
 				},
 			},
 		},
@@ -1847,7 +1847,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "mergerequests.Output",
 			result: mergerequests.Output{
 				ID: 20, IID: 3, Title: "Feature branch", State: "opened",
-				SourceBranch: "feature/x", TargetBranch: "main", Author: &mergerequests.BasicUserOutput{Username: "alice"},
+				SourceBranch: "feature/x", TargetBranch: "main", Author: &toolutil.BasicUserOutput{Username: "alice"},
 				WebURL:    "https://gitlab.example.com/group/project/-/merge_requests/3",
 				CreatedAt: "2026-03-10 14:00",
 			},
@@ -1857,7 +1857,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			name: "mergerequests.ListOutput",
 			result: mergerequests.ListOutput{
 				MergeRequests: []mergerequests.Output{
-					{ID: 20, IID: 3, Title: "MR 1", State: "opened", Author: &mergerequests.BasicUserOutput{Username: "alice"}, SourceBranch: "f1", TargetBranch: "main"},
+					{ID: 20, IID: 3, Title: "MR 1", State: "opened", Author: &toolutil.BasicUserOutput{Username: "alice"}, SourceBranch: "f1", TargetBranch: "main"},
 				},
 			},
 		},
