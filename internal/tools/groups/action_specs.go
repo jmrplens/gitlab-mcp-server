@@ -506,19 +506,19 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 	switch individualTool {
 	case "gitlab_group_get_push_rules":
 		options.Usage = "Get a group's push rules. Returns the singleton push-rule configuration such as commit_message_regex and reject_unsigned_commits. Premium/Ultimate, Owner role."
-		options.Aliases = []string{"get group push rules", "show group push rule configuration"}
+		options.Aliases = []string{"get group push rules", "show group push rule configuration", "view group push rule", "fetch group push rules"}
 		options.IndividualTool.Description = "Get a GitLab group's push rules. Returns: the singleton push-rule configuration. See also: gitlab_group_add_push_rule, gitlab_group_edit_push_rule."
 	case "gitlab_group_add_push_rule":
 		options.Usage = "Add push rules to a group. Include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with group_id alone. Premium/Ultimate, Owner role."
-		options.Aliases = []string{"add group push rule", "create group push rules"}
+		options.Aliases = []string{"add group push rule", "create group push rules", "set group push rule", "configure group push rules"}
 		options.IndividualTool.Description = "Add push rules to a GitLab group. Returns: the created push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_edit_push_rule."
 	case "gitlab_group_edit_push_rule":
 		options.Usage = "Edit a group's push rules. Send group_id plus only the settings to change. Use reject_unsigned_commits, not deny_unsigned_commits. Premium/Ultimate, Owner role."
-		options.Aliases = []string{"edit group push rule", "update group push rules"}
+		options.Aliases = []string{"edit group push rule", "update group push rules", "modify group push rule", "change group push rule"}
 		options.IndividualTool.Description = "Edit a GitLab group's push rules. Returns: the updated push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
 	case "gitlab_group_delete_push_rule":
 		options.Usage = "Delete a group's push rules. Destructive. Send group_id. Premium/Ultimate, Owner role."
-		options.Aliases = []string{"delete group push rule", "remove group push rules"}
+		options.Aliases = []string{"delete group push rule", "remove group push rules", "drop group push rules", "clear group push rule"}
 		options.IndividualTool.Description = "Delete a GitLab group's push rules. Returns: a success confirmation. See also: gitlab_group_get_push_rules, gitlab_group_add_push_rule."
 	default:
 		return false
@@ -660,23 +660,23 @@ func applyGroupHookSubOpMetadata(individualTool string, options *toolutil.Action
 		options.IndividualTool.Description = "Set a custom header on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_custom_header, gitlab_group_hook_get."
 	case toolGroupHookDelHeader:
 		options.Usage = "Delete a custom HTTP header from a group webhook by hook_id and key. Destructive. Requires Owner role."
-		options.Aliases = []string{"delete group hook custom header", "remove webhook header from group hook"}
+		options.Aliases = []string{"delete group hook custom header", "remove webhook header from group hook", "drop group webhook header", "clear group hook custom header"}
 		options.IndividualTool.Description = "Delete a custom header from a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_set_custom_header, gitlab_group_hook_get."
 	case toolGroupHookSetURLVar:
 		options.Usage = "Set (create or update) a templated URL variable on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role."
-		options.Aliases = []string{"set group hook url variable", "add url variable to group webhook"}
+		options.Aliases = []string{"set group hook url variable", "add url variable to group webhook", "configure group webhook url variable", "create group hook url variable"}
 		options.IndividualTool.Description = "Set a URL variable on a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_delete_url_variable, gitlab_group_hook_get."
 	case toolGroupHookDelURLVar:
 		options.Usage = "Delete a templated URL variable from a group webhook by hook_id and key. Destructive. Requires Owner role."
-		options.Aliases = []string{"delete group hook url variable", "remove url variable from group webhook"}
+		options.Aliases = []string{"delete group hook url variable", "remove url variable from group webhook", "drop group webhook url variable", "clear group hook url variable"}
 		options.IndividualTool.Description = "Delete a URL variable from a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_set_url_variable, gitlab_group_hook_get."
 	case toolGroupHookTest:
 		options.Usage = "Trigger a test event for a group webhook by hook_id and trigger event type (push_events, pipeline_events, etc.). Use to verify webhook delivery. Requires Owner role."
-		options.Aliases = []string{"test group webhook", "trigger group hook test", "send test event to group webhook"}
+		options.Aliases = []string{"test group webhook", "trigger group hook test", "send test event to group webhook", "fire test event for group hook"}
 		options.IndividualTool.Description = "Trigger a test event for a GitLab group webhook. Returns: a success confirmation. See also: gitlab_group_hook_get, gitlab_group_hook_resend_event."
 	case toolGroupHookResend:
 		options.Usage = "Resend a specific previously-delivered group hook event by hook_id and hook_event_id. Use to retry a failed webhook delivery. Requires Owner role."
-		options.Aliases = []string{"resend group hook event", "retry group webhook delivery", "redeliver group hook event"}
+		options.Aliases = []string{"resend group hook event", "retry group webhook delivery", "redeliver group hook event", "replay group webhook event"}
 		options.IndividualTool.Description = "Resend a GitLab group hook event. Returns: a success confirmation. See also: gitlab_group_hook_test, gitlab_group_hook_get."
 	}
 }
