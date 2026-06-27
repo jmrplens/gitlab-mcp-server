@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Access & Authentication
-> **Individual tools**: 62
+> **Individual tools**: 68
 > **Meta-tool**: `gitlab_access` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Access Tokens API](https://docs.gitlab.com/ee/api/project_access_tokens.html), [Deploy Tokens API](https://docs.gitlab.com/ee/api/deploy_tokens.html), [Deploy Keys API](https://docs.gitlab.com/ee/api/deploy_keys.html), [Members API](https://docs.gitlab.com/ee/api/members.html)
 > **Audience**: 👤 End users, AI assistant users

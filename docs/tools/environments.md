@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Environments, Deployments, Protected Environments, Freeze Periods
-> **Individual tools**: 23
+> **Individual tools**: 24
 > **Meta-tools**: `gitlab_environment` (`TOOL_SURFACE=meta` catalog). Protected environment actions use `protected_*` prefix, freeze period actions use `freeze_*` prefix, deployment actions use `deployment_*` prefix.
 > **GitLab API**: [Environments API](https://docs.gitlab.com/ee/api/environments.html) · [Deployments API](https://docs.gitlab.com/ee/api/deployments.html) · [Protected Environments API](https://docs.gitlab.com/ee/api/protected_environments.html) · [Freeze Periods API](https://docs.gitlab.com/ee/api/freeze_periods.html)
 > **Audience**: 👤 End users, AI assistant users

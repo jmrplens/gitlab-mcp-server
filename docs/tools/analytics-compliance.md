@@ -1,4 +1,13 @@
-# Analytics & Compliance
+# Analytics & Compliance — Tool Reference
+
+> **Diátaxis type**: Reference
+> **Domain**: Analytics & Compliance
+> **Individual tools**: 12
+> **Meta-tool**: split across `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias`
+> **GitLab API**: [Group Activity Analytics API](https://docs.gitlab.com/ee/api/group_activity_analytics.html), [DORA Metrics API](https://docs.gitlab.com/ee/api/dora/metrics.html), [Compliance Policy API](https://docs.gitlab.com/ee/api/compliance_policy.html), [Project Aliases API](https://docs.gitlab.com/ee/api/project_aliases.html)
+> **Audience**: End users, AI assistant users
+
+---
 
 Tools for group activity analytics, DORA metrics, project statistics, admin compliance policy settings, and project aliases.
 

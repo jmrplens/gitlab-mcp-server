@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Snippets
-> **Individual tools**: 26
+> **Individual tools**: 24
 > **Meta-tool**: `gitlab_snippet` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Snippets API](https://docs.gitlab.com/ee/api/snippets.html), [Project Snippets API](https://docs.gitlab.com/ee/api/project_snippets.html), [Snippet Discussions API](https://docs.gitlab.com/ee/api/discussions.html#snippets), [Notes API — Snippets](https://docs.gitlab.com/ee/api/notes.html#snippets)
 > **Audience**: 👤 End users, AI assistant users

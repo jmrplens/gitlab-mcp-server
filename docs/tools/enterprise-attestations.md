@@ -1,4 +1,14 @@
-# Enterprise Users & Attestations
+# Enterprise Users & Attestations — Tool Reference
+
+> **Diátaxis type**: Reference
+> **Domain**: Enterprise Users & Attestations
+> **Individual tools**: 6
+> **Meta-tool**: `gitlab_enterprise_user`, `gitlab_attestation`
+> **GitLab API**: [Enterprise Users API](https://docs.gitlab.com/ee/api/enterprise_users.html), [Attestations API](https://docs.gitlab.com/ee/api/attestations.html)
+> **Audience**: End users, AI assistant users
+> **Tier**: Premium (enterprise users), Ultimate (attestations)
+
+---
 
 Tools for managing enterprise users at the group level and build attestations at the project level.
 
