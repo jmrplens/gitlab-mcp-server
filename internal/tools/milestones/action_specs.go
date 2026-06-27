@@ -105,6 +105,9 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Aliases = []string{"list milestones", "show project milestones", "find milestones"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, actionMilestoneMergeRequests}
 		options.IndividualTool.Description = "List milestones in one project with state/title/search filters, ancestor inclusion, ordering, and pagination. Returns: matching milestones with state, dates, expiry, web URL, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_create, gitlab_milestone_issues."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "closed"}}),
+		}
 	case "milestone_get":
 		options.Usage = "Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required."
 		options.Aliases = []string{"get milestone", "show milestone details", "lookup milestone"}
@@ -128,6 +131,9 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Aliases = []string{"update milestone", "edit milestone", "close milestone", "reopen milestone"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, "milestone.delete"}
 		options.IndividualTool.Description = "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
+		}
 	case "milestone_delete":
 		options.Usage = "Delete a milestone from a project by milestone_iid. Requires Maintainer or Owner role."
 		options.Aliases = []string{"delete milestone", "remove milestone", "destroy milestone", "drop milestone"}

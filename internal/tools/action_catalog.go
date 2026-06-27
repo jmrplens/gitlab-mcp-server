@@ -142,6 +142,11 @@ func pruneSpecFieldsByTier(spec toolutil.ActionSpec, tier edition.Tier) toolutil
 	// server must not reject its own tool output over those extra properties.
 	spec.Route.InputSchema = pruneSchemaFieldsByTier(spec.Route.InputSchema, spec.Route.InputType, tier, false)
 	spec.Route.OutputSchema = pruneSchemaFieldsByTier(spec.Route.OutputSchema, spec.Route.OutputType, tier, true)
+	// Tier pruning may have removed properties that carried an input-schema
+	// override (e.g. an ultimate-only parameter on a Free instance). Drop those
+	// now-dangling overrides so catalog assembly does not reject them; the
+	// override's enum/patch was already baked into the property before pruning.
+	spec.InputSchemaOverrides = toolutil.FilterOverridesForSchema(spec.Route.InputSchema, spec.InputSchemaOverrides)
 	return spec
 }
 

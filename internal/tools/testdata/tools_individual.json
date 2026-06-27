@@ -2448,7 +2448,12 @@
           "type": "string"
         },
         "usage_type": {
-          "description": "Usage type: auth or signing (default: auth)",
+          "description": "SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.",
+          "enum": [
+            "auth",
+            "signing",
+            "auth_and_signing"
+          ],
           "type": "string"
         }
       },
@@ -2511,7 +2516,12 @@
           "type": "string"
         },
         "usage_type": {
-          "description": "Usage type: auth or signing (default: auth)",
+          "description": "SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.",
+          "enum": [
+            "auth",
+            "signing",
+            "auth_and_signing"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -7852,6 +7862,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -8331,6 +8345,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -8614,6 +8632,10 @@
         },
         "line_type": {
           "description": "Line type: new or old (default: new)",
+          "enum": [
+            "new",
+            "old"
+          ],
           "type": "string"
         },
         "note": {
@@ -8895,6 +8917,13 @@
             "properties": {
               "action": {
                 "description": "Action to perform on the file (create, update, delete, move, chmod)",
+                "enum": [
+                  "create",
+                  "delete",
+                  "move",
+                  "update",
+                  "chmod"
+                ],
                 "type": "string"
               },
               "content": {
@@ -9934,6 +9963,11 @@
         },
         "type": {
           "description": "Filter by ref type: branch, tag, or all (default: all)",
+          "enum": [
+            "branch",
+            "tag",
+            "all"
+          ],
           "type": "string"
         }
       },
@@ -10413,6 +10447,14 @@
         },
         "state": {
           "description": "Status state: pending, running, success, failed, canceled",
+          "enum": [
+            "pending",
+            "running",
+            "success",
+            "failed",
+            "canceled",
+            "skipped"
+          ],
           "type": "string"
         },
         "target_url": {
@@ -15220,7 +15262,12 @@
           ]
         },
         "runner_type": {
-          "description": "Runner type: instance_type or group_type or project_type",
+          "description": "Runner scope: instance_type (shared), group_type (requires group_id), or project_type (requires project_id).",
+          "enum": [
+            "instance_type",
+            "group_type",
+            "project_type"
+          ],
           "type": "string"
         },
         "tag_list": {
@@ -15304,6 +15351,11 @@
         },
         "health_status": {
           "description": "Health status (onTrack/needsAttention/atRisk)",
+          "enum": [
+            "onTrack",
+            "needsAttention",
+            "atRisk"
+          ],
           "type": "string"
         },
         "label_ids": {
@@ -15322,6 +15374,11 @@
           "properties": {
             "link_type": {
               "description": "Link type: BLOCKS, BLOCKED_BY, or RELATED",
+              "enum": [
+                "BLOCKED_BY",
+                "BLOCKS",
+                "RELATED"
+              ],
               "type": "string"
             },
             "work_item_ids": {
@@ -23490,6 +23547,10 @@
       "properties": {
         "auto_stop_setting": {
           "description": "Auto-stop behavior: always or with_action",
+          "enum": [
+            "always",
+            "with_action"
+          ],
           "type": "string"
         },
         "cluster_agent_id": {
@@ -23525,6 +23586,13 @@
         },
         "tier": {
           "description": "Deployment tier: production, staging, testing, development, other",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         }
       },
@@ -24462,6 +24530,11 @@
         },
         "states": {
           "description": "Filter by state: available, stopping, stopped",
+          "enum": [
+            "available",
+            "stopping",
+            "stopped"
+          ],
           "type": "string"
         }
       },
@@ -25375,6 +25448,10 @@
       "properties": {
         "auto_stop_setting": {
           "description": "Auto-stop behavior: always or with_action",
+          "enum": [
+            "always",
+            "with_action"
+          ],
           "type": "string"
         },
         "cluster_agent_id": {
@@ -25414,6 +25491,13 @@
         },
         "tier": {
           "description": "Updated tier: production, staging, testing, development, other",
+          "enum": [
+            "production",
+            "staging",
+            "testing",
+            "development",
+            "other"
+          ],
           "type": "string"
         }
       },
@@ -25865,6 +25949,11 @@
         },
         "health_status": {
           "description": "Health status (onTrack/needsAttention/atRisk)",
+          "enum": [
+            "onTrack",
+            "needsAttention",
+            "atRisk"
+          ],
           "type": "string"
         },
         "label_ids": {
@@ -27099,6 +27188,11 @@
         },
         "order_by": {
           "description": "Order epics by field (created_at, updated_at, title)",
+          "enum": [
+            "created_at",
+            "updated_at",
+            "title"
+          ],
           "type": "string"
         },
         "page": {
@@ -27131,6 +27225,11 @@
         },
         "state": {
           "description": "Filter by state (opened/closed/all)",
+          "enum": [
+            "opened",
+            "closed",
+            "all"
+          ],
           "type": "string"
         },
         "updated_after": {
@@ -27975,6 +28074,11 @@
         },
         "health_status": {
           "description": "Health status (onTrack/needsAttention/atRisk)",
+          "enum": [
+            "onTrack",
+            "needsAttention",
+            "atRisk"
+          ],
           "type": "string"
         },
         "parent_id": {
@@ -28000,10 +28104,21 @@
         },
         "state_event": {
           "description": "State event: CLOSE or REOPEN",
+          "enum": [
+            "CLOSE",
+            "REOPEN"
+          ],
           "type": "string"
         },
         "status": {
           "description": "Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE",
+          "enum": [
+            "TODO",
+            "IN_PROGRESS",
+            "DONE",
+            "WONT_DO",
+            "DUPLICATE"
+          ],
           "type": "string"
         },
         "title": {
@@ -28746,6 +28861,10 @@
         },
         "scope": {
           "description": "Filter by scope (enabled or disabled)",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "sort": {
@@ -29788,6 +29907,10 @@
         },
         "encoding": {
           "description": "Content encoding: text or base64 (default: text)",
+          "enum": [
+            "text",
+            "base64"
+          ],
           "type": "string"
         },
         "execute_filemode": {
@@ -30326,6 +30449,10 @@
         },
         "encoding": {
           "description": "Content encoding: text or base64 (default: text)",
+          "enum": [
+            "text",
+            "base64"
+          ],
           "type": "string"
         },
         "execute_filemode": {
@@ -33269,10 +33396,21 @@
         },
         "interval": {
           "description": "Aggregation interval: daily, monthly, all (default: daily)",
+          "enum": [
+            "daily",
+            "monthly",
+            "all"
+          ],
           "type": "string"
         },
         "metric": {
           "description": "DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate",
+          "enum": [
+            "deployment_frequency",
+            "lead_time_for_changes",
+            "time_to_restore_service",
+            "change_failure_rate"
+          ],
           "type": "string"
         },
         "start_date": {
@@ -36181,10 +36319,21 @@
         },
         "interval": {
           "description": "Aggregation interval: daily, monthly, all (default: daily)",
+          "enum": [
+            "daily",
+            "monthly",
+            "all"
+          ],
           "type": "string"
         },
         "metric": {
           "description": "DORA metric type: deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate",
+          "enum": [
+            "deployment_frequency",
+            "lead_time_for_changes",
+            "time_to_restore_service",
+            "change_failure_rate"
+          ],
           "type": "string"
         },
         "project_id": {
@@ -40207,7 +40356,11 @@
           "type": "string"
         },
         "type": {
-          "description": "Filter by membership type: Project or Namespace",
+          "description": "Membership type filter: Project (project memberships) or Namespace (group memberships).",
+          "enum": [
+            "Project",
+            "Namespace"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -40992,6 +41145,10 @@
         },
         "state": {
           "description": "Token state filter: active, inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         }
       },
@@ -53348,6 +53505,10 @@
         },
         "state": {
           "description": "Filter by state (active, closed)",
+          "enum": [
+            "active",
+            "closed"
+          ],
           "type": "string"
         },
         "title": {
@@ -53682,6 +53843,10 @@
         },
         "state_event": {
           "description": "State transition: activate or close",
+          "enum": [
+            "close",
+            "activate"
+          ],
           "type": "string"
         },
         "title": {
@@ -63104,6 +63269,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -63574,6 +63743,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -64613,6 +64786,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -64983,6 +65160,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -100619,6 +100800,10 @@
         },
         "scope": {
           "description": "Filter by scope: active, complete",
+          "enum": [
+            "active",
+            "complete"
+          ],
           "type": "string"
         },
         "sort": {
@@ -102235,6 +102420,10 @@
         },
         "scope": {
           "description": "Filter by scope: active, complete",
+          "enum": [
+            "active",
+            "complete"
+          ],
           "type": "string"
         },
         "sort": {
@@ -106176,7 +106365,14 @@
           ]
         },
         "order_by": {
-          "description": "Order by: id | name | username | created_at | updated_at",
+          "description": "Order users by: id, name, username, created_at, or updated_at.",
+          "enum": [
+            "id",
+            "name",
+            "username",
+            "created_at",
+            "updated_at"
+          ],
           "type": "string"
         },
         "page": {
@@ -106216,7 +106412,11 @@
           "type": "string"
         },
         "two_factor": {
-          "description": "Filter by 2FA status: enabled or disabled",
+          "description": "Filter by two-factor authentication status: enabled or disabled.",
+          "enum": [
+            "enabled",
+            "disabled"
+          ],
           "type": "string"
         },
         "username": {
@@ -107100,6 +107300,11 @@
         },
         "state": {
           "description": "Filter by state (opened/closed/all)",
+          "enum": [
+            "opened",
+            "closed",
+            "all"
+          ],
           "type": "string"
         },
         "types": {
@@ -107822,6 +108027,10 @@
         },
         "state": {
           "description": "Filter by state (active, closed)",
+          "enum": [
+            "active",
+            "closed"
+          ],
           "type": "string"
         },
         "title": {
@@ -108155,6 +108364,10 @@
         },
         "state_event": {
           "description": "State transition: activate or close",
+          "enum": [
+            "close",
+            "activate"
+          ],
           "type": "string"
         },
         "title": {
@@ -134028,6 +134241,14 @@
         },
         "level": {
           "description": "Notification level: disabled, participating, watch, global, mention, custom",
+          "enum": [
+            "disabled",
+            "participating",
+            "watch",
+            "global",
+            "mention",
+            "custom"
+          ],
           "type": "string"
         },
         "merge_merge_request": {
@@ -134418,6 +134639,14 @@
         },
         "level": {
           "description": "Notification level: disabled, participating, watch, global, mention, custom",
+          "enum": [
+            "disabled",
+            "participating",
+            "watch",
+            "global",
+            "mention",
+            "custom"
+          ],
           "type": "string"
         },
         "merge_merge_request": {
@@ -134807,6 +135036,14 @@
         },
         "level": {
           "description": "Notification level: disabled, participating, watch, global, mention, custom",
+          "enum": [
+            "disabled",
+            "participating",
+            "watch",
+            "global",
+            "mention",
+            "custom"
+          ],
           "type": "string"
         },
         "merge_merge_request": {
@@ -137285,6 +137522,10 @@
         },
         "state": {
           "description": "Token state filter: active, inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         },
         "user_id": {
@@ -139446,6 +139687,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var (default) or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -139634,6 +139879,10 @@
         },
         "variable_type": {
           "description": "Variable type: env_var or file",
+          "enum": [
+            "env_var",
+            "file"
+          ],
           "type": "string"
         }
       },
@@ -143204,6 +143453,10 @@
         },
         "state": {
           "description": "Token state filter: active, inactive",
+          "enum": [
+            "active",
+            "inactive"
+          ],
           "type": "string"
         }
       },
@@ -149913,6 +150166,20 @@
       "properties": {
         "action": {
           "description": "Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)",
+          "enum": [
+            "created",
+            "updated",
+            "closed",
+            "reopened",
+            "pushed",
+            "commented",
+            "merged",
+            "joined",
+            "left",
+            "destroyed",
+            "expired",
+            "approved"
+          ],
           "type": "string"
         },
         "after": {
@@ -149957,6 +150224,16 @@
         },
         "target_type": {
           "description": "Filter by target type (issue, milestone, merge_request, note, project, snippet, user)",
+          "enum": [
+            "issue",
+            "milestone",
+            "merge_request",
+            "note",
+            "project",
+            "snippet",
+            "user",
+            "epic"
+          ],
           "type": "string"
         }
       },
@@ -191508,7 +191785,11 @@
       "additionalProperties": false,
       "properties": {
         "availability": {
-          "description": "The availability: not_set or busy",
+          "description": "User availability: not_set (clear busy state) or busy.",
+          "enum": [
+            "not_set",
+            "busy"
+          ],
           "type": "string"
         },
         "clear_status_after": {
@@ -200925,6 +201206,11 @@
         },
         "health_status": {
           "description": "Health status (onTrack/needsAttention/atRisk)",
+          "enum": [
+            "onTrack",
+            "needsAttention",
+            "atRisk"
+          ],
           "type": "string"
         },
         "iteration_id": {
@@ -200964,10 +201250,21 @@
         },
         "state_event": {
           "description": "State event: CLOSE or REOPEN",
+          "enum": [
+            "CLOSE",
+            "REOPEN"
+          ],
           "type": "string"
         },
         "status": {
           "description": "Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE",
+          "enum": [
+            "TODO",
+            "IN_PROGRESS",
+            "DONE",
+            "WONT_DO",
+            "DUPLICATE"
+          ],
           "type": "string"
         },
         "title": {
@@ -201515,6 +201812,20 @@
       "properties": {
         "action": {
           "description": "Filter by action type (created, updated, closed, reopened, pushed, commented, merged, joined, left, destroyed, expired)",
+          "enum": [
+            "created",
+            "updated",
+            "closed",
+            "reopened",
+            "pushed",
+            "commented",
+            "merged",
+            "joined",
+            "left",
+            "destroyed",
+            "expired",
+            "approved"
+          ],
           "type": "string"
         },
         "after": {
@@ -201559,6 +201870,16 @@
         },
         "target_type": {
           "description": "Filter by target type (issue, milestone, merge_request, note, project, snippet, user)",
+          "enum": [
+            "issue",
+            "milestone",
+            "merge_request",
+            "note",
+            "project",
+            "snippet",
+            "user",
+            "epic"
+          ],
           "type": "string"
         }
       },

@@ -394,6 +394,10 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 
+	if overrides := userInputSchemaOverrides(individualTool); len(overrides) > 0 {
+		options.InputSchemaOverrides = overrides
+	}
+
 	switch individualTool {
 	case toolUserCurrent:
 		options.Usage = "Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active."
@@ -458,4 +462,63 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 	}
 
 	return options
+}
+
+// userInputSchemaOverrides returns GitLab-verified JSON Schema enum constraints
+// for fields whose valid values are a closed, documented set. Only fields
+// confirmed against both the client-go SDK constants and the GitLab REST API
+// docs are included here; free-text or ID fields are excluded.
+func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverride {
+	switch individualTool {
+	case "gitlab_list_users":
+		// Docs: https://docs.gitlab.com/ee/api/users.html#list-all-users
+		// SDK: ListUsersOptions.OrderBy *string, ListUsersOptions.TwoFactor *string
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum":        []any{"id", "name", "username", "created_at", "updated_at"},
+				"description": "Order users by: id, name, username, created_at, or updated_at.",
+			}),
+			toolutil.SchemaPropertyOverride("two_factor", map[string]any{
+				"enum":        []any{"enabled", "disabled"},
+				"description": "Filter by two-factor authentication status: enabled or disabled.",
+			}),
+		}
+	case "gitlab_set_user_status":
+		// Docs: https://docs.gitlab.com/ee/api/users.html#set-user-status
+		// SDK: AvailabilityValue consts: not_set, busy (types.go)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("availability", map[string]any{
+				"enum":        []any{"not_set", "busy"},
+				"description": "User availability: not_set (clear busy state) or busy.",
+			}),
+		}
+	case "gitlab_add_ssh_key", "gitlab_add_ssh_key_for_user":
+		// Docs: https://docs.gitlab.com/ee/api/user_keys.html#add-an-ssh-key
+		// SDK: AddSSHKeyOptions.UsageType *string (no consts, string param)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("usage_type", map[string]any{
+				"enum":        []any{"auth", "signing", "auth_and_signing"},
+				"description": "SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.",
+			}),
+		}
+	case "gitlab_create_user_runner":
+		// Docs: https://docs.gitlab.com/ee/api/users.html#create-a-runner-linked-to-a-user
+		// SDK: CreateUserRunnerOptions.RunnerType *string (no consts, string param)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("runner_type", map[string]any{
+				"enum":        []any{"instance_type", "group_type", "project_type"},
+				"description": "Runner scope: instance_type (shared), group_type (requires group_id), or project_type (requires project_id).",
+			}),
+		}
+	case "gitlab_get_user_memberships":
+		// Docs: https://docs.gitlab.com/ee/api/users.html#list-user-memberships
+		// SDK: GetUserMembershipOptions.Type *string (no consts, string param)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("type", map[string]any{
+				"enum":        []any{"Project", "Namespace"},
+				"description": "Membership type filter: Project (project memberships) or Namespace (group memberships).",
+			}),
+		}
+	}
+	return nil
 }

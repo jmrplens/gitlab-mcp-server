@@ -89,7 +89,8 @@ var mergeTrainActionMeta = map[string]mergeTrainActionMetaEntry{
 // decorateMergeTrainMeta fills non-generic Usage, natural-language Aliases,
 // RelatedActions, and the "Returns: … See also: …" individual-tool description
 // for a merge train action, replacing the generic placeholder metadata from
-// [mergeTrainOptions].
+// [mergeTrainOptions]. It also sets InputSchemaOverrides for tools with
+// constrained enum parameters.
 func decorateMergeTrainMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	meta, ok := mergeTrainActionMeta[individualTool]
 	if !ok {
@@ -106,6 +107,14 @@ func decorateMergeTrainMeta(options *toolutil.ActionSpecOptions, individualTool 
 	}
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
+	}
+	switch individualTool {
+	case "gitlab_list_project_merge_trains", "gitlab_list_merge_request_in_merge_train":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("scope", map[string]any{
+				"enum": []any{"active", "complete"},
+			}),
+		}
 	}
 }
 

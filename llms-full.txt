@@ -9018,7 +9018,7 @@ Action guidance:
 - commit_refs: List the branches and tags that contain a commit, filtered by type (branch, tag, or all) with pagination. Use this to discover where a commit has been merged or released.
 - commit_revert: Revert a commit on a target branch, creating a new commit that undoes its changes. Use this to back out a change that has already been merged.
 - commit_signature: Get the GPG, X.509, or SSH signature of a commit. Use this to verify commit authenticity; a 404 is also returned for unsigned commits.
-- commit_status_set: Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled). Use this for external CI or reporting integrations that publish commit check results.
+- commit_status_set: Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled, skipped). Use this for external CI or reporting integrations that publish commit check results.
 - commit_statuses: List the pipeline/external statuses of a commit, filtered by ref, stage, name, or pipeline_id, with pagination. Use this to check CI/CD or integration check results for a commit.
 - compare: Diff two refs to see what changed between them; set params.from to the base ref and params.to to the target ref. Use for release diffs or pre-merge review.
 - contributors: List who has committed to the repository and how much, with per-author commit counts and line stats. Use to surface top authors or attribute ownership of a codebase.
@@ -9100,7 +9100,7 @@ Parameter guidance:
 - commit_status_set.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_status_set.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - commit_status_set.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
-- commit_status_set.state: status_state; source: Target state: pending, running, success, failed, or canceled.
+- commit_status_set.state: status_state; source: Target state: pending, running, success, failed, canceled, or skipped.
 - commit_statuses.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - commit_statuses.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - commit_statuses.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
@@ -13399,7 +13399,7 @@ Add an SSH key to the current user. Returns: created key ID, title, usage type, 
 - `expires_at` (string): Expiration date in ISO 8601 format (YYYY-MM-DD)
 - `key` (string) (required): The SSH public key content
 - `title` (string) (required): A descriptive title for the SSH key
-- `usage_type` (string): Usage type: auth or signing (default: auth)
+- `usage_type` (string): SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -13412,7 +13412,7 @@ Add an SSH key to a specific user. Returns: created key ID, title, usage type, a
 - `expires_at` (string): Expiration date in ISO 8601 format (YYYY-MM-DD)
 - `key` (string) (required): The SSH public key content
 - `title` (string) (required): A descriptive title for the SSH key
-- `usage_type` (string): Usage type: auth or signing (default: auth)
+- `usage_type` (string): SSH key usage scope: auth (authentication), signing (commit signing), or auth_and_signing (both). Default: auth_and_signing.
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -14567,7 +14567,7 @@ Create a runner linked to the current user. Returns: runner ID, authentication t
 - `paused` (boolean): Whether the runner should be paused
 - `project_id` (integer): Project ID (required for project_type runners)
 - `run_untagged` (boolean): Whether the runner can run untagged jobs
-- `runner_type` (string) (required): Runner type: instance_type or group_type or project_type
+- `runner_type` (string) (required): Runner scope: instance_type (shared), group_type (requires group_id), or project_type (requires project_id).
 - `tag_list` (array of strings): List of runner tags
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -17294,7 +17294,7 @@ List a user's memberships. Returns: source ID, name, type, and access level per 
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `sort` (string): Sort order for keyset pagination: asc or desc
-- `type` (string): Filter by membership type: Project or Namespace
+- `type` (string): Membership type filter: Project (project memberships) or Namespace (group memberships).
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -21669,7 +21669,7 @@ List users with filtering and pagination support. Returns: user summaries includ
 - `extern_uid` (string): Filter by external UID (use with provider)
 - `external` (boolean): Filter for external users only
 - `humans` (boolean): Filter for human (non-bot, non-internal) users only
-- `order_by` (string): Order by: id | name | username | created_at | updated_at
+- `order_by` (string): Order users by: id, name, username, created_at, or updated_at.
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
@@ -21678,7 +21678,7 @@ List users with filtering and pagination support. Returns: user summaries includ
 - `public_email` (string): Filter by exact public email address
 - `search` (string): Search users by name or username or email
 - `sort` (string): Sort order: asc or desc
-- `two_factor` (string): Filter by 2FA status: enabled or disabled
+- `two_factor` (string): Filter by two-factor authentication status: enabled or disabled.
 - `username` (string): Filter by exact username
 - `with_custom_attributes` (boolean): Include custom attributes in the response (admin only)
 - `without_project_bots` (boolean): Exclude project bot users from the result
@@ -27533,7 +27533,7 @@ Set the current user's status. Returns: the updated emoji, message, availability
 
 **Parameters:**
 
-- `availability` (string): The availability: not_set or busy
+- `availability` (string): User availability: not_set (clear busy state) or busy.
 - `clear_status_after` (string): Duration after which to clear status: 30_minutes | 3_hours | 8_hours | 1_day | 3_days | 7_days | 30_days
 - `emoji` (string): The emoji to set for the status (e.g. coffee or speech_balloon)
 - `message` (string): The status message text

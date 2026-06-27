@@ -55,8 +55,9 @@ func applyInputSchemaOverrides(schema map[string]any, overrides []InputSchemaOve
 // GitLab endpoints; resource-specific value sets (order_by, state, scope, type,
 // ...) differ per endpoint and must be set per action via InputSchemaOverrides.
 var canonicalParamEnums = map[string][]string{
-	"sort":       {"asc", "desc"},
-	"visibility": {"private", "internal", "public"},
+	"sort":          {"asc", "desc"},
+	"visibility":    {"private", "internal", "public"},
+	"variable_type": {"env_var", "file"},
 }
 
 // applyCanonicalParamEnums injects the [canonicalParamEnums] value sets into the
@@ -85,6 +86,28 @@ func applyCanonicalParamEnums(schema map[string]any) {
 		}
 		prop["enum"] = enum
 	}
+}
+
+// FilterOverridesForSchema returns the subset of overrides whose property path
+// still resolves against schema (an empty path targets the root and is always
+// kept). It is used after tier pruning removes higher-tier properties: an
+// override that targeted a now-removed field (e.g. an ultimate-only parameter
+// pruned for a Free instance) is dropped so it does not fail
+// [validateInputSchemaOverrides] during catalog assembly. The enum/patch values
+// were already applied to the property before pruning, so dropping the override
+// here only keeps the override list consistent with the pruned schema.
+func FilterOverridesForSchema(schema map[string]any, overrides []InputSchemaOverride) []InputSchemaOverride {
+	if len(overrides) == 0 {
+		return overrides
+	}
+	out := make([]InputSchemaOverride, 0, len(overrides))
+	for _, override := range overrides {
+		path := strings.TrimSpace(override.PropertyPath)
+		if path == "" || schemaOverrideTarget(schema, path) != nil {
+			out = append(out, override)
+		}
+	}
+	return out
 }
 
 func validateInputSchemaOverrides(spec ActionSpec) error {

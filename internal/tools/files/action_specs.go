@@ -73,6 +73,12 @@ func fileOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.Usage = meta.usage
 		options.IndividualTool.Description = meta.description
 	}
+	switch individualTool {
+	case "gitlab_file_create", "gitlab_file_update":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("encoding", map[string]any{"enum": []any{"text", "base64"}}),
+		}
+	}
 	return options
 }
 

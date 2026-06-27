@@ -1221,6 +1221,30 @@ func TestApplyCanonicalParamEnums(t *testing.T) {
 	}
 }
 
+// TestFilterOverridesForSchema verifies that overrides whose property path no
+// longer resolves against the (tier-pruned) schema are dropped, while overrides
+// for present properties and root-level (empty path) overrides are kept — so a
+// tier-pruned ultimate-only field's override does not fail catalog validation.
+func TestFilterOverridesForSchema(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"state": map[string]any{"type": "string"},
+	}}
+	overrides := []InputSchemaOverride{
+		{PropertyPath: "state", Values: map[string]any{"enum": []any{"opened", "closed"}}},
+		{PropertyPath: "health_status", Values: map[string]any{"enum": []any{"onTrack"}}}, // pruned
+		{PropertyPath: "", Values: map[string]any{"anyOf": []any{}}},                      // root, always kept
+	}
+	got := FilterOverridesForSchema(schema, overrides)
+	if len(got) != 2 {
+		t.Fatalf("FilterOverridesForSchema kept %d overrides, want 2 (state + root)", len(got))
+	}
+	for _, ov := range got {
+		if ov.PropertyPath == "health_status" {
+			t.Error("override for tier-pruned health_status must be dropped")
+		}
+	}
+}
+
 // TestApplyCanonicalParamEnums_NilAndMalformed verifies the injector is a no-op
 // for a nil schema, a schema without a properties map, and non-map property
 // entries, never panicking.

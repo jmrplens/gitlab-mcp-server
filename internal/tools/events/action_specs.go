@@ -45,6 +45,14 @@ func userEventReadSpec(name string, route toolutil.ActionRoute, individualTool s
 			Title:       toolutil.TitleFromName(individualTool),
 			Description: description,
 		},
+		InputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("action", map[string]any{
+				"enum": []any{"created", "updated", "closed", "reopened", "pushed", "commented", "merged", "joined", "left", "destroyed", "expired", "approved"},
+			}),
+			toolutil.SchemaPropertyOverride("target_type", map[string]any{
+				"enum": []any{"issue", "milestone", "merge_request", "note", "project", "snippet", "user", "epic"},
+			}),
+		},
 	}
 	return toolutil.NewReadActionSpec(name, route, options)
 }

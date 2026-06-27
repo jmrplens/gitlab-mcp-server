@@ -97,6 +97,9 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if operation == "list" {
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
 		options.Tags = append(options.Tags, scope+"_access_tokens")
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "inactive"}}),
+		}
 	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
 	if accessTokenNeedsTokenID(operation) {

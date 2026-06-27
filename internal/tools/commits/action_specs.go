@@ -114,6 +114,9 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.RelatedActions = []string{actionCommitGet, actionBranchList, "tag.list"}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List branches and tags that reference (contain) a commit, optionally filtered by ref type. Returns: ref entries with type and name plus pagination metadata. See also: gitlab_commit_get, gitlab_branch_list, gitlab_tag_list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("type", map[string]any{"enum": []any{"branch", "tag", "all"}}),
+		}
 	case "commit_comments":
 		options.Usage = "List the comments posted on a commit with pagination. Use this before adding a comment or to review existing review notes attached to a commit."
 		options.Aliases = []string{"commit comments", "list commit comments", "show commit notes", "read commit discussion"}
@@ -131,6 +134,9 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 			ExampleBinding: `params.note:"Looks good to me"`,
 		}
 		options.IndividualTool.Description = "Post a comment on a commit, optionally inline on a specific file path and line. Returns: the created comment with note text, author user object, and optional path/line/line_type. See also: gitlab_commit_comments, gitlab_commit_diff, gitlab_commit_get."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("line_type", map[string]any{"enum": []any{"new", "old"}}),
+		}
 	case "commit_statuses":
 		options.Usage = "List the pipeline/external statuses of a commit, filtered by ref, stage, name, or pipeline_id, with pagination. Use this to check CI/CD or integration check results for a commit."
 		options.Aliases = []string{"commit statuses", "list commit statuses", "show commit checks", "ci status for commit"}
@@ -138,16 +144,19 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: gitlab_commit_status_set, gitlab_commit_get, gitlab_pipeline_list."
 	case "commit_status_set":
-		options.Usage = "Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled). Use this for external CI or reporting integrations that publish commit check results."
+		options.Usage = "Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled, skipped). Use this for external CI or reporting integrations that publish commit check results."
 		options.Aliases = []string{"set commit status", "update commit status", "report commit check", "publish commit status"}
 		options.RelatedActions = []string{actionCommitStatuses, actionCommitGet, "pipeline.list"}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.ParameterGuidance["state"] = toolutil.ParameterGuidance{
 			SemanticRole:   "status_state",
-			ValueSource:    "Target state: pending, running, success, failed, or canceled.",
+			ValueSource:    "Target state: pending, running, success, failed, canceled, or skipped.",
 			ExampleBinding: `params.state:"success"`,
 		}
 		options.IndividualTool.Description = "Set or update the pipeline status of a commit (used by external CI/reporting integrations). Returns: the resulting status with state, name, ref, coverage, pipeline ID, timestamps, and author user object. See also: gitlab_commit_statuses, gitlab_commit_get, gitlab_pipeline_list."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"pending", "running", "success", "failed", "canceled", "skipped"}}),
+		}
 	case "commit_merge_requests":
 		options.Usage = "List the merge requests that include a commit. Use this to trace which MR introduced or carries a commit."
 		options.Aliases = []string{"merge requests for commit", "mrs containing commit", "list commit merge requests", "which mr has commit"}
@@ -197,6 +206,9 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 			ExampleBinding: `params.actions:[{"action":"create","file_path":"README.md","content":"text"}]`,
 		}
 		options.IndividualTool.Description = "Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call. Returns: the created commit with SHA, title, author/committer, dates, parent IDs, stats, trailers, and web URL. See also: gitlab_branch_list, gitlab_repository_tree, gitlab_commit_get."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("actions.action", map[string]any{"enum": []any{"create", "delete", "move", "update", "chmod"}}),
+		}
 	}
 
 	return options
