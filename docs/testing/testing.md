@@ -18,16 +18,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,520 |
-| Unit test functions                                   | 11,238 |
+| Total test functions                                  | 11,541 |
+| Unit test functions                                   | 11,259 |
 | E2E test functions                                    |    282 |
-| cmd test functions                                    |    847 |
-| Test files (internal/)                                |    452 |
+| cmd test functions                                    |    849 |
+| Test files (internal/)                                |    453 |
 | Test files (cmd/)                                     |     59 |
 | Test files (test/e2e/suite/)                          |    139 |
 | Tool sub-packages tested                              |    174 |
 | Core packages tested                                  |     17 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.0% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.1% |
 | Overall coverage (`go test ./internal/...`)           |  94.7% |
 | Average package coverage                              |  95.4% |
 
@@ -35,8 +35,8 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,274 | 89.2% |
-| `TestFunc` (no underscore)             |    919 |  8.0% |
+| `TestFunc_Scenario` (2-part)           | 10,281 | 89.1% |
+| `TestFunc` (no underscore)             |    933 |  8.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,845 |         91 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,864 |         92 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (174) |          8,263 |        348 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            282 |        139 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            847 |         59 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,520** |    **650** |                                                                                                 |
+| cmd packages            |            849 |         59 | server entry point and developer command utilities                                              |
+| **Total**               |     **11,541** |    **651** |                                                                                                 |
 
 ### Core Packages
 
@@ -71,9 +71,9 @@
 | resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil     |       611 |    97.2% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil     |       630 |    97.2% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       287 |    92.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,845** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,864** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -299,7 +299,7 @@
 | cmd/add_docs                                   |    67.1% |
 | cmd/audit_action_coverage                      |    77.6% |
 | cmd/audit_action_spec_coverage                 |    80.9% |
-| cmd/audit_discovery_completeness               |    77.1% |
+| cmd/audit_discovery_completeness               |    78.5% |
 | cmd/audit_dynamic_aliases                      |    60.0% |
 | cmd/audit_edition_tier                         |    21.8% |
 | cmd/audit_godocs                               |    50.7% |
@@ -307,7 +307,7 @@
 | cmd/audit_metadata_completeness                |    66.4% |
 | cmd/audit_metrics                              |    56.2% |
 | cmd/audit_output                               |    64.5% |
-| cmd/audit_struct_completeness                  |    90.8% |
+| cmd/audit_struct_completeness                  |    91.2% |
 | cmd/audit_test_names                           |    91.9% |
 | cmd/audit_tokens                               |    45.3% |
 | cmd/audit_tools                                |    75.5% |
@@ -545,8 +545,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_1to1_backlog** (67.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evaluator** (69.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tools** (75.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_discovery_completeness** (77.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_coverage** (77.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_discovery_completeness** (78.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_action_spec_coverage** (80.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (82.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.

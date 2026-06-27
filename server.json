@@ -92,11 +92,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
@@ -264,11 +263,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
@@ -436,11 +434,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
@@ -608,11 +605,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
@@ -780,11 +776,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
@@ -952,11 +947,10 @@
           ]
         },
         {
-          "name": "GITLAB_ENTERPRISE",
-          "description": "Enable GitLab Premium/Ultimate tools; GitLab.com Enterprise/Premium also exposes Orbit Knowledge Graph tools (default: false)",
+          "name": "GITLAB_TIER",
+          "description": "GitLab edition tier: free/ce, premium, or ultimate. When unset, detected from GET /license (fallback free). Gates Premium/Ultimate tools; GitLab.com Ultimate also exposes Orbit Knowledge Graph tools. Replaces the deprecated GITLAB_ENTERPRISE boolean",
           "isRequired": false,
-          "default": "false",
-          "format": "boolean"
+          "format": "string"
         },
         {
           "name": "GITLAB_READ_ONLY",
