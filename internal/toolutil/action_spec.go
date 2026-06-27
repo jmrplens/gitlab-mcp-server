@@ -147,6 +147,7 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 	applyInputSchemaOverrides(route.InputSchema, inputSchemaOverrides)
 	applyCanonicalParamEnums(route.InputSchema)
 	applyCanonicalParamFormats(route.InputSchema)
+	applyCanonicalParamRanges(route.InputSchema)
 	return ActionSpec{
 		Name:                   strings.TrimSpace(name),
 		Route:                  route,

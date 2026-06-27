@@ -1311,3 +1311,28 @@ func TestSchemaFormatOverride(t *testing.T) {
 		t.Errorf("format = %v, want date", ov.Values["format"])
 	}
 }
+
+// TestApplyCanonicalParamRanges verifies per_page gets [1,100] bounds and page
+// gets a minimum of 1, that existing bounds and non-integer/absent props are
+// left untouched, and that nil/malformed schemas do not panic.
+func TestApplyCanonicalParamRanges(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"per_page": map[string]any{"type": "integer"},
+		"page":     map[string]any{"type": "integer", "minimum": 5},
+		"name":     map[string]any{"type": "string"},
+	}}
+	applyCanonicalParamRanges(schema)
+	props := schema["properties"].(map[string]any)
+	pp := props["per_page"].(map[string]any)
+	if pp["minimum"] != 1 || pp["maximum"] != 100 {
+		t.Errorf("per_page bounds = min %v max %v, want 1/100", pp["minimum"], pp["maximum"])
+	}
+	if got := props["page"].(map[string]any)["minimum"]; got != 5 {
+		t.Errorf("existing page minimum overwritten: %v", got)
+	}
+	if _, has := props["name"].(map[string]any)["minimum"]; has {
+		t.Errorf("minimum added to string prop")
+	}
+	applyCanonicalParamRanges(nil)
+	applyCanonicalParamRanges(map[string]any{"properties": "nope"})
+}

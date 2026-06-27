@@ -85,6 +85,7 @@ var canonicalParamEnums = map[string][]string{
 const (
 	formatDateTime = "date-time"
 	formatDate     = "date"
+	formatURI      = "uri"
 )
 
 // canonicalParamFormats maps GitLab-universal date/time input parameters to
@@ -117,6 +118,71 @@ var canonicalParamFormats = map[string]string{
 	"expires_at":           formatDate,
 	"due_date":             formatDate,
 	"start_date":           formatDate,
+	// Input parameters that take an absolute URL. JSON Schema `uri` is advisory
+	// (it does not reject input) and only documents the expected shape for the
+	// model. Restricted to parameter names that are always a full URL across
+	// GitLab endpoints (webhooks, mirrors, badges, release links, Jira/Bitbucket
+	// integration); url_text and similar label fields are intentionally absent.
+	"url":                  formatURI,
+	"link_url":             formatURI,
+	"image_url":            formatURI,
+	"external_url":         formatURI,
+	"remote_url":           formatURI,
+	"bitbucket_server_url": formatURI,
+}
+
+// canonicalParamRange is an inclusive integer bound for a numeric parameter.
+// A nil Min or Max leaves that bound unconstrained.
+type canonicalParamRange struct {
+	Min *int
+	Max *int
+}
+
+// canonicalParamRanges maps GitLab-universal integer pagination parameters to
+// their inclusive bounds, injected centrally by [NewActionSpec]. The GitLab
+// REST API documents per_page as default 20 / max 100 for offset-based
+// pagination, applied uniformly to every offset-paginated endpoint (the users
+// endpoint additionally switches to keyset above 50,000 records, but its
+// per_page cap is still 100). The maximum is therefore doc-grounded and safe.
+// The minimum of 1 for per_page and page is the effective floor — GitLab treats
+// a page size below 1 as "use the default" and pages are 1-based — rather than
+// an explicitly documented value; it is included to steer the model away from
+// requesting 0 or negative page sizes.
+//
+// See https://docs.gitlab.com/api/rest/#offset-based-pagination.
+var canonicalParamRanges = map[string]canonicalParamRange{
+	"per_page": {Min: new(1), Max: new(100)},
+	"page":     {Min: new(1)},
+}
+
+// applyCanonicalParamRanges injects [canonicalParamRanges] bounds into top-level
+// integer properties of schema that do not already declare the corresponding
+// bound. Per-action InputSchemaOverrides are applied first (see [NewActionSpec])
+// and therefore win: a bound a property already carries is left untouched.
+func applyCanonicalParamRanges(schema map[string]any) {
+	if schema == nil {
+		return
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, bound := range canonicalParamRanges {
+		prop, isMap := props[name].(map[string]any)
+		if !isMap || prop["type"] != "integer" {
+			continue
+		}
+		if bound.Min != nil {
+			if _, has := prop["minimum"]; !has {
+				prop["minimum"] = *bound.Min
+			}
+		}
+		if bound.Max != nil {
+			if _, has := prop["maximum"]; !has {
+				prop["maximum"] = *bound.Max
+			}
+		}
+	}
 }
 
 // applyCanonicalParamFormats injects [canonicalParamFormats] into top-level

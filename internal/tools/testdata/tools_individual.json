@@ -277,6 +277,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -289,6 +290,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -428,6 +431,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -440,6 +444,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -1322,10 +1328,12 @@
         },
         "image_url": {
           "description": "Badge image URL (supports placeholders)",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "Badge link URL (supports placeholders)",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -2079,10 +2087,12 @@
       "properties": {
         "image_url": {
           "description": "Badge image URL (supports placeholders)",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "Badge link URL (supports placeholders)",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -2258,6 +2268,7 @@
         },
         "url": {
           "description": "Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -2641,6 +2652,7 @@
         },
         "url": {
           "description": "Hook URL to receive events",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -3846,6 +3858,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -3858,6 +3871,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -4893,6 +4908,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -4905,6 +4921,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -6470,6 +6488,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -6482,6 +6501,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -8131,6 +8152,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -8143,6 +8165,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -8741,6 +8765,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -8753,6 +8778,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -9187,6 +9214,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -9199,6 +9227,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -9549,6 +9579,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -9565,6 +9596,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -9933,6 +9966,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -9945,6 +9979,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -10588,6 +10624,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -10600,6 +10637,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "pipeline_id": {
@@ -11844,6 +11883,7 @@
         },
         "url": {
           "description": "required,URL to the emoji image (PNG or GIF recommended)",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -13721,6 +13761,7 @@
       "properties": {
         "external_url": {
           "description": "External URL for the status check",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -18816,6 +18857,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -18828,6 +18870,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "public": {
@@ -19045,6 +19089,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -19057,6 +19102,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -19202,6 +19249,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -19214,6 +19262,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -20049,6 +20099,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -20061,6 +20112,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -20210,6 +20263,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -20222,6 +20276,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -21227,6 +21283,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -21239,6 +21296,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -22126,6 +22185,7 @@
       "properties": {
         "remote_url": {
           "description": "Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path; project paths are already valid project_id values.",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -22939,10 +22999,12 @@
         },
         "image_url": {
           "description": "New badge image URL",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "New badge link URL",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -23024,10 +23086,12 @@
         },
         "image_url": {
           "description": "New badge image URL",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "New badge link URL",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -23378,6 +23442,7 @@
         },
         "url": {
           "description": "Updated hook URL",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -23581,6 +23646,7 @@
         },
         "external_url": {
           "description": "URL of the environment's external deployment",
+          "format": "uri",
           "type": "string"
         },
         "flux_resource_path": {
@@ -24513,6 +24579,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -24525,6 +24592,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -25486,6 +25555,7 @@
         },
         "external_url": {
           "description": "Updated external URL",
+          "format": "uri",
           "type": "string"
         },
         "flux_resource_path": {
@@ -27216,6 +27286,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -27228,6 +27299,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -28864,6 +28937,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -28876,6 +28950,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -29560,6 +29636,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -29572,6 +29649,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -40203,6 +40282,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -40215,6 +40295,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -40370,6 +40452,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -40382,6 +40465,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -41154,6 +41239,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -41166,6 +41252,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "revoked": {
@@ -42646,6 +42734,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -42658,6 +42747,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -43620,6 +43711,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -43632,6 +43724,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -45867,6 +45961,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -45879,6 +45974,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -46145,6 +46242,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -46157,6 +46255,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -47003,6 +47103,7 @@
         },
         "url": {
           "description": "Webhook URL (required for add)",
+          "format": "uri",
           "type": "string"
         },
         "vulnerability_events": {
@@ -47606,6 +47707,7 @@
         },
         "url": {
           "description": "Webhook URL (required for add)",
+          "format": "uri",
           "type": "string"
         },
         "vulnerability_events": {
@@ -48053,6 +48155,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -48065,6 +48168,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -48660,6 +48765,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -48672,6 +48778,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "query": {
@@ -48812,6 +48920,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -48824,6 +48933,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "relation": {
@@ -49736,6 +49847,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -49748,6 +49860,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -50547,6 +50661,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -50559,6 +50674,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_storage": {
@@ -51233,6 +51350,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -51245,6 +51363,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -52630,6 +52750,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -52642,6 +52763,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "query": {
@@ -52963,6 +53086,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -52975,6 +53099,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -53347,6 +53473,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -53359,6 +53486,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -53522,6 +53651,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -53534,6 +53664,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -53734,6 +53866,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -53746,6 +53879,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -54036,6 +54171,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -54048,6 +54184,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -54415,6 +54553,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -54427,6 +54566,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -55576,6 +55717,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -55588,6 +55730,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -56339,6 +56483,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -56351,6 +56496,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "simple": {
@@ -57615,6 +57762,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -57627,6 +57775,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -58721,6 +58871,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -58733,6 +58884,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -59009,6 +59162,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -59021,6 +59175,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "revoked": {
@@ -59596,6 +59752,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -59608,6 +59765,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -59801,6 +59960,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -59813,6 +59973,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -60997,6 +61159,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -61009,6 +61172,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -63601,6 +63766,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -63613,6 +63779,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -64344,6 +64512,7 @@
         },
         "bitbucket_server_url": {
           "description": "Bitbucket Server URL",
+          "format": "uri",
           "type": "string"
         },
         "bitbucket_server_username": {
@@ -65051,6 +65220,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -65063,6 +65233,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -69384,6 +69556,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -69396,6 +69569,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -71121,6 +71296,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -71133,6 +71309,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -71507,6 +71685,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -71519,6 +71698,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -74968,6 +75149,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -74980,6 +75162,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -75961,6 +76145,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -75973,6 +76158,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
@@ -76939,6 +77126,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -76951,6 +77139,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
@@ -77925,6 +78115,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -77937,6 +78128,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -78876,6 +79069,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -78888,6 +79082,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -79623,6 +79819,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -79635,6 +79832,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -81005,6 +81204,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -81017,6 +81217,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -81468,6 +81670,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -81480,6 +81683,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -83118,6 +83323,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -83130,6 +83336,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -85683,6 +85891,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -85695,6 +85904,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -87865,6 +88076,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -87877,6 +88089,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "pipeline_id": {
@@ -88370,6 +88584,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -88382,6 +88597,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "pipeline_id": {
@@ -88743,6 +88960,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -88755,6 +88973,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -90847,6 +91067,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -90859,6 +91080,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -91351,6 +91574,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -91363,6 +91587,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -91504,6 +91730,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -91516,6 +91743,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -91755,6 +91984,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -91767,6 +91997,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -91925,6 +92157,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -91937,6 +92170,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -92274,6 +92509,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -92286,6 +92522,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -92434,6 +92672,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -92446,6 +92685,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -92838,6 +93079,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -92850,6 +93092,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -93136,6 +93380,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -93148,6 +93393,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -93261,6 +93508,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -93273,6 +93521,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -93422,6 +93672,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -93434,6 +93685,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -93601,6 +93854,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -93613,6 +93867,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -94268,6 +94524,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -94280,6 +94537,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -95348,6 +95607,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -95360,6 +95620,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -95527,6 +95789,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -95539,6 +95802,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -95658,6 +95923,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -95670,6 +95936,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -96213,6 +96481,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -96225,6 +96494,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -96545,6 +96816,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -96557,6 +96829,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -96696,6 +96970,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -96708,6 +96983,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -96912,6 +97189,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -96924,6 +97202,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -97185,10 +97465,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -97391,6 +97674,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -97403,6 +97687,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -97539,6 +97825,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -97551,6 +97838,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -97915,6 +98204,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -97927,6 +98217,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -98085,6 +98377,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -98097,6 +98390,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -98491,6 +98786,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -98503,6 +98799,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -98872,6 +99170,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -98884,6 +99183,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "revoked": {
@@ -99048,6 +99349,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -99060,6 +99362,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "relation": {
@@ -99289,6 +99593,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -99301,6 +99606,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -99408,6 +99715,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -99420,6 +99728,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -99548,6 +99858,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -99560,6 +99871,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -99688,10 +100001,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         }
       },
@@ -100254,6 +100570,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -100266,6 +100583,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -100439,6 +100758,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -100451,6 +100771,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -100575,6 +100897,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -100587,6 +100910,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -100711,6 +101036,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -100723,6 +101049,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "popular": {
@@ -100885,6 +101213,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -100897,6 +101226,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -101397,6 +101728,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -101409,6 +101741,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -101622,10 +101956,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -101828,6 +102165,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -101840,6 +102178,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -101976,6 +102316,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -101988,6 +102329,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -102162,6 +102505,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -102174,6 +102518,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -102353,10 +102699,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -102507,6 +102856,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -102519,6 +102869,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -102931,6 +103283,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -102943,6 +103296,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -103124,6 +103479,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -103136,6 +103492,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -103261,6 +103619,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -103273,6 +103632,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -103456,6 +103817,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -103468,6 +103830,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -103872,6 +104236,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -103884,6 +104249,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -104375,6 +104742,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -104387,6 +104755,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -104460,6 +104830,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -104472,6 +104843,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -104649,6 +105022,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -104661,6 +105035,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -104783,6 +105159,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -104795,6 +105172,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -104924,6 +105303,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -104936,6 +105316,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -106089,6 +106471,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -106101,6 +106484,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -106241,6 +106626,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -106253,6 +106639,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
@@ -106486,6 +106874,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -106498,6 +106887,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "provider": {
@@ -107943,6 +108334,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -107955,6 +108347,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -108106,6 +108500,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -108118,6 +108513,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -108306,6 +108703,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -108318,6 +108716,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -112899,6 +113299,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -112911,6 +113312,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -113046,6 +113449,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -113058,6 +113462,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -116047,6 +116453,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -116059,6 +116466,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -117112,6 +117521,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -117124,6 +117534,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -118988,6 +119400,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -119000,6 +119413,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -119920,6 +120335,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -119932,6 +120348,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -121067,6 +121485,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -121079,6 +121498,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -121989,6 +122410,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -122001,6 +122423,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -122318,6 +122742,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -122330,6 +122755,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -123513,6 +123940,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -123525,6 +123953,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "reviewer_id": {
@@ -124697,6 +125127,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -124709,6 +125140,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "reviewer_id": {
@@ -126943,6 +127376,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -126955,6 +127389,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -127835,6 +128271,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -127847,6 +128284,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -128573,6 +129012,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -128585,6 +129025,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -129228,6 +129670,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -129240,6 +129683,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -130434,6 +130879,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -130446,6 +130892,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -133872,6 +134320,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -133884,6 +134333,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "search": {
@@ -135598,6 +136049,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -135610,6 +136062,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -135782,6 +136236,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -135794,6 +136249,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -136808,6 +137265,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -136820,6 +137278,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -137620,6 +138080,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -137632,6 +138093,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "revoked": {
@@ -138819,6 +139282,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -138831,6 +139295,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -139131,6 +139597,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -139143,6 +139610,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -140282,6 +140751,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -140294,6 +140764,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -140568,6 +141040,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -140580,6 +141053,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -142117,6 +142592,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -142129,6 +142605,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -143195,10 +143673,12 @@
         },
         "image_url": {
           "description": "Badge image URL with placeholders",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "Badge link URL with placeholders",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -143278,10 +143758,12 @@
       "properties": {
         "image_url": {
           "description": "Badge image URL with placeholders",
+          "format": "uri",
           "type": "string"
         },
         "link_url": {
           "description": "Badge link URL with placeholders",
+          "format": "uri",
           "type": "string"
         },
         "project_id": {
@@ -143569,6 +144051,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -143581,6 +144064,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -145202,6 +145687,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -145214,6 +145700,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -150342,6 +150830,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -150354,6 +150843,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -153084,6 +153575,7 @@
         },
         "url": {
           "description": "Webhook URL",
+          "format": "uri",
           "type": "string"
         },
         "vulnerability_events": {
@@ -153667,6 +154159,7 @@
         },
         "url": {
           "description": "Updated webhook URL",
+          "format": "uri",
           "type": "string"
         },
         "vulnerability_events": {
@@ -154104,6 +154597,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -154116,6 +154610,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -154647,6 +155143,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -154659,6 +155156,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -154936,6 +155435,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -154948,6 +155448,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_checksum_failed": {
@@ -156115,6 +156617,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -156127,6 +156630,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -157223,6 +157728,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -157235,6 +157741,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -157401,6 +157909,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -157413,6 +157922,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -157564,6 +158075,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -157576,6 +158088,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -157871,6 +158385,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -157883,6 +158398,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_checksum_failed": {
@@ -159057,6 +159574,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -159069,6 +159587,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_checksum_failed": {
@@ -160243,6 +160763,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -160255,6 +160776,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_checksum_failed": {
@@ -161351,6 +161874,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -161363,6 +161887,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -162410,6 +162936,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -162422,6 +162949,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -162759,6 +163288,7 @@
         },
         "url": {
           "description": "Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -164045,6 +164575,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -164057,6 +164588,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -164336,6 +164869,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -164348,6 +164882,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -165303,6 +165839,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -165315,6 +165852,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -172292,6 +172831,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -172304,6 +172844,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -172964,6 +173506,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -172976,6 +173519,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -173347,6 +173892,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -173359,6 +173905,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -174747,6 +175295,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -174759,6 +175308,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -174956,6 +175507,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -174968,6 +175520,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -175177,6 +175731,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -175189,6 +175744,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -177967,6 +178524,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -177979,6 +178537,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -178228,6 +178788,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -178240,6 +178801,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -180207,6 +180770,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -180219,6 +180783,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -180599,6 +181165,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -180615,6 +181182,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -180967,6 +181536,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -180979,6 +181549,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -181131,6 +181703,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -181143,6 +181716,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -181311,6 +181886,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -181323,6 +181899,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -181509,6 +182087,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -181521,6 +182100,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -181676,6 +182257,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -181688,6 +182270,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -181863,6 +182447,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -181875,6 +182460,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "snippet_id": {
@@ -182688,6 +183275,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -182700,6 +183288,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -183255,6 +183845,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -183267,6 +183858,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -184028,6 +184621,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -184040,6 +184634,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "runner_id": {
@@ -184518,6 +185114,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -184537,6 +185134,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
@@ -184725,6 +185324,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -184744,6 +185344,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
@@ -184936,6 +185538,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -184948,6 +185551,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -185228,6 +185833,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -185247,6 +185853,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -186751,10 +187359,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -186900,10 +187511,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -187166,10 +187780,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -187941,10 +188558,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -188957,10 +189577,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -189130,10 +189753,13 @@
       "properties": {
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -189283,10 +189909,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "query": {
@@ -190295,10 +190924,13 @@
       "properties": {
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "query": {
@@ -190451,10 +191083,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -190592,10 +191227,13 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -191659,6 +192297,7 @@
         },
         "url": {
           "description": "Jira instance base URL",
+          "format": "uri",
           "type": "string"
         },
         "use_inherited_settings": {
@@ -192761,6 +193400,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -192773,6 +193413,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -192952,6 +193594,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -192964,6 +193607,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -193390,6 +194035,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -193402,6 +194048,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "sort": {
@@ -193627,6 +194275,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -193639,6 +194288,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_storage": {
@@ -194485,6 +195136,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -194497,6 +195149,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -194947,6 +195601,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -194959,6 +195614,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -195948,6 +196605,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -195960,6 +196618,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "repository_storage": {
@@ -197142,6 +197802,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -197154,6 +197815,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -197367,6 +198030,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -197379,6 +198043,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -197794,6 +198460,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -197806,6 +198473,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "project_id": {
@@ -198980,6 +199649,7 @@
         },
         "url": {
           "description": "Redirect URL for the system header/footer logo image",
+          "format": "uri",
           "type": "string"
         }
       },
@@ -200270,6 +200940,7 @@
         },
         "external_url": {
           "description": "Updated external URL",
+          "format": "uri",
           "type": "string"
         },
         "name": {
@@ -202023,6 +202694,7 @@
         },
         "page": {
           "description": "Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.",
+          "minimum": 1,
           "type": "integer"
         },
         "page_token": {
@@ -202035,6 +202707,8 @@
         },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
+          "maximum": 100,
+          "minimum": 1,
           "type": "integer"
         },
         "scope": {
