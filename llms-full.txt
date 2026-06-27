@@ -13817,7 +13817,7 @@ Create a CI/CD variable in a project with type, environment scope, and protected
 - `protected` (boolean) (required): Only expose in protected branches/tags
 - `raw` (boolean) (required): Treat variable value as raw string
 - `value` (string) (required): Variable value
-- `variable_type` (string) (required): Variable type: env_var or file
+- `variable_type` (string): Variable type: env_var or file
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -13879,7 +13879,7 @@ Update a CI/CD variable, selecting an environment-scoped instance via the filter
 - `protected` (boolean) (required): Only expose in protected branches/tags
 - `raw` (boolean) (required): Treat variable value as raw string
 - `value` (string) (required): Updated variable value
-- `variable_type` (string) (required): Variable type: env_var or file
+- `variable_type` (string): Variable type: env_var or file
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
