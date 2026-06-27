@@ -99,13 +99,13 @@ func projectServiceAccountAliases(actionName string) []string {
 	var aliases []string
 	switch actionName {
 	case "service_account_list":
-		aliases = append(aliases, "project service account list", "list project service accounts")
+		aliases = append(aliases, "project service account list", "list project service accounts", "show project service accounts", "browse project service accounts")
 	case "service_account_create":
-		aliases = append(aliases, "project service account create", "create project service account")
+		aliases = append(aliases, "project service account create", "create project service account", "new project service account", "provision project service account")
 	case "service_account_update":
-		aliases = append(aliases, "project service account update", "update project service account")
+		aliases = append(aliases, "project service account update", "update project service account", "edit project service account", "modify project service account")
 	case "service_account_delete":
-		aliases = append(aliases, "project service account delete", "delete project service account")
+		aliases = append(aliases, "project service account delete", "delete project service account", "remove project service account", "destroy project service account")
 	case "service_account_pat_list":
 		aliases = append(aliases, projectServiceAccountPATAliases("list")...)
 	case "service_account_pat_create":
