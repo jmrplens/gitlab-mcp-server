@@ -61,7 +61,7 @@ func enterpriseUserReadSpec(name string, route toolutil.ActionRoute, individualT
 func enterpriseUserDestructiveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := enterpriseUserOptions(individualTool)
 	options.Usage = "Delete an enterprise user from the group's enterprise namespace. Use hard_delete to permanently remove the user instead of soft-deleting; this action is irreversible."
-	options.Aliases = []string{individualTool, "delete enterprise user", "remove enterprise user"}
+	options.Aliases = []string{individualTool, "delete enterprise user", "remove enterprise user", "destroy enterprise user", "drop enterprise user"}
 	options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserList, actionEnterpriseUserDisable2FA}
 	options.IndividualTool.Description = "Delete an enterprise user, optionally with hard_delete. Returns: a success confirmation naming the user and group. See also: gitlab_get_enterprise_user, gitlab_list_enterprise_users, gitlab_disable_2fa_enterprise_user."
 	return toolutil.NewDeleteActionSpec(name, route, options)
@@ -72,7 +72,7 @@ func enterpriseUserDisable2FASpec(client *gitlabclient.Client) toolutil.ActionSp
 	options := enterpriseUserOptions("gitlab_disable_2fa_enterprise_user")
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	options.Usage = "Disable two-factor authentication for an enterprise user by group_id plus user_id. Use when a user is locked out of 2FA and the group administrator must reset it."
-	options.Aliases = []string{"gitlab_disable_2fa_enterprise_user", "disable 2fa enterprise user", "reset enterprise user two-factor"}
+	options.Aliases = []string{"gitlab_disable_2fa_enterprise_user", "disable 2fa enterprise user", "reset enterprise user two-factor", "reset enterprise user 2fa", "unlock enterprise user"}
 	options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserList, actionEnterpriseUserDelete}
 	options.IndividualTool.Description = "Disable two-factor authentication for an enterprise user. Returns: a success confirmation naming the user and group. See also: gitlab_get_enterprise_user, gitlab_list_enterprise_users, gitlab_delete_enterprise_user."
 	return toolutil.NewDeleteActionSpec("disable_2fa", toolutil.DestructiveAction(client, Disable2FAOutput), options)
