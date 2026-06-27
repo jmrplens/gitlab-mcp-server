@@ -16,7 +16,7 @@ permissions:
 
 env:
   GO_VERSION: "1.26.4"
-  COVERAGE_MIN: "80"
+  COVERAGE_MIN: "90"
 
 jobs:
   test:

@@ -18,6 +18,7 @@
 #   SONAR_HOST_URL=<url> SonarQube host (default: https://sonarcloud.io)
 #   SONAR_POLL_TIMEOUT   seconds to wait for the CE task (default: 240)
 #   SONAR_POLL_INTERVAL  seconds between CE task polls (default: 5)
+#   COVERAGE_MIN         minimum total coverage %, mirrors CI (default: 90)
 #
 # Exits non-zero if the quality gate is not OK (or on any pipeline error).
 
@@ -26,6 +27,7 @@ set -euo pipefail
 HOST="${SONAR_HOST_URL:-https://sonarcloud.io}"
 POLL_TIMEOUT="${SONAR_POLL_TIMEOUT:-240}"
 POLL_INTERVAL="${SONAR_POLL_INTERVAL:-5}"
+COVERAGE_MIN="${COVERAGE_MIN:-90}"
 NO_SCAN=0
 [ "${1:-}" = "--no-scan" ] && NO_SCAN=1
 
@@ -64,7 +66,12 @@ api() {
 if [ "$NO_SCAN" -eq 0 ]; then
 	echo "==> [1/4] Running tests with coverage (branch: $BRANCH)"
 	go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
-	go tool cover -func=coverage.out | tail -1
+	total="$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')"
+	echo "    total coverage: ${total}% (minimum ${COVERAGE_MIN}%)"
+	if awk "BEGIN {exit !(${total} + 0 < ${COVERAGE_MIN} + 0)}"; then
+		echo "ERROR: coverage ${total}% is below minimum ${COVERAGE_MIN}%" >&2
+		exit 1
+	fi
 
 	echo "==> [2/4] Uploading analysis to SonarCloud"
 	sonar-scanner \
