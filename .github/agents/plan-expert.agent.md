@@ -40,7 +40,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0        |
 | Self-Update        | `github.com/creativeprojects/go-selfupdate` v1.5.2     |
 | Transport          | stdio (primary), HTTP (optional)                        |
-| Architecture       | 176 domain sub-packages under `internal/tools/`         |
+| Architecture       | ~175 domain sub-packages under `internal/tools/` (166 with `action_specs.go`); canonical action catalog at `internal/tools/action_catalog.go` projects everything into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual tool surfaces (ADR-0004) |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
 | Static Analysis    | golangci-lint v2 (Go linters/formatters), govulncheck, markdownlint |
 
@@ -114,7 +114,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does this contradict any existing ADR?
-- How does this affect the 176 sub-package structure?
+- How does this affect the canonical action catalog (ADR-0004) and the ~175 sub-package structure?
 - What is the impact on HTTP mode vs stdio mode?
 - Does this require changes to the MCP SDK usage patterns?
 
