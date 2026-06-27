@@ -82,13 +82,13 @@ func groupServiceAccountAliases(actionName string) []string {
 	var aliases []string
 	switch actionName {
 	case "service_account_list":
-		aliases = append(aliases, "group service account list", "list group service accounts")
+		aliases = append(aliases, "group service account list", "list group service accounts", "show group service accounts", "browse group service accounts")
 	case "service_account_create":
-		aliases = append(aliases, "group service account create", "create group service account")
+		aliases = append(aliases, "group service account create", "create group service account", "new group service account", "provision group service account")
 	case "service_account_update":
-		aliases = append(aliases, "group service account update", "update group service account")
+		aliases = append(aliases, "group service account update", "update group service account", "edit group service account", "modify group service account")
 	case "service_account_delete":
-		aliases = append(aliases, "group service account delete", "delete group service account")
+		aliases = append(aliases, "group service account delete", "delete group service account", "remove group service account", "destroy group service account")
 	case "service_account_pat_list":
 		aliases = append(aliases, groupServiceAccountPATAliases("list")...)
 	case "service_account_pat_create":
