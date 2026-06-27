@@ -373,13 +373,13 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_create_for_user": {
 		usage:       "Create a project owned by a specific user (admin only). Provide user_id and name; the project is created in that user's personal namespace.",
-		aliases:     []string{"create project for user", "create project as admin", "provision user project"},
+		aliases:     []string{"create project for user", "create project as admin", "provision user project", "admin create project"},
 		related:     []string{"project.create", actionProjectGet, "project.transfer"},
 		description: "Create a project on behalf of a user (admin). Returns: the created project with id, owner namespace, visibility, and web URL. See also: gitlab_project_create, gitlab_project_get.",
 	},
 	"gitlab_project_update": {
 		usage:       "Update settings on an existing project such as name, description, visibility, default_branch, merge_method, feature access levels, or CI/CD options. Send project_id plus only the fields to change.",
-		aliases:     []string{"update project", "edit project settings", "change project configuration"},
+		aliases:     []string{"update project", "edit project settings", "change project configuration", "modify project settings"},
 		related:     []string{actionProjectGet, actionProjectArchive, "project.transfer"},
 		description: "Update a project's settings. Returns: the updated project with its current configuration and web URL. See also: gitlab_project_get, gitlab_project_archive, gitlab_project_transfer.",
 	},
@@ -409,7 +409,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_archive": {
 		usage:       "Archive a project so it becomes read-only. Send project_id; requires Owner role. Use unarchive to reverse.",
-		aliases:     []string{"archive project", "make project read-only"},
+		aliases:     []string{"archive project", "make project read-only", "freeze project", "lock project"},
 		related:     []string{"project.unarchive", actionProjectGet, actionProjectDelete},
 		description: "Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
 	},
@@ -511,7 +511,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_download_avatar": {
 		usage:       "Download the avatar image for a project. Send project_id; returns the raw image bytes.",
-		aliases:     []string{"download project avatar", "get project avatar image"},
+		aliases:     []string{"download project avatar", "get project avatar image", "fetch project avatar", "save project avatar"},
 		related:     []string{"project.upload_avatar", actionProjectGet},
 		description: "Download a project's avatar. Returns: the avatar image content. See also: gitlab_project_upload_avatar, gitlab_project_get.",
 	},
@@ -565,25 +565,25 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_hook_set_custom_header": {
 		usage:       "Set a custom HTTP header sent with a project webhook's requests. Send project_id, hook_id, key, and value; the value is write-only.",
-		aliases:     []string{"set webhook custom header", "add webhook header"},
+		aliases:     []string{"set webhook custom header", "add webhook header", "configure webhook header", "create webhook custom header"},
 		related:     []string{"project.hook_delete_custom_header", actionProjectHookGet, actionProjectHookEdit},
 		description: "Set a custom header on a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_delete_custom_header, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_delete_custom_header": {
 		usage:       "Delete a custom HTTP header from a project webhook. Send project_id, hook_id, and key.",
-		aliases:     []string{"delete webhook custom header", "remove webhook header"},
+		aliases:     []string{"delete webhook custom header", "remove webhook header", "drop webhook custom header"},
 		related:     []string{"project.hook_set_custom_header", actionProjectHookGet},
 		description: "Delete a custom header from a project webhook. Returns: a success confirmation naming the header and webhook. See also: gitlab_project_hook_set_custom_header, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_set_url_variable": {
 		usage:       "Set a URL variable (placeholder substituted into the webhook URL) on a project webhook. Send project_id, hook_id, key, and value; the value is write-only.",
-		aliases:     []string{"set webhook url variable", "add webhook url placeholder"},
+		aliases:     []string{"set webhook url variable", "add webhook url placeholder", "configure webhook url variable", "create webhook url variable"},
 		related:     []string{"project.hook_delete_url_variable", actionProjectHookGet, actionProjectHookEdit},
 		description: "Set a URL variable on a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_delete_url_variable, gitlab_project_hook_get.",
 	},
 	"gitlab_project_hook_delete_url_variable": {
 		usage:       "Delete a URL variable from a project webhook. Send project_id, hook_id, and key.",
-		aliases:     []string{"delete webhook url variable", "remove webhook url placeholder"},
+		aliases:     []string{"delete webhook url variable", "remove webhook url placeholder", "drop webhook url variable"},
 		related:     []string{"project.hook_set_url_variable", actionProjectHookGet},
 		description: "Delete a URL variable from a project webhook. Returns: a success confirmation naming the variable and webhook. See also: gitlab_project_hook_set_url_variable, gitlab_project_hook_get.",
 	},
@@ -607,7 +607,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_approval_rule_get": {
 		usage:       "Get one project approval rule by rule_id, including required approvals and eligible approvers. Send project_id and rule_id. Premium/Ultimate.",
-		aliases:     []string{"get approval rule", "show approval rule"},
+		aliases:     []string{"get approval rule", "show approval rule", "fetch approval rule", "view approval rule"},
 		related:     []string{actionProjectApprovalRuleList, "project.approval_rule_update", "project.approval_rule_delete"},
 		description: "Get a single project approval rule. Returns: the rule with name, approvals_required, users, and groups. See also: gitlab_project_approval_rule_list, gitlab_project_approval_rule_update.",
 	},
@@ -625,7 +625,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	},
 	"gitlab_project_approval_rule_delete": {
 		usage:       "Delete a project approval rule by rule_id. Send project_id and rule_id; irreversible. Premium/Ultimate, Maintainer role.",
-		aliases:     []string{"delete approval rule", "remove merge approval rule"},
+		aliases:     []string{"delete approval rule", "remove merge approval rule", "drop approval rule", "destroy approval rule"},
 		related:     []string{actionProjectApprovalRuleList, actionProjectApprovalRuleGet, actionProjectApprovalCfgGet},
 		description: "Delete a project approval rule. Returns: a success confirmation naming the rule and project. See also: gitlab_project_approval_rule_list, gitlab_project_approval_config_get.",
 	},
