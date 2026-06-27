@@ -2016,8 +2016,10 @@ func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
 // TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
-		HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
-		TimeEstimate: 10800, TotalTimeSpent: 5400,
+		TimeStatsOutput: toolutil.TimeStatsOutput{
+			HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
+			TimeEstimate: 10800, TotalTimeSpent: 5400,
+		},
 	})
 	for _, want := range []string{"3h", "10800", "1h30m", "5400"} {
 		if !strings.Contains(md, want) {

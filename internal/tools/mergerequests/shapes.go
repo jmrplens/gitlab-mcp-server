@@ -29,14 +29,11 @@ import (
 
 // TaskCompletionStatusOutput mirrors gl.TasksCompletionStatus.
 
-// timeStatsPtr converts gl.TimeStats to the package TimeStatsOutput pointer,
-// reusing the standalone TimeStatsOutput type, or nil when the SDK value is nil.
-func timeStatsPtr(t *gl.TimeStats) *TimeStatsOutput {
-	if t == nil {
-		return nil
-	}
-	ts := timeStatsToOutput(t)
-	return &ts
+// timeStatsPtr converts gl.TimeStats to the pure nested *toolutil.TimeStatsOutput
+// (no next_steps) used by Output.TimeStats and BlockingMergeRequestOutput.TimeStats.
+// Standalone handlers use timeStatsToOutput instead to get next_steps at the top level.
+func timeStatsPtr(t *gl.TimeStats) *toolutil.TimeStatsOutput {
+	return toolutil.NewTimeStatsOutput(t)
 }
 
 // MergeRequestUserOutput mirrors gl.MergeRequestUser (the MR "user" object,
@@ -84,7 +81,7 @@ type BlockingMergeRequestOutput struct {
 	WebURL                      string                               `json:"web_url"`
 	References                  *toolutil.ReferencesOutput           `json:"references,omitempty"`
 	DiscussionLocked            *bool                                `json:"discussion_locked,omitempty"`
-	TimeStats                   *TimeStatsOutput                     `json:"time_stats,omitempty"`
+	TimeStats                   *toolutil.TimeStatsOutput            `json:"time_stats,omitempty"`
 	Squash                      bool                                 `json:"squash"`
 	TaskCompletionStatus        *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
 	HasConflicts                bool                                 `json:"has_conflicts"`

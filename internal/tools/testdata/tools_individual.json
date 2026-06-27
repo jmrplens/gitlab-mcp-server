@@ -66215,15 +66215,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -111690,15 +111681,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -113127,15 +113109,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -113915,15 +113888,6 @@
                       "human_total_time_spent": {
                         "type": "string"
                       },
-                      "next_steps": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": [
-                          "null",
-                          "array"
-                        ]
-                      },
                       "time_estimate": {
                         "type": "integer"
                       },
@@ -114532,15 +114496,6 @@
                 },
                 "human_total_time_spent": {
                   "type": "string"
-                },
-                "next_steps": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": [
-                    "null",
-                    "array"
-                  ]
                 },
                 "time_estimate": {
                   "type": "integer"
@@ -119869,15 +119824,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -122132,15 +122078,6 @@
                   "human_total_time_spent": {
                     "type": "string"
                   },
-                  "next_steps": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
                   "time_estimate": {
                     "type": "integer"
                   },
@@ -123293,15 +123230,6 @@
                   },
                   "human_total_time_spent": {
                     "type": "string"
-                  },
-                  "next_steps": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
                   },
                   "time_estimate": {
                     "type": "integer"
@@ -124459,15 +124387,6 @@
                   "human_total_time_spent": {
                     "type": "string"
                   },
-                  "next_steps": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
                   "time_estimate": {
                     "type": "integer"
                   },
@@ -125504,15 +125423,6 @@
             },
             "human_total_time_spent": {
               "type": "string"
-            },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
             },
             "time_estimate": {
               "type": "integer"
@@ -130301,15 +130211,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -131408,15 +131309,6 @@
             "human_total_time_spent": {
               "type": "string"
             },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
-            },
             "time_estimate": {
               "type": "integer"
             },
@@ -132452,15 +132344,6 @@
             },
             "human_total_time_spent": {
               "type": "string"
-            },
-            "next_steps": {
-              "items": {
-                "type": "string"
-              },
-              "type": [
-                "null",
-                "array"
-              ]
             },
             "time_estimate": {
               "type": "integer"
@@ -187043,15 +186926,6 @@
                   },
                   "human_total_time_spent": {
                     "type": "string"
-                  },
-                  "next_steps": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
                   },
                   "time_estimate": {
                     "type": "integer"

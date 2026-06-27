@@ -25,24 +25,14 @@ import (
 
 // TaskCompletionStatusOutput mirrors gl.TasksCompletionStatus.
 
-// TimeStatsOutput mirrors gl.TimeStats (the merge-request time_stats object).
-type TimeStatsOutput struct {
-	HumanTimeEstimate   string `json:"human_time_estimate"`
-	HumanTotalTimeSpent string `json:"human_total_time_spent"`
-	TimeEstimate        int64  `json:"time_estimate"`
-	TotalTimeSpent      int64  `json:"total_time_spent"`
-}
+// TimeStatsOutput is the canonical pure time-tracking sub-object from toolutil.
+// Aliased here so call sites within this package remain unchanged.
+type TimeStatsOutput = toolutil.TimeStatsOutput
 
+// timeStatsPtr converts a gl.TimeStats pointer to the canonical pure
+// TimeStatsOutput, delegating to toolutil.NewTimeStatsOutput.
 func timeStatsPtr(t *gl.TimeStats) *TimeStatsOutput {
-	if t == nil {
-		return nil
-	}
-	return &TimeStatsOutput{
-		HumanTimeEstimate:   t.HumanTimeEstimate,
-		HumanTotalTimeSpent: t.HumanTotalTimeSpent,
-		TimeEstimate:        t.TimeEstimate,
-		TotalTimeSpent:      t.TotalTimeSpent,
-	}
+	return toolutil.NewTimeStatsOutput(t)
 }
 
 // MergeRequestUserOutput mirrors gl.MergeRequestUser (the MR "user" object,

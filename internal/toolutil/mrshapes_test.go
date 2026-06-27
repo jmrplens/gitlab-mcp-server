@@ -126,3 +126,54 @@ func TestNewMergeRequestUserOutput(t *testing.T) {
 		t.Errorf("MR user: %+v", got)
 	}
 }
+
+// TestNewTimeStatsOutput verifies the time-stats converter returns nil for a nil
+// source and copies every field to the pure (no next_steps) struct.
+func TestNewTimeStatsOutput(t *testing.T) {
+	if got := NewTimeStatsOutput(nil); got != nil {
+		t.Errorf("nil source must return nil, got %+v", got)
+	}
+	got := NewTimeStatsOutput(&gl.TimeStats{
+		HumanTimeEstimate:   "3h",
+		HumanTotalTimeSpent: "1h30m",
+		TimeEstimate:        10800,
+		TotalTimeSpent:      5400,
+	})
+	if got == nil {
+		t.Fatal("expected non-nil TimeStatsOutput")
+	}
+	if got.HumanTimeEstimate != "3h" || got.HumanTotalTimeSpent != "1h30m" {
+		t.Errorf("human fields: %+v", got)
+	}
+	if got.TimeEstimate != 10800 || got.TotalTimeSpent != 5400 {
+		t.Errorf("raw second fields: %+v", got)
+	}
+}
+
+// TestMergeRequestOutput_FieldsPresent verifies that MergeRequestOutput carries
+// the canonical merge-request JSON keys including the pure time_stats sub-object
+// (no next_steps nested inside) and the top-level HintableOutput embed.
+func TestMergeRequestOutput_FieldsPresent(t *testing.T) {
+	ts := &TimeStatsOutput{HumanTimeEstimate: "2h", TimeEstimate: 7200}
+	out := MergeRequestOutput{
+		ID:        1,
+		IID:       2,
+		ProjectID: 3,
+		Title:     "test MR",
+		State:     "opened",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+		TimeStats: ts,
+	}
+	if out.ID != 1 || out.IID != 2 || out.ProjectID != 3 {
+		t.Errorf("ID fields: %+v", out)
+	}
+	if out.TimeStats == nil || out.TimeStats.HumanTimeEstimate != "2h" {
+		t.Errorf("TimeStats: %+v", out.TimeStats)
+	}
+	// Verify HintableOutput is embedded (next_steps settable at top level).
+	out.SetNextSteps([]string{"hint"})
+	if len(out.NextSteps) != 1 || out.NextSteps[0] != "hint" {
+		t.Errorf("HintableOutput embed broken: %+v", out.NextSteps)
+	}
+}
