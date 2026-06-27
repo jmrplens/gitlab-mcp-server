@@ -360,3 +360,15 @@ func FormatBitbucketServerImport(out *BitbucketServerImportOutput) string {
 func FormatImportGists() string {
 	return "GitHub gists import into GitLab snippets initiated successfully."
 }
+
+// init registers value-type Markdown formatters so the discovery audit can
+// resolve OutputType dereferences for the pointer-returning import handlers.
+// The handlers return *GitHubImportOutput, *CancelledImportOutput, etc., but
+// HasRegisteredMarkdownFormatter dereferences the pointer type to look up
+// the value-type key, so the registrations below use value signatures.
+func init() {
+	toolutil.RegisterMarkdown(func(out GitHubImportOutput) string { return FormatGitHubImport(&out) })
+	toolutil.RegisterMarkdown(func(out CancelledImportOutput) string { return FormatCancelledImport(&out) })
+	toolutil.RegisterMarkdown(func(out BitbucketCloudImportOutput) string { return FormatBitbucketCloudImport(&out) })
+	toolutil.RegisterMarkdown(func(out BitbucketServerImportOutput) string { return FormatBitbucketServerImport(&out) })
+}
