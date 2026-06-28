@@ -15,7 +15,7 @@ The repository domain covers operations on GitLab repository content: browsing t
 
 This domain spans six sub-packages: `repository`, `files`, `commits`, `commitdiscussions`, `repositorysubmodules`, and `markdown`.
 
-With `TOOL_SURFACE=meta`, all 38 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 40 individual tools below are consolidated into a single `gitlab_repository` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 
@@ -310,6 +310,20 @@ Delete a note from a commit discussion thread.
 
 ## Submodules
 
+### `gitlab_list_repository_submodules`
+
+List the Git submodules defined in a repository's `.gitmodules`. Returns each submodule's name, path, remote URL, resolved project, and the pinned commit SHA the parent repository currently points to, plus a count. Requires `project_id`; optionally specify `ref` (branch, tag, or commit SHA; defaults to the default branch).
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_read_repository_submodule_file`
+
+Read a file from inside a submodule at the exact commit the parent repository pins. Resolves the submodule's GitLab project via `.gitmodules`, looks up the pinned commit SHA from the parent's tree, then fetches the file from the submodule's project at that commit. Requires `project_id`, `submodule_path`, and `file_path`; optionally specify `ref` (branch, tag, or SHA in the parent; defaults to the default branch). Returns the file name and path, submodule path, resolved project, pinned commit SHA, size, decoded content, and encoding.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ### `gitlab_update_repository_submodule`
 
 Update an existing submodule reference in a GitLab repository to point to a new commit SHA.
@@ -370,8 +384,10 @@ Render arbitrary markdown text to HTML using the GitLab API. Supports GitLab Fla
 | 34 | `gitlab_add_commit_discussion_note` | Commit Discussions | Create |
 | 35 | `gitlab_update_commit_discussion_note` | Commit Discussions | Update |
 | 36 | `gitlab_delete_commit_discussion_note` | Commit Discussions | Delete |
-| 37 | `gitlab_update_repository_submodule` | Submodules | Update |
-| 38 | `gitlab_render_markdown` | Markdown | Read |
+| 37 | `gitlab_list_repository_submodules` | Submodules | Read |
+| 38 | `gitlab_read_repository_submodule_file` | Submodules | Read |
+| 39 | `gitlab_update_repository_submodule` | Submodules | Update |
+| 40 | `gitlab_render_markdown` | Markdown | Read |
 
 ### Destructive Tools (Require Confirmation)
 

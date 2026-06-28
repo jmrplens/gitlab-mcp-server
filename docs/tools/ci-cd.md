@@ -1,19 +1,19 @@
 # CI/CD — Tool Reference
 
 > **Diátaxis type**: Reference
-> **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Lint)
-> **Individual tools**: 58
-> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_instance_variable` (`TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix.
-> **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html)
+> **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Resource Groups)
+> **Individual tools**: 65
+> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable` (`TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix; resource group actions via `resource_group_*` prefix. The `gitlab_ci_variable` meta-tool also covers group and instance variables (action prefixes `group_variable_*` / `instance_variable_*`). CI lint tools (`gitlab_ci_lint`, `gitlab_ci_lint_project`) live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
+> **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html) · [Group Variables API](https://docs.gitlab.com/ee/api/group_level_variables.html) · [Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
 
 ## Overview
 
-The CI/CD domain covers GitLab's continuous integration and delivery capabilities: pipelines, jobs, CI/CD variables (project and instance level), pipeline schedules, pipeline triggers, and CI configuration linting.
+The CI/CD domain covers GitLab's continuous integration and delivery capabilities: pipelines, jobs, CI/CD variables (project, group, and instance level), pipeline schedules, pipeline triggers, and CI resource groups.
 
-With `TOOL_SURFACE=meta`, the 57 individual tools below are consolidated into six meta-tools that dispatch by `action` parameter. CI lint tools are additionally available through the `gitlab_template` meta-tool.
+With `TOOL_SURFACE=meta`, the 65 individual tools below are consolidated into three meta-tools that dispatch by `action` parameter. CI lint tools live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
 
 ### Common Questions
 
@@ -32,24 +32,6 @@ With `TOOL_SURFACE=meta`, the 57 individual tools below are consolidated into si
 | **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
-
----
-
-## CI Lint
-
-### `gitlab_ci_lint_project`
-
-Validate a project's CI/CD configuration (.gitlab-ci.yml) from the repository. Returns validation status, errors, warnings, merged YAML, and includes.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_ci_lint`
-
-Validate arbitrary CI/CD YAML content within a project's namespace context. Useful for testing CI configuration changes before committing. Returns validation status, errors, warnings, and merged YAML.
-
-| Annotation | **Read** |
-| ---------- | -------- |
 
 ---
 
@@ -288,6 +270,56 @@ Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipp
 
 ---
 
+## Resource Groups
+
+Resource groups serialize concurrent jobs in a pipeline by sharing a single concurrency lock. Use them to control how queued jobs are dispatched when multiple pipelines target the same environment.
+
+### `gitlab_list_resource_groups`
+
+List the CI resource groups configured for a project. Returns each resource group's ID, key, and process mode that controls how jobs sharing the group are serialized to limit pipeline concurrency.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_get_resource_group`
+
+Get one CI resource group in a project by key. Returns the resource group ID, key, and process mode (the concurrency mode that controls how jobs sharing the resource group are serialized).
+
+| Parameter    | Required | Description                    |
+| ------------ | -------- | ------------------------------ |
+| `key`        | Yes      | Resource group key             |
+| `project_id` | Yes      | Project ID or URL-encoded path |
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_edit_resource_group`
+
+Update the process mode of one CI resource group by key. Returns the updated resource group ID, key, and new process mode that controls how queued jobs sharing the resource group are serialized. Valid `process_mode` values: `unordered`, `oldest_first`, `newest_first`, `newest_ready_first`.
+
+| Parameter      | Required | Description                                                                      |
+| -------------- | -------- | -------------------------------------------------------------------------------- |
+| `key`          | Yes      | Resource group key                                                               |
+| `process_mode` | Yes      | Process mode (`unordered`, `oldest_first`, `newest_first`, `newest_ready_first`) |
+| `project_id`   | Yes      | Project ID or URL-encoded path                                                   |
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_list_resource_group_upcoming_jobs`
+
+List the upcoming CI jobs queued for one resource group by key. Returns each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode.
+
+| Parameter    | Required | Description                    |
+| ------------ | -------- | ------------------------------ |
+| `key`        | Yes      | Resource group key             |
+| `project_id` | Yes      | Project ID or URL-encoded path |
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+---
+
 ## CI/CD Variables (Project)
 
 > **Auto-masking**: Variables flagged as `masked` or `hidden` in GitLab have their values automatically redacted to `[masked]` in all responses. This prevents accidental exposure of secrets through the MCP interface.
@@ -371,6 +403,99 @@ Delete a CI/CD variable from the GitLab instance level by key. This action canno
 | ---------- | ---------- |
 
 > **Destructive**: Protected by confirmation prompt.
+
+---
+
+## CI/CD Variables (Group)
+
+> **Auto-masking**: Variables flagged as `masked` or `hidden` have their values automatically redacted to `[masked]` in all responses. This prevents accidental exposure of secrets through the MCP interface.
+
+### `gitlab_group_variable_list`
+
+List a group's CI/CD variables with `order_by`, `sort`, and offset or keyset pagination. Returns each variable's key, value, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata.
+
+| Parameter    | Required | Default | Description                               |
+| ------------ | -------- | ------- | ----------------------------------------- |
+| `group_id`   | Yes      | —       | Group ID or URL-encoded path              |
+| `order_by`   | No       | —       | Field to sort by                          |
+| `sort`       | No       | —       | Sort direction (`asc` / `desc`)           |
+| `page`       | No       | 1       | Page number (1+)                          |
+| `per_page`   | No       | 20      | Items per page (1–100)                    |
+| `pagination` | No       | —       | Pagination strategy (`offset` / `keyset`) |
+| `page_token` | No       | —       | Keyset pagination token                   |
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_group_variable_get`
+
+Get a single group CI/CD variable by key, optionally selecting an environment-scoped instance via the filter. Returns the variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description.
+
+| Parameter           | Required | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `group_id`          | Yes      | Group ID or URL-encoded path                               |
+| `key`               | Yes      | Variable key                                               |
+| `environment_scope` | No       | Environment scope string; use `*` for global               |
+| `filter`            | No       | Filter object to disambiguate environment-scoped instances |
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_group_variable_create`
+
+Create a CI/CD variable in a group with type, environment scope, and protected/masked/raw/masked_and_hidden flags. Returns the created variable's key, value, type, flags, environment scope, and description.
+
+| Parameter           | Required | Description                                |
+| ------------------- | -------- | ------------------------------------------ |
+| `group_id`          | Yes      | Group ID or URL-encoded path               |
+| `key`               | Yes      | Variable key                               |
+| `value`             | Yes      | Variable value                             |
+| `variable_type`     | No       | Variable type (`env_var` / `file`)         |
+| `protected`         | No       | Restrict to protected branches/tags        |
+| `masked`            | No       | Mask value in job logs                     |
+| `masked_and_hidden` | No       | Mask value and hide from API responses     |
+| `raw`               | No       | Treat value as raw (no variable expansion) |
+| `environment_scope` | No       | Environment scope string                   |
+| `description`       | No       | Free-form description                      |
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_group_variable_update`
+
+Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description.
+
+| Parameter           | Required | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `group_id`          | Yes      | Group ID or URL-encoded path                               |
+| `key`               | Yes      | Variable key                                               |
+| `value`             | No       | New variable value                                         |
+| `variable_type`     | No       | New variable type (`env_var` / `file`)                     |
+| `protected`         | No       | Restrict to protected branches/tags                        |
+| `masked`            | No       | Mask value in job logs                                     |
+| `raw`               | No       | Treat value as raw (no variable expansion)                 |
+| `environment_scope` | No       | Environment scope string                                   |
+| `description`       | No       | Free-form description                                      |
+| `filter`            | No       | Filter object to disambiguate environment-scoped instances |
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_group_variable_delete`
+
+Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter. This action cannot be undone.
+
+| Parameter           | Required | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `group_id`          | Yes      | Group ID or URL-encoded path                               |
+| `key`               | Yes      | Variable key                                               |
+| `environment_scope` | No       | Environment scope string                                   |
+| `filter`            | No       | Filter object to disambiguate environment-scoped instances |
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt. Variable deletion cannot be undone.
 
 ---
 
@@ -511,63 +636,71 @@ Trigger a pipeline using a trigger token.
 
 | # | Tool Name | Category | Annotation |
 | --: | --------- | -------- | :--------: |
-| 1 | `gitlab_ci_lint_project` | CI Lint | Read |
-| 2 | `gitlab_ci_lint` | CI Lint | Read |
-| 3 | `gitlab_pipeline_list` | Pipelines | Read |
-| 4 | `gitlab_pipeline_get` | Pipelines | Read |
-| 5 | `gitlab_pipeline_create` | Pipelines | Create |
-| 6 | `gitlab_pipeline_cancel` | Pipelines | Update |
-| 7 | `gitlab_pipeline_retry` | Pipelines | Update |
-| 8 | `gitlab_pipeline_update_metadata` | Pipelines | Update |
-| 9 | `gitlab_pipeline_delete` | Pipelines | Delete |
-| 10 | `gitlab_pipeline_variables` | Pipelines | Read |
-| 11 | `gitlab_pipeline_test_report` | Pipelines | Read |
-| 12 | `gitlab_pipeline_test_report_summary` | Pipelines | Read |
-| 13 | `gitlab_pipeline_latest` | Pipelines | Read |
-| 14 | `gitlab_job_list` | Jobs | Read |
-| 15 | `gitlab_job_get` | Jobs | Read |
-| 16 | `gitlab_job_trace` | Jobs | Read |
-| 17 | `gitlab_job_cancel` | Jobs | Update |
-| 18 | `gitlab_job_retry` | Jobs | Update |
-| 19 | `gitlab_job_play` | Jobs | Update |
-| 20 | `gitlab_job_keep_artifacts` | Jobs | Update |
-| 21 | `gitlab_job_list_project` | Jobs | Read |
-| 22 | `gitlab_job_list_bridges` | Jobs | Read |
-| 23 | `gitlab_job_artifacts` | Jobs | Read |
-| 24 | `gitlab_job_download_artifacts` | Jobs | Read |
-| 25 | `gitlab_job_download_single_artifact` | Jobs | Read |
-| 26 | `gitlab_job_download_single_artifact_by_ref` | Jobs | Read |
-| 27 | `gitlab_job_erase` | Jobs | Delete |
-| 28 | `gitlab_job_delete_artifacts` | Jobs | Delete |
-| 29 | `gitlab_job_delete_project_artifacts` | Jobs | Delete |
-| 30 | `gitlab_ci_variable_list` | CI Variables (Project) | Read |
-| 31 | `gitlab_ci_variable_get` | CI Variables (Project) | Read |
-| 32 | `gitlab_ci_variable_create` | CI Variables (Project) | Create |
-| 33 | `gitlab_ci_variable_update` | CI Variables (Project) | Update |
-| 34 | `gitlab_ci_variable_delete` | CI Variables (Project) | Delete |
-| 35 | `gitlab_instance_variable_list` | CI Variables (Instance) | Read |
-| 36 | `gitlab_instance_variable_get` | CI Variables (Instance) | Read |
-| 37 | `gitlab_instance_variable_create` | CI Variables (Instance) | Create |
-| 38 | `gitlab_instance_variable_update` | CI Variables (Instance) | Update |
-| 39 | `gitlab_instance_variable_delete` | CI Variables (Instance) | Delete |
-| 40 | `gitlab_pipeline_schedule_list` | Pipeline Schedules | Read |
-| 41 | `gitlab_pipeline_schedule_get` | Pipeline Schedules | Read |
-| 42 | `gitlab_pipeline_schedule_create` | Pipeline Schedules | Create |
-| 43 | `gitlab_pipeline_schedule_update` | Pipeline Schedules | Update |
-| 44 | `gitlab_pipeline_schedule_delete` | Pipeline Schedules | Delete |
-| 45 | `gitlab_pipeline_schedule_run` | Pipeline Schedules | Update |
-| 46 | `gitlab_pipeline_schedule_take_ownership` | Pipeline Schedules | Update |
-| 47 | `gitlab_pipeline_schedule_create_variable` | Pipeline Schedules | Create |
-| 48 | `gitlab_pipeline_schedule_edit_variable` | Pipeline Schedules | Update |
-| 49 | `gitlab_pipeline_schedule_delete_variable` | Pipeline Schedules | Delete |
-| 50 | `gitlab_pipeline_schedule_list_triggered_pipelines` | Pipeline Schedules | Read |
-| 51 | `gitlab_pipeline_trigger_list` | Pipeline Triggers | Read |
-| 52 | `gitlab_pipeline_trigger_get` | Pipeline Triggers | Read |
-| 53 | `gitlab_pipeline_trigger_create` | Pipeline Triggers | Create |
-| 54 | `gitlab_pipeline_trigger_update` | Pipeline Triggers | Update |
-| 55 | `gitlab_pipeline_trigger_delete` | Pipeline Triggers | Delete |
-| 56 | `gitlab_pipeline_trigger_run` | Pipeline Triggers | Create |
-| 57 | `gitlab_job_delete_project_artifacts` | Jobs | Delete |
+| 1 | `gitlab_pipeline_list` | Pipelines | Read |
+| 2 | `gitlab_pipeline_get` | Pipelines | Read |
+| 3 | `gitlab_pipeline_create` | Pipelines | Create |
+| 4 | `gitlab_pipeline_cancel` | Pipelines | Update |
+| 5 | `gitlab_pipeline_retry` | Pipelines | Update |
+| 6 | `gitlab_pipeline_update_metadata` | Pipelines | Update |
+| 7 | `gitlab_pipeline_delete` | Pipelines | Delete |
+| 8 | `gitlab_pipeline_variables` | Pipelines | Read |
+| 9 | `gitlab_pipeline_test_report` | Pipelines | Read |
+| 10 | `gitlab_pipeline_test_report_summary` | Pipelines | Read |
+| 11 | `gitlab_pipeline_latest` | Pipelines | Read |
+| 12 | `gitlab_pipeline_wait` | Pipelines | Read |
+| 13 | `gitlab_job_list` | Jobs | Read |
+| 14 | `gitlab_job_get` | Jobs | Read |
+| 15 | `gitlab_job_trace` | Jobs | Read |
+| 16 | `gitlab_job_cancel` | Jobs | Update |
+| 17 | `gitlab_job_retry` | Jobs | Update |
+| 18 | `gitlab_job_play` | Jobs | Update |
+| 19 | `gitlab_job_keep_artifacts` | Jobs | Update |
+| 20 | `gitlab_job_list_project` | Jobs | Read |
+| 21 | `gitlab_job_list_bridges` | Jobs | Read |
+| 22 | `gitlab_job_artifacts` | Jobs | Read |
+| 23 | `gitlab_job_download_artifacts` | Jobs | Read |
+| 24 | `gitlab_job_download_single_artifact` | Jobs | Read |
+| 25 | `gitlab_job_download_single_artifact_by_ref` | Jobs | Read |
+| 26 | `gitlab_job_erase` | Jobs | Delete |
+| 27 | `gitlab_job_delete_artifacts` | Jobs | Delete |
+| 28 | `gitlab_job_delete_project_artifacts` | Jobs | Delete |
+| 29 | `gitlab_job_wait` | Jobs | Read |
+| 30 | `gitlab_list_resource_groups` | Resource Groups | Read |
+| 31 | `gitlab_get_resource_group` | Resource Groups | Read |
+| 32 | `gitlab_edit_resource_group` | Resource Groups | Update |
+| 33 | `gitlab_list_resource_group_upcoming_jobs` | Resource Groups | Read |
+| 34 | `gitlab_ci_variable_list` | CI Variables (Project) | Read |
+| 35 | `gitlab_ci_variable_get` | CI Variables (Project) | Read |
+| 36 | `gitlab_ci_variable_create` | CI Variables (Project) | Create |
+| 37 | `gitlab_ci_variable_update` | CI Variables (Project) | Update |
+| 38 | `gitlab_ci_variable_delete` | CI Variables (Project) | Delete |
+| 39 | `gitlab_group_variable_list` | CI Variables (Group) | Read |
+| 40 | `gitlab_group_variable_get` | CI Variables (Group) | Read |
+| 41 | `gitlab_group_variable_create` | CI Variables (Group) | Create |
+| 42 | `gitlab_group_variable_update` | CI Variables (Group) | Update |
+| 43 | `gitlab_group_variable_delete` | CI Variables (Group) | Delete |
+| 44 | `gitlab_instance_variable_list` | CI Variables (Instance) | Read |
+| 45 | `gitlab_instance_variable_get` | CI Variables (Instance) | Read |
+| 46 | `gitlab_instance_variable_create` | CI Variables (Instance) | Create |
+| 47 | `gitlab_instance_variable_update` | CI Variables (Instance) | Update |
+| 48 | `gitlab_instance_variable_delete` | CI Variables (Instance) | Delete |
+| 49 | `gitlab_pipeline_schedule_list` | Pipeline Schedules | Read |
+| 50 | `gitlab_pipeline_schedule_get` | Pipeline Schedules | Read |
+| 51 | `gitlab_pipeline_schedule_create` | Pipeline Schedules | Create |
+| 52 | `gitlab_pipeline_schedule_update` | Pipeline Schedules | Update |
+| 53 | `gitlab_pipeline_schedule_delete` | Pipeline Schedules | Delete |
+| 54 | `gitlab_pipeline_schedule_run` | Pipeline Schedules | Update |
+| 55 | `gitlab_pipeline_schedule_take_ownership` | Pipeline Schedules | Update |
+| 56 | `gitlab_pipeline_schedule_create_variable` | Pipeline Schedules | Create |
+| 57 | `gitlab_pipeline_schedule_edit_variable` | Pipeline Schedules | Update |
+| 58 | `gitlab_pipeline_schedule_delete_variable` | Pipeline Schedules | Delete |
+| 59 | `gitlab_pipeline_schedule_list_triggered_pipelines` | Pipeline Schedules | Read |
+| 60 | `gitlab_pipeline_trigger_list` | Pipeline Triggers | Read |
+| 61 | `gitlab_pipeline_trigger_get` | Pipeline Triggers | Read |
+| 62 | `gitlab_pipeline_trigger_create` | Pipeline Triggers | Create |
+| 63 | `gitlab_pipeline_trigger_update` | Pipeline Triggers | Update |
+| 64 | `gitlab_pipeline_trigger_delete` | Pipeline Triggers | Delete |
+| 65 | `gitlab_pipeline_trigger_run` | Pipeline Triggers | Create |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -578,6 +711,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_job_delete_artifacts` — deletes artifacts for a specific job
 - `gitlab_job_delete_project_artifacts` — deletes all artifacts across a project
 - `gitlab_ci_variable_delete` — deletes a project CI/CD variable
+- `gitlab_group_variable_delete` — deletes a group CI/CD variable
 - `gitlab_instance_variable_delete` — deletes an instance CI/CD variable
 - `gitlab_pipeline_schedule_delete` — deletes a pipeline schedule
 - `gitlab_pipeline_schedule_delete_variable` — deletes a schedule variable
@@ -590,7 +724,9 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html)
 - [GitLab Jobs API](https://docs.gitlab.com/ee/api/jobs.html)
 - [GitLab Project CI/CD Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html)
+- [GitLab Group CI/CD Variables API](https://docs.gitlab.com/ee/api/group_level_variables.html)
 - [GitLab Instance CI/CD Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html)
 - [GitLab Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html)
 - [GitLab Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html)
-- [GitLab CI Lint API](https://docs.gitlab.com/ee/api/lint.html)
+- [GitLab Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
+- [CI Lint tools](templates.md) — `gitlab_ci_lint`, `gitlab_ci_lint_project` are documented in the Templates reference

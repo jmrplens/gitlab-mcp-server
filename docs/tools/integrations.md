@@ -1,19 +1,19 @@
 # Integrations — Tool Reference
 
 > **Diátaxis type**: Reference
-> **Domain**: Integrations, Badges, Topics, Epic Discussions, Import
-> **Individual tools**: 35
-> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_epic_discussion`, `gitlab_import` (`TOOL_SURFACE=meta` catalog)
-> **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Epic Discussions API](https://docs.gitlab.com/ee/api/epic_discussions.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
+> **Domain**: Integrations, Badges, Topics, Import
+> **Individual tools**: 29
+> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_import` (`TOOL_SURFACE=meta` catalog)
+> **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
 
 ## Overview
 
-The integrations domain covers miscellaneous GitLab tools that don't belong to other major domains: project/group integrations (services), project/group badges, instance-level topics, epic discussion threads, and repository import from external services (GitHub, Bitbucket).
+The integrations domain covers miscellaneous GitLab tools that don't belong to other major domains: project/group integrations (services), project/group badges, instance-level topics, and repository import from external services (GitHub, Bitbucket).
 
-With `TOOL_SURFACE=meta`, integration and badge tools are consolidated into `gitlab_project`, topic tools into `gitlab_admin`, epic discussion tools into `gitlab_epic_discussion`, and import tools into `gitlab_import`.
+With `TOOL_SURFACE=meta`, integration and badge tools are consolidated into `gitlab_project`, topic tools into `gitlab_admin`, and import tools into `gitlab_import`.
 
 ### Common Questions
 
@@ -231,54 +231,6 @@ Delete a project topic. Requires admin access.
 
 ---
 
-## Epic Discussions
-
-### `gitlab_list_epic_discussions`
-
-List discussion threads on a group epic.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_get_epic_discussion`
-
-Get a single discussion thread on a group epic.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_create_epic_discussion`
-
-Create a new discussion thread on a group epic.
-
-| Annotation | **Create** |
-| ---------- | ---------- |
-
-### `gitlab_add_epic_discussion_note`
-
-Add a reply note to an existing epic discussion thread.
-
-| Annotation | **Create** |
-| ---------- | ---------- |
-
-### `gitlab_update_epic_discussion_note`
-
-Update an existing note in an epic discussion thread.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
-### `gitlab_delete_epic_discussion_note`
-
-Delete a note from an epic discussion thread.
-
-| Annotation | **Delete** |
-| ---------- | ---------- |
-
-> **Destructive**: Protected by confirmation prompt.
-
----
-
 ## Import Service
 
 ### `gitlab_import_from_github`
@@ -343,20 +295,14 @@ Import a repository from Bitbucket Server into GitLab.
 | 19 | `gitlab_create_topic` | Topics | Create |
 | 20 | `gitlab_update_topic` | Topics | Update |
 | 21 | `gitlab_delete_topic` | Topics | Delete |
-| 22 | `gitlab_list_epic_discussions` | Epic Discussions | Read |
-| 23 | `gitlab_get_epic_discussion` | Epic Discussions | Read |
-| 24 | `gitlab_create_epic_discussion` | Epic Discussions | Create |
-| 25 | `gitlab_add_epic_discussion_note` | Epic Discussions | Create |
-| 26 | `gitlab_update_epic_discussion_note` | Epic Discussions | Update |
-| 27 | `gitlab_delete_epic_discussion_note` | Epic Discussions | Delete |
-| 28 | `gitlab_import_from_github` | Import Service | Create |
-| 29 | `gitlab_cancel_github_import` | Import Service | Update |
-| 30 | `gitlab_import_github_gists` | Import Service | Create |
-| 31 | `gitlab_import_from_bitbucket_cloud` | Import Service | Create |
-| 32 | `gitlab_import_from_bitbucket_server` | Import Service | Create |
-| 33 | `gitlab_get_group_datadog_integration` | Group Integrations (Datadog) | Read |
-| 34 | `gitlab_set_group_datadog_integration` | Group Integrations (Datadog) | Create |
-| 35 | `gitlab_delete_group_datadog_integration` | Group Integrations (Datadog) | Delete |
+| 22 | `gitlab_import_from_github` | Import Service | Create |
+| 23 | `gitlab_cancel_github_import` | Import Service | Update |
+| 24 | `gitlab_import_github_gists` | Import Service | Create |
+| 25 | `gitlab_import_from_bitbucket_cloud` | Import Service | Create |
+| 26 | `gitlab_import_from_bitbucket_server` | Import Service | Create |
+| 27 | `gitlab_get_group_datadog_integration` | Group Integrations (Datadog) | Read |
+| 28 | `gitlab_set_group_datadog_integration` | Group Integrations (Datadog) | Create |
+| 29 | `gitlab_delete_group_datadog_integration` | Group Integrations (Datadog) | Delete |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -366,7 +312,6 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_delete_project_badge` — removes a badge from a project
 - `gitlab_delete_group_badge` — removes a badge from a group
 - `gitlab_delete_topic` — deletes a project topic (admin)
-- `gitlab_delete_epic_discussion_note` — deletes a note from an epic discussion
 - `gitlab_delete_group_datadog_integration` — removes the Datadog integration from a group
 
 ---
@@ -377,5 +322,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Project Badges API](https://docs.gitlab.com/ee/api/project_badges.html)
 - [GitLab Group Badges API](https://docs.gitlab.com/ee/api/group_badges.html)
 - [GitLab Topics API](https://docs.gitlab.com/ee/api/topics.html)
-- [GitLab Epic Discussions API](https://docs.gitlab.com/ee/api/epic_discussions.html)
 - [GitLab Import API](https://docs.gitlab.com/ee/api/import.html)

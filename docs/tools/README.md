@@ -14,40 +14,40 @@ This directory is a domain-oriented reference, not a one-heading-per-runtime-too
 
 | Domain                                | Tools | Meta-tool                                                                              | Document                                                 |
 | ------------------------------------- | ----: | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Projects                              |    50 | `gitlab_project`                                                                       | [projects.md](projects.md)                               |
-| Repository & Files                    |    41 | `gitlab_repository`                                                                    | [repository.md](repository.md)                           |
+| Projects                              |    91 | `gitlab_project`                                                                       | [projects.md](projects.md)                               |
+| Repository & Files                    |    40 | `gitlab_repository`                                                                    | [repository.md](repository.md)                           |
 | Branches                              |    10 | `gitlab_branch`                                                                        | [branches.md](branches.md)                               |
 | Tags                                  |     9 | `gitlab_tag`                                                                           | [tags.md](tags.md)                                       |
-| Merge Requests                        |    54 | `gitlab_merge_request`                                                                 | [merge-requests.md](merge-requests.md)                   |
+| Merge Requests                        |    56 | `gitlab_merge_request`                                                                 | [merge-requests.md](merge-requests.md)                   |
 | MR Review                             |    23 | `gitlab_mr_review`                                                                     | [mr-review.md](mr-review.md)                             |
-| Issues                                |    44 | `gitlab_issue`                                                                         | [issues.md](issues.md)                                   |
-| CI/CD                                 |    58 | `gitlab_pipeline`, `gitlab_job`, etc.                                                  | [ci-cd.md](ci-cd.md)                                     |
+| Issues                                |    49 | `gitlab_issue`                                                                         | [issues.md](issues.md)                                   |
+| CI/CD                                 |    65 | `gitlab_pipeline`, `gitlab_job`, etc.                                                  | [ci-cd.md](ci-cd.md)                                     |
 | Releases                              |    12 | `gitlab_release`                                                                       | [releases.md](releases.md)                               |
-| Environments & Deployments            |    24 | `gitlab_environment`                                                                   | [environments.md](environments.md)                       |
-| Groups                                |    72 | `gitlab_group`                                                                         | [groups.md](groups.md)                                   |
-| Users & Todos                         |    27 | `gitlab_user`                                                                          | [users.md](users.md)                                     |
-| Access & Tokens                       |    68 | various                                                                                | [access.md](access.md)                                   |
-| Boards, Labels & Milestones           |    26 | `gitlab_project`, `gitlab_group`                                                       | [boards.md](boards.md)                                   |
-| Search                                |    11 | `gitlab_search`                                                                        | [search.md](search.md)                                   |
+| Environments & Deployments            |    23 | `gitlab_environment`                                                                   | [environments.md](environments.md)                       |
+| Groups                                |   104 | `gitlab_group`                                                                         | [groups.md](groups.md)                                   |
+| Users & Todos                         |    64 | `gitlab_user`                                                                          | [users.md](users.md)                                     |
+| Access & Tokens                       |    62 | various                                                                                | [access.md](access.md)                                   |
+| Boards, Labels & Milestones           |    25 | `gitlab_project`, `gitlab_group`                                                       | [boards.md](boards.md)                                   |
+| Search                                |    10 | `gitlab_search`                                                                        | [search.md](search.md)                                   |
 | Orbit (GitLab.com Enterprise/Premium) |     6 | `gitlab_orbit`                                                                         | [orbit.md](orbit.md)                                     |
 | Wikis                                 |     6 | `gitlab_wiki`                                                                          | [wikis.md](wikis.md)                                     |
-| Snippets                              |    24 | `gitlab_snippet`                                                                       | [snippets.md](snippets.md)                               |
-| Packages & Registry                   |    32 | `gitlab_package`                                                                       | [packages.md](packages.md)                               |
+| Snippets                              |    26 | `gitlab_snippet`                                                                       | [snippets.md](snippets.md)                               |
+| Packages & Registry                   |    33 | `gitlab_package`                                                                       | [packages.md](packages.md)                               |
 | Mirrors                               |     7 | `gitlab_project` (enterprise routes)                                                   | [mirrors.md](mirrors.md)                                 |
-| Runners & Resource Groups             |    24 | `gitlab_runner`                                                                        | [runners.md](runners.md)                                 |
+| Runners & Resource Groups             |    34 | `gitlab_runner`                                                                        | [runners.md](runners.md)                                 |
 | Security & Feature Flags              |    28 | various                                                                                | [security.md](security.md)                               |
-| Notifications & Events                |    48 | various                                                                                | [notifications.md](notifications.md)                     |
-| Admin & Instance                      |    77 | `gitlab_admin`                                                                         | [admin.md](admin.md)                                     |
-| Templates                             |    10 | `gitlab_template`                                                                      | [templates.md](templates.md)                             |
-| Integrations & Misc                   |    35 | various                                                                                | [integrations.md](integrations.md)                       |
-| MCP Capabilities                      |    15 | `gitlab_server` (plus individually-registered elicitation tools)                       | [capabilities.md](capabilities.md)                       |
+| Notifications & Events                |    42 | various                                                                                | [notifications.md](notifications.md)                     |
+| Admin & Instance                      |    74 | `gitlab_admin`                                                                         | [admin.md](admin.md)                                     |
+| Templates                             |    12 | `gitlab_template`                                                                      | [templates.md](templates.md)                             |
+| Integrations & Misc                   |    29 | various                                                                                | [integrations.md](integrations.md)                       |
+| MCP Capabilities                      |     5 | `gitlab_server` (plus individually-registered elicitation tools)                       | [capabilities.md](capabilities.md)                       |
 | Project Discovery                     |     1 | `gitlab_discover_project` (individual tool)                                            | [project-discovery.md](project-discovery.md)             |
 | Identity & Security                   |    30 | `gitlab_group_scim`, `gitlab_member_role`, etc.                                        | [identity-security.md](identity-security.md)             |
 | Enterprise Users & Attestations       |     6 | `gitlab_enterprise_user`, `gitlab_attestation`                                         | [enterprise-attestations.md](enterprise-attestations.md) |
 | Analytics & Compliance                |    12 | `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias` | [analytics-compliance.md](analytics-compliance.md)       |
 | Geo & Model Registry                  |     9 | `gitlab_geo`, `gitlab_model_registry`                                                  | [geo-model-registry.md](geo-model-registry.md)           |
 | Repository Storage Moves              |    18 | `gitlab_storage_move`                                                                  | [storage-moves.md](storage-moves.md)                     |
-| Epics                                 |    17 | `gitlab_epic`                                                                          | [epics.md](epics.md)                                     |
+| Epics                                 |    23 | `gitlab_epic`                                                                          | [epics.md](epics.md)                                     |
 | Vulnerabilities                       |     8 | `gitlab_vulnerability`                                                                 | [vulnerabilities.md](vulnerabilities.md)                 |
 | Security Attributes                   |     5 | `gitlab_security_attribute`                                                            | [security-attributes.md](security-attributes.md)         |
 | Security Categories                   |     3 | `gitlab_security_category`                                                             | [security-categories.md](security-categories.md)         |
@@ -56,7 +56,7 @@ This directory is a domain-oriented reference, not a one-heading-per-runtime-too
 | Branch Rules                          |     1 | `gitlab_branch` (routed)                                                               | [branch-rules.md](branch-rules.md)                       |
 | Custom Emoji                          |     3 | `gitlab_custom_emoji`                                                                  | [custom-emoji.md](custom-emoji.md)                       |
 
-> **Note**: The `events` sub-package (3 tools) is referenced by both Users & Todos and Notifications & Events domains. Five sub-packages (`projectimportexport`, `projectstatistics`, `uploads`, `projectserviceaccounts`, `deploymentmergerequests` — 20 tools) are covered by their parent domain docs (Projects, Environments). Orbit is registered only for `https://gitlab.com` connections with the Enterprise/Premium catalog enabled. Seven GraphQL-only domains (Vulnerabilities, Security Attributes, Security Categories, Security Findings, CI/CD Catalog, Branch Rules, Custom Emoji) use the GitLab GraphQL API instead of REST — see [GraphQL Integration](../graphql.md) for details.
+> **Note**: The `events` sub-package (2 tools: `gitlab_project_event_list`, `gitlab_user_contribution_event_list`) is registered into the `gitlab_user` catalog group and documented in `users.md` (DOC-002 first-claimer-wins rule). Five sub-packages (`projectimportexport`, `projectstatistics`, `uploads`, `projectserviceaccounts`, `deploymentmergerequests` — 20 tools) are covered by their parent domain docs (Projects, Environments). Orbit is registered only for `https://gitlab.com` connections with the Enterprise/Premium catalog enabled. Seven GraphQL-only domains (Vulnerabilities, Security Attributes, Security Categories, Security Findings, CI/CD Catalog, Branch Rules, Custom Emoji) use the GitLab GraphQL API instead of REST — see [GraphQL Integration](../graphql.md) for details.
 
 ## Response Format
 

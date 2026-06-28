@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Access & Authentication
-> **Individual tools**: 68
+> **Individual tools**: 62
 > **Meta-tool**: `gitlab_access` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Access Tokens API](https://docs.gitlab.com/ee/api/project_access_tokens.html), [Deploy Tokens API](https://docs.gitlab.com/ee/api/deploy_tokens.html), [Deploy Keys API](https://docs.gitlab.com/ee/api/deploy_keys.html), [Members API](https://docs.gitlab.com/ee/api/members.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -11,9 +11,9 @@
 
 ## Overview
 
-The access & authentication domain covers project/group/personal access tokens, deploy tokens, deploy keys, access requests, invitations, CI/CD job token scope management, and project member management.
+The access & authentication domain covers project/group/personal access tokens, deploy tokens, deploy keys, access requests, invitations, CI/CD job token scope management, and project/group member management.
 
-With `TOOL_SURFACE=meta`, the 62 individual tools below are consolidated into the `gitlab_access` meta-tool. It dispatches access token, deploy token, deploy key, access request, and invitation workflows through action prefixes such as `token_*`, `deploy_token_*`, `deploy_key_*`, `request_*`, `approve_*`, `deny_*`, and `invite_*`.
+With `TOOL_SURFACE=meta`, all 62 individual tools below are consolidated into the `gitlab_access` meta-tool. It dispatches access token, deploy token, deploy key, access request, and invitation workflows through action prefixes such as `token_*`, `deploy_token_*`, `deploy_key_*`, `request_*`, `approve_*`, `deny_*`, and `invite_*`.
 
 ### Access Levels
 
@@ -499,26 +499,7 @@ Remove a group from the CI/CD job token allowlist.
 
 ## Project Members
 
-### `gitlab_project_members_list`
-
-List all members of a GitLab project including inherited members from parent groups. Returns user ID, username, name, state, access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner), and web URL. Supports filtering by name/username query.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_project_member_get`
-
-Get details of a specific project member by user ID. Returns access level, state, username, and membership info.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_project_member_get_inherited`
-
-Get a project member including inherited membership from parent groups. Returns access level, state, and membership origin.
-
-| Annotation | **Read** |
-| ---------- | -------- |
+Direct and inherited project membership tools. The read-only tools (`gitlab_project_members_list`/`_get`/`_get_inherited`) are documented in [docs/tools/projects.md](projects.md).
 
 ### `gitlab_project_member_add`
 
@@ -542,6 +523,33 @@ Remove a member from a project.
 | ---------- | ---------- |
 
 > **Destructive**: Protected by confirmation prompt.
+
+---
+
+## Group Members
+
+Group membership mutating tools. The read-only tools (`gitlab_group_members_list`/`_get`/`_get_inherited`) and `gitlab_group_member_remove` are documented in [docs/tools/groups.md](groups.md).
+
+### `gitlab_group_invited_list`
+
+List groups invited to a GitLab group. Filter by `relation` (direct, inherited), `min_access_level` (10–50), `order_by` (name, path, id) and `search`. Supports keyset (`pagination=keyset`, `page_token`) or offset pagination (`per_page` 1–100).
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_group_member_add`
+
+Add a user as a direct member of a group. Requires `access_level` (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner). Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Premium/Ultimate).
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_group_member_edit`
+
+Edit a direct group member's access level, expiry, or custom member role. Requires `access_level`. Optionally set `expires_at` (YYYY-MM-DD) and `member_role_id` (Premium/Ultimate).
+
+| Annotation | **Update** |
+| ---------- | ---------- |
 
 ---
 
@@ -605,12 +613,12 @@ Remove a member from a project.
 | 54 | `gitlab_list_job_token_group_allowlist` | Job Token Scope | Read |
 | 55 | `gitlab_add_group_job_token_allowlist` | Job Token Scope | Create |
 | 56 | `gitlab_remove_group_job_token_allowlist` | Job Token Scope | Delete |
-| 57 | `gitlab_project_members_list` | Project Members | Read |
-| 58 | `gitlab_project_member_get` | Project Members | Read |
-| 59 | `gitlab_project_member_get_inherited` | Project Members | Read |
-| 60 | `gitlab_project_member_add` | Project Members | Create |
-| 61 | `gitlab_project_member_edit` | Project Members | Update |
-| 62 | `gitlab_project_member_delete` | Project Members | Delete |
+| 57 | `gitlab_project_member_add` | Project Members | Create |
+| 58 | `gitlab_project_member_edit` | Project Members | Update |
+| 59 | `gitlab_project_member_delete` | Project Members | Delete |
+| 60 | `gitlab_group_invited_list` | Group Members | Read |
+| 61 | `gitlab_group_member_add` | Group Members | Create |
+| 62 | `gitlab_group_member_edit` | Group Members | Update |
 
 ### Destructive Tools (Require Confirmation)
 

@@ -4,7 +4,7 @@
 > **Domain**: MR Review
 > **Individual tools**: 23
 > **Meta-tool**: `gitlab_mr_review` (`TOOL_SURFACE=meta` catalog)
-> **GitLab API**: [MR Notes API](https://docs.gitlab.com/ee/api/notes.html#merge-requests), [MR Discussions API](https://docs.gitlab.com/ee/api/discussions.html#merge-requests), [MR Draft Notes API](https://docs.gitlab.com/ee/api/draft_notes.html)
+> **GitLab API**: [MR Notes API](https://docs.gitlab.com/ee/api/notes.html#merge-requests), [MR Discussions API](https://docs.gitlab.com/ee/api/discussions.html#merge-requests), [MR Draft Notes API](https://docs.gitlab.com/ee/api/draft_notes.html), [Merge Requests Changes API](https://docs.gitlab.com/ee/api/merge_requests.html#get-single-merge-request-changes)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
@@ -13,7 +13,7 @@
 
 The MR review domain covers all comment and review operations on GitLab merge requests: top-level notes (comments), threaded discussions (including inline diff comments), and draft notes (pending review comments that remain private until published).
 
-With `TOOL_SURFACE=meta`, all 19 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 23 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 
@@ -186,35 +186,35 @@ Publish all pending draft notes on a GitLab merge request at once, making them v
 
 ---
 
-## MR Approval Settings
+## MR Changes & Diffs
 
-### `gitlab_get_group_mr_approval_settings`
+### `gitlab_mr_changes_get`
 
-Get group-level merge request approval settings: author/committer approval, approver list overrides, approval retention on push, and reauthentication. Settings may be locked or inherited. Requires GitLab Premium.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_update_group_mr_approval_settings`
-
-Update group-level merge request approval settings. Only include settings you want to change. Requires GitLab Premium.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
-### `gitlab_get_project_mr_approval_settings`
-
-Get project-level merge request approval settings: author/committer approval, approver list overrides, approval retention on push, selective code owner removals, and reauthentication. Requires GitLab Premium.
+Get the current file diffs (changes) for a merge request. Returns per-file diffs with `old_path`, `new_path`, diff content, file status (added/deleted/renamed), file modes, and `truncated_files` when GitLab collapses large diffs. Supports keyset pagination (`order_by`, `sort`, `pagination`, `page_token`) and `unidiff` for unified-diff formatting.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_update_project_mr_approval_settings`
+### `gitlab_mr_diff_versions_list`
 
-Update project-level merge request approval settings. Only include settings you want to change. Requires GitLab Premium.
+List all diff versions (historical snapshots) of a merge request. Returns each version's `id`, head/base/start SHAs, `state`, `real_size`, and `created_at`, plus pagination metadata. Supports keyset pagination; pass a `version_id` to `gitlab_mr_diff_version_get` to fetch the actual diffs.
 
-| Annotation | **Update** |
-| ---------- | ---------- |
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_mr_diff_version_get`
+
+Get a single merge request diff version by `version_id`, including its commits and per-file diffs. Set `unidiff=true` to render diffs in unified-diff format. Returns the version with `id`, SHAs, `state`, `real_size`, the full commit list, and the file diffs.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_mr_raw_diffs`
+
+Get the raw unified-diff output for a merge request in plain-text git-apply format. Returns `raw_diff`, a single plain-text unified diff for the MR head suitable for patch application or programmatic analysis — use when `gitlab_mr_changes_get` reports `truncated_files` and the full diff payload is needed.
+
+| Annotation | **Read** |
+| ---------- | -------- |
 
 ---
 
@@ -241,10 +241,10 @@ Update project-level merge request approval settings. Only include settings you 
 | 17 | `gitlab_mr_draft_note_delete` | Draft Notes | Delete |
 | 18 | `gitlab_mr_draft_note_publish` | Draft Notes | Update |
 | 19 | `gitlab_mr_draft_note_publish_all` | Draft Notes | Update |
-| 20 | `gitlab_get_group_mr_approval_settings` | Approval Settings | Read |
-| 21 | `gitlab_update_group_mr_approval_settings` | Approval Settings | Update |
-| 22 | `gitlab_get_project_mr_approval_settings` | Approval Settings | Read |
-| 23 | `gitlab_update_project_mr_approval_settings` | Approval Settings | Update |
+| 20 | `gitlab_mr_changes_get` | MR Changes & Diffs | Read |
+| 21 | `gitlab_mr_diff_versions_list` | MR Changes & Diffs | Read |
+| 22 | `gitlab_mr_diff_version_get` | MR Changes & Diffs | Read |
+| 23 | `gitlab_mr_raw_diffs` | MR Changes & Diffs | Read |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -261,4 +261,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Merge Request Notes API](https://docs.gitlab.com/ee/api/notes.html#merge-requests)
 - [GitLab Merge Request Discussions API](https://docs.gitlab.com/ee/api/discussions.html#merge-requests)
 - [GitLab Draft Notes API](https://docs.gitlab.com/ee/api/draft_notes.html)
-- [GitLab MR Approval Settings API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html)
+- [GitLab Merge Requests Changes API](https://docs.gitlab.com/ee/api/merge_requests.html#get-single-merge-request-changes)

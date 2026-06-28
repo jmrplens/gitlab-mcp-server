@@ -444,39 +444,39 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       939 |     189,671 |
-| Unit tests (`_test.go`)  |       512 |     291,215 |
+| Source (`.go`, non-test) |       943 |     191,258 |
+| Unit tests (`_test.go`)  |       513 |     291,828 |
 | End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,593** | **516,063** |
+| **Total**                | **1,598** | **518,263** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,257 |
+| Source functions                |  7,301 |
 | — exported (public)             |  2,541 |
-| — unexported (private)          |  4,716 |
-| Unit test functions (`TestXxx`) | 11,271 |
-| Subtests (`t.Run(...)`)         |  2,621 |
+| — unexported (private)          |  4,760 |
+| Unit test functions (`TestXxx`) | 11,282 |
+| Subtests (`t.Run(...)`)         |  2,624 |
 | End-to-end test functions       |    286 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.54× more tests than code |
-| Average source file length         |                 ~201 lines |
+| Test lines vs source lines         | 1.53× more tests than code |
+| Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~568 lines |
-| Comment lines in source            |  19,916 (~10.5% of source) |
-| Test functions per source function |                       1.6× |
+| Comment lines in source            |  20,350 (~10.6% of source) |
+| Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,500 |
-| `defer` statements                 |   703 |
-| `struct` types defined             | 2,692 |
+| `if err != nil` checks             | 6,522 |
+| `defer` statements                 |   707 |
+| `struct` types defined             | 2,702 |
 | `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -484,10 +484,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   223 |
+| Go packages                    |   224 |
 | Direct dependencies (`go.mod`) |    12 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   299 |
+| Git commits                    |   207 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -501,8 +501,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,448 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,326 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,477 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,599 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

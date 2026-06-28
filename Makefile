@@ -9,6 +9,7 @@
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
+	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -761,6 +762,17 @@ audit-discovery:
 ## the human-readable report.
 audit-discovery-check:
 	go run ./cmd/audit_discovery_completeness/ -gaps-only -check
+
+## audit-doc-coverage: report per-doc-file gaps between docs/tools/*.md and the canonical action catalog (DOC-002).
+## Writes the per-file backlog to plan/docs-tools-backlog.json (gitignored) so each Phase-1 doc-writer can pick a file with full context.
+audit-doc-coverage:
+	$(call MKDIR_P,plan)
+	go run ./cmd/audit_doc_coverage/ -output plan/docs-tools-backlog.json
+
+## audit-doc-coverage-check: CI gate for DOC-002. Exits non-zero when any docs/tools/*.md has missing/orphan/tier_mismatch findings.
+## Use `make audit-doc-coverage` for the full human-readable report; use this for pre-PR gating.
+audit-doc-coverage-check:
+	go run ./cmd/audit_doc_coverage/ -check
 
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:
