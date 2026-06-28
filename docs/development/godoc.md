@@ -59,7 +59,7 @@ package config
 Command packages use `Command` instead of `Package`:
 
 ```go
-// Command audit_godocs audits Go package and symbol documentation.
+// Command godoc_tool audits Go package and symbol documentation.
 package main
 ```
 
