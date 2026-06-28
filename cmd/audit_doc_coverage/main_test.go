@@ -17,7 +17,7 @@ import (
 
 // TestParseDomainsTable verifies the README table parser extracts the
 // four canonical columns and rejects malformed rows.
-func TestParseDomainsTable(t *testing.T) {
+func TestParse_DomainsTable(t *testing.T) {
 	tmp := t.TempDir()
 	readme := filepath.Join(tmp, "README.md")
 	content := "## Domains\n\n| Domain | Tools | Meta-tool | Document |\n| --- | ---: | --- | --- |\n| Projects | 50 | `gitlab_project` | [projects.md](projects.md) |\n| Access & Tokens | 68 | various | [access.md](access.md) |\n| Branch Rules | 1 | `gitlab_branch` (routed) | [branch-rules.md](branch-rules.md) |\n"
@@ -46,7 +46,7 @@ func TestParseDomainsTable(t *testing.T) {
 // most common shapes: simple comma-separated tool names, parenthesised
 // annotations, and the "various" rows that fall through to the
 // hardcoded specialGroups table.
-func TestExpectedGroupsForRow(t *testing.T) {
+func TestExpected_GroupsForRow(t *testing.T) {
 	tests := []struct {
 		name string
 		row  docMappingRow
@@ -95,7 +95,7 @@ func TestExpectedGroupsForRow(t *testing.T) {
 // TestParseDocTools verifies the three Markdown patterns the auditor
 // accepts as tool references. Each test case exercises one pattern
 // alone, then a doc combining all three is checked for the union.
-func TestParseDocTools(t *testing.T) {
+func TestParse_DocTools(t *testing.T) {
 	tmp := t.TempDir()
 	cases := []struct {
 		name    string
@@ -182,7 +182,7 @@ Body.
 // TestParseTierBadge verifies the tier badge detector picks up the
 // three documented badge styles (table cell, prose "> **Tier**:", and
 // inline annotation) and ignores tool headings whose body is free.
-func TestParseTierBadge(t *testing.T) {
+func TestParse_TierBadge(t *testing.T) {
 	tmp := t.TempDir()
 	cases := []struct {
 		name    string
@@ -269,7 +269,7 @@ Body.
 // Premium / Ultimate) versus doc badge ("", "Premium", "Ultimate").
 // Only Premium/Ultimate badges that disagree with the catalog should
 // trip the auditor.
-func TestTierBadgeMatches(t *testing.T) {
+func TestTier_Badge_Matches(t *testing.T) {
 	tests := []struct {
 		edition string
 		badge   string
@@ -493,7 +493,7 @@ func TestCheck_FailsWhenFindingsPresent(t *testing.T) {
 
 // TestRelativeDocPath verifies README link targets resolve to the
 // canonical docs/tools/<name>.md path used everywhere else.
-func TestRelativeDocPath(t *testing.T) {
+func TestRelative_DocPath(t *testing.T) {
 	tests := []struct {
 		link string
 		want string
@@ -513,7 +513,7 @@ func TestRelativeDocPath(t *testing.T) {
 
 // TestSortedDiff ensures the sorted set difference utility returns
 // only the elements in want that are absent from got, in lex order.
-func TestSortedDiff(t *testing.T) {
+func TestSorted_Diff(t *testing.T) {
 	got := sortedDiff([]string{"b", "a", "c"}, []string{"a", "x"})
 	if !reflect.DeepEqual(got, []string{"b", "c"}) {
 		t.Errorf("sortedDiff = %v, want [b c]", got)

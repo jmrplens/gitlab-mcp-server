@@ -21,8 +21,10 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -38,6 +40,14 @@ var toolHeadingBareRE = regexp.MustCompile(`^###\s+gitlab_([a-z][a-z0-9_]+)\s*$`
 // toolTableRowRE matches pipe-table rows whose first cell contains
 // `gitlab_<name>`. Captures the name without the gitlab_ prefix.
 var toolTableRowRE = regexp.MustCompile(`(?m)^\|\s*` + "`" + `gitlab_([a-z][a-z0-9_]+)` + "`")
+
+// Tier badge regexes are precompiled once at package init. The
+// auditor scans every doc's headings so re-compiling inside the
+// per-tool scan would dominate the runtime.
+var (
+	premiumRE  = regexp.MustCompile(`(?i)\*\*premium\*\*|>\s*\*\*tier\*\*:\s*premium|requires\s+premium`)
+	ultimateRE = regexp.MustCompile(`(?i)\*\*ultimate\*\*|>\s*\*\*tier\*\*:\s*ultimate|requires\s+ultimate`)
+)
 
 // parseDocTools returns the sorted, deduplicated set of `gitlab_*`
 // tool names referenced in the doc.
@@ -73,7 +83,7 @@ func parseDocTools(docPath string) ([]string, error) {
 		out = append(out, name)
 	}
 	// Deterministic output for stable diffs and tests.
-	sortStrings(out)
+	sort.Strings(out)
 	return out, nil
 }
 
@@ -86,6 +96,11 @@ func parseDocTools(docPath string) ([]string, error) {
 // parameter table that follows a `### \`gitlab_<tool>\“ heading, but
 // some docs use prose like "> **Tier**: Premium" instead. We accept
 // both.
+//
+// When a false-positive match (e.g. a paragraph mention of the tool
+// name) consumes the scan window, the loop resets `foundHeading`
+// instead of bailing out so the real heading later in the file is
+// still picked up.
 func parseTierBadge(docPath, tool string) (string, bool) {
 	f, err := os.Open(docPath)
 	if err != nil {
@@ -112,11 +127,14 @@ func parseTierBadge(docPath, tool string) (string, bool) {
 			continue
 		}
 		window = append(window, line)
-		if len(window) > windowSize {
-			break
-		}
 		if badge, ok := detectTierBadge(window); ok {
 			return badge, true
+		}
+		if len(window) > windowSize {
+			// Window exhausted without a badge; reset and keep
+			// scanning so a later, valid heading is found.
+			foundHeading = false
+			window = nil
 		}
 	}
 	return "", false
@@ -128,8 +146,6 @@ func parseTierBadge(docPath, tool string) (string, bool) {
 // the small property table win; prose forms ("> **Tier**: Premium")
 // are a fallback.
 func detectTierBadge(window []string) (string, bool) {
-	premiumRE := regexp.MustCompile(`(?i)\*\*premium\*\*|>\s*\*\*tier\*\*:\s*premium|requires\s+premium`)
-	ultimateRE := regexp.MustCompile(`(?i)\*\*ultimate\*\*|>\s*\*\*tier\*\*:\s*ultimate|requires\s+ultimate`)
 	if slices.ContainsFunc(window, func(line string) bool { return ultimateRE.MatchString(line) }) {
 		return "Ultimate", true
 	}
@@ -191,51 +207,7 @@ func discoverDocFiles(docsRoot string) ([]string, error) {
 		if strings.EqualFold(name, "README.md") {
 			continue
 		}
-		out = append(out, filepathJoin(docsRoot, name))
+		out = append(out, filepath.Join(docsRoot, name))
 	}
 	return out, nil
-}
-
-// sortStrings sorts values lexicographically in place. This is a thin
-// wrapper to keep the imports tidy in this file.
-func sortStrings(values []string) {
-	for i := 1; i < len(values); i++ {
-		for j := i; j > 0 && values[j-1] > values[j]; j-- {
-			values[j-1], values[j] = values[j], values[j-1]
-		}
-	}
-}
-
-// filepathJoin is filepath.Join wrapped to keep the imports list
-// local to this file.
-func filepathJoin(elem ...string) string {
-	return joinPath(elem...)
-}
-
-// joinPath joins path elements. filepath.Join is used.
-func joinPath(elem ...string) string {
-	return pathJoin(elem...)
-}
-
-// pathJoin is filepath.Join. Defined here so the function is
-// testable without importing path/filepath in this file's exported
-// surface (the parser only needs to read the file, not resolve
-// paths).
-func pathJoin(elem ...string) string {
-	if len(elem) == 0 {
-		return ""
-	}
-	out := elem[0]
-	for _, e := range elem[1:] {
-		if out == "" {
-			out = e
-			continue
-		}
-		if strings.HasSuffix(out, string(os.PathSeparator)) {
-			out += e
-		} else {
-			out += string(os.PathSeparator) + e
-		}
-	}
-	return out
 }

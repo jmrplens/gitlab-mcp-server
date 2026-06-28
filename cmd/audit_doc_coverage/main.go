@@ -109,6 +109,14 @@ type cmdlineFlags struct {
 	readmePath string
 }
 
+// unassignedDocPath is the pseudo DocPath used in the report's
+// "(unassigned)" entry. Catalog tools that no README row claims
+// (typically because the catalog gained a new group before the
+// Domains table was updated) are bucketed under this path so the
+// auditor surfaces them as one backlog row instead of silently
+// dropping them.
+const unassignedDocPath = "(unassigned)"
+
 func main() {
 	flags := parseFlags()
 
@@ -138,20 +146,15 @@ func main() {
 		return
 	}
 
+	if flags.gapsOnly {
+		rep = rep.filterGapsOnly()
+	}
+
 	content, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
 		cmdutil.Fatalf("marshal report: %v", err)
 	}
 	content = append(content, '\n')
-
-	if flags.gapsOnly {
-		rep = rep.filterGapsOnly()
-		content, err = json.MarshalIndent(rep, "", "  ")
-		if err != nil {
-			cmdutil.Fatalf("marshal gaps-only report: %v", err)
-		}
-		content = append(content, '\n')
-	}
 
 	if writeErr := writeReport(filepath.Join(repoRoot, flags.outputPath), content); writeErr != nil {
 		cmdutil.Fatalf("write report: %v", writeErr)
@@ -304,15 +307,29 @@ func resolveExpectedByDoc(mapping *docMapping, catalog *catalogSnapshot, docEntr
 }
 
 // fillPerDocFindings computes the per-doc missing/orphan/tier_mismatch
-// sets and the count invariants. Returns an error only when a doc
-// file fails to parse (which should be rare; the parser tolerates
-// most layout quirks).
+// sets and the count invariants. Doc entries without a backing file
+// on disk (e.g. README rows whose doc path doesn't exist yet) are
+// reported as fully-missing rather than failing the entire audit;
+// only genuine parse failures abort the run.
 func fillPerDocFindings(docEntries map[string]*fileFinding, absByRel map[string]string, expectedByDoc map[string][]string, catalog *catalogSnapshot) error {
 	for docPath, entry := range docEntries {
 		entry.ExpectedCount = len(expectedByDoc[docPath])
 		expectedSet := stringSet(expectedByDoc[docPath])
 
-		documented, parseErr := parseDocTools(absByRel[docPath])
+		absPath, hasFile := absByRel[docPath]
+		if !hasFile {
+			// Doc file missing on disk: every expected tool is
+			// missing and there is nothing documented. Leave
+			// Missing/Orphan populated by the set diff below.
+			entry.DocumentedCount = 0
+			entry.CountMatches = entry.DocumentedCount == entry.ExpectedCount
+			entry.ReadmeCountMatches = entry.ExpectedCount == entry.ReadmeCount
+			entry.Missing = sortedSetMinus(expectedSet, stringSet(nil))
+			entry.Orphan = nil
+			continue
+		}
+
+		documented, parseErr := parseDocTools(absPath)
 		if parseErr != nil {
 			return fmt.Errorf("parse %s: %w", docPath, parseErr)
 		}
@@ -373,7 +390,7 @@ func assembleFileList(mapping *docMapping, docEntries map[string]*fileFinding, u
 	}
 	if len(unassignedTools) > 0 {
 		files = append(files, fileFinding{
-			DocPath:              "(unassigned)",
+			DocPath:              unassignedDocPath,
 			Domain:               "tools not present in the Domains table",
 			UnassignedExpected:   sortedStrings(unassignedTools),
 			UnassignedDocumented: nil,
@@ -396,10 +413,10 @@ func summarize(files []fileFinding) reportSummary {
 		s.TierMismatchTotal += len(f.TierMismatch)
 		if len(f.Missing) > 0 || len(f.Orphan) > 0 || len(f.TierMismatch) > 0 {
 			s.DocsWithFindings++
-		} else if f.DocPath != "(unassigned)" {
+		} else if f.DocPath != unassignedDocPath {
 			s.CleanDocs++
 		}
-		if !f.ReadmeCountMatches && f.DocPath != "(unassigned)" {
+		if !f.ReadmeCountMatches && f.DocPath != unassignedDocPath {
 			s.ReadmeCountDriftDocs++
 		}
 	}

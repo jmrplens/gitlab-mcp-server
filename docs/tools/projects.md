@@ -908,9 +908,9 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_project_delete_push_rule` — removes all push restrictions
 - `gitlab_project_upload_delete` — deletes a file upload from a project
 - `gitlab_project_upload_delete_by_secret` — deletes a project upload by its 32-character secret
-- `gitlab_project_pages_unpublish` — unpublishes a Pages site
-- `gitlab_project_pages_domain_delete` — removes a custom Pages domain
-- `gitlab_project_delete_group_integration` — disables a group integration
+- `gitlab_pages_unpublish` — unpublishes a Pages site
+- `gitlab_pages_domain_delete` — removes a custom Pages domain
+- `gitlab_delete_group_integration` — disables a group integration
 - `gitlab_project_delete_fork_relation` — clears a project's fork linkage to its upstream
 - `gitlab_project_approval_rule_delete` — removes an approval rule
 - `gitlab_project_delete_target_branch_rule` — removes a target branch rule

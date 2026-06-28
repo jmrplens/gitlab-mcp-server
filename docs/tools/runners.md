@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Runners
 > **Individual tools**: 34
-> **Meta-tool**: `gitlab_runner` (`TOOL_SURFACE=meta` catalog, 33 actions)
+> **Meta-tool**: `gitlab_runner` (`TOOL_SURFACE=meta` catalog, 34 actions)
 > **GitLab API**: [Runners API](https://docs.gitlab.com/ee/api/runners.html)
 > **Audience**: 👤 End users, AI assistant users
 
