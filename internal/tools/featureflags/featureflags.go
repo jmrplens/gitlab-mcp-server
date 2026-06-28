@@ -65,24 +65,24 @@ type ListOutput struct {
 
 // ScopeInput represents a scope for strategy options.
 type ScopeInput struct {
-	EnvironmentScope string `json:"environment_scope"`
+	EnvironmentScope string `json:"environment_scope" jsonschema:"Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope"`
 }
 
 // StrategyParameterInput represents strategy parameters for create/update.
 type StrategyParameterInput struct {
-	GroupID    string `json:"group_id,omitempty"`
-	UserIDs    string `json:"user_ids,omitempty"`
-	Percentage string `json:"percentage,omitempty"`
-	Rollout    string `json:"rollout,omitempty"`
-	Stickiness string `json:"stickiness,omitempty"`
+	GroupID    string `json:"group_id,omitempty" jsonschema:"Group ID for the gradualRolloutUserId strategy"`
+	UserIDs    string `json:"user_ids,omitempty" jsonschema:"Comma-separated user IDs for the userWithId strategy"`
+	Percentage string `json:"percentage,omitempty" jsonschema:"Percentage of users to include for the gradualRolloutUserId strategy (e.g. 25)"`
+	Rollout    string `json:"rollout,omitempty" jsonschema:"Rollout duration (0-100) for the gradualRolloutUserId strategy"`
+	Stickiness string `json:"stickiness,omitempty" jsonschema:"Stickiness attribute used to bucket users (default, user, session, cookie)"`
 }
 
 // StrategyInput represents a strategy for create/update operations.
 type StrategyInput struct {
-	ID         int64                   `json:"id,omitempty"`
-	Name       string                  `json:"name"`
-	Parameters *StrategyParameterInput `json:"parameters,omitempty"`
-	Scopes     []ScopeInput            `json:"scopes,omitempty"`
+	ID         int64                   `json:"id,omitempty" jsonschema:"Strategy ID (only for update operations referencing an existing strategy)"`
+	Name       string                  `json:"name" jsonschema:"Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)"`
+	Parameters *StrategyParameterInput `json:"parameters,omitempty" jsonschema:"Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)"`
+	Scopes     []ScopeInput            `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
 }
 
 // ──────────────────────────────────────────────

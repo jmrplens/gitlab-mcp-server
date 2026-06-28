@@ -243,6 +243,11 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 	}
 }
 
+// TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches verifies that
+// NormalizeParamsWithExplanation rewrites enterprise-only parameter aliases to their
+// canonical schema names (e.g. branch->name, deny_unsigned_commits->reject_unsigned_commits),
+// coerces access-level strings to their integer codes, and reports each applied alias,
+// across the protected-branch, push-rule, and protected-environment action families.
 func TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches(t *testing.T) {
 	testCases := []struct {
 		name             string

@@ -53,86 +53,17 @@ type ListInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// Output mirrors gl.MergeRequest (the full merge-request payload returned by the
-// deployment merge requests endpoint). It embeds the gl.BasicMergeRequest field
-// set and layers on the MergeRequest-only fields, surfacing every SDK field on
-// its canonical json key per the 1:1 audit policy. Sub-objects are mirrored as
-// local types (see shapes.go) to avoid importing the mergerequests package.
-type Output struct {
-	toolutil.HintableOutput
-	ID                          int64                       `json:"id"`
-	IID                         int64                       `json:"iid"`
-	ProjectID                   int64                       `json:"project_id"`
-	SourceProjectID             int64                       `json:"source_project_id,omitempty"`
-	TargetProjectID             int64                       `json:"target_project_id,omitempty"`
-	Title                       string                      `json:"title"`
-	Description                 string                      `json:"description"`
-	State                       string                      `json:"state"`
-	Imported                    bool                        `json:"imported,omitempty"`
-	ImportedFrom                string                      `json:"imported_from,omitempty"`
-	SourceBranch                string                      `json:"source_branch"`
-	TargetBranch                string                      `json:"target_branch"`
-	WebURL                      string                      `json:"web_url"`
-	DetailedMergeStatus         string                      `json:"detailed_merge_status,omitempty"`
-	Draft                       bool                        `json:"draft"`
-	WorkInProgress              bool                        `json:"work_in_progress,omitempty"`
-	HasConflicts                bool                        `json:"has_conflicts"`
-	BlockingDiscussionsResolved bool                        `json:"blocking_discussions_resolved"`
-	Squash                      bool                        `json:"squash,omitempty"`
-	SquashOnMerge               bool                        `json:"squash_on_merge,omitempty"`
-	MergeWhenPipelineSucceeds   bool                        `json:"merge_when_pipeline_succeeds,omitempty"`
-	ShouldRemoveSourceBranch    bool                        `json:"should_remove_source_branch,omitempty"`
-	AllowMaintainerToPush       bool                        `json:"allow_maintainer_to_push,omitempty"`
-	DiscussionLocked            bool                        `json:"discussion_locked"`
-	RebaseInProgress            bool                        `json:"rebase_in_progress,omitempty"`
-	Author                      *BasicUserOutput            `json:"author,omitempty"`
-	Assignee                    *BasicUserOutput            `json:"assignee,omitempty"`
-	MergeUser                   *BasicUserOutput            `json:"merge_user,omitempty"`
-	MergedBy                    *BasicUserOutput            `json:"merged_by,omitempty"`
-	ClosedBy                    *BasicUserOutput            `json:"closed_by,omitempty"`
-	Assignees                   []*BasicUserOutput          `json:"assignees"`
-	Reviewers                   []*BasicUserOutput          `json:"reviewers"`
-	Labels                      []string                    `json:"labels"`
-	LabelDetails                []*LabelDetailsOutput       `json:"label_details,omitempty"`
-	Milestone                   *MilestoneOutput            `json:"milestone,omitempty"`
-	References                  *ReferencesOutput           `json:"references,omitempty"`
-	SHA                         string                      `json:"sha,omitempty"`
-	MergeCommitSHA              string                      `json:"merge_commit_sha,omitempty"`
-	MergeError                  string                      `json:"merge_error,omitempty"`
-	ChangesCount                string                      `json:"changes_count,omitempty"`
-	DivergedCommitsCount        int64                       `json:"diverged_commits_count,omitempty"`
-	Upvotes                     int64                       `json:"upvotes,omitempty"`
-	Downvotes                   int64                       `json:"downvotes,omitempty"`
-	SquashCommitSHA             string                      `json:"squash_commit_sha,omitempty"`
-	ForceRemoveSourceBranch     bool                        `json:"force_remove_source_branch,omitempty"`
-	AllowCollaboration          bool                        `json:"allow_collaboration,omitempty"`
-	MergeAfter                  string                      `json:"merge_after,omitempty"`
-	TaskCompletionStatus        *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
-	TimeStats                   *TimeStatsOutput            `json:"time_stats,omitempty"`
-	Subscribed                  bool                        `json:"subscribed,omitempty"`
-	FirstContribution           bool                        `json:"first_contribution,omitempty"`
-	User                        *MergeRequestUserOutput     `json:"user,omitempty"`
-	DiffRefs                    *DiffRefsOutput             `json:"diff_refs,omitempty"`
-	Pipeline                    *PipelineInfoOutput         `json:"pipeline,omitempty"`
-	HeadPipeline                *PipelineOutput             `json:"head_pipeline,omitempty"`
-	LatestBuildStartedAt        string                      `json:"latest_build_started_at,omitempty"`
-	LatestBuildFinishedAt       string                      `json:"latest_build_finished_at,omitempty"`
-	FirstDeployedToProductionAt string                      `json:"first_deployed_to_production_at,omitempty"`
-	CreatedAt                   string                      `json:"created_at"`
-	UpdatedAt                   string                      `json:"updated_at"`
-	MergedAt                    string                      `json:"merged_at,omitempty"`
-	ClosedAt                    string                      `json:"closed_at,omitempty"`
-	PreparedAt                  string                      `json:"prepared_at,omitempty"`
-	UserNotesCount              int64                       `json:"user_notes_count,omitempty"`
-}
+// Output is the canonical merge-request output shape shared with the
+// mergerequests domain. The single authoritative definition lives in
+// toolutil.MergeRequestOutput; this alias keeps all existing call sites
+// within this package unchanged (ADR-0004).
+type Output = toolutil.MergeRequestOutput
 
 // DiffRefsOutput mirrors gl.MergeRequestDiffRefs (the diff_refs object with the
-// base, head, and start SHAs of a merge request).
-type DiffRefsOutput struct {
-	BaseSHA  string `json:"base_sha"`
-	HeadSHA  string `json:"head_sha"`
-	StartSHA string `json:"start_sha"`
-}
+// base, head, and start SHAs of a merge request). The canonical definition
+// lives in toolutil.DiffRefsOutput; this alias preserves all existing
+// references within the package unchanged.
+type DiffRefsOutput = toolutil.DiffRefsOutput
 
 // ListOutput is the output for listing deployment merge requests.
 type ListOutput struct {
@@ -318,18 +249,18 @@ func toOutput(m *gl.MergeRequest) Output {
 		Upvotes:                     m.Upvotes,
 		Downvotes:                   m.Downvotes,
 		UserNotesCount:              m.UserNotesCount,
-		Author:                      basicUserOutput(m.Author),
-		Assignee:                    basicUserOutput(m.Assignee),
-		MergeUser:                   basicUserOutput(m.MergeUser),
-		ClosedBy:                    basicUserOutput(m.ClosedBy),
-		MergedBy:                    basicUserOutput(m.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
-		Assignees:                   basicUserOutputs(m.Assignees),
-		Reviewers:                   basicUserOutputs(m.Reviewers),
+		Author:                      toolutil.NewBasicUserOutput(m.Author),
+		Assignee:                    toolutil.NewBasicUserOutput(m.Assignee),
+		MergeUser:                   toolutil.NewBasicUserOutput(m.MergeUser),
+		ClosedBy:                    toolutil.NewBasicUserOutput(m.ClosedBy),
+		MergedBy:                    toolutil.NewBasicUserOutput(m.MergedBy), //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use MergeUser.
+		Assignees:                   toolutil.NewBasicUserOutputs(m.Assignees),
+		Reviewers:                   toolutil.NewBasicUserOutputs(m.Reviewers),
 		Labels:                      []string(m.Labels),
-		LabelDetails:                labelDetailsOutputs(m.LabelDetails),
-		Milestone:                   milestoneOutput(m.Milestone),
-		References:                  referencesOutput(m.References),
-		TaskCompletionStatus:        taskCompletionStatusOutput(m.TaskCompletionStatus),
+		LabelDetails:                toolutil.NewLabelDetailsOutputs(m.LabelDetails),
+		Milestone:                   mrMilestoneOutputPtr(m.Milestone),
+		References:                  toolutil.NewReferencesOutput(m.References),
+		TaskCompletionStatus:        toolutil.NewTaskCompletionStatusOutput(m.TaskCompletionStatus),
 		TimeStats:                   timeStatsPtr(m.TimeStats),
 		MergeError:                  m.MergeError,
 		ChangesCount:                m.ChangesCount,
@@ -338,9 +269,9 @@ func toOutput(m *gl.MergeRequest) Output {
 		Subscribed:                  m.Subscribed,
 		FirstContribution:           m.FirstContribution,
 		WorkInProgress:              m.WorkInProgress, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
-		User:                        mergeRequestUserOutput(m.User),
-		Pipeline:                    pipelineInfoOutput(m.Pipeline),
-		HeadPipeline:                pipelineOutput(m.HeadPipeline),
+		User:                        mergeRequestUserOutputPtr(m.User),
+		Pipeline:                    toolutil.NewPipelineInfoOutput(m.Pipeline),
+		HeadPipeline:                toolutil.NewPipelineOutput(m.HeadPipeline),
 		MergeAfter:                  toolutil.FormatTimePtr(m.MergeAfter),
 		LatestBuildStartedAt:        toolutil.FormatTimePtr(m.LatestBuildStartedAt),
 		LatestBuildFinishedAt:       toolutil.FormatTimePtr(m.LatestBuildFinishedAt),

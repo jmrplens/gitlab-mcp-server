@@ -6931,9 +6931,9 @@ func TestFormatApprovalRuleMarkdown_AllFields(t *testing.T) {
 		ReportType:                    "code_coverage",
 		AppliesToAllProtectedBranches: true,
 		ContainsHiddenGroups:          false,
-		Users:                         []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}},
+		Users:                         []*toolutil.BasicUserOutput{{Username: "alice"}, {Username: "bob"}},
 		Groups:                        []*ApprovalGroupOutput{{Name: "security-team"}},
-		EligibleApprovers:             []*BasicUserOutput{{Username: "alice"}, {Username: "bob"}, {Username: "charlie"}},
+		EligibleApprovers:             []*toolutil.BasicUserOutput{{Username: "alice"}, {Username: "bob"}, {Username: "charlie"}},
 	})
 	for _, want := range []string{"regular", "code_coverage", "alice, bob", "security-team", "alice, bob, charlie"} {
 		if !strings.Contains(md, want) {
@@ -6948,7 +6948,7 @@ func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
 		Rules: []ApprovalRuleOutput{
 			{
-				ID: 1, Name: "Review", RuleType: "regular", Users: []*BasicUserOutput{{Username: "alice"}},
+				ID: 1, Name: "Review", RuleType: "regular", Users: []*toolutil.BasicUserOutput{{Username: "alice"}},
 				Groups: []*ApprovalGroupOutput{{Name: "devs"}}, ApprovalsRequired: 1,
 			},
 			{

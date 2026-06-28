@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	actionPagesDomainList = "pages.domain_list"
-	actionPagesDomainGet  = "pages.domain_get"
+	actionPagesDomainList   = "pages.domain_list"
+	actionPagesDomainGet    = "pages.domain_get"
+	actionPagesDomainCreate = "pages.domain_create"
 )
 
 // ActionSpecs returns canonical specs for project Pages actions
@@ -148,7 +149,7 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_update": {
 		usage:   "Update a project's GitLab Pages settings such as force-HTTPS, unique-domain, and the primary domain.",
 		aliases: []string{"update pages settings", "configure pages https", "set pages primary domain"},
-		related: []string{"pages.get", "pages.unpublish", "pages.domain_create"},
+		related: []string{"pages.get", "pages.unpublish", actionPagesDomainCreate},
 	},
 	"pages_unpublish": {
 		usage:   "Unpublish and tear down a project's GitLab Pages site, removing the deployed content.",
@@ -156,14 +157,14 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 		related: []string{"pages.get", "pages.update"},
 	},
 	"pages_domain_list_all": {
-		usage:   "List every GitLab Pages custom domain across the whole instance (admin only).",
-		aliases: []string{"list all pages domains", "audit pages custom domains", "show instance pages domains"},
-		related: []string{actionPagesDomainList, actionPagesDomainGet},
+		usage:   "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of pages_domain_list when you need every domain on the instance, not just those attached to a single project.",
+		aliases: []string{"list all pages domains", "audit pages custom domains", "show instance pages domains", "enumerate every custom domain"},
+		related: []string{actionPagesDomainList, actionPagesDomainGet, actionPagesDomainCreate},
 	},
 	"pages_domain_list": {
 		usage:   "List the custom Pages domains attached to a project, with verification and SSL status.",
 		aliases: []string{"list project pages domains", "show custom domains", "find pages domains for project"},
-		related: []string{actionPagesDomainGet, "pages.domain_create", "pages.domain_list_all"},
+		related: []string{actionPagesDomainGet, actionPagesDomainCreate, "pages.domain_list_all"},
 	},
 	"pages_domain_get": {
 		usage:   "Fetch one custom Pages domain by name, including its verification code and certificate details.",
@@ -194,7 +195,7 @@ var pagesActionDescriptions = map[string]string{
 	"pages_get":             "Get the Pages settings for a project. Returns: the Pages URL, force-HTTPS and unique-domain flags, primary domain, and recent deployments. See also: gitlab_pages_update, gitlab_pages_unpublish, gitlab_pages_domain_list.",
 	"pages_update":          "Update the Pages settings for a project. Returns: the updated Pages settings with URL, force-HTTPS and unique-domain flags, primary domain, and deployments. See also: gitlab_pages_get, gitlab_pages_domain_create, gitlab_pages_unpublish.",
 	"pages_unpublish":       "Unpublish a project's Pages site (destructive). Returns: a success confirmation. See also: gitlab_pages_get, gitlab_pages_update.",
-	"pages_domain_list_all": "List every Pages custom domain across the instance (admin only). Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get.",
+	"pages_domain_list_all": "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of gitlab_pages_domain_list when you need every domain on the instance, not just those attached to a single project. Returns: all domains with verification status, auto-SSL flag, project ID, and certificate subject. See also: gitlab_pages_domain_list, gitlab_pages_domain_get, gitlab_pages_domain_create.",
 	"pages_domain_list":     "List the custom Pages domains for a project with pagination. Returns: matching domains with verification status, auto-SSL flag, project ID, certificate details, and pagination metadata. See also: gitlab_pages_domain_get, gitlab_pages_domain_create, gitlab_pages_domain_list_all.",
 	"pages_domain_get":      "Get a single Pages custom domain by name. Returns: the domain with verification status and code, auto-SSL flag, enabled-until date, and certificate subject/expiration. See also: gitlab_pages_domain_list, gitlab_pages_domain_update, gitlab_pages_domain_delete.",
 	"pages_domain_create":   "Add a new custom Pages domain to a project. Returns: the created domain with verification code, auto-SSL flag, and certificate details. See also: gitlab_pages_domain_get, gitlab_pages_domain_update, gitlab_pages_domain_list.",

@@ -26,7 +26,18 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("resolve", toolutil.RouteAction(client, Resolve), toolutil.ActionSpecOptions{
 			Aliases: []string{"gitlab_discover_project"}, Tags: []string{"discovery", "project"},
-			Usage:          "Resolve a complete git remote URL from .git/config or git remote -v to GitLab project metadata.",
+			Usage:          "Resolve a complete git remote URL (e.g. git@host:group/project.git or https://host/group/project.git, from .git/config or git remote -v) to GitLab project metadata. Only use this when the input is a full git remote URL; for a namespace path like group/project or a numeric ID use project.get instead.",
+			RelatedActions: []string{"project.get"},
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{
+				"remote_url": {
+					SemanticRole:   "git_remote_url",
+					ValueSource:    "A complete git remote URL from .git/config or `git remote -v`.",
+					ExampleBinding: `params.remote_url:"git@gitlab.com:my-org/tools/gitlab-mcp-server.git"`,
+					CommonConfusions: []string{
+						"remote_url must be a full git URL, not a namespace path: a value like my-org/tools/gitlab-mcp-server is a path — look it up with project.get (project_id), not discover_project.resolve.",
+					},
+				},
+			},
 			OpenWorld:      true,
 			OwnerPackage:   "projectdiscovery",
 			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_discover_project", Title: toolutil.TitleFromName("gitlab_discover_project"), Description: discoverProjectDescription},

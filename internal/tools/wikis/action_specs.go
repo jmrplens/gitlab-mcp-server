@@ -150,7 +150,7 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 	},
 	"gitlab_wiki_delete": {
 		usage:   "Permanently delete a wiki page by slug. Destructive; requires Maintainer or Owner role and confirmation of the project and slug.",
-		aliases: []string{"delete wiki page", "remove wiki page"},
+		aliases: []string{"delete wiki page", "remove wiki page", "destroy wiki page", "drop wiki page"},
 		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
 		description: "Delete a wiki page permanently. Returns: a success confirmation for the removed page. " +
 			"See also: gitlab_wiki_get, gitlab_wiki_list.",

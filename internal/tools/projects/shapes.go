@@ -287,45 +287,6 @@ func customAttributesOutput(attrs []*gl.CustomAttribute) []CustomAttributeOutput
 	return out
 }
 
-// BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in
-// approval-rule eligible_approvers and users arrays.
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	return &BasicUserOutput{
-		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
-	}
-}
-
-func basicUserOutputs(users []*gl.BasicUser) []*BasicUserOutput {
-	if len(users) == 0 {
-		return nil
-	}
-	out := make([]*BasicUserOutput, 0, len(users))
-	for _, u := range users {
-		if u == nil {
-			continue
-		}
-		out = append(out, basicUserOutput(u))
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
 // ApprovalGroupOutput mirrors the compact identity subset of gl.Group surfaced
 // in an approval rule's groups array. The full gl.Group struct carries dozens
 // of administrative fields not present in the approval-rule projection; this
@@ -389,8 +350,8 @@ func protectedBranchRefsOutput(branches []*gl.ProtectedBranch) []*ProtectedBranc
 // ApproverUserOutput mirrors gl.MergeRequestApproverUser, an element of the
 // project approvals approvers array (a user plus its approved_at timestamp).
 type ApproverUserOutput struct {
-	User       *BasicUserOutput `json:"user"`
-	ApprovedAt string           `json:"approved_at,omitempty"`
+	User       *toolutil.BasicUserOutput `json:"user"`
+	ApprovedAt string                    `json:"approved_at,omitempty"`
 }
 
 func approverUsersOutput(approvers []*gl.MergeRequestApproverUser) []*ApproverUserOutput {
@@ -403,7 +364,7 @@ func approverUsersOutput(approvers []*gl.MergeRequestApproverUser) []*ApproverUs
 			continue
 		}
 		out = append(out, &ApproverUserOutput{
-			User:       basicUserOutput(a.User),
+			User:       toolutil.NewBasicUserOutput(a.User),
 			ApprovedAt: toolutil.FormatTimePtr(a.ApprovedAt),
 		})
 	}

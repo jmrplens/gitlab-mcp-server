@@ -2519,7 +2519,7 @@ func boolIcon(v bool) string {
 
 // userNames extracts usernames from approval-rule user objects for compact
 // Markdown rendering, skipping nil entries.
-func userNames(users []*BasicUserOutput) []string {
+func userNames(users []*toolutil.BasicUserOutput) []string {
 	if len(users) == 0 {
 		return nil
 	}

@@ -44,19 +44,70 @@ func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func epicReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, epicOptions(individualTool))
+	opts := epicOptions(individualTool)
+	if individualTool == "gitlab_epic_list" {
+		opts.InputSchemaOverrides = epicListEnumOverrides()
+	}
+	return toolutil.NewReadActionSpec(name, route, opts)
 }
 
 func epicCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, epicOptions(individualTool))
+	opts := epicOptions(individualTool)
+	opts.InputSchemaOverrides = epicCreateEnumOverrides()
+	return toolutil.NewCreateActionSpec(name, route, opts)
 }
 
 func epicUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, epicOptions(individualTool))
+	opts := epicOptions(individualTool)
+	opts.InputSchemaOverrides = epicUpdateEnumOverrides()
+	return toolutil.NewUpdateActionSpec(name, route, opts)
 }
 
 func epicDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, epicOptions(individualTool))
+}
+
+// epicListEnumOverrides constrains the fixed-vocabulary filter fields on the
+// epic list action. state and order_by are accepted by both the REST epics
+// endpoint and the Work Items API path (IssuableState / WorkItemSort).
+func epicListEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state", map[string]any{
+			"enum": []any{"opened", "closed", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("order_by", map[string]any{
+			"enum": []any{"created_at", "updated_at", "title"},
+		}),
+	}
+}
+
+// epicCreateEnumOverrides constrains health_status on the epic create action.
+// Values match the GraphQL HealthStatus enum: onTrack, needsAttention, atRisk
+// (source: client-go workitems.go line 747 comment + test fixtures).
+func epicCreateEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("health_status", map[string]any{
+			"enum": []any{"onTrack", "needsAttention", "atRisk"},
+		}),
+	}
+}
+
+// epicUpdateEnumOverrides constrains state_event, health_status, and status on
+// the epic update action. state_event values come from WorkItemStateEvent SDK
+// constants (CLOSE/REOPEN). health_status from the GraphQL HealthStatus enum.
+// status from the mapStatusToID lookup table (WorkItemStatusID GIDs).
+func epicUpdateEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state_event", map[string]any{
+			"enum": []any{"CLOSE", "REOPEN"},
+		}),
+		toolutil.SchemaPropertyOverride("health_status", map[string]any{
+			"enum": []any{"onTrack", "needsAttention", "atRisk"},
+		}),
+		toolutil.SchemaPropertyOverride("status", map[string]any{
+			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},
+		}),
+	}
 }
 
 func epicOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -105,7 +156,7 @@ func decorateEpicMeta(opts *toolutil.ActionSpecOptions, individualTool string) {
 		opts.IndividualTool.Description = "Update an existing epic; supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete."
 	case "gitlab_epic_delete":
 		opts.Usage = "Permanently delete an epic by full_path plus epic_iid. Destructive; requires confirmation and Owner role at the group level."
-		opts.Aliases = []string{individualTool, "delete epic", "remove epic"}
+		opts.Aliases = []string{individualTool, "delete epic", "remove epic", "destroy epic", "drop epic"}
 		opts.RelatedActions = []string{actionEpicGet, actionEpicList, actionEpicUpdate}
 		opts.IndividualTool.Description = "Permanently delete an epic from a group. Returns: a success confirmation naming the epic and group. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update."
 	}

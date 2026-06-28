@@ -57,6 +57,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.Aliases = []string{"list work items", "find work items in namespace", "show open work items", individualTool}
 		opts.RelatedActions = []string{actionWorkItemGet, "work_item.create", "work_item.type_list"}
 		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
+		opts.InputSchemaOverrides = workItemListEnumOverrides()
 	case "gitlab_list_work_item_types":
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."
 		opts.Aliases = []string{"list work item types", "show work item types", "find work item types", individualTool}
@@ -73,6 +74,7 @@ func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool 
 	opts.Aliases = []string{"create work item", "open new work item", "add epic or task", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemList, "work_item.type_list"}
 	opts.IndividualTool.Description = "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types."
+	opts.InputSchemaOverrides = workItemCreateEnumOverrides()
 	return toolutil.NewCreateActionSpec(name, route, opts)
 }
 
@@ -83,6 +85,7 @@ func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool 
 	opts.Aliases = []string{"update work item", "edit work item fields", "close or reopen work item", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, "work_item.delete", actionWorkItemList}
 	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
+	opts.InputSchemaOverrides = workItemUpdateEnumOverrides()
 	return toolutil.NewUpdateActionSpec(name, route, opts)
 }
 
@@ -102,5 +105,49 @@ func workItemOptions(individualTool string) toolutil.ActionSpecOptions {
 		OpenWorld:      true,
 		OwnerPackage:   "workitems",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+}
+
+// workItemListEnumOverrides constrains the state filter on the work item list
+// action. The field maps to IssuableState in the GraphQL query; the three
+// values below are the safe, stable subset documented for work items.
+func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state", map[string]any{
+			"enum": []any{"opened", "closed", "all"},
+		}),
+	}
+}
+
+// workItemCreateEnumOverrides constrains health_status and the nested
+// linked_items.link_type on the work item create action.
+// health_status values: GraphQL HealthStatus enum (client-go workitems.go:747).
+// link_type values: SDK comment on CreateWorkItemOptionsLinkedItems.LinkType.
+func workItemCreateEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("health_status", map[string]any{
+			"enum": []any{"onTrack", "needsAttention", "atRisk"},
+		}),
+		toolutil.SchemaPropertyOverride("linked_items.link_type", map[string]any{
+			"enum": []any{"BLOCKED_BY", "BLOCKS", "RELATED"},
+		}),
+	}
+}
+
+// workItemUpdateEnumOverrides constrains state_event, health_status, and
+// status on the work item update action. state_event values come from
+// WorkItemStateEvent SDK constants. health_status from the GraphQL HealthStatus
+// enum. status from the mapStatusToID lookup table (WorkItemStatusID GIDs).
+func workItemUpdateEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state_event", map[string]any{
+			"enum": []any{"CLOSE", "REOPEN"},
+		}),
+		toolutil.SchemaPropertyOverride("health_status", map[string]any{
+			"enum": []any{"onTrack", "needsAttention", "atRisk"},
+		}),
+		toolutil.SchemaPropertyOverride("status", map[string]any{
+			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},
+		}),
 	}
 }

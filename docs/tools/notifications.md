@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Notifications & Events
-> **Individual tools**: 44
+> **Individual tools**: 48
 > **Meta-tools**: `gitlab_notification`, `gitlab_event`, `gitlab_resource_event`, `gitlab_award_emoji` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Events](https://docs.gitlab.com/ee/api/events.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
 > **Audience**: 👤 End users, AI assistant users

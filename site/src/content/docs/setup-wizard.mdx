@@ -105,26 +105,26 @@ The wizard can configure these stdio clients:
 
 Advanced options map to stdio environment variables written to `~/.gitlab-mcp-server.env`.
 
-| Wizard option              | Environment variable     | Description                                                    |
-| -------------------------- | ------------------------ | -------------------------------------------------------------- |
-| Skip TLS verification      | `GITLAB_SKIP_TLS_VERIFY` | Allows self-signed or private CA GitLab certificates.          |
-| Tool surface               | `TOOL_SURFACE`           | Chooses `meta`, `individual`, or `dynamic`.                    |
-| Capability surface         | `CAPABILITY_SURFACE`     | Chooses full resources/prompts or minimal startup context.     |
-| Meta parameter schema      | `META_PARAM_SCHEMA`      | Controls meta-tool input schema detail.                        |
-| Enterprise/Premium catalog | `GITLAB_ENTERPRISE`      | Enables Premium/Ultimate tools in stdio mode.                  |
-| Read-only mode             | `GITLAB_READ_ONLY`       | Registers only non-mutating tools.                             |
-| Safe mode previews         | `GITLAB_SAFE_MODE`       | Returns previews for mutating calls instead of executing them. |
-| Embedded resources         | `EMBEDDED_RESOURCES`     | Adds canonical MCP resource links to get-style results.        |
-| Ignore PAT scopes          | `GITLAB_IGNORE_SCOPES`   | Skips token scope detection and registers all tools.           |
-| Excluded tools             | `EXCLUDE_TOOLS`          | Omits comma-separated tool names from registration.            |
-| Upload max file size       | `UPLOAD_MAX_FILE_SIZE`   | Sets the maximum accepted upload/file size.                    |
-| Auto-update mode           | `AUTO_UPDATE`            | Applies, checks, or disables background updates.               |
-| Auto-update repository     | `AUTO_UPDATE_REPO`       | Selects the GitHub release repository used for update checks.  |
-| Auto-update timeout        | `AUTO_UPDATE_TIMEOUT`    | Limits time spent on startup/background update checks.         |
-| Rate limit RPS             | `RATE_LIMIT_RPS`         | Sets the stdio tool-call rate limit; `0` disables it.          |
-| Rate limit burst           | `RATE_LIMIT_BURST`       | Sets token-bucket burst size when rate limiting is enabled.    |
-| YOLO mode                  | `YOLO_MODE`              | Skips selected local safety confirmations. Use carefully.      |
-| Log level                  | `LOG_LEVEL`              | Sets `debug`, `info`, `warn`, or `error` logging.              |
+| Wizard option              | Environment variable     | Description                                                                                     |
+| -------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| Skip TLS verification      | `GITLAB_SKIP_TLS_VERIFY` | Allows self-signed or private CA GitLab certificates.                                           |
+| Tool surface               | `TOOL_SURFACE`           | Chooses `meta`, `individual`, or `dynamic`.                                                     |
+| Capability surface         | `CAPABILITY_SURFACE`     | Chooses full resources/prompts or minimal startup context.                                      |
+| Meta parameter schema      | `META_PARAM_SCHEMA`      | Controls meta-tool input schema detail.                                                         |
+| Enterprise/Premium catalog | `GITLAB_TIER`            | Sets the edition (`free`/`premium`/`ultimate`) that gates Premium/Ultimate tools in stdio mode. |
+| Read-only mode             | `GITLAB_READ_ONLY`       | Registers only non-mutating tools.                                                              |
+| Safe mode previews         | `GITLAB_SAFE_MODE`       | Returns previews for mutating calls instead of executing them.                                  |
+| Embedded resources         | `EMBEDDED_RESOURCES`     | Adds canonical MCP resource links to get-style results.                                         |
+| Ignore PAT scopes          | `GITLAB_IGNORE_SCOPES`   | Skips token scope detection and registers all tools.                                            |
+| Excluded tools             | `EXCLUDE_TOOLS`          | Omits comma-separated tool names from registration.                                             |
+| Upload max file size       | `UPLOAD_MAX_FILE_SIZE`   | Sets the maximum accepted upload/file size.                                                     |
+| Auto-update mode           | `AUTO_UPDATE`            | Applies, checks, or disables background updates.                                                |
+| Auto-update repository     | `AUTO_UPDATE_REPO`       | Selects the GitHub release repository used for update checks.                                   |
+| Auto-update timeout        | `AUTO_UPDATE_TIMEOUT`    | Limits time spent on startup/background update checks.                                          |
+| Rate limit RPS             | `RATE_LIMIT_RPS`         | Sets the stdio tool-call rate limit; `0` disables it.                                           |
+| Rate limit burst           | `RATE_LIMIT_BURST`       | Sets token-bucket burst size when rate limiting is enabled.                                     |
+| YOLO mode                  | `YOLO_MODE`              | Skips selected local safety confirmations. Use carefully.                                       |
+| Log level                  | `LOG_LEVEL`              | Sets `debug`, `info`, `warn`, or `error` logging.                                               |
 
 HTTP-only server options, such as OAuth mode, session timeout, max HTTP clients, and HTTP auto-update interval, do not appear in the wizard because those belong to the long-running HTTP server process.
 

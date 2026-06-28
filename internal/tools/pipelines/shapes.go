@@ -2,8 +2,6 @@ package pipelines
 
 import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Canonical output shapes mirrored from client-go sub-objects. Per the 1:1
@@ -14,31 +12,6 @@ import (
 // This file covers the pipeline sub-objects surfaced on the canonical json keys
 // (user, detailed_status). The old flattened user_username scalar is removed
 // because the data now lives in the user object.
-
-// BasicUserOutput mirrors gl.BasicUser, the compact user object embedded in the
-// pipeline payload under the "user" key. It surfaces every field of the SDK
-// struct so callers no longer need the removed flattened user_username scalar.
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-// basicUserOutput converts a single gl.BasicUser to its output shape, returning
-// nil when the SDK value is nil.
-func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	return &BasicUserOutput{
-		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
-	}
-}
 
 // IllustrationOutput mirrors gl.DetailedStatusIllustration (the optional status
 // illustration embedded in detailed_status).

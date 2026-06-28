@@ -17,11 +17,11 @@ MCP lists fixed resources and URI templates separately. In full mode, clients th
 
 ### Static resources (3)
 
-| Resource                   | Description                                                                                                    |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `gitlab://user/current`    | Current authenticated user profile (username, email, state, admin status)                                      |
-| `gitlab://groups`          | All GitLab groups accessible to the authenticated user                                                         |
-| `gitlab://tools`           | Surface-aware manifest of visible tools and executable entries                                                 |
+| Resource                | Description                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `gitlab://user/current` | Current authenticated user profile (username, email, state, admin status) |
+| `gitlab://groups`       | All GitLab groups accessible to the authenticated user                    |
+| `gitlab://tools`        | Surface-aware manifest of visible tools and executable entries            |
 
 ### Tool manifest resource template (1)
 
@@ -269,8 +269,8 @@ The server returns a structured prompt with context-aware content that the LLM u
 
 ## Configuration
 
-| Variable             | Default | Description                                                                                                                       |
-| -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Variable             | Default | Description                                                                                                  |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
 | `CAPABILITY_SURFACE` | `full`  | `full` registers resources, workflow guides, prompts, and `gitlab://tools`; `minimal` keeps `gitlab://tools` |
 
 :::tip

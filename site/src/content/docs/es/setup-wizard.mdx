@@ -105,26 +105,26 @@ El asistente puede configurar estos clientes stdio:
 
 Las opciones avanzadas se corresponden con variables de entorno stdio escritas en `~/.gitlab-mcp-server.env`.
 
-| Opción del asistente             | Variable de entorno      | Descripción                                                               |
-| -------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
-| Omitir verificación TLS          | `GITLAB_SKIP_TLS_VERIFY` | Permite certificados GitLab autofirmados o de CA privada.                 |
-| Superficie de herramientas       | `TOOL_SURFACE`           | Elige `meta`, `individual` o `dynamic`.                                   |
-| Superficie de capacidades        | `CAPABILITY_SURFACE`     | Elige recursos/prompts completos o contexto inicial mínimo.               |
-| Esquema de parámetros meta       | `META_PARAM_SCHEMA`      | Controla el detalle del esquema de entrada de las meta-herramientas.      |
-| Catálogo Enterprise/Premium      | `GITLAB_ENTERPRISE`      | Habilita herramientas Premium/Ultimate en modo stdio.                     |
-| Modo solo lectura                | `GITLAB_READ_ONLY`       | Registra solo herramientas que no mutan estado.                           |
-| Vistas previas seguras           | `GITLAB_SAFE_MODE`       | Devuelve vistas previas de llamadas mutantes en lugar de ejecutarlas.     |
-| Recursos embebidos               | `EMBEDDED_RESOURCES`     | Añade enlaces de recursos MCP canónicos en resultados tipo get.           |
-| Ignorar scopes del PAT           | `GITLAB_IGNORE_SCOPES`   | Omite la detección de scopes del token y registra todas las herramientas. |
-| Herramientas excluidas           | `EXCLUDE_TOOLS`          | Omite nombres de herramientas separados por comas.                        |
-| Tamaño máximo de subida          | `UPLOAD_MAX_FILE_SIZE`   | Define el tamaño máximo aceptado para subidas y archivos.                 |
-| Modo de autoactualización        | `AUTO_UPDATE`            | Aplica, comprueba o desactiva actualizaciones en segundo plano.           |
-| Repositorio de autoactualización | `AUTO_UPDATE_REPO`       | Elige el repositorio GitHub usado para comprobar releases.                |
-| Timeout de autoactualización     | `AUTO_UPDATE_TIMEOUT`    | Limita el tiempo de las comprobaciones de arranque/en segundo plano.      |
-| Rate limit RPS                   | `RATE_LIMIT_RPS`         | Define el límite de llamadas stdio; `0` lo desactiva.                     |
-| Rate limit burst                 | `RATE_LIMIT_BURST`       | Define el tamaño del bucket cuando el rate limit está activo.             |
-| Modo YOLO                        | `YOLO_MODE`              | Omite algunas confirmaciones locales de seguridad. Úsalo con cuidado.     |
-| Nivel de log                     | `LOG_LEVEL`              | Define logging `debug`, `info`, `warn` o `error`.                         |
+| Opción del asistente             | Variable de entorno      | Descripción                                                                                                   |
+| -------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Omitir verificación TLS          | `GITLAB_SKIP_TLS_VERIFY` | Permite certificados GitLab autofirmados o de CA privada.                                                     |
+| Superficie de herramientas       | `TOOL_SURFACE`           | Elige `meta`, `individual` o `dynamic`.                                                                       |
+| Superficie de capacidades        | `CAPABILITY_SURFACE`     | Elige recursos/prompts completos o contexto inicial mínimo.                                                   |
+| Esquema de parámetros meta       | `META_PARAM_SCHEMA`      | Controla el detalle del esquema de entrada de las meta-herramientas.                                          |
+| Catálogo Enterprise/Premium      | `GITLAB_TIER`            | Define la edición (`free`/`premium`/`ultimate`) que habilita las herramientas Premium/Ultimate en modo stdio. |
+| Modo solo lectura                | `GITLAB_READ_ONLY`       | Registra solo herramientas que no mutan estado.                                                               |
+| Vistas previas seguras           | `GITLAB_SAFE_MODE`       | Devuelve vistas previas de llamadas mutantes en lugar de ejecutarlas.                                         |
+| Recursos embebidos               | `EMBEDDED_RESOURCES`     | Añade enlaces de recursos MCP canónicos en resultados tipo get.                                               |
+| Ignorar scopes del PAT           | `GITLAB_IGNORE_SCOPES`   | Omite la detección de scopes del token y registra todas las herramientas.                                     |
+| Herramientas excluidas           | `EXCLUDE_TOOLS`          | Omite nombres de herramientas separados por comas.                                                            |
+| Tamaño máximo de subida          | `UPLOAD_MAX_FILE_SIZE`   | Define el tamaño máximo aceptado para subidas y archivos.                                                     |
+| Modo de autoactualización        | `AUTO_UPDATE`            | Aplica, comprueba o desactiva actualizaciones en segundo plano.                                               |
+| Repositorio de autoactualización | `AUTO_UPDATE_REPO`       | Elige el repositorio GitHub usado para comprobar releases.                                                    |
+| Timeout de autoactualización     | `AUTO_UPDATE_TIMEOUT`    | Limita el tiempo de las comprobaciones de arranque/en segundo plano.                                          |
+| Rate limit RPS                   | `RATE_LIMIT_RPS`         | Define el límite de llamadas stdio; `0` lo desactiva.                                                         |
+| Rate limit burst                 | `RATE_LIMIT_BURST`       | Define el tamaño del bucket cuando el rate limit está activo.                                                 |
+| Modo YOLO                        | `YOLO_MODE`              | Omite algunas confirmaciones locales de seguridad. Úsalo con cuidado.                                         |
+| Nivel de log                     | `LOG_LEVEL`              | Define logging `debug`, `info`, `warn` o `error`.                                                             |
 
 Las opciones exclusivas del servidor HTTP, como modo OAuth, timeout de sesión, máximo de clientes HTTP o intervalo de autoactualización HTTP, no aparecen en el asistente porque pertenecen al proceso HTTP de larga duración.
 

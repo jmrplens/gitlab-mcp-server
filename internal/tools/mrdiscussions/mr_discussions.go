@@ -59,47 +59,15 @@ type CreateInput struct {
 	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
 }
 
-// NoteOutput represents a single note within a discussion. Per the 1:1 audit
-// policy it mirrors every field of gl.Note, surfacing the full author /
-// resolved_by / position sub-objects. Per the locked canonical-key convention
-// the full *NoteUserOutput author object is surfaced on the canonical `author`
-// key.
-type NoteOutput struct {
-	toolutil.HintableOutput
-	ID           int64               `json:"id"`
-	Body         string              `json:"body"`
-	Author       *NoteUserOutput     `json:"author,omitempty"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Title        string              `json:"title,omitempty"`
-	FileName     string              `json:"file_name,omitempty"`
-	CreatedAt    string              `json:"created_at"`
-	UpdatedAt    string              `json:"updated_at,omitempty"`
-	ExpiresAt    string              `json:"expires_at,omitempty"`
-	Resolved     bool                `json:"resolved"`
-	Resolvable   bool                `json:"resolvable"`
-	ResolvedAt   string              `json:"resolved_at,omitempty"`
-	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
-	System       bool                `json:"system"`
-	Internal     bool                `json:"internal"`
-	Confidential bool                `json:"confidential"`
-	Type         string              `json:"type,omitempty"`
-	NoteableType string              `json:"noteable_type,omitempty"`
-	NoteableID   int64               `json:"noteable_id,omitempty"`
-	NoteableIID  int64               `json:"noteable_iid,omitempty"`
-	CommitID     string              `json:"commit_id,omitempty"`
-	Position     *NotePositionOutput `json:"position,omitempty"`
-	ProjectID    int64               `json:"project_id,omitempty"`
-}
+// NoteOutput is an alias of [toolutil.DiscussionThreadNoteOutput], the rich
+// note shape used within discussion threads, shared with commitdiscussions.
+// Field layout and JSON tags (including UpdatedAt with omitempty and
+// Resolved/Resolvable without omitempty) are defined in toolutil.
+type NoteOutput = toolutil.DiscussionThreadNoteOutput
 
-// Output represents a discussion thread. Its Notes field is a local
-// []*NoteOutput mirror of the SDK's []*gl.Note (C-IMPORTS replication; the
-// auditor flags the local-mirror type, which is the intended behavior).
-type Output struct {
-	toolutil.HintableOutput
-	ID             string        `json:"id"`
-	IndividualNote bool          `json:"individual_note"`
-	Notes          []*NoteOutput `json:"notes"`
-}
+// Output is an alias of [toolutil.DiscussionThreadOutput], the discussion
+// thread shape with full note payloads, shared with commitdiscussions.
+type Output = toolutil.DiscussionThreadOutput
 
 // ResolveInput defines parameters for resolving/unresolving a discussion.
 type ResolveInput struct {
@@ -146,13 +114,13 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 	out := NoteOutput{
 		ID:           n.ID,
 		Body:         n.Body,
-		Author:       noteAuthorOutput(n.Author),
+		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
 		Attachment:   n.Attachment,
 		Title:        n.Title,
 		FileName:     n.FileName,
 		Resolved:     n.Resolved,
 		Resolvable:   n.Resolvable,
-		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
+		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
 		System:       n.System,
 		Internal:     n.Internal,
 		Confidential: n.Internal,
@@ -161,7 +129,7 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 		NoteableID:   n.NoteableID,
 		NoteableIID:  n.NoteableIID,
 		CommitID:     n.CommitID,
-		Position:     notePositionOutput(n.Position),
+		Position:     toolutil.NewNotePositionOutput(n.Position),
 		ProjectID:    n.ProjectID,
 	}
 	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)

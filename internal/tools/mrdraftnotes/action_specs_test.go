@@ -315,7 +315,7 @@ func mrDraftNoteSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 func TestDecorateDraftNoteMeta_UnknownTool(t *testing.T) {
 	options := mrDraftNoteOptions("gitlab_unknown_tool")
 	before := options.Usage
-	decorateDraftNoteMeta(&options, "gitlab_unknown_tool")
+	toolutil.ApplyActionMeta(&options, draftNoteActionMeta["gitlab_unknown_tool"])
 	if options.Usage != before {
 		t.Errorf("expected usage unchanged for unknown tool, got %q", options.Usage)
 	}

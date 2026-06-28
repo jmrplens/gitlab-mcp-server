@@ -17,21 +17,21 @@ import (
 // group releases endpoint returns the same gl.Release payload as project
 // releases. See shapes.go.
 type Output struct {
-	TagName         string             `json:"tag_name"`
-	Name            string             `json:"name"`
-	Description     string             `json:"description,omitempty"`
-	DescriptionHTML string             `json:"description_html,omitempty"`
-	CreatedAt       string             `json:"created_at"`
-	ReleasedAt      string             `json:"released_at,omitempty"`
-	Author          *AuthorOutput      `json:"author,omitempty"`
-	Commit          *CommitOutput      `json:"commit,omitempty"`
-	UpcomingRelease bool               `json:"upcoming_release,omitempty"`
-	Milestones      []*MilestoneOutput `json:"milestones,omitempty"`
-	CommitPath      string             `json:"commit_path,omitempty"`
-	TagPath         string             `json:"tag_path,omitempty"`
-	Assets          *AssetsOutput      `json:"assets,omitempty"`
-	Evidences       []*EvidenceOutput  `json:"evidences,omitempty"`
-	Links           *LinksOutput       `json:"_links,omitempty"`
+	TagName         string                      `json:"tag_name"`
+	Name            string                      `json:"name"`
+	Description     string                      `json:"description,omitempty"`
+	DescriptionHTML string                      `json:"description_html,omitempty"`
+	CreatedAt       string                      `json:"created_at"`
+	ReleasedAt      string                      `json:"released_at,omitempty"`
+	Author          *toolutil.AuthorOutput      `json:"author,omitempty"`
+	Commit          *CommitOutput               `json:"commit,omitempty"`
+	UpcomingRelease bool                        `json:"upcoming_release,omitempty"`
+	Milestones      []*toolutil.MilestoneOutput `json:"milestones,omitempty"`
+	CommitPath      string                      `json:"commit_path,omitempty"`
+	TagPath         string                      `json:"tag_path,omitempty"`
+	Assets          *toolutil.AssetsOutput      `json:"assets,omitempty"`
+	Evidences       []*toolutil.EvidenceOutput  `json:"evidences,omitempty"`
+	Links           *toolutil.LinksOutput       `json:"_links,omitempty"`
 }
 
 // ListOutput holds a paginated list of group releases.
@@ -52,10 +52,10 @@ func toOutput(r *gl.Release) Output {
 		UpcomingRelease: r.UpcomingRelease,
 		CommitPath:      r.CommitPath,
 		TagPath:         r.TagPath,
-		Assets:          assetsOutput(r.Assets),
-		Milestones:      milestoneOutputs(r.Milestones),
-		Evidences:       evidenceOutputs(r.Evidences),
-		Links:           linksOutput(r.Links),
+		Assets:          toolutil.NewAssetsOutput(r.Assets),
+		Milestones:      toolutil.NewMilestoneOutputs(r.Milestones),
+		Evidences:       toolutil.NewEvidenceOutputs(r.Evidences),
+		Links:           toolutil.NewLinksOutput(r.Links),
 	}
 	if r.CreatedAt != nil {
 		o.CreatedAt = r.CreatedAt.Format(time.RFC3339)

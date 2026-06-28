@@ -1,6 +1,3 @@
-// sharing.go implements group-to-group sharing, shared-project listing, and
-// subgroup transfer MCP tools: ShareGroupWithGroup, UnshareGroupFromGroup,
-// ListGroupSharedProjects, and TransferSubGroup.
 package groups
 
 import (

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: MCP Capabilities (Elicitation, Health)
-> **Individual tools**: 5
+> **Individual tools**: 15
 > **Meta-tool**: elicitation tools are always registered individually; health is included in `gitlab_server` meta-tool as `status` action
 > **MCP Protocol**: [Elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
 > **Audience**: 👤 End users, AI assistant users

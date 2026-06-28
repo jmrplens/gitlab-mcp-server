@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Runners & Resource Groups
-> **Individual tools**: 22
+> **Individual tools**: 24
 > **Meta-tools**: `gitlab_runner`, `gitlab_resource_group` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Runners API](https://docs.gitlab.com/ee/api/runners.html), [Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
 > **Audience**: 👤 End users, AI assistant users

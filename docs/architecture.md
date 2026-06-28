@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>176 internal/tools packages]
+        SPECS[domain ActionSpecs<br/>~175 internal/tools packages<br/>(166 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>1061 self-managed / 1067 GitLab.com Premium/Ultimate tools]

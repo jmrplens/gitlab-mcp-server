@@ -321,3 +321,12 @@ Save to `docs/adr/ADR-[number]-[title].md` when architecture decisions are made.
 - Business vs technical tradeoffs needed
 
 Remember: Goal is enterprise-grade code that is secure, maintainable, and compliant.
+
+## Tier-Gating Review Checklist (gitlab-mcp-server)
+
+When reviewing a PR that touches the catalog or per-tool tier gating:
+
+- `internal/tools/action_catalog.go:138` calls `pruneSchemaFieldsByTier` once with `lenientExtra=false` (input schema) and once with `lenientExtra=true` (output schema). Confirm the asymmetry is intentional and documented at the call site.
+- Per-field gating uses struct tags `tier:"premium"` and `tier:"ultimate"` on `internal/tools/*/shapes.go` and `action_specs.go`. Confirm every new tier-tagged field is also reflected in the corresponding `tier:` alias field on the catalog route (see ADR-0011 for the field-tier model).
+- Action-level gating (whole tools gated behind `premium` or `ultimate`) is set via `ActionSpec.Compatibility.MinTier` / `MaxTier`. Cross-check against `cmd/audit_edition_tier` output — a tool marked Premium but with no `tier:` tag is almost certainly a bug.
+- `GITLAB_ENTERPRISE` is deprecated; new code must read `GITLAB_TIER` instead (HTTP mode `--tier` flag is the parallel path).

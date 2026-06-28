@@ -139,3 +139,51 @@ func RegisteredMarkdownTypeNames() []string {
 	})
 	return names
 }
+
+// HasRegisteredMarkdownFormatter reports whether a Markdown formatter
+// has been registered for the given Go type. Accepts either a reflect.Type
+// (the canonical lookup path — matches spec.Route.OutputType) or a value
+// of any kind (used by tests). Pointer types are dereferenced to their
+// element type for the registry lookup. Returns false for nil, for the
+// special "interface" reflect.Type returned by reflect.TypeOf on a
+// nil/untyped interface, and for unregistered types.
+//
+// This is the authoritative source for "is there a Markdown formatter
+// for this output type?" queries from external tools (e.g.
+// cmd/audit_discovery_completeness uses it to gate the
+// `missing_next_steps` check).
+func HasRegisteredMarkdownFormatter(v any) bool {
+	if v == nil {
+		return false
+	}
+	var t reflect.Type
+	switch x := v.(type) {
+	case reflect.Type:
+		t = x
+	default:
+		t = reflect.TypeOf(v)
+	}
+	if t == nil || t == reflect.TypeFor[any]() {
+		return false
+	}
+	for t.Kind() == reflect.Ptr { //nolint:govet // reflect.Ptr reads better than its numeric value (22).
+		t = t.Elem()
+	}
+	if _, ok := stringFormatters.Load(t); ok {
+		return true
+	}
+	if _, ok := resultFormatters.Load(t); ok {
+		return true
+	}
+	return false
+}
+
+// MarkdownFormatterCount returns the number of registered Markdown
+// formatters (string + result variants). Useful for sanity checks in
+// tests and tools that need to know "are formatters even loaded?".
+func MarkdownFormatterCount() int {
+	n := 0
+	stringFormatters.Range(func(_, _ any) bool { n++; return true })
+	resultFormatters.Range(func(_, _ any) bool { n++; return true })
+	return n
+}

@@ -49,7 +49,25 @@ func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
+// FormatGetMarkdown formats a single get_topic response.
+func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
+	return FormatTopicMarkdown(out.Topic)
+}
+
+// FormatCreateMarkdown formats a single create_topic response.
+func FormatCreateMarkdown(out CreateOutput) *mcp.CallToolResult {
+	return FormatTopicMarkdown(out.Topic)
+}
+
+// FormatUpdateMarkdown formats a single update_topic response.
+func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
+	return FormatTopicMarkdown(out.Topic)
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(FormatListMarkdown)
 	toolutil.RegisterMarkdownResult(FormatTopicMarkdown)
+	toolutil.RegisterMarkdownResult(FormatGetMarkdown)
+	toolutil.RegisterMarkdownResult(FormatCreateMarkdown)
+	toolutil.RegisterMarkdownResult(FormatUpdateMarkdown)
 }

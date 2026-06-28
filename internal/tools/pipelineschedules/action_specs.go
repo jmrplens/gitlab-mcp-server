@@ -150,7 +150,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	},
 	"gitlab_pipeline_schedule_delete": {
 		usage:   "Permanently delete a pipeline schedule. Destructive and irreversible; confirm project_id and schedule_id before calling.",
-		aliases: []string{"delete pipeline schedule", "remove scheduled pipeline"},
+		aliases: []string{"delete pipeline schedule", "remove scheduled pipeline", "destroy pipeline schedule", "drop pipeline schedule"},
 		related: []string{actionScheduleGet, actionScheduleList},
 		guidance: map[string]toolutil.ParameterGuidance{
 			paramScheduleID: {
@@ -216,7 +216,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	},
 	"gitlab_pipeline_schedule_delete_variable": {
 		usage:   "Delete a pipeline schedule variable by key. Destructive; confirm project_id, schedule_id, and key before calling.",
-		aliases: []string{"delete pipeline schedule variable", "remove schedule variable"},
+		aliases: []string{"delete pipeline schedule variable", "remove schedule variable", "destroy pipeline schedule variable", "drop schedule variable"},
 		related: []string{actionScheduleGet, "pipeline_schedule.schedule_create_variable", "pipeline_schedule.schedule_edit_variable"},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"key": {

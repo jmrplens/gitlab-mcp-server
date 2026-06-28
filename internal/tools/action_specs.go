@@ -194,7 +194,7 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 	for _, build := range actionSpecGroupBuilders() {
 		groups = append(groups, build(client, enterprise)...)
 	}
-	return sortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups))
+	return fillScopeGuidanceInGroups(sortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups)))
 }
 
 // buildAdminActionSpecs contributes the gitlab_admin catalog group.
@@ -696,4 +696,20 @@ func sortedActionSpecGroups(groups []ActionSpecGroup) []ActionSpecGroup {
 		return out[left].ToolName < out[right].ToolName
 	})
 	return out
+}
+
+// fillScopeGuidanceInGroups walks every spec in every group and applies
+// [toolutil.FillScopeParameterGuidanceSingle]. Callers that bypass the
+// tier filter (e.g. the discovery auditor and the unit-test suites that
+// inspect raw action specs) rely on this so the
+// missing_parameter_guidance check sees the canonical defaults. The catalog
+// path re-applies FillScopeParameterGuidanceSingle after tier pruning
+// inside [filterActionSpecGroupsByTier], which is idempotent.
+func fillScopeGuidanceInGroups(groups []ActionSpecGroup) []ActionSpecGroup {
+	for gi := range groups {
+		for si := range groups[gi].Actions {
+			groups[gi].Actions[si] = toolutil.FillScopeParameterGuidanceSingle(groups[gi].Actions[si])
+		}
+	}
+	return groups
 }

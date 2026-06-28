@@ -46,7 +46,9 @@ gitlab-mcp-server/
 │   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
 │   ├── audit_action_coverage/   # Audits client-go SDK endpoints with no MCP action (R-ACTION; 1:1 audit)
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
+│   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
+│   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_meta_schema/       # Audits meta-tool schema generation
 │   ├── audit_metadata_completeness/ # Audits ActionSpec discovery-metadata gaps (R-META; 1:1 audit)
@@ -297,6 +299,10 @@ make analyze-report                        # generate LLM-consumable report
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
 | `RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
+| `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
+| `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
+| `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
+| `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
 In **HTTP mode**, configuration comes from CLI flags instead of environment variables:
 
@@ -520,7 +526,9 @@ Find combines canonical `domain.action` IDs, domain/action names, aliases, natur
 
 ### Enterprise tool gating
 
-`GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes:
+`GITLAB_TIER` controls access to GitLab Premium/Ultimate features in stdio mode (Enterprise tools are gated when the resolved tier is Premium or Ultimate). In HTTP mode, the `--tier` flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`). The catalog effect is the same in individual and meta-tool modes.
+
+The tier affects tool registration (input/output schemas and tool lists) through `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go:138` — every registered action has its input schema pruned strictly (lower-tier clients never see higher-tier input fields, even though the SDK type still carries them) and its output schema pruned leniently (`lenientExtra=true`: higher-tier output fields are kept but omitted from the model-facing schema, so a Premium client reading an Ultimate response sees the data; an Ultimate client reading a Premium response does not). The 3-tier field-level gating is described per-field with `tier:"premium"` / `tier:"ultimate"` struct tags throughout `internal/tools/*/action_specs.go` and `internal/tools/*/shapes.go`.
 
 **Individual mode** (`TOOL_SURFACE=individual`; legacy `META_TOOLS=false`) — gates Enterprise/Premium actions through catalog metadata:
 

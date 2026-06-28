@@ -66,25 +66,25 @@ func approvalPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 
 func approvalReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := approvalOptions(individualTool)
-	decorateApprovalMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, approvalActionMeta[individualTool])
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func approvalCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := approvalOptions(individualTool)
-	decorateApprovalMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, approvalActionMeta[individualTool])
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func approvalUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := approvalOptions(individualTool)
-	decorateApprovalMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, approvalActionMeta[individualTool])
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func approvalDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := approvalOptions(individualTool)
-	decorateApprovalMeta(&options, individualTool)
+	toolutil.ApplyActionMeta(&options, approvalActionMeta[individualTool])
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
@@ -92,7 +92,7 @@ func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
 	options := approvalOptions("gitlab_mr_approval_reset")
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	decorateApprovalMeta(&options, "gitlab_mr_approval_reset")
+	toolutil.ApplyActionMeta(&options, approvalActionMeta["gitlab_mr_approval_reset"])
 	return toolutil.NewDeleteActionSpec("approval_reset", toolutil.DestructiveAction(client, resetOutput), options)
 }
 
@@ -103,15 +103,6 @@ func approvalOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "mrapprovals",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
-}
-
-// approvalActionMetaEntry is the discovery metadata for one MR approval action.
-type approvalActionMetaEntry struct {
-	usage       string
-	aliases     []string
-	related     []string
-	guidance    map[string]toolutil.ParameterGuidance
-	description string
 }
 
 // projectScopeGuidance is the shared parameter guidance for the project_id
@@ -145,52 +136,52 @@ var ruleIDGuidance = toolutil.ParameterGuidance{
 // metadata (non-generic Usage, natural-language Aliases, canonical
 // RelatedActions, ParameterGuidance, and the "Returns: … See also: …"
 // individual-tool description). It satisfies the 1:1 audit R-META requirement.
-var approvalActionMeta = map[string]approvalActionMetaEntry{
+var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_mr_approval_state": {
-		usage:   "Read the overall approval state of a merge request, including whether the project rules were overridden and the per-rule approval status. Use when checking whether an MR has met its approval requirements before merge.",
-		aliases: []string{"merge request approval state", "is this mr approved", "show mr approval status"},
-		related: []string{actionApprovalRules, actionApprovalConfig, actionMRApprove},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Read the overall approval state of a merge request, including whether the project rules were overridden and the per-rule approval status. Use when checking whether an MR has met its approval requirements before merge.",
+		Aliases: []string{"merge request approval state", "is this mr approved", "show mr approval status"},
+		Related: []string{actionApprovalRules, actionApprovalConfig, actionMRApprove},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		description: "Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag, and approvers. See also: gitlab_mr_approval_rules, gitlab_mr_approval_config, gitlab_mr_approve.",
+		Description: "Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag, and approvers. See also: gitlab_mr_approval_rules, gitlab_mr_approval_config, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_rules": {
-		usage:   "List the approval rules configured on a merge request, including eligible approvers, assigned users, and groups. Use when inspecting or before editing the rules that gate an MR.",
-		aliases: []string{"list mr approval rules", "show merge request approval rules", "merge request approvers"},
-		related: []string{actionApprovalRuleCreate, actionApprovalRuleUpdate, actionApprovalState},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "List the approval rules configured on a merge request, including eligible approvers, assigned users, and groups. Use when inspecting or before editing the rules that gate an MR.",
+		Aliases: []string{"list mr approval rules", "show merge request approval rules", "merge request approvers"},
+		Related: []string{actionApprovalRuleCreate, actionApprovalRuleUpdate, actionApprovalState},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
+		Description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
 	},
 	"gitlab_mr_approval_config": {
-		usage:   "Read the approval configuration of a merge request: approvals required and left, current approvers, suggested approvers, and approver groups. Use for a configuration overview rather than the per-rule state.",
-		aliases: []string{"mr approval configuration", "merge request approvals required", "who has approved this mr"},
-		related: []string{actionApprovalState, actionApprovalRules, actionMRApprove},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Read the approval configuration of a merge request: approvals required and left, current approvers, suggested approvers, and approver groups. Use for a configuration overview rather than the per-rule state.",
+		Aliases: []string{"mr approval configuration", "merge request approvals required", "who has approved this mr"},
+		Related: []string{actionApprovalState, actionApprovalRules, actionMRApprove},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		description: "Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
+		Description: "Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_reset": {
-		usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user); personal access tokens are rejected. Use when approvals must be re-collected after changes.",
-		aliases: []string{"reset mr approvals", "clear merge request approvals", "remove all mr approvals"},
-		related: []string{actionApprovalState, actionApprovalConfig, actionMRUnapprove},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user); personal access tokens are rejected. Use when approvals must be re-collected after changes.",
+		Aliases: []string{"reset mr approvals", "clear merge request approvals", "remove all mr approvals"},
+		Related: []string{actionApprovalState, actionApprovalConfig, actionMRUnapprove},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		description: "Reset all approvals on a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_state, gitlab_mr_approval_config, gitlab_mr_unapprove.",
+		Description: "Reset all approvals on a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_state, gitlab_mr_approval_config, gitlab_mr_unapprove.",
 	},
 	"gitlab_mr_approval_rule_create": {
-		usage:   "Create a new approval rule on a merge request, naming the rule and the number of approvals required, optionally scoping it to specific users or groups. Requires Maintainer and Premium/Ultimate.",
-		aliases: []string{"add mr approval rule", "create merge request approval rule", "require approvers on mr"},
-		related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleDelete},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Create a new approval rule on a merge request, naming the rule and the number of approvals required, optionally scoping it to specific users or groups. Requires Maintainer and Premium/Ultimate.",
+		Aliases: []string{"add mr approval rule", "create merge request approval rule", "require approvers on mr"},
+		Related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleDelete},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 			"name": {
@@ -205,54 +196,28 @@ var approvalActionMeta = map[string]approvalActionMetaEntry{
 				CommonConfusions: []string{"This is the count for this single rule, not the project-wide minimum."},
 			},
 		},
-		description: "Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_delete.",
+		Description: "Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_delete.",
 	},
 	"gitlab_mr_approval_rule_update": {
-		usage:   "Update an existing approval rule on a merge request: change its name, required approval count, or assigned users and groups. The rule_type cannot be changed after creation.",
-		aliases: []string{"update mr approval rule", "edit merge request approval rule", "change required approvers"},
-		related: []string{actionApprovalRules, actionApprovalRuleCreate, actionApprovalRuleDelete},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Update an existing approval rule on a merge request: change its name, required approval count, or assigned users and groups. The rule_type cannot be changed after creation.",
+		Aliases: []string{"update mr approval rule", "edit merge request approval rule", "change required approvers"},
+		Related: []string{actionApprovalRules, actionApprovalRuleCreate, actionApprovalRuleDelete},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 			"approval_rule_id":  ruleIDGuidance,
 		},
-		description: "Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_delete.",
+		Description: "Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_delete.",
 	},
 	"gitlab_mr_approval_rule_delete": {
-		usage:   "Delete an approval rule from a merge request. Destructive and irreversible; confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
-		aliases: []string{"delete mr approval rule", "remove merge request approval rule"},
-		related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleCreate},
-		guidance: map[string]toolutil.ParameterGuidance{
+		Usage:   "Delete an approval rule from a merge request. Destructive and irreversible; confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
+		Aliases: []string{"delete mr approval rule", "remove merge request approval rule", "destroy mr approval rule", "drop merge request approval rule"},
+		Related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleCreate},
+		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 			"approval_rule_id":  ruleIDGuidance,
 		},
-		description: "Delete an approval rule from a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_create.",
+		Description: "Delete an approval rule from a merge request. Returns: a success confirmation. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_update, gitlab_mr_approval_rule_create.",
 	},
-}
-
-// decorateApprovalMeta fills non-generic Usage, natural-language Aliases,
-// canonical RelatedActions, ParameterGuidance, and the individual-tool
-// description for an MR approval action from approvalActionMeta. It is a no-op
-// for individual tools without a metadata entry.
-func decorateApprovalMeta(options *toolutil.ActionSpecOptions, individualTool string) {
-	meta, ok := approvalActionMeta[individualTool]
-	if !ok {
-		return
-	}
-	if meta.usage != "" {
-		options.Usage = meta.usage
-	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string(nil), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if len(meta.guidance) > 0 {
-		options.ParameterGuidance = meta.guidance
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
-	}
 }

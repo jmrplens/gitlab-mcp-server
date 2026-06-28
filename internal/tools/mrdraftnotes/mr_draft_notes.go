@@ -115,31 +115,15 @@ type PublishAllInput struct {
 // PositionOutput represents the diff position of an inline draft note. It
 // mirrors the GitLab client-go NotePosition (notes.go) one-to-one.
 type PositionOutput struct {
-	BaseSHA      string           `json:"base_sha"`
-	StartSHA     string           `json:"start_sha"`
-	HeadSHA      string           `json:"head_sha"`
-	PositionType string           `json:"position_type,omitempty"`
-	NewPath      string           `json:"new_path,omitempty"`
-	OldPath      string           `json:"old_path,omitempty"`
-	NewLine      int64            `json:"new_line,omitempty"`
-	OldLine      int64            `json:"old_line,omitempty"`
-	LineRange    *LineRangeOutput `json:"line_range,omitempty"`
-}
-
-// LineRangeOutput represents the start and end positions of a multi-line
-// inline draft note. It mirrors the GitLab client-go LineRange (notes.go).
-type LineRangeOutput struct {
-	Start *LinePositionOutput `json:"start,omitempty"`
-	End   *LinePositionOutput `json:"end,omitempty"`
-}
-
-// LinePositionOutput represents a single line position within a line range.
-// It mirrors the GitLab client-go LinePosition (notes.go).
-type LinePositionOutput struct {
-	LineCode string `json:"line_code,omitempty"`
-	Type     string `json:"type,omitempty"`
-	OldLine  int64  `json:"old_line,omitempty"`
-	NewLine  int64  `json:"new_line,omitempty"`
+	BaseSHA      string                    `json:"base_sha"`
+	StartSHA     string                    `json:"start_sha"`
+	HeadSHA      string                    `json:"head_sha"`
+	PositionType string                    `json:"position_type,omitempty"`
+	NewPath      string                    `json:"new_path,omitempty"`
+	OldPath      string                    `json:"old_path,omitempty"`
+	NewLine      int64                     `json:"new_line,omitempty"`
+	OldLine      int64                     `json:"old_line,omitempty"`
+	LineRange    *toolutil.LineRangeOutput `json:"line_range,omitempty"`
 }
 
 // Output represents a single draft note.
@@ -191,26 +175,13 @@ func ToOutput(d *gl.DraftNote) Output {
 			OldLine:      d.Position.OldLine,
 		}
 		if lr := d.Position.LineRange; lr != nil {
-			out.Position.LineRange = &LineRangeOutput{
-				Start: toLinePositionOutput(lr.StartRange),
-				End:   toLinePositionOutput(lr.EndRange),
+			out.Position.LineRange = &toolutil.LineRangeOutput{
+				Start: toolutil.NewLinePositionOutput(lr.StartRange),
+				End:   toolutil.NewLinePositionOutput(lr.EndRange),
 			}
 		}
 	}
 	return out
-}
-
-// toLinePositionOutput converts a client-go LinePosition to the MCP output type.
-func toLinePositionOutput(p *gl.LinePosition) *LinePositionOutput {
-	if p == nil {
-		return nil
-	}
-	return &LinePositionOutput{
-		LineCode: p.LineCode,
-		Type:     p.Type,
-		OldLine:  p.OldLine,
-		NewLine:  p.NewLine,
-	}
 }
 
 // toDiffPositionOptions converts a DiffPosition to the GitLab client

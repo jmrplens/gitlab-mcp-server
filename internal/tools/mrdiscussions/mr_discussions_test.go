@@ -767,7 +767,7 @@ func TestFormatNoteMarkdown_Full(t *testing.T) {
 	n := NoteOutput{
 		ID:        500,
 		Body:      "Looks good!",
-		Author:    &NoteUserOutput{Username: "reviewer"},
+		Author:    &toolutil.NoteUserOutput{Username: "reviewer"},
 		CreatedAt: "2026-03-02T12:00:00Z",
 		Resolved:  true,
 	}
@@ -788,7 +788,7 @@ func TestFormatNoteMarkdown_Full(t *testing.T) {
 
 // TestFormatNoteMarkdown_Minimal verifies FormatNoteMarkdown when minimal.
 func TestFormatNoteMarkdown_Minimal(t *testing.T) {
-	n := NoteOutput{ID: 1, Body: "hi", Author: &NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z"}
+	n := NoteOutput{ID: 1, Body: "hi", Author: &toolutil.NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z"}
 	md := FormatNoteMarkdown(n)
 	if !strings.Contains(md, "## Discussion Note #1") {
 		t.Errorf("missing header:\n%s", md)
@@ -808,8 +808,8 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		ID:             "disc-abc",
 		IndividualNote: false,
 		Notes: []*NoteOutput{
-			{ID: 1, Body: "First", Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
-			{ID: 2, Body: "Reply", Author: &NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
+			{ID: 1, Body: "First", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
 	}
 	md := FormatOutputMarkdown(d)
@@ -1283,7 +1283,7 @@ func assertNoteScalars(t *testing.T, n *NoteOutput) {
 
 // assertNotePosition verifies the position sub-object (including its multi-line
 // line_range) mapped by NoteToOutput.
-func assertNotePosition(t *testing.T, pos *NotePositionOutput) {
+func assertNotePosition(t *testing.T, pos *toolutil.NotePositionOutput) {
 	t.Helper()
 	if pos == nil {
 		t.Fatal("expected position object")
@@ -1310,7 +1310,7 @@ func TestNoteAuthorUsername_NilAuthor(t *testing.T) {
 // TestNoteResolvedByOutput_Empty verifies noteResolvedByOutput returns nil when
 // no user has resolved the note.
 func TestNoteResolvedByOutput_Empty(t *testing.T) {
-	if got := noteResolvedByOutput(gl.NoteResolvedBy{}); got != nil {
+	if got := toolutil.NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{}); got != nil {
 		t.Errorf("expected nil resolved_by for zero user, got %+v", got)
 	}
 }
@@ -1388,18 +1388,18 @@ func assertDiscoveryMetadata(t *testing.T, tool string, spec toolutil.ActionSpec
 // TestLinePositionOutput_Nil verifies linePositionOutput returns nil for a nil
 // SDK line position.
 func TestLinePositionOutput_Nil(t *testing.T) {
-	if got := linePositionOutput(nil); got != nil {
-		t.Errorf("linePositionOutput(nil) = %+v, want nil", got)
+	if got := toolutil.NewLinePositionOutput(nil); got != nil {
+		t.Errorf("toolutil.NewLinePositionOutput(nil) = %+v, want nil", got)
 	}
 }
 
 // TestLineRangeOutput_NilAndEmpty verifies lineRangeOutput returns nil for a nil
 // range and for a range whose endpoints are both nil.
 func TestLineRangeOutput_NilAndEmpty(t *testing.T) {
-	if got := lineRangeOutput(nil); got != nil {
-		t.Errorf("lineRangeOutput(nil) = %+v, want nil", got)
+	if got := toolutil.NewLineRangeOutput(nil); got != nil {
+		t.Errorf("toolutil.NewLineRangeOutput(nil) = %+v, want nil", got)
 	}
-	if got := lineRangeOutput(&gl.LineRange{}); got != nil {
-		t.Errorf("lineRangeOutput(empty) = %+v, want nil", got)
+	if got := toolutil.NewLineRangeOutput(&gl.LineRange{}); got != nil {
+		t.Errorf("toolutil.NewLineRangeOutput(empty) = %+v, want nil", got)
 	}
 }

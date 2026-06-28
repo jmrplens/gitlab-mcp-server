@@ -88,8 +88,8 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "| Description | %s |\n", emptyDash(project.Description))
 	fmt.Fprintf(&b, "| Visibility | %s |\n", string(project.Visibility))
 	fmt.Fprintf(&b, "| Default branch | %s |\n", emptyDash(project.DefaultBranch))
-	fmt.Fprintf(&b, "| Created | %s |\n", formatTimePtr(project.CreatedAt))
-	fmt.Fprintf(&b, "| Last activity | %s |\n", formatTimePtr(project.LastActivityAt))
+	fmt.Fprintf(&b, "| Created | %s |\n", formatAuditDate(project.CreatedAt))
+	fmt.Fprintf(&b, "| Last activity | %s |\n", formatAuditDate(project.LastActivityAt))
 	b.WriteString("\n")
 
 	// Feature toggles
@@ -821,8 +821,11 @@ func accessLevelIcon(v gl.AccessControlValue) string {
 	return toolutil.EmojiCross
 }
 
-// formatTimePtr formats a time pointer, returning "—" if nil.
-func formatTimePtr(t *time.Time) string {
+// formatAuditDate formats a time pointer for the project audit prompt table,
+// returning an em dash ("—") for nil values and a short YYYY-MM-DD date for
+// non-nil values. Intentionally distinct from toolutil.FormatTimePtr
+// (which returns RFC 3339 or empty) — this helper is prompt-table-specific.
+func formatAuditDate(t *time.Time) string {
 	if t == nil {
 		return "—"
 	}

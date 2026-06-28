@@ -20,6 +20,14 @@ func doraMetricReadSpec(name string, route toolutil.ActionRoute, individualTool 
 		Edition:        "premium",
 		OwnerPackage:   "dorametrics",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		InputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("metric", map[string]any{
+				"enum": []any{"deployment_frequency", "lead_time_for_changes", "time_to_restore_service", "change_failure_rate"},
+			}),
+			toolutil.SchemaPropertyOverride("interval", map[string]any{
+				"enum": []any{"daily", "monthly", "all"},
+			}),
+		},
 	}
 	switch name {
 	case "project":

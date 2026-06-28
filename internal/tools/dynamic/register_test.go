@@ -833,6 +833,10 @@ func TestDynamicInputSchema_RemovesConfirmFromRequired(t *testing.T) {
 	}
 }
 
+// TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing verifies that
+// dynamicInputSchema falls back to a permissive object schema (type=object,
+// additionalProperties=true, plus explanatory description) when the action route
+// carries no captured parameter schema, so execution is never blocked by a missing schema.
 func TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing(t *testing.T) {
 	schema := dynamicInputSchema(actionEntry{
 		ID:     "widget.ping",
@@ -848,6 +852,10 @@ func TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing(t *testing.T) {
 	}
 }
 
+// TestRemoveDynamicRequiredConfirmParam_HandlesStringRequiredLists verifies that
+// removeDynamicRequiredConfirmParam strips the "confirm" entry from a schema's
+// required list for both []any and []string representations, deleting the key
+// entirely when "confirm" was the only required field and otherwise preserving the rest.
 func TestRemoveDynamicRequiredConfirmParam_HandlesStringRequiredLists(t *testing.T) {
 	anySchema := map[string]any{"required": []any{"confirm"}}
 	removeDynamicRequiredConfirmParam(anySchema)
@@ -2932,6 +2940,10 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 	}
 }
 
+// TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult verifies that a
+// natural-language project-search query returns the canonical search.projects action
+// as the top result against the real catalog registry, guarding against provider/domain
+// confusion that would rank a less-specific action higher.
 func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
@@ -2960,6 +2972,10 @@ func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult(t *testing.T) 
 	}
 }
 
+// TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult_EnterpriseCatalog verifies
+// that the same project-search query still ranks search.projects as the top result when the
+// registry is built from the larger enterprise catalog, ensuring the extra enterprise actions
+// do not displace the exact match.
 func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult_EnterpriseCatalog(t *testing.T) {
 	enterpriseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {

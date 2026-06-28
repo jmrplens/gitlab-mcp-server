@@ -88,18 +88,18 @@ The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:l
 
 The host must provide these variables before enabling the plugin:
 
-| Variable                 | Required | Description                                                                                                                          |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                |
-| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                                                                  |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                                                       |
-| `TOOL_SURFACE`           | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)                                              |
-| `META_TOOLS`             | No       | Deprecated compatibility selector: `true` maps to `meta`, `false` maps to `individual`, and `dynamic` maps to `TOOL_SURFACE=dynamic` |
-| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                           |
-| `GITLAB_ENTERPRISE`      | No       | `true` to enable Premium/Ultimate tools (default `false`)                                                                            |
-| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                                                                   |
-| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                                                             |
-| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                    |
+| Variable                 | Required | Description                                                                                                                                                             |
+| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                                                   |
+| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                                                                                                     |
+| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                                                                                          |
+| `TOOL_SURFACE`           | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)                                                                                 |
+| `META_TOOLS`             | No       | Deprecated compatibility selector: `true` maps to `meta`, `false` maps to `individual`, and `dynamic` maps to `TOOL_SURFACE=dynamic`                                    |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                                                              |
+| `GITLAB_TIER`            | No       | GitLab edition: `free`/`ce`, `premium`, or `ultimate`. When unset, detected from `GET /license` (fallback `free`). Replaces the deprecated `GITLAB_ENTERPRISE` boolean. |
+| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                                                                                                      |
+| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                                                                                                |
+| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                                                       |
 
 `TOOL_SURFACE` is the canonical selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=dynamic` for the default low-token find/execute surface, `TOOL_SURFACE=meta` for consolidated domain meta-tools, and `TOOL_SURFACE=individual` for individual tools. `META_TOOLS` remains supported for compatibility but should be treated as deprecated in favor of the explicit selector.
 
@@ -437,7 +437,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, enable the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true` in stdio mode or `--enterprise`/auto-detection in HTTP mode. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
+Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode or use `--tier=premium`/`--tier=ultimate` in HTTP mode. When unset, the tier is detected from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` and `--enterprise` flag are still honored for compatibility but are deprecated. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
 
 ## Verify the setup
 

@@ -49,14 +49,19 @@ func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if actionName == "ff_user_list_get" || actionName == "ff_user_list_update" || actionName == "ff_user_list_delete" {
+		confusions := []string{
+			"Do not use the user list name as user_list_iid.",
+			"The ID is project-scoped and distinct from the feature flag name.",
+		}
+		if actionName == "ff_user_list_delete" {
+			confusions = append(confusions,
+				"This deletes a feature flag user-list cohort, NOT the feature flag itself — to delete the flag use feature_flags.feature_flag_delete (by name).")
+		}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"user_list_iid": {
-				SemanticRole: "feature_flag_user_list_iid",
-				ValueSource:  "Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.",
-				CommonConfusions: []string{
-					"Do not use the user list name as user_list_iid.",
-					"The ID is project-scoped and distinct from the feature flag name.",
-				},
+				SemanticRole:     "feature_flag_user_list_iid",
+				ValueSource:      "Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.",
+				CommonConfusions: confusions,
 			},
 		}
 	}

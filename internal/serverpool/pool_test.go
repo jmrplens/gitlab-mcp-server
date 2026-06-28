@@ -31,11 +31,19 @@ func testFactory() ServerFactory {
 }
 
 // testConfig returns a config suitable for tests using the given base URL.
+//
+// Tier detection and scope discovery are disabled by default (TierExplicit +
+// IgnoreScopes) so GetOrCreate performs no GitLab network I/O for the common
+// case. Tests that specifically exercise detection set up an httptest server and
+// re-enable the relevant path (cfg.TierExplicit = false / cfg.IgnoreScopes =
+// false).
 func testConfig(baseURL string) *config.Config {
 	return &config.Config{
 		GitLabURL:     baseURL,
 		GitLabToken:   "default-token",
 		SkipTLSVerify: false,
+		Tier:          edition.Free,
+		TierExplicit:  true,
 		IgnoreScopes:  true,
 	}
 }
@@ -623,9 +631,11 @@ func TestEvictByKey(t *testing.T) {
 	}
 }
 
-// TestGetOrCreateLocked_ExistingEntry verifies the slow-path double-check
-// branch deterministically without depending on goroutine scheduling.
-func TestGetOrCreateLocked_ExistingEntry(t *testing.T) {
+// TestInsertEntry_ExistingEntry verifies the slow-path double-check branch
+// deterministically without depending on goroutine scheduling: when a key is
+// already present, insertEntry returns the stored server (discarding the freshly
+// built one), records a cache hit, and moves the existing entry to the LRU front.
+func TestInsertEntry_ExistingEntry(t *testing.T) {
 	cfg := testConfig("http://localhost")
 	pool := New(cfg, testFactory(), WithMaxSize(20))
 
@@ -639,22 +649,28 @@ func TestGetOrCreateLocked_ExistingEntry(t *testing.T) {
 	otherElement := pool.lru.PushFront(otherKey)
 	pool.entries[existingKey] = &poolEntry{server: existingServer, element: existingElement}
 	pool.entries[otherKey] = &poolEntry{server: otherServer, element: otherElement}
-
-	server, err := pool.getOrCreateLocked(existingKey, "unused-token", "http://localhost")
-	missingServer, missingOK := pool.existingServerLocked("missing")
 	pool.mu.Unlock()
 
-	if err != nil {
-		t.Fatalf("getOrCreateLocked() error = %v", err)
-	}
+	// A concurrent builder lost the race: its freshly built server must be
+	// discarded in favor of the already-stored one.
+	rebuilt := mcp.NewServer(&mcp.Implementation{Name: "rebuilt", Version: "0.0.0"}, nil)
+	server := pool.insertEntry(existingKey, "unused-token", &poolEntry{server: rebuilt})
+
 	if server != existingServer {
-		t.Fatal("getOrCreateLocked() returned unexpected server")
+		t.Fatal("insertEntry() returned the rebuilt server; want the existing cached server")
 	}
+
+	pool.mu.Lock()
+	missingServer, missingOK := pool.existingServerLocked("missing")
+	pool.mu.Unlock()
 	if missingOK || missingServer != nil {
 		t.Fatalf("existingServerLocked(missing) = (%v, %v), want (nil, false)", missingServer, missingOK)
 	}
 	if front := pool.lru.Front(); front == nil || front.Value != existingKey {
 		t.Fatalf("front LRU key = %v, want %s", front, existingKey)
+	}
+	if size := pool.Size(); size != 2 {
+		t.Fatalf("pool.Size() = %d, want 2 (rebuilt entry discarded)", size)
 	}
 	if hits := pool.Stats().Hits; hits != 1 {
 		t.Fatalf("Hits = %d, want 1", hits)

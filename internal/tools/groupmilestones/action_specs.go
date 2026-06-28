@@ -91,15 +91,19 @@ func decorateGroupMilestoneMeta(options *toolutil.ActionSpecOptions, individualT
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	if len(meta.inputSchemaOverrides) > 0 {
+		options.InputSchemaOverrides = append(options.InputSchemaOverrides, meta.inputSchemaOverrides...)
+	}
 }
 
 // groupMilestoneActionMetaEntry is the discovery metadata for one group
 // milestone action.
 type groupMilestoneActionMetaEntry struct {
-	usage       string
-	aliases     []string
-	related     []string
-	description string
+	usage                string
+	aliases              []string
+	related              []string
+	description          string
+	inputSchemaOverrides []toolutil.InputSchemaOverride
 }
 
 // groupMilestoneActionMeta maps each individual group milestone tool to its
@@ -110,6 +114,9 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		aliases:     []string{"list group milestones", "show group milestones", "find milestones in group"},
 		related:     []string{actionGroupMilestoneGet, "group_milestone.create", "milestone.list"},
 		description: "List milestones in a group with filtering and pagination. Returns: matching group milestones with state, dates, expiry, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_create, gitlab_milestone_list.",
+		inputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "closed"}}),
+		},
 	},
 	"gitlab_group_milestone_get": {
 		usage:       "Get one exact group milestone by group_id plus milestone_iid. Use after list results or when the prompt already names a concrete group milestone IID.",
@@ -128,10 +135,13 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		aliases:     []string{"update group milestone", "edit group milestone", "close group milestone", "activate group milestone"},
 		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, "group_milestone.delete"},
 		description: "Update an existing group milestone. Returns: the updated milestone with state, dates, and expiry. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_delete.",
+		inputSchemaOverrides: []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
+		},
 	},
 	"gitlab_group_milestone_delete": {
 		usage:       "Permanently delete a group milestone. Destructive and irreversible; confirm group_id and milestone_iid before calling. Requires Owner role.",
-		aliases:     []string{"delete group milestone", "remove group milestone"},
+		aliases:     []string{"delete group milestone", "remove group milestone", "destroy group milestone", "drop group milestone"},
 		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
 		description: "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",
 	},

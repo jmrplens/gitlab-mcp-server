@@ -654,12 +654,12 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		TagName:         "v2.0.0",
 		Name:            "Release v2.0.0",
 		Description:     "## Changes\n- Feature X",
-		Author:          &AuthorOutput{Username: "admin"},
+		Author:          &toolutil.AuthorOutput{Username: "admin"},
 		CreatedAt:       "2026-03-02T10:00:00Z",
 		ReleasedAt:      "2026-03-02T10:00:00Z",
-		Commit:          &CommitOutput{ID: "abc123"},
+		Commit:          &toolutil.CommitOutput{ID: "abc123"},
 		UpcomingRelease: true,
-		Milestones:      []*MilestoneOutput{{Title: "m1"}, {Title: "m2"}},
+		Milestones:      []*toolutil.MilestoneOutput{{Title: "m1"}, {Title: "m2"}},
 	})
 	for _, want := range []string{
 		"## Release: Release v2.0.0",
@@ -736,8 +736,8 @@ func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
-			{TagName: "v2.0.0", Name: "Major", Author: &AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z"},
-			{TagName: "v1.0.0", Name: "First", Author: &AuthorOutput{Username: "dev"}, CreatedAt: "2026-01-01T10:00:00Z"},
+			{TagName: "v2.0.0", Name: "Major", Author: &toolutil.AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z"},
+			{TagName: "v1.0.0", Name: "First", Author: &toolutil.AuthorOutput{Username: "dev"}, CreatedAt: "2026-01-01T10:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -802,19 +802,19 @@ func TestToOutput_NilTimestamps(t *testing.T) {
 	}
 }
 
-// TestToOutput_NoAssetsSources verifies ToOutput leaves the nested assets
-// sources slice nil (with a present assets object) when the release carries no
-// asset sources.
+// TestToOutput_NoAssetsSources verifies ToOutput omits the nested assets
+// object entirely when the release carries no assets (sources, links, or
+// evidence file path). toolutil.NewAssetsOutput returns nil for a fully
+// empty gl.ReleaseAssets so the JSON omits the assets key.
 func TestToOutput_NoAssetsSources(t *testing.T) {
 	out := ToOutput(&gl.Release{})
-	if out.Assets == nil {
-		t.Fatal("out.Assets = nil, want non-nil mirror of gl.ReleaseAssets")
-	}
-	if out.Assets.Sources != nil {
-		t.Errorf("out.Assets.Sources should be nil, got %v", out.Assets.Sources)
-	}
-	if out.Assets.Links != nil {
-		t.Errorf("out.Assets.Links should be nil, got %v", out.Assets.Links)
+	if out.Assets != nil {
+		if out.Assets.Sources != nil {
+			t.Errorf("out.Assets.Sources should be nil, got %v", out.Assets.Sources)
+		}
+		if out.Assets.Links != nil {
+			t.Errorf("out.Assets.Links should be nil, got %v", out.Assets.Links)
+		}
 	}
 }
 
@@ -881,7 +881,7 @@ func TestFormatMarkdown_WithWebURL(t *testing.T) {
 		TagName:   "v1.0.0",
 		Name:      "Release v1.0.0",
 		CreatedAt: "2026-03-01T10:00:00Z",
-		Links:     &LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v1.0.0/edit"},
+		Links:     &toolutil.LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v1.0.0/edit"},
 	})
 	want := "[https://gitlab.example.com/-/releases/v1.0.0](https://gitlab.example.com/-/releases/v1.0.0)"
 	if !strings.Contains(md, want) {
@@ -927,7 +927,7 @@ func TestFormatMarkdown_ContainsHints(t *testing.T) {
 func TestFormatListMarkdown_ClickableTagLink(t *testing.T) {
 	out := ListOutput{
 		Releases: []Output{
-			{TagName: "v2.0.0", Name: "Major", Author: &AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z", Links: &LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v2.0.0/edit"}},
+			{TagName: "v2.0.0", Name: "Major", Author: &toolutil.AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z", Links: &toolutil.LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v2.0.0/edit"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	}

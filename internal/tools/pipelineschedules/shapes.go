@@ -126,9 +126,9 @@ func variableObjectsAPI(vars []*scheduleVariableAPI) []VariableObject {
 // InputObject mirrors gl.PipelineInput, the pipeline inputs embedded on a
 // pipeline schedule payload and accepted on create/edit.
 type InputObject struct {
-	Name    string `json:"name"`
-	Value   any    `json:"value,omitempty"`
-	Destroy *bool  `json:"destroy,omitempty"`
+	Name    string `json:"name"             jsonschema:"Pipeline input name (must match a defined input on the target pipeline)"`
+	Value   any    `json:"value,omitempty"  jsonschema:"Pipeline input value; type depends on the input definition"`
+	Destroy *bool  `json:"destroy,omitempty" jsonschema:"Set true to delete this input from the schedule (only honored on update)"`
 }
 
 // inputObjects converts a slice of gl.PipelineInput, skipping nil elements and

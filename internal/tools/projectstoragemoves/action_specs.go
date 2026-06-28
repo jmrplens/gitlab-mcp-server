@@ -102,7 +102,7 @@ func getSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 func getForProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	opts := baseOptions("gitlab_get_project_storage_move_for_project")
 	opts.Usage = "Get one repository storage move scoped to a specific project by project_id plus move id (admin-only, self-managed). Use to inspect a known move on a known project."
-	opts.Aliases = []string{"gitlab_get_project_storage_move_for_project", "get project storage move", "show project repository storage move"}
+	opts.Aliases = []string{"gitlab_get_project_storage_move_for_project", "get project storage move", "show project repository storage move", "fetch project storage move", "view project storage move"}
 	opts.RelatedActions = []string{actionRetrieveOne, actionGet, actionSchedule}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"project_id": guidanceProjectID(), "id": guidanceMoveID()}
 	opts.IndividualTool.Description = "Get a single repository storage move for a specific project by project_id and move id. Returns: the move's id, state, source and destination storage shards, and project. Admin-only and self-managed only. See also: gitlab_retrieve_project_storage_moves."

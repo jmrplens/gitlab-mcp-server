@@ -88,18 +88,18 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 El host debe proporcionar estas variables antes de habilitar el plugin:
 
-| Variable                 | Obligatoria | Descripción                                                                                                                                 |
-| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas                               |
-| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                                                         |
-| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                                                 |
-| `TOOL_SURFACE`           | No          | Selector canónico del catálogo: `dynamic`, `meta` o `individual` (por defecto `dynamic`)                                                    |
-| `META_TOOLS`             | No          | Selector de compatibilidad deprecado: `true` mapea a `meta`, `false` mapea a `individual`, y dynamic al valor equivalente de `TOOL_SURFACE` |
-| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                                                        |
-| `GITLAB_ENTERPRISE`      | No          | `true` para habilitar herramientas Premium/Ultimate (por defecto `false`)                                                                   |
-| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                                                    |
-| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                                                           |
-| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                                                       |
+| Variable                 | Obligatoria | Descripción                                                                                                                                                                         |
+| ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas                                                                       |
+| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                                                                                                 |
+| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                                                                                         |
+| `TOOL_SURFACE`           | No          | Selector canónico del catálogo: `dynamic`, `meta` o `individual` (por defecto `dynamic`)                                                                                            |
+| `META_TOOLS`             | No          | Selector de compatibilidad deprecado: `true` mapea a `meta`, `false` mapea a `individual`, y dynamic al valor equivalente de `TOOL_SURFACE`                                         |
+| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                                                                                                |
+| `GITLAB_TIER`            | No          | Edición de GitLab: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, se detecta desde `GET /license` (por defecto `free`). Reemplaza al booleano deprecado `GITLAB_ENTERPRISE`. |
+| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                                                                                            |
+| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                                                                                                   |
+| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                                                                                               |
 
 `TOOL_SURFACE` tiene precedencia sobre `META_TOOLS` cuando ambos están definidos. Usa `TOOL_SURFACE` en configuraciones nuevas: `dynamic` es la superficie predeterminada de bajo consumo con find/execute, `meta` expone meta-herramientas consolidadas por dominio e `individual` expone cada herramienta por separado. `META_TOOLS` sigue funcionando por compatibilidad, pero se recomienda tratarlo como deprecado frente al selector explícito.
 
@@ -437,7 +437,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, habilita el catálogo Enterprise/Premium con `GITLAB_ENTERPRISE=true` en modo stdio o `--enterprise`/autodetección en modo HTTP. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
+Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, o usa `--tier=premium`/`--tier=ultimate` en modo HTTP. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). El booleano heredado `GITLAB_ENTERPRISE=true` y el flag `--enterprise` siguen funcionando por compatibilidad, pero están deprecados. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
 
 ## Verificar la configuración
 

@@ -109,6 +109,37 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
+// issueListEnumOverrides returns the InputSchemaOverrides shared by the three
+// issue list actions (list, list_all, list_group). Each override constrains a
+// fixed-vocabulary filter parameter to a JSON Schema enum so model tool calls
+// are validated before reaching the GitLab API. sort is omitted here because
+// it is already handled centrally via canonicalParamEnums.
+func issueListEnumOverrides() []toolutil.InputSchemaOverride {
+	return []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("state", map[string]any{
+			"enum": []any{"opened", "closed", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
+		toolutil.SchemaPropertyOverride("scope", map[string]any{
+			"enum": []any{"created_by_me", "assigned_to_me", "all"},
+		}),
+		toolutil.SchemaPropertyOverride("in", map[string]any{
+			"enum": []any{"title", "description", "title,description"},
+		}),
+		toolutil.SchemaPropertyOverride("not_in", map[string]any{
+			"enum": []any{"title", "description", "title,description"},
+		}),
+		toolutil.SchemaPropertyOverride("order_by", map[string]any{
+			"enum": []any{
+				"created_at", "due_date", "id", "label_priority", "milestone_due",
+				"popularity", "priority", "relative_position", "title", "updated_at", "weight",
+			},
+		}),
+	}
+}
+
 // issueReadSpec builds a read-only [toolutil.ActionSpec] for an issue
 // action and fills in the usage, related actions, and parameter guidance
 // for the most common individual tools.
@@ -158,11 +189,16 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 			},
 		}
 		options.IndividualTool.Description = "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	case "gitlab_issue_list_all":
 		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
 		options.RelatedActions = []string{actionIssueList, "issue.list_group", actionSearchIssues}
 		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
+	case toolIssueListGroup:
+		decorateIssueMeta(&options, individualTool)
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	default:
 		decorateIssueMeta(&options, individualTool)
 	}
@@ -205,7 +241,7 @@ type issueActionMetaEntry struct {
 var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_get_by_id": {
 		usage:       "Fetch one issue by its global database ID rather than a project IID. Use when the prompt or prior output gives a numeric issue id with no project context.",
-		aliases:     []string{"get issue by id", "fetch issue by global id"},
+		aliases:     []string{"get issue by id", "fetch issue by global id", "show issue by global id", "lookup issue by id"},
 		related:     []string{actionIssueGet, actionIssueList, actionSearchIssues},
 		description: "Get a single issue by its global ID. Returns: the issue with state, labels, assignees, author, and web URL. See also: gitlab_issue_get, gitlab_issue_list.",
 	},
@@ -221,85 +257,85 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	},
 	"gitlab_issue_delete": {
 		usage:       "Permanently delete an issue. Destructive and irreversible; confirm project_id and issue_iid before calling.",
-		aliases:     []string{"delete issue", "remove issue"},
+		aliases:     []string{"delete issue", "remove issue", "destroy issue", "drop issue"},
 		related:     []string{actionIssueGet, actionIssueList, actionIssueUpdate},
 		description: "Delete an issue permanently. Returns: a success confirmation naming the issue and project. See also: gitlab_issue_get, gitlab_issue_update.",
 	},
 	"gitlab_issue_reorder": {
 		usage:       "Reposition an issue relative to another issue (move before or after) to change its manual order on a board or list.",
-		aliases:     []string{"reorder issue", "move issue in list"},
+		aliases:     []string{"reorder issue", "move issue in list", "reorder issue in list", "reposition issue"},
 		related:     []string{actionIssueGet, actionIssueList},
 		description: "Reorder an issue within its list. Returns: the updated issue. See also: gitlab_issue_get, gitlab_issue_list.",
 	},
 	"gitlab_issue_move": {
 		usage:       "Move an issue to a different project, preserving its discussion and metadata.",
-		aliases:     []string{"move issue to project", "transfer issue"},
+		aliases:     []string{"move issue to project", "transfer issue", "move issue to another project", "relocate issue"},
 		related:     []string{actionIssueGet, actionIssueUpdate, actionIssueList},
 		description: "Move an issue to another project. Returns: the issue in its new project. See also: gitlab_issue_get, gitlab_issue_update.",
 	},
 	"gitlab_issue_subscribe": {
 		usage:       "Subscribe the authenticated user to notifications for an issue.",
-		aliases:     []string{"subscribe to issue", "follow issue"},
+		aliases:     []string{"subscribe to issue", "follow issue", "watch issue", "get notifications for issue"},
 		related:     []string{actionIssueGet, "issue.unsubscribe"},
 		description: "Subscribe to an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_unsubscribe.",
 	},
 	"gitlab_issue_unsubscribe": {
 		usage:       "Unsubscribe the authenticated user from an issue's notifications.",
-		aliases:     []string{"unsubscribe from issue", "unfollow issue"},
+		aliases:     []string{"unsubscribe from issue", "unfollow issue", "unwatch issue", "stop issue notifications"},
 		related:     []string{actionIssueGet, "issue.subscribe"},
 		description: "Unsubscribe from an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_subscribe.",
 	},
 	"gitlab_issue_create_todo": {
 		usage:       "Create a to-do item for the authenticated user on an issue so it appears in their GitLab to-do list.",
-		aliases:     []string{"add issue todo", "create todo for issue"},
+		aliases:     []string{"add issue todo", "create todo for issue", "add issue to my todo list", "mark issue as todo"},
 		related:     []string{actionIssueGet, actionIssueList},
 		description: "Create a to-do for an issue. Returns: the created to-do item with action, target, and state. See also: gitlab_issue_get.",
 	},
 	"gitlab_issue_time_estimate_set": {
 		usage:       "Set the time estimate for an issue using a human duration such as 3h30m or 1d.",
-		aliases:     []string{"set issue estimate", "estimate issue time"},
+		aliases:     []string{"set issue estimate", "estimate issue time", "set time estimate", "add issue estimate"},
 		related:     []string{"issue.time_estimate_reset", actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
 		description: "Set an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_time_estimate_reset": {
 		usage:       "Clear the time estimate previously set on an issue.",
-		aliases:     []string{"reset issue estimate", "clear issue estimate"},
+		aliases:     []string{"reset issue estimate", "clear issue estimate", "remove issue estimate", "delete issue estimate"},
 		related:     []string{actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Clear an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_set, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_add": {
 		usage:       "Log time spent on an issue using a human duration such as 2h or 30m; logged values accumulate across calls.",
-		aliases:     []string{"log issue time", "add spent time"},
+		aliases:     []string{"log issue time", "add spent time", "record time on issue", "log time on issue"},
 		related:     []string{"issue.spent_time_reset", actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Add spent time to an issue. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_reset": {
 		usage:       "Reset the total time spent on an issue back to zero.",
-		aliases:     []string{"reset spent time", "clear issue spent time"},
+		aliases:     []string{"reset spent time", "clear issue spent time", "zero spent time on issue", "remove spent time"},
 		related:     []string{actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
 		description: "Reset an issue's spent time. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_add, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_time_stats_get": {
 		usage:       "Read the time tracking totals (estimate and time spent) for an issue.",
-		aliases:     []string{"get issue time stats", "show issue time tracking"},
+		aliases:     []string{"get issue time stats", "show issue time tracking", "issue time tracking totals", "issue time summary"},
 		related:     []string{actionIssueTimeEstSet, "issue.time_estimate_reset", actionIssueSpentTimeAdd, "issue.spent_time_reset"},
 		description: "Read an issue's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_issue_time_estimate_set, gitlab_issue_spent_time_add.",
 	},
 	"gitlab_issue_participants": {
 		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers).",
-		aliases:     []string{"list issue participants", "who is on this issue"},
+		aliases:     []string{"list issue participants", "who is on this issue", "show issue participants", "issue participant list"},
 		related:     []string{actionIssueGet, "issue.notes_list"},
 		description: "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_notes_list.",
 	},
 	"gitlab_issue_mrs_closing": {
 		usage:       "List merge requests that will close this issue when merged (those referencing it with a closing keyword).",
-		aliases:     []string{"list mrs closing issue", "merge requests that close issue"},
+		aliases:     []string{"list mrs closing issue", "merge requests that close issue", "mrs closing this issue", "merge requests that will close this issue"},
 		related:     []string{actionIssueGet, "merge_request.get", "issue.mrs_related"},
 		description: "List MRs that close this issue on merge. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_related.",
 	},
 	"gitlab_issue_mrs_related": {
 		usage:       "List merge requests related to this issue (those mentioning it), a broader set than the closing MRs.",
-		aliases:     []string{"list mrs related to issue", "merge requests mentioning issue"},
+		aliases:     []string{"list mrs related to issue", "merge requests mentioning issue", "mrs related to issue", "merge requests that mention issue"},
 		related:     []string{actionIssueGet, "merge_request.get", "issue.mrs_closing"},
 		description: "List MRs related to this issue. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_closing.",
 	},
@@ -337,6 +373,11 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 		},
 	}
 	options.IndividualTool.Description = "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update."
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
+	}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -372,6 +413,9 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 				"description": "State transition; set to close or reopen when changing issue state.",
 			},
 		},
+		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
+			"enum": []any{"issue", "incident", "test_case", "task"},
+		}),
 	}
 	return toolutil.NewUpdateActionSpec("update", toolutil.RouteAction(client, Update), options)
 }
@@ -413,6 +457,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 			},
 		}
 		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."
+		options.InputSchemaOverrides = issueListEnumOverrides()
 	}
 	return toolutil.NewReadActionSpec(name, route, options)
 }

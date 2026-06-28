@@ -50,6 +50,10 @@ Default runtime surface is `TOOL_SURFACE=dynamic`, which exposes `gitlab_find_ac
 
 Use `gitlab://tools` and `gitlab://tools/{id}` terminology when referring to tool manifests and executable action schemas. Avoid legacy resource names and the old three-step dynamic discovery flow.
 
+Each `ActionSpec` declares a minimum `Edition` (`free`, `premium`, or `ultimate`). Edition gating flows through `GITLAB_TIER` / `--tier` and `pruneSchemaFieldsByTier` (in `internal/tools/action_catalog.go`), which removes premium/ultimate-only actions and prunes per-field schema entries once the active tier resolves. When adding or updating an action, set the lowest edition that exposes the endpoint correctly and add tier hints in `ParameterGuidance` when a field is edition-gated.
+
+Discovery metadata (aliases, usage, parameter guidance, related actions) is checked by `cmd/audit_discovery_completeness` against a `link_create_batch`-class gold standard. New actions should fill all four buckets before review.
+
 ## Key SDK Components
 
 ### Server Creation

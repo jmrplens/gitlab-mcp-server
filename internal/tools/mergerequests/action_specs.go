@@ -255,7 +255,7 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 		},
 		"approve": {
 			usage:       "Add the caller's approval to a merge request; pass sha to approve only if the MR HEAD still matches (a safety check against new pushes).",
-			aliases:     []string{"approve merge request", "approve mr"},
+			aliases:     []string{"approve merge request", "approve mr", "add my approval to mr", "sign off on mr", "lgtm this mr"},
 			related:     []string{"merge_request.unapprove", actionMRMerge, actionMRGet},
 			description: "Approve a merge request on behalf of the caller. Returns: the approval state with required-approvals count, approved-by count, and overall approved flag. See also: gitlab_mr_unapprove, gitlab_mr_merge, gitlab_mr_get.",
 		},
@@ -396,6 +396,35 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 		options.IndividualTool.Description = meta.description
 	}
 	switch actionName {
+	case "list":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at", "title"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+		}
+	case "list_global":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+			toolutil.SchemaPropertyOverride("approved", map[string]any{"enum": []any{"yes", "no"}}),
+		}
+	case "list_group":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
+			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
+			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
+			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
+		}
+	case "update":
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "reopen"}}),
+		}
 	case "merge":
 		options.Usage = "Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use " + pipelineWaitAction + " unless the task only asks to wait for an existing pipeline."
 		options.Aliases = []string{"merge merge request", "merge mr", "merge when pipeline succeeds"}

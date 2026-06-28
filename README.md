@@ -41,9 +41,9 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default)                          |             2 |               864 | n/a                 |              2,204 |        18,100 |       20,304 |
 | `dynamic` / `minimal`                                 |             2 |               864 | n/a                 |              2,204 |           555 |        2,759 |
-| `meta` / `full`                                       |            33 |               864 | `opaque`            |            129,290 |        18,100 |      147,390 |
-| `meta` / `minimal`                                    |            33 |               864 | `opaque`            |            129,290 |           555 |      129,845 |
-| `individual` / `full`                                 |           860 |               860 | n/a                 |            671,940 |        18,100 |      690,040 |
+| `meta` / `full`                                       |            33 |               864 | `opaque`            |            144,458 |        18,100 |      162,558 |
+| `meta` / `minimal`                                    |            33 |               864 | `opaque`            |            144,458 |           555 |      145,013 |
+| `individual` / `full`                                 |           860 |               860 | n/a                 |            678,524 |        18,100 |      696,624 |
 
 Rows use the base Community Edition catalog (`GITLAB_TIER=free`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -297,16 +297,16 @@ The published model-evaluation set covers 560 task attempts and 1096 expected MC
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker CE dynamic 20260626-103054**.
+Current published result: **Docker CE dynamic 20260627-232303**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |      Recovery | Docker live status          |
 | --------- | --------------------------- | ------------- | ------------: | ------------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (4/4) | 100.0% final across 555 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% |  100.0% (2/2) | 100.0% final across 555 ops |
-| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% | 93.8% (15/16) | 98.6% final across 555 ops  |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (2/2) | 100.0% final across 555 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% |  100.0% (4/4) | 100.0% final across 555 ops |
+| OpenAI    | `gpt-5.4-nano`              | Review        |         99.3% | 84.6% (11/13) | 98.0% final across 555 ops  |
 | Qwen      | `qwen3.6-flash`             | OK            |        100.0% |  100.0% (5/5) | 100.0% final across 555 ops |
 
-The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2263 tool calls over 2264 model requests, with 99.7% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2265 tool calls over 2265 model requests, with 99.5% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
@@ -323,16 +323,16 @@ The published model-evaluation set covers 92 task attempts and 336 expected MCP 
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
-Current published result: **Docker Enterprise dynamic 20260626-122829**.
+Current published result: **Docker Enterprise dynamic 20260628-015421**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status          |
 | --------- | --------------------------- | ------------- | ------------: | -----------: | --------------------------- |
 | Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
-| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 202 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (2/2) | 100.0% final across 202 ops |
+| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
 | Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
 
-The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 819 tool calls over 819 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 ## Documentation
@@ -444,20 +444,20 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       937 |     187,717 |
-| Unit tests (`_test.go`)  |       505 |     288,760 |
-| End-to-end tests         |       141 |      35,044 |
-| **Total**                | **1,583** | **511,521** |
+| Source (`.go`, non-test) |       939 |     189,671 |
+| Unit tests (`_test.go`)  |       512 |     291,215 |
+| End-to-end tests         |       142 |      35,177 |
+| **Total**                | **1,593** | **516,063** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,238 |
-| — exported (public)             |  2,488 |
-| — unexported (private)          |  4,750 |
-| Unit test functions (`TestXxx`) | 11,189 |
-| Subtests (`t.Run(...)`)         |  2,620 |
+| Source functions                |  7,257 |
+| — exported (public)             |  2,541 |
+| — unexported (private)          |  4,716 |
+| Unit test functions (`TestXxx`) | 11,271 |
+| Subtests (`t.Run(...)`)         |  2,621 |
 | End-to-end test functions       |    286 |
 
 ### Ratios worth noting
@@ -465,29 +465,29 @@ Numbers nobody asked for, but here they are anyway.
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.54× more tests than code |
-| Average source file length         |                 ~200 lines |
-| Average test file length           |                 ~571 lines |
-| Comment lines in source            |  19,305 (~10.3% of source) |
-| Test functions per source function |                       1.5× |
+| Average source file length         |                 ~201 lines |
+| Average test file length           |                 ~568 lines |
+| Comment lines in source            |  19,916 (~10.5% of source) |
+| Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,470 |
-| `defer` statements                 |   697 |
-| `struct` types defined             | 2,741 |
-| `//nolint` suppressions            |   178 |
+| `if err != nil` checks             | 6,500 |
+| `defer` statements                 |   703 |
+| `struct` types defined             | 2,692 |
+| `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   222 |
+| Go packages                    |   223 |
 | Direct dependencies (`go.mod`) |    12 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   442 |
+| Git commits                    |   299 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -501,8 +501,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,413 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,362 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,448 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,326 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

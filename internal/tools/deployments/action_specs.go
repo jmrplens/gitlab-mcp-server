@@ -71,6 +71,14 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
 		options.RelatedActions = []string{actionDeploymentGet, "environment.list", "pipeline.get"}
 		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum": []any{"created", "running", "success", "failed", "canceled"},
+			}),
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum": []any{"id", "iid", "created_at", "updated_at", "finished_at", "ref"},
+			}),
+		}
 	case "deployment_get":
 		options.Usage = "Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata."
 		options.Aliases = []string{"get deployment", "show deployment details", "lookup deployment"}
@@ -87,11 +95,21 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Aliases = []string{"create deployment", "start deployment", "new deployment"}
 		options.RelatedActions = []string{"environment.get", actionDeploymentList, actionDeploymentUpdate}
 		options.IndividualTool.Description = "Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_environment_get, gitlab_deployment_list, gitlab_deployment_update."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum": []any{"created", "running", "success", "failed", "canceled"},
+			}),
+		}
 	case "deployment_update":
 		options.Usage = "Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
 		options.Aliases = []string{"update deployment status", "set deployment status", "transition deployment"}
 		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentList, "deployment.approve_or_reject"}
 		options.IndividualTool.Description = "Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_deployment_get, gitlab_deployment_list, gitlab_deployment_approve_or_reject."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum": []any{"created", "running", "success", "failed", "canceled", "blocked"},
+			}),
+		}
 	case "deployment_delete":
 		options.Usage = "Permanently delete a deployment record by deployment_id. Use only to remove obsolete or erroneous deployment entries; this does not undo the underlying deployment."
 		options.Aliases = []string{"delete deployment", "remove deployment", "purge deployment record"}
@@ -102,6 +120,11 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 		options.Aliases = []string{"approve deployment", "reject deployment", "deployment approval"}
 		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentUpdate}
 		options.IndividualTool.Description = "Approve or reject a blocked deployment awaiting protected-environment approval, optionally with a comment and an approval rule to represent. Returns: a confirmation message naming the deployment and the applied status. See also: gitlab_deployment_get, gitlab_deployment_update."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum": []any{"approved", "rejected"},
+			}),
+		}
 	}
 
 	return options

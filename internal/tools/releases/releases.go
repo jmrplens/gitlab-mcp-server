@@ -47,21 +47,21 @@ type AssetLinkInput struct {
 // types field-for-field per the 1:1 audit policy. See shapes.go.
 type Output struct {
 	toolutil.HintableOutput
-	TagName         string             `json:"tag_name"`
-	Name            string             `json:"name"`
-	Description     string             `json:"description"`
-	DescriptionHTML string             `json:"description_html,omitempty"`
-	CreatedAt       string             `json:"created_at"`
-	ReleasedAt      string             `json:"released_at"`
-	Author          *AuthorOutput      `json:"author,omitempty"`
-	Commit          *CommitOutput      `json:"commit,omitempty"`
-	UpcomingRelease bool               `json:"upcoming_release,omitempty"`
-	Milestones      []*MilestoneOutput `json:"milestones,omitempty"`
-	CommitPath      string             `json:"commit_path,omitempty"`
-	TagPath         string             `json:"tag_path,omitempty"`
-	Assets          *AssetsOutput      `json:"assets,omitempty"`
-	Evidences       []*EvidenceOutput  `json:"evidences,omitempty"`
-	Links           *LinksOutput       `json:"_links,omitempty"`
+	TagName         string                      `json:"tag_name"`
+	Name            string                      `json:"name"`
+	Description     string                      `json:"description"`
+	DescriptionHTML string                      `json:"description_html,omitempty"`
+	CreatedAt       string                      `json:"created_at"`
+	ReleasedAt      string                      `json:"released_at"`
+	Author          *toolutil.AuthorOutput      `json:"author,omitempty"`
+	Commit          *toolutil.CommitOutput      `json:"commit,omitempty"`
+	UpcomingRelease bool                        `json:"upcoming_release,omitempty"`
+	Milestones      []*toolutil.MilestoneOutput `json:"milestones,omitempty"`
+	CommitPath      string                      `json:"commit_path,omitempty"`
+	TagPath         string                      `json:"tag_path,omitempty"`
+	Assets          *toolutil.AssetsOutput      `json:"assets,omitempty"`
+	Evidences       []*toolutil.EvidenceOutput  `json:"evidences,omitempty"`
+	Links           *toolutil.LinksOutput       `json:"_links,omitempty"`
 }
 
 // UpdateInput defines parameters for updating a release.
@@ -118,15 +118,15 @@ func ToOutput(r *gl.Release) Output {
 		Name:            r.Name,
 		Description:     r.Description,
 		DescriptionHTML: r.DescriptionHTML,
-		Author:          authorOutput(r.Author),
-		Commit:          commitOutput(r.Commit),
+		Author:          releaseAuthorOutput(r.Author),
+		Commit:          toolutil.NewCommitOutput(r.Commit),
 		UpcomingRelease: r.UpcomingRelease,
 		CommitPath:      r.CommitPath,
 		TagPath:         r.TagPath,
-		Assets:          assetsOutput(r.Assets),
-		Milestones:      milestoneOutputs(r.Milestones),
-		Evidences:       evidenceOutputs(r.Evidences),
-		Links:           linksOutput(r.Links),
+		Assets:          toolutil.NewAssetsOutput(r.Assets),
+		Milestones:      toolutil.NewMilestoneOutputs(r.Milestones),
+		Evidences:       toolutil.NewEvidenceOutputs(r.Evidences),
+		Links:           toolutil.NewLinksOutput(r.Links),
 	}
 	if r.CreatedAt != nil {
 		out.CreatedAt = r.CreatedAt.Format(time.RFC3339)

@@ -224,9 +224,6 @@ func TestImportFromBitbucketCloud_APIToken(t *testing.T) {
 	}
 }
 
-// TestImportFromBitbucketCloud_Error verifies that ImportFromBitbucketCloud returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
 // TestImportFromBitbucketCloud_Validation verifies the required-field guards
 // short-circuit before any API call.
 func TestImportFromBitbucketCloud_Validation(t *testing.T) {
@@ -255,6 +252,9 @@ func TestImportFromBitbucketCloud_Validation(t *testing.T) {
 	}
 }
 
+// TestImportFromBitbucketCloud_Error verifies that ImportFromBitbucketCloud returns a
+// wrapped error when the GitLab API responds with an error status, exercising the GET
+// path of the underlying call and asserting the error is wrapped with a useful hint.
 func TestImportFromBitbucketCloud_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)

@@ -100,9 +100,35 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 	verb := strings.TrimPrefix(actionName, "badge_")
 	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
 	if scope == "group" {
-		options.Aliases = []string{verb + " group badge", verb + " badge in group"}
+		switch verb {
+		case "list":
+			options.Aliases = []string{"list group badges", "browse group badges", "enumerate group badges"}
+		case "get":
+			options.Aliases = []string{"get group badge", "show group badge", "fetch group badge"}
+		case "add":
+			options.Aliases = []string{"add group badge", "create group badge", "new group badge"}
+		case "edit":
+			options.Aliases = []string{"edit group badge", "update group badge", "modify group badge"}
+		case "delete":
+			options.Aliases = []string{"delete group badge", "remove group badge", "drop group badge"}
+		case "preview":
+			options.Aliases = []string{"preview group badge", "render group badge", "test group badge"}
+		}
 	} else {
-		options.Aliases = []string{verb + " project badge", verb + " badge in project"}
+		switch verb {
+		case "list":
+			options.Aliases = []string{"list project badges", "browse project badges", "enumerate project badges"}
+		case "get":
+			options.Aliases = []string{"get project badge", "show project badge", "fetch project badge"}
+		case "add":
+			options.Aliases = []string{"add project badge", "create project badge", "new project badge"}
+		case "edit":
+			options.Aliases = []string{"edit project badge", "update project badge", "modify project badge"}
+		case "delete":
+			options.Aliases = []string{"delete project badge", "remove project badge", "drop project badge"}
+		case "preview":
+			options.Aliases = []string{"preview project badge", "render project badge", "test project badge"}
+		}
 	}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		idParam: {
@@ -191,19 +217,20 @@ func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) to
 	return options
 }
 
-func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, GetProject)
+// wrapBadgeNotFound wraps an ActionRoute's handler so that HTTP-404 errors are
+// converted into a structured badgeNotFoundOutput instead of a Go error. The
+// caller supplies the resource label (e.g. "Project Badge"), the scope word used
+// in the identifier sentence (e.g. "project"), the input-map key for the scope ID
+// (e.g. "project_id"), and the hint strings shown to the model.
+func wrapBadgeNotFound(route toolutil.ActionRoute, resource, scope, scopeKey string, hints []string) toolutil.ActionRoute {
 	baseHandler := route.Handler
 	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
 		result, err := baseHandler(ctx, input)
 		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return badgeNotFoundOutput{
-				Resource:   "Project Badge",
-				Identifier: fmt.Sprintf("badge %v in project %v", input["badge_id"], input["project_id"]),
-				Hints: []string{
-					"Use gitlab_list_project_badges to list badges for this project",
-					"Verify the badge_id is correct",
-				},
+				Resource:   resource,
+				Identifier: fmt.Sprintf("badge %v in %s %v", input["badge_id"], scope, input[scopeKey]),
+				Hints:      hints,
 			}, nil
 		}
 		return result, err
@@ -211,24 +238,26 @@ func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	return route
 }
 
+func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	return wrapBadgeNotFound(
+		toolutil.RouteAction(client, GetProject),
+		"Project Badge", "project", "project_id",
+		[]string{
+			"Use gitlab_list_project_badges to list badges for this project",
+			"Verify the badge_id is correct",
+		},
+	)
+}
+
 func groupBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
-	route := toolutil.RouteAction(client, GetGroup)
-	baseHandler := route.Handler
-	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {
-		result, err := baseHandler(ctx, input)
-		if err != nil && toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return badgeNotFoundOutput{
-				Resource:   "Group Badge",
-				Identifier: fmt.Sprintf("badge %v in group %v", input["badge_id"], input["group_id"]),
-				Hints: []string{
-					"Use gitlab_list_group_badges to list badges for this group",
-					"Verify the badge_id and group_id are correct",
-				},
-			}, nil
-		}
-		return result, err
-	}
-	return route
+	return wrapBadgeNotFound(
+		toolutil.RouteAction(client, GetGroup),
+		"Group Badge", "group", "group_id",
+		[]string{
+			"Use gitlab_list_group_badges to list badges for this group",
+			"Verify the badge_id and group_id are correct",
+		},
+	)
 }
 
 // DeleteProjectOutput deletes a project badge and returns the legacy success message shape.

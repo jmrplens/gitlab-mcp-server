@@ -528,7 +528,7 @@ func TestToOutput_FullPipeline(t *testing.T) {
 }
 
 // assertFullPipeline verifies every mirrored field of a populated pipeline.
-func assertFullPipeline(t *testing.T, p *PipelineOutput) {
+func assertFullPipeline(t *testing.T, p *toolutil.PipelineOutput) {
 	t.Helper()
 	switch {
 	case p.ID != 200, p.IID != 3, p.Source != "push", p.SHA != "deadbeef", p.Coverage != "90", p.WebURL != "https://gl/pipe/200":
@@ -560,19 +560,19 @@ func mustParseTime(t *testing.T, s string) time.Time {
 // TestPipelineHelpers_NilBranches verifies the shape converters return nil for
 // nil inputs and omit the illustration when its image is empty.
 func TestPipelineHelpers_NilBranches(t *testing.T) {
-	if pipelineOutput(nil) != nil {
-		t.Error("pipelineOutput(nil) should be nil")
+	if toolutil.NewPipelineOutput(nil) != nil {
+		t.Error("toolutil.NewPipelineOutput(nil) should be nil")
 	}
-	if basicUserOutput(nil) != nil {
-		t.Error("basicUserOutput(nil) should be nil")
+	if toolutil.NewBasicUserOutput(nil) != nil {
+		t.Error("toolutil.NewBasicUserOutput(nil) should be nil")
 	}
-	if pipelineDetailedStatusOutput(nil) != nil {
-		t.Error("pipelineDetailedStatusOutput(nil) should be nil")
+	if toolutil.NewPipelineDetailedStatusOutput(nil) != nil {
+		t.Error("toolutil.NewPipelineDetailedStatusOutput(nil) should be nil")
 	}
 	if toolutil.FormatTimePtr(nil) != "" {
 		t.Error("toolutil.FormatTimePtr(nil) should be empty")
 	}
-	ds := pipelineDetailedStatusOutput(&gl.DetailedStatus{Label: "passed"})
+	ds := toolutil.NewPipelineDetailedStatusOutput(&gl.DetailedStatus{Label: "passed"})
 	if ds == nil || ds.Illustration != nil {
 		t.Errorf("detailed_status = %+v, want non-nil with nil illustration", ds)
 	}
@@ -648,7 +648,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						ID:           1,
 						TargetBranch: "main",
 						Status:       "merged",
-						User:         &BasicUserOutput{ID: 1, Username: "admin"},
+						User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
 						Duration:     120,
 						MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 					},
@@ -672,7 +672,7 @@ func TestFormatListMarkdown(t *testing.T) {
 						ID:           2,
 						TargetBranch: "develop",
 						Status:       "idle",
-						User:         &BasicUserOutput{ID: 2, Username: "dev"},
+						User:         &toolutil.BasicUserOutput{ID: 2, Username: "dev"},
 						Duration:     0,
 						MergeRequest: MergeRequestOutput{IID: 10, Title: "Add feature"},
 					},
@@ -716,8 +716,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:           1,
 				TargetBranch: "main",
 				Status:       "merged",
-				User:         &BasicUserOutput{ID: 1, Username: "admin"},
-				Pipeline:     &PipelineOutput{ID: 200},
+				User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
+				Pipeline:     &toolutil.PipelineOutput{ID: 200},
 				Duration:     120,
 				CreatedAt:    "2026-01-15T10:00:00Z",
 				MergedAt:     "2026-01-17T10:00:00Z",

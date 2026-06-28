@@ -116,19 +116,19 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 	},
 	"gitlab_group_label_delete": {
 		usage:       "Permanently delete a group label by ID or name. Destructive; confirm group_id and label_id before calling.",
-		aliases:     []string{"delete group label", "remove group label"},
+		aliases:     []string{"delete group label", "remove group label", "drop group label", "destroy group label"},
 		related:     []string{actionGroupLabelGet, actionGroupLabelList},
 		description: "Delete a group label permanently. Returns: a success confirmation. See also: gitlab_group_label_get, gitlab_group_label_list.",
 	},
 	"gitlab_group_label_subscribe": {
 		usage:       "Subscribe the authenticated user to a group label to receive notifications for issues and merge requests carrying it.",
-		aliases:     []string{"subscribe to group label", "follow group label"},
+		aliases:     []string{"subscribe to group label", "follow group label", "watch group label", "get notifications for group label"},
 		related:     []string{actionGroupLabelGet, "group_label.unsubscribe"},
 		description: "Subscribe to a group label's notifications. Returns: the label with the updated subscription state. See also: gitlab_group_label_get, gitlab_group_label_unsubscribe.",
 	},
 	"gitlab_group_label_unsubscribe": {
 		usage:       "Unsubscribe the authenticated user from a group label so notifications for it stop.",
-		aliases:     []string{"unsubscribe from group label", "unfollow group label"},
+		aliases:     []string{"unsubscribe from group label", "unfollow group label", "unwatch group label", "stop group label notifications"},
 		related:     []string{actionGroupLabelGet, "group_label.subscribe"},
 		description: "Unsubscribe from a group label's notifications. Returns: a success confirmation. See also: gitlab_group_label_get, gitlab_group_label_subscribe.",
 	},

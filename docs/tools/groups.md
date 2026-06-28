@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Groups
-> **Individual tools**: 64
+> **Individual tools**: 72
 > **Meta-tools**: `gitlab_group`, `gitlab_group_member`, `gitlab_group_label`, `gitlab_group_milestone`, `gitlab_group_variable`, `gitlab_group_import_export`, `gitlab_group_board`, `gitlab_group_relations_export`, `gitlab_group_markdown_upload` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
 > **Audience**: 👤 End users, AI assistant users

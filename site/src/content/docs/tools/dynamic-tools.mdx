@@ -231,13 +231,14 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 ## Troubleshooting
 
-| Symptom                                 | What to do                                                                                          |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| You only see two tools                  | That is expected in dynamic mode. Ask the assistant to find actions before execution                |
-| Find returns broad results              | Include domain, resource, action, and filters, for example `merge request list open authored by me` |
-| Execute rejects an action               | Find again and use the canonical `domain.action` ID from the result                                 |
-| Execute rejects parameters              | Find the action and retry with the exact field names and types                                      |
-| Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                  |
+| Symptom                                 | What to do                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You only see two tools                  | That is expected in dynamic mode. Ask the assistant to find actions before execution                                                                                                     |
+| Find returns broad results              | Include domain, resource, action, and filters, for example `merge request list open authored by me`                                                                                      |
+| Execute rejects an action               | Find again and use the canonical `domain.action` ID from the result                                                                                                                      |
+| Execute rejects parameters              | Find the action and retry with the exact field names and types                                                                                                                           |
+| Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                                                                                                       |
+| Discovery metadata feels thin           | Run `go run ./cmd/audit_discovery_completeness/` to confirm each action has aliases, usage, parameter guidance, and related actions; fill gaps using the link-create-batch gold standard |
 
 ## Further reading
 

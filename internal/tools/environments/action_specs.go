@@ -80,6 +80,9 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 		options.Usage = "List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations."
 		options.Aliases = []string{"list environments", "show environments", "find environments"}
 		options.RelatedActions = []string{actionEnvironmentGet, actionEnvironmentStop, actionDeploymentList}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("states", map[string]any{"enum": []any{"available", "stopping", "stopped"}}),
+		}
 	case "get":
 		options.Usage = "Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment."
 		options.Aliases = []string{"get environment", "show environment details", "lookup environment"}
@@ -95,11 +98,19 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 		options.Usage = "Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments."
 		options.Aliases = []string{"create environment", "new environment", "add environment"}
 		options.RelatedActions = []string{actionEnvironmentList, "environment.update", "deployment.create"}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("tier", map[string]any{"enum": []any{"production", "staging", "testing", "development", "other"}}),
+			toolutil.SchemaPropertyOverride("auto_stop_setting", map[string]any{"enum": []any{"always", "with_action"}}),
+		}
 	case "update":
 		options.Usage = "Update an existing environment by environment_id. Use to change its name, description, external URL, tier, cluster agent, Kubernetes namespace, Flux resource path, or auto-stop setting."
 		options.Aliases = []string{"update environment", "edit environment", "modify environment"}
 		options.RelatedActions = []string{actionEnvironmentGet, actionEnvironmentList, actionEnvironmentStop}
 		options.IndividualTool.Description = "Update an existing environment in a project. Returns: the updated environment with state, tier, external URL, cluster agent, Kubernetes namespace, Flux resource path, and auto-stop settings. See also: gitlab_environment_get, gitlab_environment_list, gitlab_environment_stop."
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("tier", map[string]any{"enum": []any{"production", "staging", "testing", "development", "other"}}),
+			toolutil.SchemaPropertyOverride("auto_stop_setting", map[string]any{"enum": []any{"always", "with_action"}}),
+		}
 	case "delete":
 		options.Usage = "Delete an environment by environment_id. The environment must be stopped first. Use to permanently remove a runtime target that is no longer used."
 		options.Aliases = []string{"delete environment", "remove environment", "destroy environment"}

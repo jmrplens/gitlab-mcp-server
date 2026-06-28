@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Search
-> **Individual tools**: 10
+> **Individual tools**: 11
 > **Meta-tool**: `gitlab_search` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Search API](https://docs.gitlab.com/ee/api/search.html)
 > **Audience**: 👤 End users, AI assistant users

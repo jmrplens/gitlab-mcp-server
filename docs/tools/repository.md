@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Repository (tree, compare, files, commits, submodules, discussions, markdown)
-> **Individual tools**: 38
+> **Individual tools**: 41
 > **Meta-tool**: `gitlab_repository` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Repositories API](https://docs.gitlab.com/ee/api/repositories.html), [Repository Files API](https://docs.gitlab.com/ee/api/repository_files.html), [Commits API](https://docs.gitlab.com/ee/api/commits.html), [Commit Discussions API](https://docs.gitlab.com/ee/api/discussions.html#commits), [Repository Submodules API](https://docs.gitlab.com/ee/api/repository_submodules.html), [Markdown API](https://docs.gitlab.com/ee/api/markdown.html)
 > **Audience**: 👤 End users, AI assistant users

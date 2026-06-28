@@ -1537,13 +1537,13 @@ const (
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 10, Title: "Big Bug", State: "opened",
-		Author:    &IssueAuthorOutput{Username: "alice"},
-		Assignees: []*IssueAssigneeOutput{{Username: "bob"}, {Username: "carol"}},
-		Labels:    []string{"bug", "critical"}, Milestone: &MilestoneOutput{Title: "v1.0"},
+		Author:    &toolutil.IssueUserOutput{Username: "alice"},
+		Assignees: []*toolutil.IssueUserOutput{{Username: "bob"}, {Username: "carol"}},
+		Labels:    []string{"bug", "critical"}, Milestone: &toolutil.MRMilestoneOutput{Title: "v1.0"},
 		DueDate: testDueDateCov, Confidential: true,
 		CreatedAt: testCreatedAtCov, Description: "Details here",
 		WebURL:               "https://gitlab.example.com/issue/10",
-		TaskCompletionStatus: &TaskCompletionStatusOutput{CompletedCount: 3, Count: 5},
+		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{CompletedCount: 3, Count: 5},
 		UserNotesCount:       7,
 	})
 	for _, want := range []string{
@@ -1578,8 +1578,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 1, Title: "Issue1", State: "opened", Author: &IssueAuthorOutput{Username: "alice"}, Labels: []string{"bug"}},
-			{IID: 2, Title: "Issue2", State: "closed", Author: &IssueAuthorOutput{Username: "bob"}, Labels: []string{}},
+			{IID: 1, Title: "Issue1", State: "opened", Author: &toolutil.IssueUserOutput{Username: "alice"}, Labels: []string{"bug"}},
+			{IID: 2, Title: "Issue2", State: "closed", Author: &toolutil.IssueUserOutput{Username: "bob"}, Labels: []string{}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
@@ -1596,7 +1596,7 @@ func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 42, Title: "Bug", State: "opened", Author: &IssueAuthorOutput{Username: "alice"},
+				IID: 42, Title: "Bug", State: "opened", Author: &toolutil.IssueUserOutput{Username: "alice"},
 				WebURL: "https://gitlab.example.com/issues/42",
 			},
 		},
@@ -1619,7 +1619,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
-			{IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"}, Labels: []string{"feat"}},
+			{IID: 5, Title: "GroupIssue", State: "opened", Author: &toolutil.IssueUserOutput{Username: "carol"}, Labels: []string{"feat"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1636,7 +1636,7 @@ func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
 			{
-				IID: 5, Title: "GroupIssue", State: "opened", Author: &IssueAuthorOutput{Username: "carol"},
+				IID: 5, Title: "GroupIssue", State: "opened", Author: &toolutil.IssueUserOutput{Username: "carol"},
 				WebURL: "https://gitlab.example.com/issues/5",
 			},
 		},
@@ -1659,7 +1659,7 @@ func TestFormatListGroupMarkdown_Empty(t *testing.T) {
 func TestFormatListAllMarkdown_Populated(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"}, Labels: []string{"doc"}},
+			{IID: 100, Title: "AllIssue", State: "closed", Author: &toolutil.IssueUserOutput{Username: "dave"}, Labels: []string{"doc"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1684,7 +1684,7 @@ func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
 			{
-				IID: 100, Title: "AllIssue", State: "closed", Author: &IssueAuthorOutput{Username: "dave"},
+				IID: 100, Title: "AllIssue", State: "closed", Author: &toolutil.IssueUserOutput{Username: "dave"},
 				WebURL: "https://gitlab.example.com/issues/100",
 			},
 		},
@@ -1767,7 +1767,7 @@ func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
 func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
 		MergeRequests: []RelatedMROutput{
-			{IID: 3, Title: "Fix MR", State: "merged", Author: &BasicUserOutput{Username: "carol"}, SourceBranch: "fix", TargetBranch: "main"},
+			{IID: 3, Title: "Fix MR", State: "merged", Author: &toolutil.BasicUserOutput{Username: "carol"}, SourceBranch: "fix", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}, "Related MRs")
@@ -2018,6 +2018,10 @@ func assertPopulatedPeople(t *testing.T, out Output) {
 	}
 }
 
+// TestToOutput_Populated verifies that ToOutput maps every populated field of a
+// fully specified gl.Issue — including nested author, milestone, assignees, epic,
+// references, task-completion, and time-stats sub-objects — onto the corresponding
+// MCP output fields without dropping or mistranslating any value.
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{
@@ -2154,9 +2158,9 @@ func TestToOutput_ConverterBranches(t *testing.T) {
 func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 7, Title: "Objects", State: "closed",
-		Author:    &IssueAuthorOutput{Username: "obj-author"},
-		Assignees: []*IssueAssigneeOutput{{Username: "obj-assignee"}},
-		ClosedBy:  &IssueCloserOutput{Username: "obj-closer"},
+		Author:    &toolutil.IssueUserOutput{Username: "obj-author"},
+		Assignees: []*toolutil.IssueUserOutput{{Username: "obj-assignee"}},
+		ClosedBy:  &toolutil.IssueUserOutput{Username: "obj-closer"},
 		WebURL:    "https://example.com/7",
 	})
 	for _, want := range []string{"obj-author", "@obj-assignee", "@obj-closer"} {
@@ -3620,8 +3624,8 @@ func TestUnsubscribe_APIError(t *testing.T) {
 func TestFormatGetMarkdown_EdgeCases(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Test", State: "closed",
-		References: &ReferencesOutput{Full: "test/project#1"}, IssueType: "incident",
-		ClosedBy: &IssueCloserOutput{Username: "admin"}, ClosedAt: "2025-01-01T00:00:00Z",
+		References: &toolutil.ReferencesOutput{Full: "test/project#1"}, IssueType: "incident",
+		ClosedBy: &toolutil.IssueUserOutput{Username: "admin"}, ClosedAt: "2025-01-01T00:00:00Z",
 	}
 	md := FormatMarkdown(out)
 	if !strings.Contains(md, "test/project#1") {

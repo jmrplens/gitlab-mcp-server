@@ -57,6 +57,7 @@ func featureFlagDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 // RelatedActions, and the "Returns: … See also: …" individual-tool description
 // for a feature-flag action, replacing the generic placeholders from
 // featureFlagOptions. It is a no-op for tools with no metadata entry.
+// It also sets InputSchemaOverrides for tools with constrained enum parameters.
 func decorateFeatureFlagMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	meta, ok := featureFlagActionMeta[individualTool]
 	if !ok {
@@ -73,6 +74,13 @@ func decorateFeatureFlagMeta(options *toolutil.ActionSpecOptions, individualTool
 	}
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
+	}
+	if individualTool == "gitlab_feature_flag_list" {
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("scope", map[string]any{
+				"enum": []any{"enabled", "disabled"},
+			}),
+		}
 	}
 }
 
@@ -112,7 +120,7 @@ var featureFlagActionMeta = map[string]featureFlagActionMetaEntry{
 	},
 	"gitlab_feature_flag_delete": {
 		usage:       "Permanently delete a feature flag by name. Destructive and irreversible; confirm project_id and name before calling. Requires Maintainer+ on a Premium/Ultimate project.",
-		aliases:     []string{"delete project feature flag", "remove project feature flag"},
+		aliases:     []string{"delete project feature flag", "remove project feature flag", "destroy project feature flag", "drop project feature flag"},
 		related:     []string{actionFeatureFlagGet, actionFeatureFlagList},
 		description: "Delete a feature flag permanently. Returns: a success confirmation naming the flag. See also: gitlab_feature_flag_get, gitlab_feature_flag_list.",
 	},

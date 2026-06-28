@@ -55,7 +55,7 @@ type CreateInput struct {
 	Key              string               `json:"key" jsonschema:"Variable key name,required"`
 	Value            string               `json:"value" jsonschema:"Variable value,required"`
 	Description      string               `json:"description" jsonschema:"Variable description"`
-	VariableType     string               `json:"variable_type" jsonschema:"Variable type: env_var or file"`
+	VariableType     string               `json:"variable_type,omitempty" jsonschema:"Variable type: env_var or file"`
 	Protected        *bool                `json:"protected" jsonschema:"Only expose in protected branches/tags"`
 	Masked           *bool                `json:"masked" jsonschema:"Mask variable value in job logs"`
 	MaskedAndHidden  *bool                `json:"masked_and_hidden" jsonschema:"Mask and hide variable value"`
@@ -69,7 +69,7 @@ type UpdateInput struct {
 	Key              string               `json:"key" jsonschema:"Variable key name,required"`
 	Value            string               `json:"value" jsonschema:"Updated variable value"`
 	Description      string               `json:"description" jsonschema:"Updated variable description"`
-	VariableType     string               `json:"variable_type" jsonschema:"Variable type: env_var or file"`
+	VariableType     string               `json:"variable_type,omitempty" jsonschema:"Variable type: env_var or file"`
 	Protected        *bool                `json:"protected" jsonschema:"Only expose in protected branches/tags"`
 	Masked           *bool                `json:"masked" jsonschema:"Mask variable value in job logs"`
 	Raw              *bool                `json:"raw" jsonschema:"Treat variable value as raw string"`

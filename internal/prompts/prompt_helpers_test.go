@@ -667,14 +667,14 @@ func TestAccessLevelIcon(t *testing.T) {
 	}
 }
 
-// TestFormatTimePtr covers both branches.
-func TestFormatTimePtr(t *testing.T) {
-	if got := formatTimePtr(nil); got != "—" {
-		t.Errorf("formatTimePtr(nil) = %q, want %q", got, "—")
+// TestFormatAuditDate covers both branches.
+func TestFormatAuditDate(t *testing.T) {
+	if got := formatAuditDate(nil); got != "—" {
+		t.Errorf("formatAuditDate(nil) = %q, want %q", got, "—")
 	}
 	now := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
-	if got := formatTimePtr(&now); got != "2025-03-15" {
-		t.Errorf("formatTimePtr() = %q, want %q", got, "2025-03-15")
+	if got := formatAuditDate(&now); got != "2025-03-15" {
+		t.Errorf("formatAuditDate() = %q, want %q", got, "2025-03-15")
 	}
 }
 

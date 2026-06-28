@@ -124,7 +124,7 @@ var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 	},
 	"gitlab_group_wiki_delete": {
 		usage:   "Permanently delete a group wiki page by slug. Destructive; requires Maintainer or Owner role and confirmation of the group and slug.",
-		aliases: []string{"delete group wiki page", "remove group wiki page"},
+		aliases: []string{"delete group wiki page", "remove group wiki page", "destroy group wiki page", "drop group wiki page"},
 		related: []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiEdit},
 		description: "Delete a group wiki page permanently. Returns: a success confirmation for the removed page. " +
 			"See also: gitlab_group_wiki_get, gitlab_group_wiki_list.",

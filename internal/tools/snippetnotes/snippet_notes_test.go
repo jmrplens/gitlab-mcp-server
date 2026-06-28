@@ -495,7 +495,7 @@ func TestFormatOutputMarkdown_Basic(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     100,
 		Body:   "Great snippet",
-		Author: &NoteUserOutput{Username: "alice"},
+		Author: &toolutil.NoteUserOutput{Username: "alice"},
 		System: false,
 	})
 	if !contains(md, "## Snippet Note #100") {
@@ -520,7 +520,7 @@ func TestFormatOutputMarkdown_SystemNote(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     101,
 		Body:   "changed the title",
-		Author: &NoteUserOutput{Username: "admin"},
+		Author: &toolutil.NoteUserOutput{Username: "admin"},
 		System: true,
 	})
 	if !contains(md, "System note") {
@@ -540,8 +540,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Notes: []Output{
-			{ID: 100, Author: &NoteUserOutput{Username: "alice"}, System: false},
-			{ID: 101, Author: &NoteUserOutput{Username: "admin"}, System: true},
+			{ID: 100, Author: &toolutil.NoteUserOutput{Username: "alice"}, System: false},
+			{ID: 101, Author: &toolutil.NoteUserOutput{Username: "admin"}, System: true},
 		},
 	})
 	if !contains(md, "| 100 |") {
@@ -710,7 +710,7 @@ func TestToOutput_UnresolvedNote(t *testing.T) {
 }
 
 // assertFullNotePosition checks the nested position / line_range sub-objects.
-func assertFullNotePosition(t *testing.T, pos *NotePositionOutput) {
+func assertFullNotePosition(t *testing.T, pos *toolutil.NotePositionOutput) {
 	t.Helper()
 	if pos == nil {
 		t.Fatal("Position = nil, want populated")
@@ -826,7 +826,7 @@ func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:        100,
 		Body:      "test note",
-		Author:    &NoteUserOutput{Username: "bob"},
+		Author:    &toolutil.NoteUserOutput{Username: "bob"},
 		CreatedAt: "2026-03-10T09:00:00Z",
 		UpdatedAt: "2026-03-10T10:00:00Z",
 	})

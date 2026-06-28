@@ -190,7 +190,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []Output{
-			{IID: 1, Title: "MR One", State: "merged", Author: &BasicUserOutput{Username: "dev"}, SourceBranch: "feat", TargetBranch: "main"},
+			{IID: 1, Title: "MR One", State: "merged", Author: &toolutil.BasicUserOutput{Username: "dev"}, SourceBranch: "feat", TargetBranch: "main"},
 		},
 	}
 	result := FormatListMarkdown(out)
@@ -616,9 +616,9 @@ func TestList_SparsePayload(t *testing.T) {
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []Output{
-			{IID: 10, Title: "Feature A", State: "merged", Author: &BasicUserOutput{Username: "dev1"}, SourceBranch: "feat-a", TargetBranch: "main"},
-			{IID: 11, Title: "Fix B", State: "opened", Author: &BasicUserOutput{Username: "dev2"}, SourceBranch: "fix-b", TargetBranch: "develop"},
-			{IID: 12, Title: "Hotfix C", State: "closed", Author: &BasicUserOutput{Username: "dev3"}, SourceBranch: "hotfix-c", TargetBranch: "main"},
+			{IID: 10, Title: "Feature A", State: "merged", Author: &toolutil.BasicUserOutput{Username: "dev1"}, SourceBranch: "feat-a", TargetBranch: "main"},
+			{IID: 11, Title: "Fix B", State: "opened", Author: &toolutil.BasicUserOutput{Username: "dev2"}, SourceBranch: "fix-b", TargetBranch: "develop"},
+			{IID: 12, Title: "Hotfix C", State: "closed", Author: &toolutil.BasicUserOutput{Username: "dev3"}, SourceBranch: "hotfix-c", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 3, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -658,7 +658,7 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []Output{
-			{IID: 1, Title: "Title with | pipe", State: "merged", Author: &BasicUserOutput{Username: "user"}, SourceBranch: "src", TargetBranch: "tgt"},
+			{IID: 1, Title: "Title with | pipe", State: "merged", Author: &toolutil.BasicUserOutput{Username: "user"}, SourceBranch: "src", TargetBranch: "tgt"},
 		},
 	}
 	result := FormatListMarkdown(out)

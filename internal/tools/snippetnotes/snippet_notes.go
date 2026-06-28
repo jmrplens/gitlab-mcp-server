@@ -57,29 +57,29 @@ type DeleteInput struct {
 // *NoteUserOutput author object is surfaced on the canonical `author` key.
 type Output struct {
 	toolutil.HintableOutput
-	ID           int64               `json:"id"`
-	Body         string              `json:"body"`
-	Author       *NoteUserOutput     `json:"author,omitempty"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Title        string              `json:"title,omitempty"`
-	FileName     string              `json:"file_name,omitempty"`
-	CreatedAt    string              `json:"created_at"`
-	UpdatedAt    string              `json:"updated_at,omitempty"`
-	ExpiresAt    string              `json:"expires_at,omitempty"`
-	System       bool                `json:"system"`
-	Internal     bool                `json:"internal"`
-	Resolvable   bool                `json:"resolvable,omitempty"`
-	Resolved     bool                `json:"resolved,omitempty"`
-	ResolvedAt   string              `json:"resolved_at,omitempty"`
-	ResolvedBy   *NoteUserOutput     `json:"resolved_by,omitempty"`
-	Type         string              `json:"type,omitempty"`
-	CommitID     string              `json:"commit_id,omitempty"`
-	Position     *NotePositionOutput `json:"position,omitempty"`
-	NoteableType string              `json:"noteable_type,omitempty"`
-	NoteableID   int64               `json:"noteable_id,omitempty"`
-	NoteableIID  int64               `json:"noteable_iid,omitempty"`
-	ProjectID    int64               `json:"project_id,omitempty"`
-	Confidential bool                `json:"confidential"`
+	ID           int64                        `json:"id"`
+	Body         string                       `json:"body"`
+	Author       *toolutil.NoteUserOutput     `json:"author,omitempty"`
+	Attachment   string                       `json:"attachment,omitempty"`
+	Title        string                       `json:"title,omitempty"`
+	FileName     string                       `json:"file_name,omitempty"`
+	CreatedAt    string                       `json:"created_at"`
+	UpdatedAt    string                       `json:"updated_at,omitempty"`
+	ExpiresAt    string                       `json:"expires_at,omitempty"`
+	System       bool                         `json:"system"`
+	Internal     bool                         `json:"internal"`
+	Resolvable   bool                         `json:"resolvable,omitempty"`
+	Resolved     bool                         `json:"resolved,omitempty"`
+	ResolvedAt   string                       `json:"resolved_at,omitempty"`
+	ResolvedBy   *toolutil.NoteUserOutput     `json:"resolved_by,omitempty"`
+	Type         string                       `json:"type,omitempty"`
+	CommitID     string                       `json:"commit_id,omitempty"`
+	Position     *toolutil.NotePositionOutput `json:"position,omitempty"`
+	NoteableType string                       `json:"noteable_type,omitempty"`
+	NoteableID   int64                        `json:"noteable_id,omitempty"`
+	NoteableIID  int64                        `json:"noteable_iid,omitempty"`
+	ProjectID    int64                        `json:"project_id,omitempty"`
+	Confidential bool                         `json:"confidential"`
 }
 
 // ListOutput holds a paginated list of snippet notes.
@@ -98,7 +98,7 @@ func toOutput(n *gl.Note) Output {
 	out := Output{
 		ID:           n.ID,
 		Body:         n.Body,
-		Author:       noteAuthorOutput(n.Author),
+		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
 		Attachment:   n.Attachment,
 		Title:        n.Title,
 		FileName:     n.FileName,
@@ -106,10 +106,10 @@ func toOutput(n *gl.Note) Output {
 		Internal:     n.Internal,
 		Resolvable:   n.Resolvable,
 		Resolved:     n.Resolved,
-		ResolvedBy:   noteResolvedByOutput(n.ResolvedBy),
+		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
 		Type:         string(n.Type),
 		CommitID:     n.CommitID,
-		Position:     notePositionOutput(n.Position),
+		Position:     toolutil.NewNotePositionOutput(n.Position),
 		NoteableType: n.NoteableType,
 		NoteableID:   n.NoteableID,
 		NoteableIID:  n.NoteableIID,

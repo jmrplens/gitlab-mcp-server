@@ -8,6 +8,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
+// TestDebugScores_SearchProjectsVsMRList is a diagnostic test that prints the
+// per-term scoring breakdown for the "project list search" query across the
+// search.projects and merge-request list candidates, used to inspect why one
+// action outranks the other when tuning the discovery scorer.
 func TestDebugScores_SearchProjectsVsMRList(t *testing.T) {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
@@ -31,6 +35,10 @@ func TestDebugScores_SearchProjectsVsMRList(t *testing.T) {
 	}
 }
 
+// TestDebugScores_ActionSpecificityForSearchProjects is a diagnostic test that
+// reports the action-specificity component of the discovery score for the
+// search.projects entry against the "project list search" query, used to tune
+// how strongly exact action matches are boosted.
 func TestDebugScores_ActionSpecificityForSearchProjects(t *testing.T) {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
@@ -63,6 +71,10 @@ func TestDebugScores_ActionSpecificityForSearchProjects(t *testing.T) {
 	}
 }
 
+// TestDebugScores_SearchWithDefaultLimit is a diagnostic test that runs the
+// discovery search for the "project list search" query at the default limit and
+// reports whether search.projects appears in the returned window, used to inspect
+// limit-sensitivity of the ranking.
 func TestDebugScores_SearchWithDefaultLimit(t *testing.T) {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {

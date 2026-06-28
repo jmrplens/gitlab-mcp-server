@@ -214,14 +214,14 @@ func assertRichDiscoveryMeta(t *testing.T, tool string, spec toolutil.ActionSpec
 	}
 }
 
-// TestDecorateApprovalMeta_UnknownToolNoOp verifies decorateApprovalMeta leaves
+// TestDecorateApprovalMeta_UnknownToolNoOp verifies toolutil.ApplyActionMeta leaves
 // the generic options untouched for an individual tool without a metadata entry.
 func TestDecorateApprovalMeta_UnknownToolNoOp(t *testing.T) {
 	options := approvalOptions("gitlab_unknown_tool")
 	before := options.Usage
-	decorateApprovalMeta(&options, "gitlab_unknown_tool")
+	toolutil.ApplyActionMeta(&options, approvalActionMeta["gitlab_unknown_tool"])
 	if options.Usage != before {
-		t.Errorf("decorateApprovalMeta mutated Usage for unknown tool: %q", options.Usage)
+		t.Errorf("toolutil.ApplyActionMeta mutated Usage for unknown tool: %q", options.Usage)
 	}
 }
 

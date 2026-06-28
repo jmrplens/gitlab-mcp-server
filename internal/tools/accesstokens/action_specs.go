@@ -92,13 +92,14 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if scope == "" {
 		return options
 	}
-	operationText := strings.ReplaceAll(operation, "_", " ")
 	options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s a %s-scoped API token.", scope, accessTokenOperationPhrase(operation), scope)
-	options.Aliases = []string{fmt.Sprintf("%s %s access token", operationText, scope)}
+	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
 		options.Tags = append(options.Tags, scope+"_access_tokens")
-		options.Aliases = append(options.Aliases, scope+" access tokens", fmt.Sprintf("list %s access tokens", scope))
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "inactive"}}),
+		}
 	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
 	if accessTokenNeedsTokenID(operation) {
@@ -111,6 +112,55 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 	}
 	return options
+}
+
+func accessTokenAliases(scope, operation string) []string {
+	switch operation {
+	case "list":
+		return []string{
+			scope + " access tokens",
+			fmt.Sprintf("list %s access tokens", scope),
+			fmt.Sprintf("show %s access tokens", scope),
+			fmt.Sprintf("browse %s access tokens", scope),
+		}
+	case "get":
+		return []string{
+			fmt.Sprintf("get %s access token", scope),
+			fmt.Sprintf("show %s access token", scope),
+			fmt.Sprintf("fetch %s access token", scope),
+		}
+	case "create":
+		return []string{
+			fmt.Sprintf("create %s access token", scope),
+			fmt.Sprintf("new %s access token", scope),
+			fmt.Sprintf("provision %s access token", scope),
+		}
+	case "rotate":
+		return []string{
+			fmt.Sprintf("rotate %s access token", scope),
+			fmt.Sprintf("renew %s access token", scope),
+			fmt.Sprintf("reset %s access token", scope),
+		}
+	case "rotate_self":
+		return []string{
+			fmt.Sprintf("rotate my %s access token", scope),
+			fmt.Sprintf("renew my %s access token", scope),
+			fmt.Sprintf("reset my %s access token", scope),
+		}
+	case "revoke":
+		return []string{
+			fmt.Sprintf("revoke %s access token", scope),
+			fmt.Sprintf("delete %s access token", scope),
+			fmt.Sprintf("remove %s access token", scope),
+		}
+	case "revoke_self":
+		return []string{
+			fmt.Sprintf("revoke my %s access token", scope),
+			fmt.Sprintf("delete my %s access token", scope),
+			fmt.Sprintf("remove my %s access token", scope),
+		}
+	}
+	return []string{fmt.Sprintf("%s %s access token", strings.ReplaceAll(operation, "_", " "), scope)}
 }
 
 func accessTokenScopeAndOperation(actionName string) (scope, operation string) {

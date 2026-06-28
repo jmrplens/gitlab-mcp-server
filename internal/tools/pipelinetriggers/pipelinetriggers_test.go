@@ -379,7 +379,7 @@ func TestListTriggers_OrderBySort(t *testing.T) {
 func TestDecoratePipelineTriggerMeta_UnknownTool(t *testing.T) {
 	options := pipelineTriggerOptions("gitlab_unknown_tool")
 	before := options.Usage
-	decoratePipelineTriggerMeta(&options, "gitlab_unknown_tool")
+	toolutil.ApplyActionMeta(&options, pipelineTriggerActionMeta["gitlab_unknown_tool"])
 	if options.Usage != before {
 		t.Errorf("usage changed for unknown tool: %q", options.Usage)
 	}

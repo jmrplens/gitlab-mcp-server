@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Merge Requests
-> **Individual tools**: 56
+> **Individual tools**: 54
 > **Meta-tool**: `gitlab_merge_request` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html), [Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
 > **Audience**: 👤 End users, AI assistant users

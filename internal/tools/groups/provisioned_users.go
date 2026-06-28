@@ -1,5 +1,3 @@
-// provisioned_users.go contains the list-provisioned-users tool, which lists the
-// users provisioned for a group through SAML/SCIM (Premium/Ultimate).
 package groups
 
 import (

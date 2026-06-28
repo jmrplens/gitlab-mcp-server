@@ -462,7 +462,7 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
 		ID:         200,
 		Body:       "Full note body",
-		Author:     &NoteUserOutput{Username: "fulluser"},
+		Author:     &toolutil.NoteUserOutput{Username: "fulluser"},
 		CreatedAt:  "2026-03-01T09:00:00Z",
 		System:     true,
 		Internal:   true,
@@ -495,7 +495,7 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	out := Output{
 		ID:         201,
 		Body:       "Unresolved note",
-		Author:     &NoteUserOutput{Username: "reviewer"},
+		Author:     &toolutil.NoteUserOutput{Username: "reviewer"},
 		CreatedAt:  "2026-03-02T09:00:00Z",
 		Resolvable: true,
 		Resolved:   false,
@@ -538,8 +538,8 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Notes: []Output{
-			{ID: 1, Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z", System: false, Internal: false},
-			{ID: 2, Author: &NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z", System: true, Internal: true},
+			{ID: 1, Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z", System: false, Internal: false},
+			{ID: 2, Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z", System: true, Internal: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -964,7 +964,7 @@ func TestToOutput_NestedObjects(t *testing.T) {
 
 // assertFullLineRange checks the canonical start/end sub-objects of a fully
 // populated line range.
-func assertFullLineRange(t *testing.T, lr *LineRangeOutput) {
+func assertFullLineRange(t *testing.T, lr *toolutil.LineRangeOutput) {
 	t.Helper()
 	// Canonical-key start/end objects mirror gl.LineRange.StartRange/EndRange.
 	if lr == nil || lr.Start == nil || lr.End == nil {
@@ -997,7 +997,7 @@ func TestToOutput_EmptyNestedObjects(t *testing.T) {
 // TestNotePositionOutput_LineRangeNilSubRanges verifies a LineRange with both
 // sub-ranges nil collapses to a nil line_range object.
 func TestNotePositionOutput_LineRangeNilSubRanges(t *testing.T) {
-	out := notePositionOutput(&gl.NotePosition{
+	out := toolutil.NewNotePositionOutput(&gl.NotePosition{
 		PositionType: "text",
 		LineRange:    &gl.LineRange{},
 	})
@@ -1012,7 +1012,7 @@ func TestNotePositionOutput_LineRangeNilSubRanges(t *testing.T) {
 // TestNotePositionOutput_LineRangeStartOnly verifies a LineRange carrying only a
 // start sub-range is preserved with a nil end.
 func TestNotePositionOutput_LineRangeStartOnly(t *testing.T) {
-	out := notePositionOutput(&gl.NotePosition{
+	out := toolutil.NewNotePositionOutput(&gl.NotePosition{
 		LineRange: &gl.LineRange{StartRange: &gl.LinePosition{LineCode: "x", NewLine: 3}},
 	})
 	if out == nil || out.LineRange == nil || out.LineRange.Start == nil {
@@ -1031,7 +1031,7 @@ func TestNotePositionOutput_LineRangeStartOnly(t *testing.T) {
 // TestNotePositionOutput_NoLineRange verifies a position with no line range
 // produces a populated position object whose line_range is nil.
 func TestNotePositionOutput_NoLineRange(t *testing.T) {
-	out := notePositionOutput(&gl.NotePosition{PositionType: "text", NewPath: "f.go"})
+	out := toolutil.NewNotePositionOutput(&gl.NotePosition{PositionType: "text", NewPath: "f.go"})
 	if out == nil {
 		t.Fatal("position = nil, want populated")
 	}
@@ -1043,7 +1043,7 @@ func TestNotePositionOutput_NoLineRange(t *testing.T) {
 // TestNotePositionOutput_LineRangeEndOnly verifies a LineRange carrying only an
 // end sub-range is preserved with a nil start.
 func TestNotePositionOutput_LineRangeEndOnly(t *testing.T) {
-	out := notePositionOutput(&gl.NotePosition{
+	out := toolutil.NewNotePositionOutput(&gl.NotePosition{
 		LineRange: &gl.LineRange{EndRange: &gl.LinePosition{LineCode: "y", NewLine: 5}},
 	})
 	if out == nil || out.LineRange == nil || out.LineRange.End == nil {

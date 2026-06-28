@@ -11,7 +11,6 @@ import (
 // struct and are replicated here rather than imported from sibling packages to
 // preserve the zero-import-cycle constraint (C-IMPORTS).
 
-// formatISOTimePtr renders an optional ISO date (gitlab.ISOTime) as YYYY-MM-DD,
 // UserOutput mirrors gitlab.IssueAuthor / gitlab.IssueAssignee (they share the
 // same shape). It surfaces the full user sub-object referenced by an issue
 // relation's author and assignees.

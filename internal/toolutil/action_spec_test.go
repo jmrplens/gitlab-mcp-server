@@ -1086,3 +1086,253 @@ func TestSchemaHasPropertyPathFrom_NilChildProperty(t *testing.T) {
 		t.Error("schemaHasPropertyPathFrom(nil child) = true, want false")
 	}
 }
+
+// TestFillScopeParameterGuidanceSingle_AddsDefaultsForScopeParams pins the
+// helper used by the central tier filter: every scope-suggestive parameter
+// present in the schema gets a default guidance entry, and any pre-existing
+// guidance whose key was removed from the schema (e.g. by tier pruning) is
+// dropped so validation cannot fail with "guidance for unknown parameter".
+func TestFillScopeParameterGuidanceSingle_AddsDefaultsForScopeParams(t *testing.T) {
+	cases := []struct {
+		name        string
+		schemaProps map[string]any
+		existing    map[string]ParameterGuidance
+		wantRoles   map[string]string
+		mustDrop    []string
+	}{
+		{
+			name: "adds scope_project for project_id",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"title":      map[string]any{"type": "string"},
+			},
+			existing:  nil,
+			wantRoles: map[string]string{"project_id": "scope_project"},
+		},
+		{
+			name: "preserves explicit guidance and adds missing scope entries",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+				"group_id":   map[string]any{"type": "string"},
+				"ref":        map[string]any{"type": "string"},
+			},
+			existing: map[string]ParameterGuidance{
+				"project_id": {SemanticRole: "custom_role"},
+			},
+			wantRoles: map[string]string{
+				"project_id": "custom_role",
+				"group_id":   "scope_group",
+				"ref":        "branch_or_tag",
+			},
+		},
+		{
+			name: "drops stale guidance for params missing from schema",
+			schemaProps: map[string]any{
+				"project_id": map[string]any{"type": "string"},
+			},
+			existing: map[string]ParameterGuidance{
+				"epic_id": {SemanticRole: "stale"},
+			},
+			wantRoles: map[string]string{"project_id": "scope_project"},
+			mustDrop:  []string{"epic_id"},
+		},
+		{
+			name: "ignores non-scope-suggestive parameters",
+			schemaProps: map[string]any{
+				"name":  map[string]any{"type": "string"},
+				"color": map[string]any{"type": "string"},
+			},
+			existing:  nil,
+			wantRoles: map[string]string{},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := ActionSpec{
+				Route: ActionRoute{
+					InputSchema: map[string]any{
+						"type":       "object",
+						"properties": tc.schemaProps,
+					},
+				},
+				ParameterGuidance: tc.existing,
+			}
+			out := FillScopeParameterGuidanceSingle(spec)
+			for _, key := range tc.mustDrop {
+				if _, ok := out.ParameterGuidance[key]; ok {
+					t.Errorf("guidance entry %q should have been dropped", key)
+				}
+			}
+			for key, role := range tc.wantRoles {
+				got, ok := out.ParameterGuidance[key]
+				if !ok {
+					t.Errorf("missing guidance for %q", key)
+					continue
+				}
+				if got.SemanticRole != role {
+					t.Errorf("guidance[%q].SemanticRole = %q, want %q", key, got.SemanticRole, role)
+				}
+			}
+		})
+	}
+}
+
+// TestFillScopeParameterGuidance_AcceptsEmptyInput makes sure the slice
+// form short-circuits on nil/empty input instead of panicking.
+func TestFillScopeParameterGuidance_AcceptsEmptyInput(t *testing.T) {
+	if got := FillScopeParameterGuidance(nil); got != nil {
+		t.Errorf("FillScopeParameterGuidance(nil) = %v, want nil", got)
+	}
+	if got := FillScopeParameterGuidance([]ActionSpec{}); len(got) != 0 {
+		t.Errorf("FillScopeParameterGuidance([]) = %v, want empty", got)
+	}
+}
+
+// TestApplyCanonicalParamEnums verifies the central injection of GitLab-universal
+// input enums: a string "sort"/"visibility" property without an enum receives the
+// canonical value set; a property that already declares an enum is left untouched
+// (per-action overrides win); non-string and unrelated properties are ignored.
+func TestApplyCanonicalParamEnums(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"sort":         map[string]any{"type": "string", "description": "Sort direction (asc, desc)"},
+		"visibility":   map[string]any{"type": "string", "description": "Project visibility"},
+		"order_by":     map[string]any{"type": "string", "description": "Column to order by"},
+		"sort_already": map[string]any{"type": "string"},
+	}}
+	// Pre-set an explicit enum on a "sort"-typed prop to confirm it is preserved.
+	props := schema["properties"].(map[string]any)
+	props["sort_custom"] = map[string]any{"type": "string", "enum": []any{"x", "y"}}
+
+	applyCanonicalParamEnums(schema)
+
+	sortEnum, _ := props["sort"].(map[string]any)["enum"].([]any)
+	if len(sortEnum) != 2 || sortEnum[0] != "asc" || sortEnum[1] != "desc" {
+		t.Errorf("sort enum = %v, want [asc desc]", props["sort"].(map[string]any)["enum"])
+	}
+	visEnum, _ := props["visibility"].(map[string]any)["enum"].([]any)
+	if len(visEnum) != 3 {
+		t.Errorf("visibility enum = %v, want 3 values", props["visibility"].(map[string]any)["enum"])
+	}
+	if _, has := props["order_by"].(map[string]any)["enum"]; has {
+		t.Error("order_by must NOT receive a canonical enum (resource-specific)")
+	}
+	if got := props["sort_custom"].(map[string]any)["enum"].([]any); len(got) != 2 || got[0] != "x" {
+		t.Errorf("pre-existing enum must be preserved, got %v", got)
+	}
+}
+
+// TestApplyCanonicalParamFormats verifies the central injection of GitLab date
+// formats: a string created_after/due_date without a format receives date-time /
+// date respectively; a property that already declares a format is left untouched;
+// non-string and unrelated properties are ignored.
+func TestApplyCanonicalParamFormats(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"created_after": map[string]any{"type": "string", "description": "ISO 8601"},
+		"due_date":      map[string]any{"type": "string"},
+		"title":         map[string]any{"type": "string"},
+		"expires_at":    map[string]any{"type": "string", "format": "date"}, // pre-set, must be kept
+	}}
+	props := schema["properties"].(map[string]any)
+	applyCanonicalParamFormats(schema)
+	if props["created_after"].(map[string]any)["format"] != "date-time" {
+		t.Errorf("created_after format = %v, want date-time", props["created_after"].(map[string]any)["format"])
+	}
+	if props["due_date"].(map[string]any)["format"] != "date" {
+		t.Errorf("due_date format = %v, want date", props["due_date"].(map[string]any)["format"])
+	}
+	if _, has := props["title"].(map[string]any)["format"]; has {
+		t.Error("title must not receive a format")
+	}
+	if props["expires_at"].(map[string]any)["format"] != "date" {
+		t.Error("pre-existing expires_at format must be preserved")
+	}
+}
+
+// TestFilterOverridesForSchema verifies that overrides whose property path no
+// longer resolves against the (tier-pruned) schema are dropped, while overrides
+// for present properties and root-level (empty path) overrides are kept — so a
+// tier-pruned ultimate-only field's override does not fail catalog validation.
+func TestFilterOverridesForSchema(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"state": map[string]any{"type": "string"},
+	}}
+	overrides := []InputSchemaOverride{
+		{PropertyPath: "state", Values: map[string]any{"enum": []any{"opened", "closed"}}},
+		{PropertyPath: "health_status", Values: map[string]any{"enum": []any{"onTrack"}}}, // pruned
+		{PropertyPath: "", Values: map[string]any{"anyOf": []any{}}},                      // root, always kept
+	}
+	got := FilterOverridesForSchema(schema, overrides)
+	if len(got) != 2 {
+		t.Fatalf("FilterOverridesForSchema kept %d overrides, want 2 (state + root)", len(got))
+	}
+	for _, ov := range got {
+		if ov.PropertyPath == "health_status" {
+			t.Error("override for tier-pruned health_status must be dropped")
+		}
+	}
+}
+
+// TestApplyCanonicalParamEnums_NilAndMalformed verifies the injector is a no-op
+// for a nil schema, a schema without a properties map, and non-map property
+// entries, never panicking.
+func TestApplyCanonicalParamEnums_NilAndMalformed(t *testing.T) {
+	applyCanonicalParamEnums(nil)
+	applyCanonicalParamEnums(map[string]any{})
+	applyCanonicalParamEnums(map[string]any{"properties": "not-a-map"})
+	applyCanonicalParamEnums(map[string]any{"properties": map[string]any{"sort": "not-a-map"}})
+}
+
+// TestSchemaEnumOverride verifies the enum-only override helper builds an
+// override targeting the given property path with an []any enum of the supplied
+// string values.
+func TestSchemaEnumOverride(t *testing.T) {
+	ov := SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all")
+	if ov.PropertyPath != "scope" {
+		t.Fatalf("PropertyPath = %q, want scope", ov.PropertyPath)
+	}
+	enum, ok := ov.Values["enum"].([]any)
+	if !ok {
+		t.Fatalf("enum not []any: %T", ov.Values["enum"])
+	}
+	want := []any{"created_by_me", "assigned_to_me", "all"}
+	if !reflect.DeepEqual(enum, want) {
+		t.Errorf("enum = %v, want %v", enum, want)
+	}
+}
+
+// TestSchemaFormatOverride verifies the format helper sets the JSON Schema
+// format key for the targeted property path.
+func TestSchemaFormatOverride(t *testing.T) {
+	ov := SchemaFormatOverride("expires_at", "date")
+	if ov.PropertyPath != "expires_at" {
+		t.Fatalf("PropertyPath = %q, want expires_at", ov.PropertyPath)
+	}
+	if ov.Values["format"] != "date" {
+		t.Errorf("format = %v, want date", ov.Values["format"])
+	}
+}
+
+// TestApplyCanonicalParamRanges verifies per_page gets [1,100] bounds and page
+// gets a minimum of 1, that existing bounds and non-integer/absent props are
+// left untouched, and that nil/malformed schemas do not panic.
+func TestApplyCanonicalParamRanges(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{
+		"per_page": map[string]any{"type": "integer"},
+		"page":     map[string]any{"type": "integer", "minimum": 5},
+		"name":     map[string]any{"type": "string"},
+	}}
+	applyCanonicalParamRanges(schema)
+	props := schema["properties"].(map[string]any)
+	pp := props["per_page"].(map[string]any)
+	if pp["minimum"] != 1 || pp["maximum"] != 100 {
+		t.Errorf("per_page bounds = min %v max %v, want 1/100", pp["minimum"], pp["maximum"])
+	}
+	if got := props["page"].(map[string]any)["minimum"]; got != 5 {
+		t.Errorf("existing page minimum overwritten: %v", got)
+	}
+	if _, has := props["name"].(map[string]any)["minimum"]; has {
+		t.Errorf("minimum added to string prop")
+	}
+	applyCanonicalParamRanges(nil)
+	applyCanonicalParamRanges(map[string]any{"properties": "nope"})
+}

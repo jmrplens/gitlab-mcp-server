@@ -264,7 +264,7 @@ Personal todo/task list.
 
 ## Enterprise mode
 
-The Enterprise/Premium catalog enables 16 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, enterprise-only action routes are added to existing base meta-tools:
+The Enterprise/Premium catalog enables 16 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy boolean `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored as a fallback when `GITLAB_TIER`/`--tier` is unset, but are deprecated. Tier-gating also prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`). Additionally, enterprise-only action routes are added to existing base meta-tools:
 
 - **Iterations** → routed through `gitlab_issue`
 - **Project mirrors** → routed through `gitlab_project`
@@ -279,11 +279,15 @@ You can check which tools your server has registered by looking at the startup l
 
 ## Configuration
 
-| Variable             | Default  | Description                                                                                                                                                                  |
-| -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOOL_SURFACE`       | `meta`   | Canonical selector for this mode: set `meta` to use meta-tools. Set `individual` only when you intentionally want one MCP tool per GitLab operation.                         |
-| `META_TOOLS`         | legacy   | Deprecated compatibility selector: `true` maps to `meta`, and `false` maps to `individual` when `TOOL_SURFACE` is absent.                                                    |
-| `CAPABILITY_SURFACE` | `full`   | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps the `gitlab://tools` manifest, and omits optional resources, guides, and prompts. |
-| `META_PARAM_SCHEMA`  | `opaque` | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Exact action schemas are available through `gitlab://tools/{id}`.   |
-| `GITLAB_ENTERPRISE`  | `false`  | Enable enterprise-only meta-tools in stdio mode (requires Premium/Ultimate).                                                                                                 |
-| `--enterprise`       | `false`  | In HTTP mode, force enterprise-only meta-tools; omit to auto-detect CE/EE per token+URL entry.                                                                               |
+| Variable             | Default         | Description                                                                                                                                                                        |
+| -------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOOL_SURFACE`       | `meta`          | Canonical selector for this mode: set `meta` to use meta-tools. Set `individual` only when you intentionally want one MCP tool per GitLab operation.                               |
+| `META_TOOLS`         | legacy          | Deprecated compatibility selector: `true` maps to `meta`, and `false` maps to `individual` when `TOOL_SURFACE` is absent.                                                          |
+| `CAPABILITY_SURFACE` | `full`          | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps the `gitlab://tools` manifest, and omits optional resources, guides, and prompts.                         |
+| `META_PARAM_SCHEMA`  | `opaque`        | Controls how much per-action `params` schema is inlined in `tools/list`: `opaque`, `compact`, or `full`. Exact action schemas are available through `gitlab://tools/{id}`.         |
+| `GITLAB_TIER`        | _(auto-detect)_ | Edition selector: `free`/`ce`, `premium`, or `ultimate`. When unset, the tier is detected from `GET /license` (fallback `free`). Replaces the deprecated `GITLAB_ENTERPRISE` flag. |
+| `--tier`             | _(auto-detect)_ | HTTP-mode edition flag: `free`/`ce`, `premium`, or `ultimate`. Replaces the deprecated `--enterprise` flag.                                                                        |
+
+## Discovery metadata
+
+Each meta-tool action carries discovery metadata (aliases, usage, parameter guidance, related actions) that helps models choose the correct action and shape parameters. Run `go run ./cmd/audit_discovery_completeness/` to score the catalog; the auditor produces a prioritized backlog used by domain agents to fill gaps following the link-create-batch gold standard.

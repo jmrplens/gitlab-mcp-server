@@ -44,7 +44,21 @@ func FormatListMarkdown(out ListOutput) string {
 	return b.String()
 }
 
+// FormatUpdateMarkdown renders the SCIM identity update confirmation as Markdown.
+func FormatUpdateMarkdown(out UpdateOutput) string {
+	var b strings.Builder
+	b.WriteString("## SCIM Identity Updated\n\n")
+	fmt.Fprintf(&b, "- **Updated**: %t\n", out.Updated)
+	fmt.Fprintf(&b, "- **Message**: %s\n", out.Message)
+	toolutil.WriteHints(
+		&b,
+		"Use `gitlab_get_group_scim_identity` to verify the new external UID",
+	)
+	return b.String()
+}
+
 func init() {
 	toolutil.RegisterMarkdown(FormatOutputMarkdown) // Output
 	toolutil.RegisterMarkdown(FormatListMarkdown)   // ListOutput
+	toolutil.RegisterMarkdown(FormatUpdateMarkdown) // UpdateOutput
 }

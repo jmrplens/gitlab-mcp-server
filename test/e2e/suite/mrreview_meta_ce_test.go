@@ -41,7 +41,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-changes", "new.txt", "new content", "add file")
 
 	mrOut, mrErr := callToolOn[struct {
-		IID int64 `json:"merge_request_iid"`
+		IID int64 `json:"iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -130,7 +130,7 @@ func TestMeta_MRReviewDiscussionNoteUpdate(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-disc-note", "disc-branch.txt", "v2", "add branch file")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"merge_request_iid"`
+		IID int64 `json:"iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -206,7 +206,7 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "feat-draft-pub", "draft-v2.txt", "v2", "update")
 
 	mrOut, err := callToolOn[struct {
-		IID int64 `json:"merge_request_iid"`
+		IID int64 `json:"iid"`
 	}](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 		"action": "create",
 		"params": map[string]any{

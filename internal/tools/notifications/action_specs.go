@@ -70,6 +70,12 @@ func notificationOptions(name, individualTool string) toolutil.ActionSpecOptions
 		options.RelatedActions = append([]string(nil), meta.related...)
 		options.IndividualTool.Description = meta.description
 	}
+	switch name {
+	case actionGlobalUpdate, actionProjectUpdate, actionGroupUpdate:
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("level", map[string]any{"enum": []any{"disabled", "participating", "watch", "global", "mention", "custom"}}),
+		}
+	}
 	return options
 }
 

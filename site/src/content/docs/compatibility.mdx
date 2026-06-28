@@ -7,7 +7,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## GitLab edition compatibility
 
-GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks 16 additional enterprise-only meta-tools: use `GITLAB_ENTERPRISE=true` in stdio mode, or `--enterprise`/HTTP edition auto-detection in HTTP mode.
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks 16 additional enterprise-only meta-tools: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat but are deprecated.
 
 | Feature                                 | Community (CE) | Enterprise (EE) |
 | --------------------------------------- | :------------: | :-------------: |
@@ -24,7 +24,7 @@ GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition 
 | Compliance Policies                     |       ❌       |       ✅        |
 | +16 enterprise meta-tools               |       ❌       |       ✅        |
 
-To enable enterprise features in stdio mode, set `GITLAB_ENTERPRISE=true`. In HTTP mode, set `--enterprise` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition.
+To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium`/`--tier=ultimate` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition. The legacy `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat.
 
 ## Platform support
 

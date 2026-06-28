@@ -264,7 +264,7 @@ Lista personal de tareas pendientes.
 
 ## Modo Enterprise
 
-El catálogo Enterprise/Premium habilita 16 meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate. En modo stdio, configura `GITLAB_ENTERPRISE=true`; en modo HTTP, usa `--enterprise` para forzar el catálogo u omítelo para permitir autodetección CE/EE por entrada token+URL. Además, se añaden rutas de acción solo enterprise a las meta-herramientas base existentes:
+El catálogo Enterprise/Premium habilita 16 meta-herramientas adicionales que exponen funciones de GitLab Premium y Ultimate. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir autodetección CE/EE por entrada token+URL. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose como alternativa cuando `GITLAB_TIER`/`--tier` no está definido, pero están deprecados. El tier también poda entradas de esquema por campo mediante `pruneSchemaFieldsByTier` (ver `internal/tools/action_catalog.go`). Además, se añaden rutas de acción solo enterprise a las meta-herramientas base existentes:
 
 - **Iterations** → enrutadas a través de `gitlab_issue`
 - **Project mirrors** → enrutadas a través de `gitlab_project`
@@ -279,11 +279,11 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                                                                                    |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                         |
-| `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                            |
-| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene el manifiesto `gitlab://tools`, y omite recursos opcionales, guías y prompts. |
-| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.       |
-| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                         |
-| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                      |
+| Variable             | Predeterminado    | Descripción                                                                                                                                                                               |
+| -------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOOL_SURFACE`       | `meta`            | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                                    |
+| `META_TOOLS`         | heredado          | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                                       |
+| `CAPABILITY_SURFACE` | `full`            | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene el manifiesto `gitlab://tools`, y omite recursos opcionales, guías y prompts.                           |
+| `META_PARAM_SCHEMA`  | `opaque`          | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.                  |
+| `GITLAB_TIER`        | _(autodetectado)_ | Selector de edición: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). Reemplaza al flag deprecado `GITLAB_ENTERPRISE`. |
+| `--tier`             | _(autodetectado)_ | Flag de edición en modo HTTP: `free`/`ce`, `premium` o `ultimate`. Reemplaza al flag deprecado `--enterprise`.                                                                            |

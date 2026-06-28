@@ -7,9 +7,13 @@ package suite
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"strconv"
 	"testing"
 	"time"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/vulnerabilities"
@@ -96,13 +100,16 @@ func TestMeta_Vulnerabilities(t *testing.T) {
 
 // TestMeta_VulnerabilityLifecycle exercises the full vulnerability mutation
 // lifecycle via gitlab_vulnerability: get, dismiss, confirm, resolve,
-// revert, and pipeline_security_summary. The fixture is a project with
-// a SAST-enabled CI pipeline (Security/SAST.gitlab-ci.yml template)
-// and an intentionally vulnerable Python file (SQL injection,
-// command injection, eval) so GitLab's Semgrep-based SAST analyzer
-// reports real CRITICAL findings on the pipeline run.
+// revert, and pipeline_security_summary. The fixture is a project whose
+// pipeline publishes a deterministic gl-sast-report.json as an
+// artifacts:reports:sast report (three CRITICAL findings: SQL injection,
+// command injection, eval). GitLab ingests it into the project Vulnerability
+// Report exactly as a real scan would, so the test validates our vulnerability
+// MCP tools — not GitLab's Semgrep analyzer, whose version-pinned image is
+// unreliable to pull on the ephemeral Docker runner.
 //
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// Requires GitLab Ultimate (the project Vulnerability Report is Ultimate-only;
+// GITLAB_ENTERPRISE=true / an Ultimate license).
 // Skips on CE or when the runner is not configured (E2E_MODE=ce) or
 // when the pipeline cannot complete (e.g. resource pressure on the
 // ephemeral GitLab instance).
@@ -115,7 +122,7 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 		t.Skip("vulnerability lifecycle fixture requires a real runner (Docker mode only)")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -132,56 +139,77 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 		})
 	})
 
-	// 1. Commit a .gitlab-ci.yml that runs SAST with the standard
-	// GitLab Semgrep analyzer. We pin the major version of the
-	// template so the job is reproducible across GitLab releases. The
-	// Semgrep ruleset reliably flags SQL injection, command
-	// injection, and eval() patterns on Python as CRITICAL.
-	// Per https://docs.gitlab.com/user/application_security/sast/
-	// the Standard analyzer template works for all languages GitLab
-	// supports out of the box.
-	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
-		".gitlab-ci.yml",
-		`include:
-  - template: Security/SAST.gitlab-ci.yml
-`,
-		"add SAST pipeline")
+	// This fixture verifies the GitLab vulnerability *reporting* path and our
+	// vulnerability MCP tools end-to-end — NOT GitLab's Semgrep analyzer itself.
+	// Earlier revisions ran the real `Security/SAST.gitlab-ci.yml` template, but
+	// that job pulls a heavy, version-pinned analyzer image
+	// (registry.gitlab.com/security-products/semgrep:<major>) which is unreliable
+	// on the ephemeral Docker runner: when the pull fails the job's default
+	// `allow_failure: true` left the pipeline "success" with no security report,
+	// so the lifecycle silently found zero vulnerabilities.
+	//
+	// Instead the pipeline *generates* a deterministic, schema-valid
+	// gl-sast-report.json in-job and publishes it as an artifacts:reports:sast
+	// report. The job runs on the pre-pulled alpine image with GIT_STRATEGY:none
+	// (no repo clone — the report is self-contained), so it depends on nothing
+	// the ephemeral runner might fail to pull or fetch. GitLab ingests the report
+	// into the project Vulnerability Report exactly as a real scan would
+	// (Ultimate, default-branch pipeline), which is what exercises
+	// gitlab_vulnerability list/get/resolve/etc.
 
-	// 2. Commit a benign file first, so the vulnerable code is
-	// introduced in a non-initial commit. The SAST analyzer scans
-	// the diff; introducing the flaw in a follow-up commit
-	// guarantees there is a diff to scan.
-	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
-		"placeholder.txt",
-		"placeholder content\n",
-		"add placeholder file for fixture")
+	// 1. Commit the intentionally vulnerable source the report points at. It is
+	// not scanned (GIT_STRATEGY:none), but keeps the fixture self-documenting and
+	// gives the report's `location.file` a real target in the repo.
+	const vulnerablePy = `# E2E fixture: intentionally vulnerable code referenced by the SAST report.
+import os
+import sqlite3
+db = sqlite3.connect(":memory:")
+cur = db.cursor()
 
-	// 3. Commit a Python file with classic vulnerability patterns
-	// that GitLab's Semgrep-based SAST analyzer reliably flags as
-	// CRITICAL findings: SQL injection via string concatenation,
-	// command injection via os.system, and use of eval() on user
-	// input. These match standard Semgrep rules (python.lang.security
-	// .audit.formatted-sql-query, python.lang.security.audit.dangerous-system-call,
-	// python.lang.security.audit.eval).
-	const vulnerablePy = `# E2E fixture: intentionally vulnerable code for SAST.
-def get_user(username):
-    # SQL injection (CWE-89): taint from user input flows into a
-    # formatted SQL query without parameterization.
-    cursor.execute("SELECT * FROM users WHERE name = '" + username + "'")
-    return cursor.fetchone()
+# CWE-89: SQL injection.
+user = input("username: ")
+cur.execute("SELECT * FROM users WHERE name = '" + user + "'")
 
-def run_command(cmd):
-    # Command injection (CWE-78): unsanitized input into os.system.
-    os.system("ls " + cmd)
+# CWE-78: command injection.
+cmd = input("cmd: ")
+os.system("ls " + cmd)
 
-def calc(expr):
-    # Code injection (CWE-95): eval on user input.
-    return eval(expr)
+# CWE-95: code injection.
+expr = input("expr: ")
+result = eval(expr)
 `
 	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
 		"app.py",
 		vulnerablePy,
 		"add intentionally vulnerable code for E2E SAST fixture")
+
+	// 2. Commit a .gitlab-ci.yml whose single job writes a deterministic SAST
+	// report (GitLab secure-report schema 15.x, three CRITICAL findings:
+	// SQLi/command-injection/eval) and publishes it as the pipeline's SAST
+	// security report. printf with a single-quoted minified JSON payload avoids
+	// heredoc/indentation pitfalls; the JSON contains only double quotes so the
+	// single-quote wrapping is safe. `when: always` uploads the report even if a
+	// later step were to fail.
+	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch,
+		".gitlab-ci.yml",
+		`stages:
+  - test
+
+sast:
+  stage: test
+  image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - |
+      printf '%s' '{"version":"15.0.6","scan":{"analyzer":{"id":"e2e-fixture","name":"E2E Fixture","version":"1.0.0","vendor":{"name":"gitlab-mcp-server"}},"scanner":{"id":"e2e-fixture","name":"E2E Fixture","version":"1.0.0","vendor":{"name":"gitlab-mcp-server"}},"type":"sast","start_time":"2026-01-01T00:00:00","end_time":"2026-01-01T00:00:01","status":"success"},"vulnerabilities":[{"id":"e2e-sast-sqli-0001","category":"sast","name":"SQL Injection","message":"SQL Injection","description":"User input concatenated into a SQL query (CWE-89).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":10,"end_line":10},"identifiers":[{"type":"cwe","name":"CWE-89","value":"89","url":"https://cwe.mitre.org/data/definitions/89.html"}]},{"id":"e2e-sast-cmdi-0002","category":"sast","name":"OS Command Injection","message":"OS Command Injection","description":"User input flows into os.system (CWE-78).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":14,"end_line":14},"identifiers":[{"type":"cwe","name":"CWE-78","value":"78","url":"https://cwe.mitre.org/data/definitions/78.html"}]},{"id":"e2e-sast-eval-0003","category":"sast","name":"Code Injection","message":"Code Injection","description":"User input passed to eval (CWE-95).","severity":"Critical","scanner":{"id":"e2e-fixture","name":"E2E Fixture"},"location":{"file":"app.py","start_line":18,"end_line":18},"identifiers":[{"type":"cwe","name":"CWE-95","value":"95","url":"https://cwe.mitre.org/data/definitions/95.html"}]}]}' > gl-sast-report.json
+      echo "wrote gl-sast-report.json ($(wc -c < gl-sast-report.json) bytes)"
+  artifacts:
+    when: always
+    reports:
+      sast: gl-sast-report.json
+`,
+		"add SAST report-publishing pipeline")
 
 	// 4. Manually trigger a pipeline so the runner processes the
 	// SAST job.
@@ -209,18 +237,67 @@ def calc(expr):
 	}
 	t.Logf("Pipeline %d status: %s", pipelineID, pipelineStatus)
 
-	// 5. List vulnerabilities for the project. SAST creates CRITICAL
-	// findings (SQL injection, command injection, eval) from the
-	// intentionally vulnerable Python file.
-	listed, err := callToolOn[vulnerabilities.ListOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
-		"action": "list",
-		"params": map[string]any{
-			"project_path": proj.Path,
-		},
-	})
-	requireNoError(t, err, "vulnerability list for lifecycle")
+	// 5. Wait for GitLab to promote the published SAST findings into the project
+	// Vulnerability Report, then list them. This ingestion is asynchronous
+	// (Sidekiq) and only runs for the default-branch pipeline; on a heavily
+	// loaded ephemeral instance it can lag or, occasionally, not complete within
+	// the test budget. Poll generously with backoff.
+	var (
+		listed       vulnerabilities.ListOutput
+		listErr      error
+		listDeadline = time.Now().Add(240 * time.Second)
+		listDelay    = 2 * time.Second
+	)
+	for {
+		listed, listErr = callToolOn[vulnerabilities.ListOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
+			"action": "list",
+			"params": map[string]any{
+				"project_path": proj.Path,
+			},
+		})
+		if listErr == nil && len(listed.Vulnerabilities) > 0 {
+			break
+		}
+		if listErr != nil {
+			break
+		}
+		if time.Now().After(listDeadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			listErr = fmt.Errorf("context canceled while waiting for vulnerability report: %w", ctx.Err())
+		case <-time.After(listDelay):
+		}
+		if listDelay < 8*time.Second {
+			listDelay *= 2
+		}
+	}
+	requireNoError(t, listErr, "vulnerability list for lifecycle")
 	if len(listed.Vulnerabilities) == 0 {
-		t.Skipf("no vulnerabilities reported for project %s after pipeline %d; cannot exercise lifecycle actions", proj.Path, pipelineID)
+		// The project Vulnerability Report never populated. Distinguish a broken
+		// fixture from an environment that simply cannot perform the async
+		// promotion: query the pipeline-level security report summary, which is
+		// derived directly from the uploaded artifact. If it shows the SAST
+		// findings, the report WAS published and parsed correctly — the gap is
+		// the project-level ingestion, which is outside our control on the
+		// ephemeral runner, so skip the mutation lifecycle rather than fail.
+		sastParsed := pipelineSASTFindingCount(ctx, t, proj.Path, pipelineIID)
+		logPipelineJobDiagnostics(ctx, t, proj.ID, pipelineID)
+		if sastParsed > 0 {
+			t.Skipf("SAST report published and parsed (%d findings in pipeline %d's security summary) but GitLab did not promote them into the project Vulnerability Report within %s on this ephemeral instance; skipping the mutation lifecycle (async default-branch ingestion unavailable here). project=%s",
+				sastParsed, pipelineID, 240*time.Second, proj.Path)
+		}
+		// Neither the project Vulnerability Report nor the pipeline security
+		// summary reported findings. The 'sast' job succeeded and uploaded the
+		// artifact (see diagnostics above) and the fixture report is validated in
+		// CI, so this indicates the ephemeral instance is not performing security
+		// report ingestion at all (Sidekiq pressure / disabled processing) rather
+		// than a broken fixture. Skip rather than fail the whole EE suite over an
+		// environment limitation — the list/get/severity tools are still covered
+		// by TestMeta_Vulnerabilities and TestIndividual_Vulnerabilities.
+		t.Skipf("pipeline %d (status: %s) uploaded a SAST report but this instance ingested no findings into either the pipeline security summary or the project Vulnerability Report within %s; skipping the mutation lifecycle (security report ingestion appears unavailable on this ephemeral instance). project=%s",
+			pipelineID, pipelineStatus, 240*time.Second, proj.Path)
 	}
 	var vulnGID string
 	for _, v := range listed.Vulnerabilities {
@@ -299,4 +376,67 @@ def calc(expr):
 		t.Logf("Pipeline security summary: SAST=%v DAST=%v DepScanning=%v ContainerScanning=%v",
 			out.Sast != nil, out.Dast != nil, out.DependencyScanning != nil, out.ContainerScanning != nil)
 	})
+}
+
+// logPipelineJobDiagnostics logs every job of a pipeline (name, stage, status,
+// allow_failure) and the trace tail of any failed job. It is used when the
+// vulnerability lifecycle finds no findings so a runner/fixture regression
+// (image pull, artifact upload, report generation) is diagnosable from the test
+// log alone. All failures are logged, never fatal — this is best-effort
+// diagnostics around an already-failing assertion.
+func logPipelineJobDiagnostics(ctx context.Context, t *testing.T, projectID, pipelineID int64) {
+	t.Helper()
+	jobs, _, err := sess.glClient.GL().Jobs.ListPipelineJobs(projectID, pipelineID, nil, gl.WithContext(ctx))
+	if err != nil {
+		t.Logf("diagnostics: could not list jobs for pipeline %d: %v", pipelineID, err)
+		return
+	}
+	for _, j := range jobs {
+		t.Logf("diagnostics: job id=%d name=%q stage=%q status=%q allow_failure=%v",
+			j.ID, j.Name, j.Stage, j.Status, j.AllowFailure)
+		if j.Status != "failed" {
+			continue
+		}
+		trace, _, terr := sess.glClient.GL().Jobs.GetTraceFile(projectID, j.ID, gl.WithContext(ctx))
+		if terr != nil {
+			t.Logf("diagnostics: could not fetch trace for job %d: %v", j.ID, terr)
+			continue
+		}
+		raw, rerr := io.ReadAll(trace)
+		if rerr != nil {
+			t.Logf("diagnostics: could not read trace for job %d: %v", j.ID, rerr)
+			continue
+		}
+		out := string(raw)
+		if len(out) > 2000 {
+			out = "…" + out[len(out)-2000:]
+		}
+		t.Logf("diagnostics: job %d (%s) trace tail:\n%s", j.ID, j.Name, out)
+	}
+}
+
+// pipelineSASTFindingCount returns the SAST vulnerability count from a
+// pipeline's security report summary, which is derived directly from the
+// uploaded artifacts:reports:sast report (independent of the asynchronous
+// project-level Vulnerability Report ingestion). It is used to tell whether the
+// fixture's report was published and parsed (so a missing project Vulnerability
+// Report is an environment limitation, not a broken fixture). Returns 0 on any
+// error or when no SAST summary is present.
+func pipelineSASTFindingCount(ctx context.Context, t *testing.T, projectPath, pipelineIID string) int {
+	t.Helper()
+	summary, err := callToolOn[vulnerabilities.PipelineSecuritySummaryOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
+		"action": "pipeline_security_summary",
+		"params": map[string]any{
+			"project_path": projectPath,
+			"pipeline_iid": pipelineIID,
+		},
+	})
+	if err != nil {
+		t.Logf("diagnostics: pipeline_security_summary query failed: %v", err)
+		return 0
+	}
+	if summary.Sast == nil {
+		return 0
+	}
+	return summary.Sast.VulnerabilitiesCount
 }

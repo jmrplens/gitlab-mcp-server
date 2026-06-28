@@ -17,11 +17,11 @@ MCP lista por separado los recursos fijos y las plantillas de URI. En modo full,
 
 ### Recursos estáticos (3)
 
-| Recurso                    | Descripción                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `gitlab://user/current`    | Perfil del usuario autenticado (nombre de usuario, email, estado, administrador)                                          |
-| `gitlab://groups`          | Todos los grupos GitLab accesibles para el usuario autenticado                                                            |
-| `gitlab://tools`           | Manifiesto dependiente de superficie con herramientas visibles y entradas ejecutables                                     |
+| Recurso                 | Descripción                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `gitlab://user/current` | Perfil del usuario autenticado (nombre de usuario, email, estado, administrador)      |
+| `gitlab://groups`       | Todos los grupos GitLab accesibles para el usuario autenticado                        |
+| `gitlab://tools`        | Manifiesto dependiente de superficie con herramientas visibles y entradas ejecutables |
 
 ### Plantilla de recurso de manifiesto de herramientas (1)
 
@@ -269,8 +269,8 @@ El servidor devuelve un prompt estructurado con contenido consciente del context
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                             |
-| -------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Variable             | Predeterminado | Descripción                                                                                      |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
 | `CAPABILITY_SURFACE` | `full`         | `full` registra recursos, guías, prompts y `gitlab://tools`; `minimal` mantiene `gitlab://tools` |
 
 :::tip

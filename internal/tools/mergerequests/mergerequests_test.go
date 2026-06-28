@@ -1792,9 +1792,9 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		IID: 1, Title: "feat: new login", State: testStateOpened,
 		SourceBranch: testFeatureBranch, TargetBranch: testBranchMain,
 		DetailedMergeStatus: "can_be_merged", Draft: true, HasConflicts: true,
-		Author:    &BasicUserOutput{Username: testAuthorAlice},
-		Assignees: []*BasicUserOutput{{Username: testAuthorBob}, {Username: testAuthorCarol}},
-		Reviewers: []*BasicUserOutput{{Username: "dave"}}, Labels: []string{testLabelBug, "enhancement"},
+		Author:    &toolutil.BasicUserOutput{Username: testAuthorAlice},
+		Assignees: []*toolutil.BasicUserOutput{{Username: testAuthorBob}, {Username: testAuthorCarol}},
+		Reviewers: []*toolutil.BasicUserOutput{{Username: "dave"}}, Labels: []string{testLabelBug, "enhancement"},
 		CreatedAt: testCreatedAt, UserNotesCount: 5,
 		Description: "Full description here", WebURL: testMRWebURL,
 	})
@@ -1822,8 +1822,8 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
-			{IID: 1, Title: "MR1", State: testStateOpened, Draft: true, Author: &BasicUserOutput{Username: testAuthorAlice}, SourceBranch: "a", TargetBranch: "b"},
-			{IID: 2, Title: "MR2", State: testStateMerged, Author: &BasicUserOutput{Username: testAuthorBob}, SourceBranch: "c", TargetBranch: "d"},
+			{IID: 1, Title: "MR1", State: testStateOpened, Draft: true, Author: &toolutil.BasicUserOutput{Username: testAuthorAlice}, SourceBranch: "a", TargetBranch: "b"},
+			{IID: 2, Title: "MR2", State: testStateMerged, Author: &toolutil.BasicUserOutput{Username: testAuthorBob}, SourceBranch: "c", TargetBranch: "d"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
@@ -1970,7 +1970,7 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
 		Issues: []issues.Output{
-			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &issues.IssueAuthorOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
+			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -2016,8 +2016,10 @@ func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
 // TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
-		HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
-		TimeEstimate: 10800, TotalTimeSpent: 5400,
+		TimeStatsOutput: toolutil.TimeStatsOutput{
+			HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
+			TimeEstimate: 10800, TotalTimeSpent: 5400,
+		},
 	})
 	for _, want := range []string{"3h", "10800", "1h30m", "5400"} {
 		if !strings.Contains(md, want) {
@@ -2041,7 +2043,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
 		Issues: []issues.Output{
-			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &issues.IssueAuthorOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
+			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -2088,7 +2090,7 @@ func TestFormatListMarkdown_ClickableMRLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
 			{
-				IID: 7, Title: "MR7", State: testStateOpened, Author: &BasicUserOutput{Username: testAuthorAlice},
+				IID: 7, Title: "MR7", State: testStateOpened, Author: &toolutil.BasicUserOutput{Username: testAuthorAlice},
 				WebURL: "https://gitlab.example.com/mr/7", SourceBranch: "a", TargetBranch: "b",
 			},
 		},
@@ -4163,10 +4165,10 @@ func TestFormatMarkdown_MergedState(t *testing.T) {
 		IID: 5, Title: "merged MR", State: "merged",
 		SourceBranch: "feat", TargetBranch: "main",
 		DetailedMergeStatus: "merged",
-		References:          &ReferencesOutput{Full: "group/project!5"},
-		Milestone:           &MilestoneOutput{Title: "v1.0"},
-		Pipeline:            &PipelineInfoOutput{ID: 42, WebURL: "https://pipeline"},
-		ChangesCount:        "3", MergeUser: &BasicUserOutput{Username: "alice"}, MergedAt: testCreatedAt,
+		References:          &toolutil.ReferencesOutput{Full: "group/project!5"},
+		Milestone:           &toolutil.MRMilestoneOutput{Title: "v1.0"},
+		Pipeline:            &toolutil.PipelineInfoOutput{ID: 42, WebURL: "https://pipeline"},
+		ChangesCount:        "3", MergeUser: &toolutil.BasicUserOutput{Username: "alice"}, MergedAt: testCreatedAt,
 	})
 	for _, want := range []string{"group/project", "v1.0", "[#42](https://pipeline)", "3 files", "@alice"} {
 		if !strings.Contains(md, want) {
@@ -4182,8 +4184,8 @@ func TestFormatMarkdown_ClosedState(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 6, Title: "closed MR", State: "closed",
 		SourceBranch: "fix", TargetBranch: "main", DetailedMergeStatus: "cannot_be_merged",
-		ClosedBy: &BasicUserOutput{Username: "bob"}, ClosedAt: testCreatedAt,
-		Pipeline: &PipelineInfoOutput{ID: 99},
+		ClosedBy: &toolutil.BasicUserOutput{Username: "bob"}, ClosedAt: testCreatedAt,
+		Pipeline: &toolutil.PipelineInfoOutput{ID: 99},
 	})
 	if !strings.Contains(md, "@bob") {
 		t.Error("expected closed-by in output")
@@ -4710,28 +4712,28 @@ func TestShapeConverters_EdgeBranches(t *testing.T) {
 		t.Errorf("labelOptionsToStrings = %v, want 2", got)
 	}
 	// basicUserOutputs: nil-element skipped and all-nil collapses to nil.
-	if got := basicUserOutputs([]*gl.BasicUser{nil}); got != nil {
-		t.Errorf("basicUserOutputs(all-nil) = %v, want nil", got)
+	if got := toolutil.NewBasicUserOutputs([]*gl.BasicUser{nil}); got != nil {
+		t.Errorf("toolutil.NewBasicUserOutputs(all-nil) = %v, want nil", got)
 	}
-	mixed := basicUserOutputs([]*gl.BasicUser{nil, {Username: "x"}})
+	mixed := toolutil.NewBasicUserOutputs([]*gl.BasicUser{nil, {Username: "x"}})
 	if len(mixed) != 1 || mixed[0].Username != "x" {
-		t.Errorf("basicUserOutputs(mixed) = %v, want [x]", mixed)
+		t.Errorf("toolutil.NewBasicUserOutputs(mixed) = %v, want [x]", mixed)
 	}
 	// labelDetailsOutputs: empty -> nil, all-nil -> nil, populated path.
-	if got := labelDetailsOutputs(nil); got != nil {
-		t.Errorf("labelDetailsOutputs(nil) = %v, want nil", got)
+	if got := toolutil.NewLabelDetailsOutputs(nil); got != nil {
+		t.Errorf("toolutil.NewLabelDetailsOutputs(nil) = %v, want nil", got)
 	}
-	if got := labelDetailsOutputs([]*gl.LabelDetails{nil}); got != nil {
-		t.Errorf("labelDetailsOutputs(all-nil) = %v, want nil", got)
+	if got := toolutil.NewLabelDetailsOutputs([]*gl.LabelDetails{nil}); got != nil {
+		t.Errorf("toolutil.NewLabelDetailsOutputs(all-nil) = %v, want nil", got)
 	}
-	ld := labelDetailsOutputs([]*gl.LabelDetails{nil, {ID: 1, Name: "bug"}})
+	ld := toolutil.NewLabelDetailsOutputs([]*gl.LabelDetails{nil, {ID: 1, Name: "bug"}})
 	if len(ld) != 1 || ld[0].Name != "bug" {
-		t.Errorf("labelDetailsOutputs(mixed) = %v, want [bug]", ld)
+		t.Errorf("toolutil.NewLabelDetailsOutputs(mixed) = %v, want [bug]", ld)
 	}
-	if got := pipelineDetailedStatusOutput(nil); got != nil {
-		t.Errorf("pipelineDetailedStatusOutput(nil) = %v, want nil", got)
+	if got := toolutil.NewPipelineDetailedStatusOutput(nil); got != nil {
+		t.Errorf("toolutil.NewPipelineDetailedStatusOutput(nil) = %v, want nil", got)
 	}
-	if got := pipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Text != "running" {
+	if got := toolutil.NewPipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Text != "running" {
 		t.Errorf("pipelineDetailedStatusOutput = %v, want text running", got)
 	}
 }
@@ -4740,10 +4742,10 @@ func TestShapeConverters_EdgeBranches(t *testing.T) {
 // converter maps the SDK illustration object onto the canonical illustration
 // key when an image is present and leaves it nil when the image is empty.
 func TestPipelineDetailedStatusOutput_Illustration(t *testing.T) {
-	if got := pipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Illustration != nil {
+	if got := toolutil.NewPipelineDetailedStatusOutput(&gl.DetailedStatus{Text: "running"}); got == nil || got.Illustration != nil {
 		t.Errorf("pipelineDetailedStatusOutput (no illustration) = %v, want nil illustration", got)
 	}
-	withIllustration := pipelineDetailedStatusOutput(&gl.DetailedStatus{
+	withIllustration := toolutil.NewPipelineDetailedStatusOutput(&gl.DetailedStatus{
 		Text:         "failed",
 		Illustration: gl.DetailedStatusIllustration{Image: "https://example.com/img.svg"},
 	})
@@ -4756,13 +4758,13 @@ func TestPipelineDetailedStatusOutput_Illustration(t *testing.T) {
 // TestMarkdownHelpers_EdgeBranches exercises the nil/empty branches of the
 // markdown helper functions added for the output migration.
 func TestMarkdownHelpers_EdgeBranches(t *testing.T) {
-	if got := mrProjectPath(Output{References: &ReferencesOutput{Full: "noseparator"}}); got != "" {
+	if got := mrProjectPath(Output{References: &toolutil.ReferencesOutput{Full: "noseparator"}}); got != "" {
 		t.Errorf("mrProjectPath(no-sep) = %q, want empty", got)
 	}
 	if got := userName(nil); got != "" {
 		t.Errorf("userName(nil) = %q, want empty", got)
 	}
-	if got := userNames([]*BasicUserOutput{nil, {Username: "x"}}); len(got) != 1 || got[0] != "x" {
+	if got := userNames([]*toolutil.BasicUserOutput{nil, {Username: "x"}}); len(got) != 1 || got[0] != "x" {
 		t.Errorf("userNames(mixed) = %v, want [x]", got)
 	}
 }

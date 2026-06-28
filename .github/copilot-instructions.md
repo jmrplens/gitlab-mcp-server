@@ -229,7 +229,12 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
 | `AUTO_UPDATE_TIMEOUT`    | Startup/background update timeout (range 5s–10m) | `60s` (default)    |
-| `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition | `false` (default) |
+| `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
+| `GITLAB_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
+| `EVAL_SURFACE_ENTERPRISE` | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus | `false` (default)  |
+| `EVAL_SURFACE_CASE_SET`   | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only), `all` (CE+Enterprise) | `ce` (default)     |
+| `EVAL_SURFACE_FIXTURE_SMOKE` | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) | `false` (default) |
+| `--max-output-retries`   | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output | `2` (default)      |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |
 | `RATE_LIMIT_RPS`         | Per-server tools/call rate limit in req/s (also `--rate-limit-rps` flag; `0` = disabled) | `0` (default)    |

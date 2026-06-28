@@ -83,8 +83,26 @@ func FormatTestMarkdown(output TestOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
+// FormatGetMarkdown formats a single system_hook_get response.
+func FormatGetMarkdown(output GetOutput) *mcp.CallToolResult {
+	return FormatHookMarkdown(output.Hook)
+}
+
+// FormatAddMarkdown formats a single system_hook_add response.
+func FormatAddMarkdown(output AddOutput) *mcp.CallToolResult {
+	return FormatHookMarkdown(output.Hook)
+}
+
+// FormatEditMarkdown formats a single system_hook_edit response.
+func FormatEditMarkdown(output EditOutput) *mcp.CallToolResult {
+	return FormatHookMarkdown(output.Hook)
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(FormatListMarkdown)
 	toolutil.RegisterMarkdownResult(FormatHookMarkdown)
 	toolutil.RegisterMarkdownResult(FormatTestMarkdown)
+	toolutil.RegisterMarkdownResult(FormatGetMarkdown)
+	toolutil.RegisterMarkdownResult(FormatAddMarkdown)
+	toolutil.RegisterMarkdownResult(FormatEditMarkdown)
 }
