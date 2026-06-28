@@ -6,7 +6,7 @@
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
+	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -455,7 +455,7 @@ audit-docs:
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_testing_docs/ --check
 	$(MAKE) check-doc-links
-	go run ./cmd/audit_godocs/
+	go run ./cmd/godoc_tool/ audit
 	go run ./cmd/audit_surface_quality/ -view=metadata
 	go run ./cmd/audit_dynamic_aliases/
 	go run ./cmd/audit_surface_quality/ -view=output
@@ -792,12 +792,17 @@ audit-test-names:
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
-	go run ./cmd/audit_godocs/ --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
+	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
 	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
 
 ## audit-godocs-check: fail when package, symbol, or test Godoc findings remain.
 audit-godocs-check:
-	go run ./cmd/audit_godocs/ --include-tests --fail-on-findings
+	go run ./cmd/godoc_tool/ audit --include-tests --fail-on-findings
+
+## fix-godocs: generate and insert godoc-compliant comments for the given paths.
+## Use --dry-run to preview changes without writing (e.g. make fix-godocs ARGS="--dry-run internal/tools/").
+fix-godocs:
+	go run ./cmd/godoc_tool/ fix $(ARGS)
 
 ## docs-local-go: serve local pkg.go.dev-style documentation at http://127.0.0.1:6060.
 docs-local-go:

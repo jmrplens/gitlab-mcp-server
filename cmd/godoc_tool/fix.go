@@ -1,7 +1,5 @@
-// Command add_docs adds godoc-compliant doc comments to Go source and test
-// files that are missing documentation. It uses go/ast to parse files,
-// identify undocumented symbols (functions, types, methods), and inserts
-// context-aware doc comments based on naming conventions.
+// Fix generates and inserts godoc-compliant comments (formerly add_docs).
+
 package main
 
 import (
@@ -59,17 +57,6 @@ var generatedDocMarkerPairs = [][2]string{
 	{" names the ", " value shared by this package."},
 	{" stores the ", " value."},
 	{" provides the ", " value shared by this package."},
-}
-
-// main walks the specified paths and adds godoc comments to undocumented symbols.
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/add_docs/ <path>...")
-		os.Exit(1)
-	}
-	for _, path := range os.Args[1:] {
-		processPath(path)
-	}
 }
 
 // processPath processes a Go file or recursively processes a directory.
@@ -153,6 +140,11 @@ func processFile(path string) {
 	result := strings.Join(lines, "\n")
 	if !strings.HasSuffix(result, "\n") {
 		result += "\n"
+	}
+
+	if dryRun {
+		fmt.Printf("// dry-run: would update %s (%d insertions)\n", cleanPath, len(insertions))
+		return
 	}
 
 	err = os.WriteFile(cleanPath, []byte(result), 0o600) //#nosec G703 -- CLI tool, paths from args

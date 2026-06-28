@@ -43,13 +43,13 @@ The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `q
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
-│   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
+│   ├── find_dupes/              # Finds duplicated string literals missing constants
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META + merge)
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
 │   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
-│   ├── audit_godocs/            # Audits Go documentation coverage
+│   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
 │   ├── audit_test_names/        # Audits test function naming convention compliance

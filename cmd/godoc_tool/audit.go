@@ -1,21 +1,5 @@
-// Command audit_godocs audits Go package and symbol documentation.
-//
-// It parses the repository with go/parser and go/doc, then reports package
-// comments, exported symbol comments, and optional test documentation issues in
-// Markdown or JSON format.
-//
-// Usage:
-//
-//	go run ./cmd/audit_godocs/ --format=markdown
-//	go run ./cmd/audit_godocs/ --include-tests --fail-on-findings
-//
-// # Reported Categories
-//
-// Findings are grouped by package comments, exported declarations, and optional
-// test declarations. Package findings catch missing, malformed, or duplicated
-// package comments; symbol findings catch exported declarations without useful
-// comments; and test findings catch Test, Benchmark, Fuzz, and Example functions
-// whose comments are missing or do not start with the function name.
+// Audit finds missing or malformed Go doc comments (formerly audit_godocs).
+
 package main
 
 import (
@@ -119,13 +103,6 @@ type report struct {
 	Findings     []finding      `json:"findings"`
 	ByCategory   map[string]int `json:"by_category"`
 	ByPackage    map[string]int `json:"by_package"`
-}
-
-func main() {
-	if err := run(os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
 
 // run parses CLI arguments, audits packages, writes the report, and optionally
