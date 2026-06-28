@@ -11,7 +11,7 @@
 
 ## Overview
 
-The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, changes/diffs, and context commits.
+The merge requests domain covers the full lifecycle of GitLab merge requests: creation, retrieval, listing (project/group/global), updating, merging, rebasing, approval workflows, deletion, subscriptions, time tracking, dependencies, and context commits. File-level diffs and raw diffs are documented in [mr-review.md](mr-review.md).
 
 With `TOOL_SURFACE=meta`, all 44 individual tools below are consolidated into a single `gitlab_merge_request` meta-tool that dispatches by `action` parameter.
 
@@ -350,35 +350,37 @@ Delete an approval rule from a GitLab merge request. Requires project_id, merge_
 
 ---
 
-## Changes & Diffs
+## MR Approval Settings (Premium)
 
-### `gitlab_mr_changes_get`
+Group- and project-level policies that gate merge request approval. These differ from per-MR approval rules (`gitlab_mr_approval_*`): they set the inherited default policy and can lock descendants against override. Requires GitLab Premium or Ultimate.
 
-Get the list of file diffs (changes) for a merge request. Returns old/new paths, diff content, file status (added/deleted/renamed), and file modes.
+### `gitlab_get_group_mr_approval_settings`
 
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_mr_diff_versions_list`
-
-List all diff versions of a merge request. Each version represents the state of diffs at a particular point in the MR lifecycle. Returns version IDs, SHAs, state, and creation timestamps.
+Read the merge request approval settings of a group. Returns each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. Use this to inspect inherited and locked approval policy before updating a group or any of its projects. Requires GitLab Premium.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_mr_diff_version_get`
+### `gitlab_update_group_mr_approval_settings`
 
-Get a single merge request diff version with its commits and file diffs. Use the version_id from gitlab_mr_diff_versions_list. Optionally request unified diff format.
+Update the merge request approval settings of a group. Set only the fields you want to change; omitted fields are left unchanged. Group-level changes can lock the corresponding setting for projects in the group. Requires GitLab Premium.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_get_project_mr_approval_settings`
+
+Read the merge request approval settings of a project. Returns each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. Use this to inspect the effective approval policy, including which settings are locked by the parent group. Requires GitLab Premium.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-### `gitlab_mr_raw_diffs`
+### `gitlab_update_project_mr_approval_settings`
 
-Get the raw unified-diff output for a merge request. Returns plain-text diff content suitable for git-apply. Useful for programmatic diff analysis or patch application.
+Update the merge request approval settings of a project. Set only the fields you want to change; omitted fields are left unchanged. Settings locked by the parent group cannot be overridden here. Requires GitLab Premium.
 
-| Annotation | **Read** |
-| ---------- | -------- |
+| Annotation | **Update** |
+| ---------- | ---------- |
 
 ---
 
@@ -409,78 +411,78 @@ Remove context commits from a merge request.
 
 ---
 
-## Merge Trains
+## Merge Trains (Premium)
 
 ### `gitlab_list_project_merge_trains`
 
-List all merge trains for a project. Returns merge train entries with ID, merge request, user, pipeline, target branch, status, and duration.
+List all merge trains for a project. Returns merge train entries with ID, merge request, user, pipeline, target branch, status, and duration. Requires GitLab Premium.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_merge_request_in_merge_train`
 
-List merge requests in a merge train for a specific target branch. Supports filtering by scope (`active`, `complete`) and sorting.
+List merge requests in a merge train for a specific target branch. Supports filtering by scope (`active`, `complete`) and sorting. Requires GitLab Premium.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_get_merge_request_on_merge_train`
 
-Get the merge train status for a specific merge request, including ID, status, target branch, and duration.
+Get the merge train status for a specific merge request, including ID, status, target branch, and duration. Requires GitLab Premium.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_add_merge_request_to_merge_train`
 
-Add a merge request to a merge train. Supports auto-merge, SHA verification, and squash options.
+Add a merge request to a merge train. Supports auto-merge, SHA verification, and squash options. Requires GitLab Premium.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ---
 
-## External Status Checks
+## External Status Checks (Ultimate)
 
 ### `gitlab_list_project_status_checks`
 
-List project-level external status checks. Returns paginated list with ID, name, external URL, HMAC, and protected branches.
+List project-level external status checks. Returns paginated list with ID, name, external URL, HMAC, and protected branches. Requires GitLab Ultimate.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_project_mr_external_status_checks`
 
-List external status checks for a project merge request.
+List external status checks for a project merge request. Requires GitLab Ultimate.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_project_external_status_checks`
 
-List external status checks configured for a project.
+List external status checks configured for a project. Requires GitLab Ultimate.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_create_project_external_status_check`
 
-Create an external status check for a project. Requires name and external URL.
+Create an external status check for a project. Requires name and external URL. Requires GitLab Ultimate.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_update_project_external_status_check`
 
-Update an external status check for a project.
+Update an external status check for a project. Requires GitLab Ultimate.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
 
 ### `gitlab_delete_project_external_status_check`
 
-Delete an external status check from a project.
+Delete an external status check from a project. Requires GitLab Ultimate.
 
 | Annotation | **Delete** |
 | ---------- | ---------- |
@@ -489,14 +491,14 @@ Delete an external status check from a project.
 
 ### `gitlab_retry_failed_external_status_check_for_project_mr`
 
-Retry a failed external status check for a project merge request.
+Retry a failed external status check for a project merge request. Requires GitLab Ultimate.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
 
 ### `gitlab_set_project_mr_external_status_check_status`
 
-Set the status of an external status check for a project merge request.
+Set the status of an external status check for a project merge request. Requires GitLab Ultimate.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -544,10 +546,10 @@ Set the status of an external status check for a project merge request.
 | 35 | `gitlab_mr_approval_rule_create` | Approval Rules | Create |
 | 36 | `gitlab_mr_approval_rule_update` | Approval Rules | Update |
 | 37 | `gitlab_mr_approval_rule_delete` | Approval Rules | Delete |
-| 38 | `gitlab_mr_changes_get` | Changes & Diffs | Read |
-| 39 | `gitlab_mr_diff_versions_list` | Changes & Diffs | Read |
-| 40 | `gitlab_mr_diff_version_get` | Changes & Diffs | Read |
-| 41 | `gitlab_mr_raw_diffs` | Changes & Diffs | Read |
+| 38 | `gitlab_get_group_mr_approval_settings` | MR Approval Settings | Read |
+| 39 | `gitlab_update_group_mr_approval_settings` | MR Approval Settings | Update |
+| 40 | `gitlab_get_project_mr_approval_settings` | MR Approval Settings | Read |
+| 41 | `gitlab_update_project_mr_approval_settings` | MR Approval Settings | Update |
 | 42 | `gitlab_list_mr_context_commits` | Context Commits | Read |
 | 43 | `gitlab_create_mr_context_commits` | Context Commits | Create |
 | 44 | `gitlab_delete_mr_context_commits` | Context Commits | Delete |
@@ -581,7 +583,9 @@ The following tools are annotated with `DestructiveHint: true` or require user c
 
 - [GitLab Merge Requests API](https://docs.gitlab.com/ee/api/merge_requests.html)
 - [GitLab Merge Request Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)
-- [GitLab Merge Request Diffs API](https://docs.gitlab.com/ee/api/merge_request_diffs.html)
 - [GitLab Merge Request Context Commits API](https://docs.gitlab.com/ee/api/merge_request_context_commits.html)
 - [GitLab Merge Trains API](https://docs.gitlab.com/ee/api/merge_trains.html)
 - [GitLab External Status Checks API](https://docs.gitlab.com/ee/api/status_checks.html)
+- [GitLab Group MR Approval Settings API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html)
+- [GitLab Project MR Approval Settings API](https://docs.gitlab.com/ee/api/project_level_mr_approvals.html)
+- [MR Review — Tool Reference](mr-review.md)

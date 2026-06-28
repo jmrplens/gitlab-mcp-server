@@ -408,29 +408,3 @@ List the users provisioned via SAML SSO for a top-level group. Supports filterin
 | `created_before` | string     |    No    | Return users created before this RFC3339 timestamp |
 
 **Annotation**: Read
-
----
-
-## Meta-Tool Reference
-
-With `TOOL_SURFACE=meta`, the following meta-tools replace the individual tools above:
-
-### `gitlab_group_scim`
-
-Manage SCIM identities for a group (enterprise-only, requires the Enterprise/Premium catalog). Actions: `list`, `get`, `update`, `delete`.
-
-### `gitlab_group_ssh_certificate`
-
-SSH certificate management is now available as enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog). Actions: `ssh_certificate_list`, `ssh_certificate_create`, `ssh_certificate_delete`.
-
-### `gitlab_security_settings`
-
-Security settings are now available as enterprise-only routes split between **`gitlab_project`** and **`gitlab_group`** (requires the Enterprise/Premium catalog). Project actions: `security_settings_get`, `security_settings_update`. Group actions: `security_settings_update`.
-
-### `gitlab_member_role`
-
-Manage custom member roles at instance and group level (enterprise-only, requires the Enterprise/Premium catalog). Actions: `list_instance`, `create_instance`, `delete_instance`, `list_group`, `create_group`, `delete_group`.
-
-### `gitlab_group_credential`
-
-Group credential management is now available as enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog). Actions: `credential_list_pats`, `credential_list_ssh_keys`, `credential_revoke_pat`, `credential_delete_ssh_key`.

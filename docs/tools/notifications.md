@@ -2,9 +2,9 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Notifications & Events
-> **Individual tools**: 48
-> **Meta-tools**: `gitlab_notification`, `gitlab_event`, `gitlab_resource_event`, `gitlab_award_emoji` (`TOOL_SURFACE=meta` catalog)
-> **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Events](https://docs.gitlab.com/ee/api/events.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
+> **Individual tools**: 42
+> **Meta-tools**: `gitlab_notification`, `gitlab_resource_event`, `gitlab_award_emoji` (`TOOL_SURFACE=meta` catalog)
+> **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
@@ -81,19 +81,7 @@ Update notification settings for a specific group.
 
 ## Events
 
-### `gitlab_project_event_list`
-
-List all visible events for a project. Supports filtering by action type, target type, date range, sort order, and pagination.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_user_contribution_event_list`
-
-List contribution events for the authenticated user. Supports filtering by action type, target type, date range, sort order, scope, and pagination.
-
-| Annotation | **Read** |
-| ---------- | -------- |
+Project and user contribution event listings are documented under [Users & Todos — Events](users.md#events).
 
 ---
 
@@ -407,44 +395,42 @@ Delete an award emoji from a project snippet note.
 | 4 | `gitlab_notification_global_update` | Notifications | Update |
 | 5 | `gitlab_notification_project_update` | Notifications | Update |
 | 6 | `gitlab_notification_group_update` | Notifications | Update |
-| 7 | `gitlab_project_event_list` | Events | Read |
-| 8 | `gitlab_user_contribution_event_list` | Events | Read |
-| 9 | `gitlab_issue_label_event_list` | Resource Events | Read |
-| 10 | `gitlab_issue_label_event_get` | Resource Events | Read |
-| 11 | `gitlab_mr_label_event_list` | Resource Events | Read |
-| 12 | `gitlab_mr_label_event_get` | Resource Events | Read |
-| 13 | `gitlab_issue_milestone_event_list` | Resource Events | Read |
-| 14 | `gitlab_issue_milestone_event_get` | Resource Events | Read |
-| 15 | `gitlab_mr_milestone_event_list` | Resource Events | Read |
-| 16 | `gitlab_mr_milestone_event_get` | Resource Events | Read |
-| 17 | `gitlab_issue_state_event_list` | Resource Events | Read |
-| 18 | `gitlab_issue_state_event_get` | Resource Events | Read |
-| 19 | `gitlab_mr_state_event_list` | Resource Events | Read |
-| 20 | `gitlab_mr_state_event_get` | Resource Events | Read |
-| 21 | `gitlab_issue_emoji_list` | Award Emoji | Read |
-| 22 | `gitlab_issue_emoji_get` | Award Emoji | Read |
-| 23 | `gitlab_issue_emoji_create` | Award Emoji | Create |
-| 24 | `gitlab_issue_emoji_delete` | Award Emoji | Delete |
-| 25 | `gitlab_issue_note_emoji_list` | Award Emoji | Read |
-| 26 | `gitlab_issue_note_emoji_get` | Award Emoji | Read |
-| 27 | `gitlab_issue_note_emoji_create` | Award Emoji | Create |
-| 28 | `gitlab_issue_note_emoji_delete` | Award Emoji | Delete |
-| 29 | `gitlab_mr_emoji_list` | Award Emoji | Read |
-| 30 | `gitlab_mr_emoji_get` | Award Emoji | Read |
-| 31 | `gitlab_mr_emoji_create` | Award Emoji | Create |
-| 32 | `gitlab_mr_emoji_delete` | Award Emoji | Delete |
-| 33 | `gitlab_mr_note_emoji_list` | Award Emoji | Read |
-| 34 | `gitlab_mr_note_emoji_get` | Award Emoji | Read |
-| 35 | `gitlab_mr_note_emoji_create` | Award Emoji | Create |
-| 36 | `gitlab_mr_note_emoji_delete` | Award Emoji | Delete |
-| 37 | `gitlab_snippet_emoji_list` | Award Emoji | Read |
-| 38 | `gitlab_snippet_emoji_get` | Award Emoji | Read |
-| 39 | `gitlab_snippet_emoji_create` | Award Emoji | Create |
-| 40 | `gitlab_snippet_emoji_delete` | Award Emoji | Delete |
-| 41 | `gitlab_snippet_note_emoji_list` | Award Emoji | Read |
-| 42 | `gitlab_snippet_note_emoji_get` | Award Emoji | Read |
-| 43 | `gitlab_snippet_note_emoji_create` | Award Emoji | Create |
-| 44 | `gitlab_snippet_note_emoji_delete` | Award Emoji | Delete |
+| 7 | `gitlab_issue_label_event_list` | Resource Events | Read |
+| 8 | `gitlab_issue_label_event_get` | Resource Events | Read |
+| 9 | `gitlab_mr_label_event_list` | Resource Events | Read |
+| 10 | `gitlab_mr_label_event_get` | Resource Events | Read |
+| 11 | `gitlab_issue_milestone_event_list` | Resource Events | Read |
+| 12 | `gitlab_issue_milestone_event_get` | Resource Events | Read |
+| 13 | `gitlab_mr_milestone_event_list` | Resource Events | Read |
+| 14 | `gitlab_mr_milestone_event_get` | Resource Events | Read |
+| 15 | `gitlab_issue_state_event_list` | Resource Events | Read |
+| 16 | `gitlab_issue_state_event_get` | Resource Events | Read |
+| 17 | `gitlab_mr_state_event_list` | Resource Events | Read |
+| 18 | `gitlab_mr_state_event_get` | Resource Events | Read |
+| 19 | `gitlab_issue_emoji_list` | Award Emoji | Read |
+| 20 | `gitlab_issue_emoji_get` | Award Emoji | Read |
+| 21 | `gitlab_issue_emoji_create` | Award Emoji | Create |
+| 22 | `gitlab_issue_emoji_delete` | Award Emoji | Delete |
+| 23 | `gitlab_issue_note_emoji_list` | Award Emoji | Read |
+| 24 | `gitlab_issue_note_emoji_get` | Award Emoji | Read |
+| 25 | `gitlab_issue_note_emoji_create` | Award Emoji | Create |
+| 26 | `gitlab_issue_note_emoji_delete` | Award Emoji | Delete |
+| 27 | `gitlab_mr_emoji_list` | Award Emoji | Read |
+| 28 | `gitlab_mr_emoji_get` | Award Emoji | Read |
+| 29 | `gitlab_mr_emoji_create` | Award Emoji | Create |
+| 30 | `gitlab_mr_emoji_delete` | Award Emoji | Delete |
+| 31 | `gitlab_mr_note_emoji_list` | Award Emoji | Read |
+| 32 | `gitlab_mr_note_emoji_get` | Award Emoji | Read |
+| 33 | `gitlab_mr_note_emoji_create` | Award Emoji | Create |
+| 34 | `gitlab_mr_note_emoji_delete` | Award Emoji | Delete |
+| 35 | `gitlab_snippet_emoji_list` | Award Emoji | Read |
+| 36 | `gitlab_snippet_emoji_get` | Award Emoji | Read |
+| 37 | `gitlab_snippet_emoji_create` | Award Emoji | Create |
+| 38 | `gitlab_snippet_emoji_delete` | Award Emoji | Delete |
+| 39 | `gitlab_snippet_note_emoji_list` | Award Emoji | Read |
+| 40 | `gitlab_snippet_note_emoji_get` | Award Emoji | Read |
+| 41 | `gitlab_snippet_note_emoji_create` | Award Emoji | Create |
+| 42 | `gitlab_snippet_note_emoji_delete` | Award Emoji | Delete |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -462,7 +448,6 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 ## Related
 
 - [GitLab Notification Settings API](https://docs.gitlab.com/ee/api/notification_settings.html)
-- [GitLab Events API](https://docs.gitlab.com/ee/api/events.html)
 - [GitLab Resource Label Events API](https://docs.gitlab.com/ee/api/resource_label_events.html)
 - [GitLab Resource Milestone Events API](https://docs.gitlab.com/ee/api/resource_milestone_events.html)
 - [GitLab Resource State Events API](https://docs.gitlab.com/ee/api/resource_state_events.html)

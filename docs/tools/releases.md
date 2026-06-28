@@ -13,7 +13,7 @@
 
 The releases domain covers the full lifecycle of GitLab releases and their associated asset links: creating releases for existing tags, retrieving release details, listing releases, updating metadata, deleting releases, and managing asset links attached to releases.
 
-With `TOOL_SURFACE=meta`, all 11 individual tools below are consolidated into a single `gitlab_release` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 12 individual tools below are consolidated into a single `gitlab_release` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 
@@ -91,6 +91,13 @@ Add an asset link to a GitLab release. Supports link types: runbook, package, im
 | Annotation | **Create** |
 | ---------- | ---------- |
 
+### `gitlab_release_link_create_batch`
+
+Create multiple release asset links in one call. Accepts a `links` array where each entry has a `name` and an absolute `url`, plus optional `link_type` and `direct_asset_path` (deprecated alias: `filepath`). Returns the created links and any failed entries. Prefer this over repeated `gitlab_release_link_create` calls when attaching several assets at once.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
 ### `gitlab_release_link_get`
 
 Get details of a specific release asset link by its ID, including name, URL, type, and whether it is external.
@@ -123,17 +130,6 @@ Remove an asset link from a GitLab release by its link ID.
 
 ---
 
-## Group Releases
-
-### `gitlab_group_release_list`
-
-List releases across all projects in a GitLab group. Returns paginated list of releases with tag, name, dates, and author.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
----
-
 ## Tool Summary
 
 | # | Tool Name | Category | Annotation |
@@ -145,11 +141,11 @@ List releases across all projects in a GitLab group. Returns paginated list of r
 | 5 | `gitlab_release_update` | Releases | Update |
 | 6 | `gitlab_release_delete` | Releases | Delete |
 | 7 | `gitlab_release_link_create` | Release Links | Create |
-| 8 | `gitlab_release_link_get` | Release Links | Read |
-| 9 | `gitlab_release_link_list` | Release Links | Read |
-| 10 | `gitlab_release_link_update` | Release Links | Update |
-| 11 | `gitlab_release_link_delete` | Release Links | Delete |
-| 12 | `gitlab_group_release_list` | Group Releases | Read |
+| 8 | `gitlab_release_link_create_batch` | Release Links | Create |
+| 9 | `gitlab_release_link_get` | Release Links | Read |
+| 10 | `gitlab_release_link_list` | Release Links | Read |
+| 11 | `gitlab_release_link_update` | Release Links | Update |
+| 12 | `gitlab_release_link_delete` | Release Links | Delete |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -164,4 +160,3 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 
 - [GitLab Releases API](https://docs.gitlab.com/ee/api/releases/)
 - [GitLab Release Links API](https://docs.gitlab.com/ee/api/releases/links.html)
-- [GitLab Group Releases API](https://docs.gitlab.com/ee/api/group_releases.html)

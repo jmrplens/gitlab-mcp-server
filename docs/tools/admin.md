@@ -2,18 +2,18 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Administration
-> **Individual tools**: 77
-> **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_page`, `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_avatar`, `gitlab_dependency_proxy` (`TOOL_SURFACE=meta` catalog)
-> **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Pages](https://docs.gitlab.com/ee/api/pages.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
+> **Individual tools**: 74
+> **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_dependency_proxy` (`TOOL_SURFACE=meta` catalog)
+> **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Audit Events](https://docs.gitlab.com/ee/api/audit_events.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
 
 ## Overview
 
-The administration domain covers instance-level settings, appearance, broadcast messages, admin feature flags, licensing, system hooks, Sidekiq metrics, plan limits, usage data, database migrations, OAuth2 applications, application statistics, instance metadata, custom attributes, bulk imports, avatars, dependency proxy, GitLab Pages, Terraform states, and cluster agents.
+The administration domain covers instance-level settings, appearance, broadcast messages, admin feature flags, licensing, system hooks, Sidekiq metrics, plan limits, usage data, database migrations, OAuth2 applications, application statistics, instance metadata, custom attributes, bulk imports, dependency proxy, audit events, Terraform states, and cluster agents.
 
-With `TOOL_SURFACE=meta`, the smaller sub-packages (settings through bulk imports) are consolidated into a single `gitlab_admin` meta-tool. The larger sub-packages — pages, terraform states, cluster agents, avatar, and dependency proxy — each have their own meta-tool.
+With `TOOL_SURFACE=meta`, the smaller sub-packages (settings through bulk imports) are consolidated into a single `gitlab_admin` meta-tool. The larger sub-packages — terraform states, cluster agents, and dependency proxy — each have their own meta-tool.
 
 ### Common Questions
 
@@ -479,93 +479,11 @@ List failed import records for a bulk import migration entity. Useful for diagno
 
 ---
 
-## Avatar
-
-### `gitlab_get_avatar`
-
-Get the avatar URL for an email address.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
----
-
 ## Dependency Proxy
 
 ### `gitlab_purge_dependency_proxy`
 
 Purge the dependency proxy cache for a GitLab group.
-
-| Annotation | **Delete** |
-| ---------- | ---------- |
-
-> **Destructive**: Protected by confirmation prompt.
-
----
-
-## GitLab Pages
-
-### `gitlab_pages_get`
-
-Get Pages settings for a project. Returns URL, unique domain status, HTTPS enforcement, deployments, and primary domain.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_pages_update`
-
-Update Pages settings for a project. Can configure unique domain, HTTPS enforcement, and primary domain.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
-### `gitlab_pages_unpublish`
-
-Unpublish Pages for a project. Removes all published Pages content.
-
-| Annotation | **Delete** |
-| ---------- | ---------- |
-
-> **Destructive**: Protected by confirmation prompt.
-
-### `gitlab_pages_domain_list_all`
-
-List all Pages domains across all projects accessible to the authenticated user.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_pages_domain_list`
-
-List Pages domains for a specific project. Supports pagination.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_pages_domain_get`
-
-Get a single Pages domain for a project, including certificate details.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_pages_domain_create`
-
-Create a new Pages domain for a project. Optionally configure SSL certificate.
-
-| Annotation | **Create** |
-| ---------- | ---------- |
-
-### `gitlab_pages_domain_update`
-
-Update an existing Pages domain for a project. Can update SSL settings.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
-### `gitlab_pages_domain_delete`
-
-Delete a Pages domain from a project.
 
 | Annotation | **Delete** |
 | ---------- | ---------- |
@@ -734,24 +652,6 @@ Get a single project-level audit event by ID.
 
 ---
 
-## Server Update
-
-### `gitlab_server_check_update`
-
-Check if a newer version of the MCP server is available. Returns current version, latest version, release URL, and release notes.
-
-| Annotation | **Read** |
-| ---------- | -------- |
-
-### `gitlab_server_apply_update`
-
-Download and apply the latest MCP server update. On Linux/macOS the binary is replaced atomically. On Windows the update is downloaded to a staging path with an update script.
-
-| Annotation | **Update** |
-| ---------- | ---------- |
-
----
-
 ## Tool Summary
 
 | # | Tool Name | Category | Annotation |
@@ -809,39 +709,27 @@ Download and apply the latest MCP server update. On Linux/macOS the binary is re
 | 51 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
 | 52 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
 | 53 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
-| 54 | `gitlab_get_avatar` | Avatar | Read |
-| 55 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
-| 56 | `gitlab_pages_get` | Pages | Read |
-| 57 | `gitlab_pages_update` | Pages | Update |
-| 58 | `gitlab_pages_unpublish` | Pages | Delete |
-| 59 | `gitlab_pages_domain_list_all` | Pages | Read |
-| 60 | `gitlab_pages_domain_list` | Pages | Read |
-| 61 | `gitlab_pages_domain_get` | Pages | Read |
-| 62 | `gitlab_pages_domain_create` | Pages | Create |
-| 63 | `gitlab_pages_domain_update` | Pages | Update |
-| 64 | `gitlab_pages_domain_delete` | Pages | Delete |
-| 65 | `gitlab_list_terraform_states` | Terraform States | Read |
-| 66 | `gitlab_get_terraform_state` | Terraform States | Read |
-| 67 | `gitlab_delete_terraform_state` | Terraform States | Delete |
-| 68 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
-| 69 | `gitlab_lock_terraform_state` | Terraform States | Update |
-| 70 | `gitlab_unlock_terraform_state` | Terraform States | Update |
-| 71 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
-| 72 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
-| 73 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
-| 74 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
-| 75 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
-| 76 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
-| 77 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
-| 78 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
-| 79 | `gitlab_list_instance_audit_events` | Audit Events | Read |
-| 80 | `gitlab_get_instance_audit_event` | Audit Events | Read |
-| 81 | `gitlab_list_group_audit_events` | Audit Events | Read |
-| 82 | `gitlab_get_group_audit_event` | Audit Events | Read |
-| 83 | `gitlab_list_project_audit_events` | Audit Events | Read |
-| 84 | `gitlab_get_project_audit_event` | Audit Events | Read |
-| 85 | `gitlab_server_check_update` | Server Update | Read |
-| 86 | `gitlab_server_apply_update` | Server Update | Update |
+| 54 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
+| 55 | `gitlab_list_terraform_states` | Terraform States | Read |
+| 56 | `gitlab_get_terraform_state` | Terraform States | Read |
+| 57 | `gitlab_delete_terraform_state` | Terraform States | Delete |
+| 58 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
+| 59 | `gitlab_lock_terraform_state` | Terraform States | Update |
+| 60 | `gitlab_unlock_terraform_state` | Terraform States | Update |
+| 61 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
+| 62 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
+| 63 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
+| 64 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
+| 65 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
+| 66 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
+| 67 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
+| 68 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
+| 69 | `gitlab_list_instance_audit_events` | Audit Events | Read |
+| 70 | `gitlab_get_instance_audit_event` | Audit Events | Read |
+| 71 | `gitlab_list_group_audit_events` | Audit Events | Read |
+| 72 | `gitlab_get_group_audit_event` | Audit Events | Read |
+| 73 | `gitlab_list_project_audit_events` | Audit Events | Read |
+| 74 | `gitlab_get_project_audit_event` | Audit Events | Read |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -855,8 +743,6 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_delete_application` — deletes an OAuth2 application
 - `gitlab_delete_custom_attribute` — deletes a custom attribute
 - `gitlab_purge_dependency_proxy` — purges the dependency proxy cache
-- `gitlab_pages_unpublish` — unpublishes Pages content
-- `gitlab_pages_domain_delete` — deletes a Pages domain
 - `gitlab_delete_terraform_state` — deletes a Terraform state
 - `gitlab_delete_terraform_state_version` — deletes a Terraform state version
 - `gitlab_delete_cluster_agent` — deletes a cluster agent
@@ -881,9 +767,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Metadata API](https://docs.gitlab.com/ee/api/metadata.html)
 - [GitLab Custom Attributes API](https://docs.gitlab.com/ee/api/custom_attributes.html)
 - [GitLab Bulk Imports API](https://docs.gitlab.com/ee/api/bulk_imports.html)
-- [GitLab Avatar API](https://docs.gitlab.com/ee/api/avatar.html)
 - [GitLab Dependency Proxy API](https://docs.gitlab.com/ee/api/dependency_proxy.html)
-- [GitLab Pages API](https://docs.gitlab.com/ee/api/pages.html)
 - [GitLab Terraform States API](https://docs.gitlab.com/ee/api/terraform_state.html)
 - [GitLab Cluster Agents API](https://docs.gitlab.com/ee/api/cluster_agents.html)
 - [GitLab Audit Events API](https://docs.gitlab.com/ee/api/audit_events.html)

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Issues
-> **Individual tools**: 44
+> **Individual tools**: 49
 > **Meta-tools**: `gitlab_issue` (`TOOL_SURFACE=meta` catalog), `gitlab_issue_discussion`, `gitlab_issue_statistics`
 > **GitLab API**: [Issues API](https://docs.gitlab.com/ee/api/issues.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -77,13 +77,6 @@ Permanently delete a GitLab issue. This action cannot be undone. Requires at lea
 ---
 
 ## Query & Navigation
-
-### `gitlab_issue_list_group`
-
-List issues across all projects in a GitLab group. Supports filtering by state, labels, milestone, scope, time range, assignee, author, and search. Returns paginated issue details including project reference.
-
-| Annotation | **Read** |
-| ---------- | -------- |
 
 ### `gitlab_issue_list_all`
 
@@ -352,6 +345,47 @@ Get issue statistics for a project.
 
 ---
 
+## Iterations (Premium/Ultimate)
+
+> Iterations are time-boxed sprints (Premium/Ultimate). Iteration events record when an issue's iteration was assigned or removed and when its weight was set.
+
+### `gitlab_list_group_iterations`
+
+List iterations (sprints) for a group (Premium/Ultimate). Supports filtering by `state` (`opened`, `upcoming`, `current`, `closed`, `all`), `include_ancestors`, and `search` (title). Returns iterations with sequence, title, description, state, start and due dates, web URL, and pagination metadata.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_list_project_iterations`
+
+List iterations (sprints) for a project (Premium/Ultimate). Supports filtering by `state`, `include_ancestors` (pulls in ancestor-group iterations), and `search` (title). Returns iterations with id, iid, sequence, group_id, title, description, state, start/due dates, timestamps, web URL, and pagination metadata.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_issue_iteration_event_list`
+
+List iteration events for an issue (Premium/Ultimate) — every assignment or removal of an iteration against the issue, with action, iteration, acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_issue_iteration_event_get`
+
+Get a single iteration event for an issue (Premium/Ultimate) by `iteration_event_id`. Returns the event with action, the iteration object, and the acting user.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_issue_weight_event_list`
+
+List weight events for an issue (Premium/Ultimate) — every weight value set, with the weight, the acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+---
+
 ## Work Items (Experimental)
 
 ### `gitlab_get_work_item`
@@ -409,46 +443,50 @@ List available work item types (system-defined and custom) for a project or grou
 | 3 | `gitlab_issue_list` | Core CRUD | Read |
 | 4 | `gitlab_issue_update` | Core CRUD | Update |
 | 5 | `gitlab_issue_delete` | Core CRUD | Delete |
-| 6 | `gitlab_issue_list_group` | Query & Navigation | Read |
-| 7 | `gitlab_issue_list_all` | Query & Navigation | Read |
-| 8 | `gitlab_issue_get_by_id` | Query & Navigation | Read |
-| 9 | `gitlab_issue_reorder` | Actions | Update |
-| 10 | `gitlab_issue_move` | Actions | Update |
-| 11 | `gitlab_issue_subscribe` | Actions | Update |
-| 12 | `gitlab_issue_unsubscribe` | Actions | Update |
-| 13 | `gitlab_issue_create_todo` | Actions | Create |
-| 14 | `gitlab_issue_time_estimate_set` | Time Tracking | Update |
-| 15 | `gitlab_issue_time_estimate_reset` | Time Tracking | Update |
-| 16 | `gitlab_issue_spent_time_add` | Time Tracking | Update |
-| 17 | `gitlab_issue_spent_time_reset` | Time Tracking | Update |
-| 18 | `gitlab_issue_time_stats_get` | Time Tracking | Read |
-| 19 | `gitlab_issue_participants` | Relationships | Read |
-| 20 | `gitlab_issue_mrs_closing` | Relationships | Read |
-| 21 | `gitlab_issue_mrs_related` | Relationships | Read |
-| 22 | `gitlab_issue_note_create` | Notes | Create |
-| 23 | `gitlab_issue_note_list` | Notes | Read |
-| 24 | `gitlab_issue_note_get` | Notes | Read |
-| 25 | `gitlab_issue_note_update` | Notes | Update |
-| 26 | `gitlab_issue_note_delete` | Notes | Delete |
-| 27 | `gitlab_issue_link_list` | Issue Links | Read |
-| 28 | `gitlab_issue_link_get` | Issue Links | Read |
-| 29 | `gitlab_issue_link_create` | Issue Links | Create |
-| 30 | `gitlab_issue_link_delete` | Issue Links | Delete |
-| 31 | `gitlab_list_issue_discussions` | Discussions | Read |
-| 32 | `gitlab_get_issue_discussion` | Discussions | Read |
-| 33 | `gitlab_create_issue_discussion` | Discussions | Create |
-| 34 | `gitlab_add_issue_discussion_note` | Discussions | Create |
-| 35 | `gitlab_update_issue_discussion_note` | Discussions | Update |
-| 36 | `gitlab_delete_issue_discussion_note` | Discussions | Delete |
-| 37 | `gitlab_get_issue_statistics` | Statistics | Read |
-| 38 | `gitlab_get_group_issue_statistics` | Statistics | Read |
-| 39 | `gitlab_get_project_issue_statistics` | Statistics | Read |
-| 40 | `gitlab_get_work_item` | Work Items | Read |
-| 41 | `gitlab_list_work_items` | Work Items | Read |
-| 42 | `gitlab_create_work_item` | Work Items | Create |
-| 43 | `gitlab_update_work_item` | Work Items | Update |
-| 44 | `gitlab_delete_work_item` | Work Items | Delete |
-| 45 | `gitlab_list_work_item_types` | Work Items | Read |
+| 6 | `gitlab_issue_list_all` | Query & Navigation | Read |
+| 7 | `gitlab_issue_get_by_id` | Query & Navigation | Read |
+| 8 | `gitlab_issue_reorder` | Actions | Update |
+| 9 | `gitlab_issue_move` | Actions | Update |
+| 10 | `gitlab_issue_subscribe` | Actions | Update |
+| 11 | `gitlab_issue_unsubscribe` | Actions | Update |
+| 12 | `gitlab_issue_create_todo` | Actions | Create |
+| 13 | `gitlab_issue_time_estimate_set` | Time Tracking | Update |
+| 14 | `gitlab_issue_time_estimate_reset` | Time Tracking | Update |
+| 15 | `gitlab_issue_spent_time_add` | Time Tracking | Update |
+| 16 | `gitlab_issue_spent_time_reset` | Time Tracking | Update |
+| 17 | `gitlab_issue_time_stats_get` | Time Tracking | Read |
+| 18 | `gitlab_issue_participants` | Relationships | Read |
+| 19 | `gitlab_issue_mrs_closing` | Relationships | Read |
+| 20 | `gitlab_issue_mrs_related` | Relationships | Read |
+| 21 | `gitlab_issue_note_create` | Notes | Create |
+| 22 | `gitlab_issue_note_list` | Notes | Read |
+| 23 | `gitlab_issue_note_get` | Notes | Read |
+| 24 | `gitlab_issue_note_update` | Notes | Update |
+| 25 | `gitlab_issue_note_delete` | Notes | Delete |
+| 26 | `gitlab_issue_link_list` | Issue Links | Read |
+| 27 | `gitlab_issue_link_get` | Issue Links | Read |
+| 28 | `gitlab_issue_link_create` | Issue Links | Create |
+| 29 | `gitlab_issue_link_delete` | Issue Links | Delete |
+| 30 | `gitlab_list_issue_discussions` | Discussions | Read |
+| 31 | `gitlab_get_issue_discussion` | Discussions | Read |
+| 32 | `gitlab_create_issue_discussion` | Discussions | Create |
+| 33 | `gitlab_add_issue_discussion_note` | Discussions | Create |
+| 34 | `gitlab_update_issue_discussion_note` | Discussions | Update |
+| 35 | `gitlab_delete_issue_discussion_note` | Discussions | Delete |
+| 36 | `gitlab_get_issue_statistics` | Statistics | Read |
+| 37 | `gitlab_get_group_issue_statistics` | Statistics | Read |
+| 38 | `gitlab_get_project_issue_statistics` | Statistics | Read |
+| 39 | `gitlab_list_group_iterations` | Iterations (Premium) | Read |
+| 40 | `gitlab_list_project_iterations` | Iterations (Premium) | Read |
+| 41 | `gitlab_issue_iteration_event_list` | Iterations (Premium) | Read |
+| 42 | `gitlab_issue_iteration_event_get` | Iterations (Premium) | Read |
+| 43 | `gitlab_issue_weight_event_list` | Iterations (Premium) | Read |
+| 44 | `gitlab_get_work_item` | Work Items | Read |
+| 45 | `gitlab_list_work_items` | Work Items | Read |
+| 46 | `gitlab_create_work_item` | Work Items | Create |
+| 47 | `gitlab_update_work_item` | Work Items | Update |
+| 48 | `gitlab_delete_work_item` | Work Items | Delete |
+| 49 | `gitlab_list_work_item_types` | Work Items | Read |
 
 ### Destructive Tools (Require Confirmation)
 

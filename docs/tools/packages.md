@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Packages, Container Registry & Package Protection Rules
-> **Individual tools**: 32
+> **Individual tools**: 33
 > **Meta-tool**: `gitlab_package` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -13,7 +13,7 @@
 
 The packages domain covers the GitLab Generic Package Registry (publish, download, list, delete packages and files) and the Container Registry (repositories, tags, protection rules). It also includes composite operations like publish-and-link (publish a file and create a release asset link in one step) and publish-directory (batch-publish files from a local directory).
 
-With `TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_TIER` (Premium or Ultimate).
+With `TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_TIER` (Premium or Ultimate).
 
 ### Common Questions
 
@@ -60,6 +60,13 @@ List packages in a GitLab project. Can filter by name, version, type, and suppor
 ### `gitlab_package_file_list`
 
 List files within a specific package. Returns file ID, name, size, and SHA256 for each file with pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_list_group_packages`
+
+List packages across a GitLab group and its descendant projects with optional filters and ordering. Supports filtering by package name and type (composer, conan, generic, golang, helm, maven, npm, nuget, pypi, terraform_module) and status (default, hidden, processing, error, pending_destruction, deprecated). Set `exclude_subgroups` to limit results to the group's direct projects, and `include_versionless` to include packages without a version. Order by `created_at`, `name`, `version`, `type`, or `project_path`.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -338,6 +345,7 @@ Download a completed dependency list export (CycloneDX SBOM JSON). Returns raw S
 | 30 | `gitlab_create_dependency_list_export` | Dependencies | Create |
 | 31 | `gitlab_get_dependency_list_export` | Dependencies | Read |
 | 32 | `gitlab_download_dependency_list_export` | Dependencies | Read |
+| 33 | `gitlab_list_group_packages` | Generic Package Registry | Read |
 
 ### Destructive Tools (Require Confirmation)
 
