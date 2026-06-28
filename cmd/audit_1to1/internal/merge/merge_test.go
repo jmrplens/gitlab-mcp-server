@@ -1,6 +1,7 @@
-package main
+package merge
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -15,6 +16,21 @@ func writeTemp(t *testing.T, dir, name, content string) string {
 		t.Fatalf("write %s: %v", name, err)
 	}
 	return path
+}
+
+// loadBacklog is a test helper that runs BuildBacklogFromPaths and decodes the
+// result for typed inspection. Tests assert on the decoded backlog struct.
+func loadBacklog(t *testing.T, structPath, actionPath, metadataPath string) backlog {
+	t.Helper()
+	content, err := BuildBacklogFromPaths(structPath, actionPath, metadataPath)
+	if err != nil {
+		t.Fatalf("BuildBacklogFromPaths: %v", err)
+	}
+	var bl backlog
+	if unmarshalErr := json.Unmarshal(content, &bl); unmarshalErr != nil {
+		t.Fatalf("decode backlog: %v", unmarshalErr)
+	}
+	return bl
 }
 
 // TestBuildBacklog_MergesThreeStreams verifies the merge attributes each gap
@@ -41,10 +57,7 @@ func TestBuildBacklog_MergesThreeStreams(t *testing.T) {
 	  ]
 	}`)
 
-	bl, err := buildBacklog(structPath, actionPath, metadataPath)
-	if err != nil {
-		t.Fatalf("buildBacklog: %v", err)
-	}
+	bl := loadBacklog(t, structPath, actionPath, metadataPath)
 
 	// branches gets struct + metadata; mrdiscussions + issuediscussions get the
 	// shared service; clean (no missing methods) is absent.
@@ -92,10 +105,7 @@ func TestBuildBacklog_PackagesSortedAndStructGapsPreserved(t *testing.T) {
 	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
 	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
 
-	bl, err := buildBacklog(structPath, actionPath, metadataPath)
-	if err != nil {
-		t.Fatalf("buildBacklog: %v", err)
-	}
+	bl := loadBacklog(t, structPath, actionPath, metadataPath)
 	if len(bl.Packages) != 2 || bl.Packages[0].Package != "alpha" || bl.Packages[1].Package != "zeta" {
 		t.Fatalf("packages not sorted: %+v", bl.Packages)
 	}
@@ -118,10 +128,7 @@ func TestBuildBacklog_SurfacesExtraOutput(t *testing.T) {
 	actionPath := writeTemp(t, dir, "action.json", `{"services":[]}`)
 	metadataPath := writeTemp(t, dir, "metadata.json", `{"packages":[]}`)
 
-	bl, err := buildBacklog(structPath, actionPath, metadataPath)
-	if err != nil {
-		t.Fatalf("buildBacklog: %v", err)
-	}
+	bl := loadBacklog(t, structPath, actionPath, metadataPath)
 	pkgs := indexPackages(bl)
 	issues, ok := pkgs["issues"]
 	if !ok || issues.Struct == nil {
@@ -148,6 +155,32 @@ func TestReadJSON_MissingFile(t *testing.T) {
 	var target structReport
 	if err := readJSON(filepath.Join(t.TempDir(), "nope.json"), &target); err == nil {
 		t.Fatal("expected error reading missing file")
+	}
+}
+
+// TestBuildBacklogFromBytes_MatchesFromPaths is the differential guarantee: the
+// in-memory bytes entry point MUST produce byte-identical output to the
+// file-based entry point for the same inputs. This is the property that lets
+// audit_1to1's all-scope mode reuse the merge pipeline without divergence.
+func TestBuildBacklogFromBytes_MatchesFromPaths(t *testing.T) {
+	dir := t.TempDir()
+	structJSON := `{"packages":[{"package":"x","missing_input_count":3,"missing_output_count":1,"gaps":[{"kind":"input"}]}]}`
+	actionJSON := `{"services":[{"service":"Svc","packages":["x"],"api_methods":10,"covered_methods":8,"missing_methods":["A","B"]}]}`
+	metadataJSON := `{"packages":[{"package":"x","findings":[{"action":"x.list","flags":["generic_usage"]}]}]}`
+	structPath := writeTemp(t, dir, "struct.json", structJSON)
+	actionPath := writeTemp(t, dir, "action.json", actionJSON)
+	metadataPath := writeTemp(t, dir, "metadata.json", metadataJSON)
+
+	fromPaths, err := BuildBacklogFromPaths(structPath, actionPath, metadataPath)
+	if err != nil {
+		t.Fatalf("BuildBacklogFromPaths: %v", err)
+	}
+	fromBytes, err := BuildBacklogFromBytes([]byte(structJSON), []byte(actionJSON), []byte(metadataJSON))
+	if err != nil {
+		t.Fatalf("BuildBacklogFromBytes: %v", err)
+	}
+	if !bytes.Equal(fromPaths, fromBytes) {
+		t.Errorf("paths and bytes outputs differ:\npaths: %s\nbytes: %s", fromPaths, fromBytes)
 	}
 }
 

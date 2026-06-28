@@ -1,4 +1,4 @@
-// Command audit_metadata_completeness reports discovery-metadata gaps (R-META)
+// Package metadata reports discovery-metadata gaps (R-META)
 // across the canonical ActionSpec catalog. For every action it flags:
 //
 //   - generic_usage: a placeholder Usage string such as "Use to execute X domain
@@ -10,21 +10,12 @@
 //     "Returns: … See also: …" Description.
 //
 // The output is the R-META slice of the 1:1 backlog, grouped by owner package.
-//
-// Usage:
-//
-//	go run ./cmd/audit_metadata_completeness/                 # full report to stdout
-//	go run ./cmd/audit_metadata_completeness/ -gaps-only      # only actions with findings
-//	go run ./cmd/audit_metadata_completeness/ -output dist/metadata-completeness.json
-package main
+package metadata
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -32,7 +23,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -75,23 +65,19 @@ type reportSummary struct {
 	WeakIndividualDescription int `json:"weak_individual_description"`
 }
 
-func main() {
-	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
-	gapsOnly := flag.Bool("gaps-only", false, "only include actions that raise at least one flag")
-	flag.Parse()
-
-	rep, err := buildReport(*gapsOnly)
+// Run builds the report and returns it as indented JSON (with a trailing
+// newline). gapsOnly filters to actions that raise at least one flag, matching
+// the original -gaps-only flag.
+func Run(gapsOnly bool) ([]byte, error) {
+	rep, err := buildReport(gapsOnly)
 	if err != nil {
-		cmdutil.Fatalf("build metadata completeness report: %v", err)
+		return nil, err
 	}
 	content, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
-		cmdutil.Fatalf("marshal report: %v", err)
+		return nil, fmt.Errorf("marshal report: %w", err)
 	}
-	content = append(content, '\n')
-	if writeErr := writeReport(*outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write report: %v", writeErr)
-	}
+	return append(content, '\n'), nil
 }
 
 func buildReport(gapsOnly bool) (report, error) {
@@ -269,15 +255,4 @@ func summarize(packages []packageReport) reportSummary {
 		}
 	}
 	return s
-}
-
-func writeReport(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }

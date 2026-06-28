@@ -1,4 +1,4 @@
-// Command audit_struct_completeness verifies the 1:1 field mapping between the
+// Package structs verifies the 1:1 field mapping between the
 // MCP tool input/output structs and the client-go SDK Options/result structs
 // they wrap.
 //
@@ -18,29 +18,18 @@
 // intentionally high-signal on *missing fields* (the gap class that the
 // client-go bumps repeatedly introduced) and advisory on type divergences,
 // because the domain legitimately maps SDK enum/time types onto scalars.
-//
-// Usage:
-//
-//	go run ./cmd/audit_struct_completeness/                 # full report to stdout
-//	go run ./cmd/audit_struct_completeness/ -gaps-only      # only packages with gaps
-//	go run ./cmd/audit_struct_completeness/ -output dist/struct-completeness.json
-package main
+package structs
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"go/ast"
 	"go/types"
-	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 const (
@@ -495,27 +484,19 @@ type reportSummary struct {
 	TypeMismatches      int `json:"type_mismatches"`
 }
 
-func main() {
-	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
-	gapsOnly := flag.Bool("gaps-only", false, "only include packages that have at least one missing field")
-	flag.Parse()
-
-	root, err := cmdutil.RepositoryRoot(".")
+// Run builds the report for the given repository root and returns it as
+// indented JSON (with a trailing newline). gapsOnly filters to entries with at
+// least one finding, matching the original -gaps-only flag.
+func Run(root string, gapsOnly bool) ([]byte, error) {
+	rep, err := buildReport(root, gapsOnly)
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
-	}
-	rep, err := buildReport(root, *gapsOnly)
-	if err != nil {
-		cmdutil.Fatalf("build struct completeness report: %v", err)
+		return nil, err
 	}
 	content, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
-		cmdutil.Fatalf("marshal report: %v", err)
+		return nil, fmt.Errorf("marshal report: %w", err)
 	}
-	content = append(content, '\n')
-	if writeErr := writeReport(*outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write report: %v", writeErr)
-	}
+	return append(content, '\n'), nil
 }
 
 func buildReport(root string, gapsOnly bool) (report, error) {
@@ -1329,15 +1310,4 @@ func summarize(reports []packageReport) reportSummary {
 		}
 	}
 	return s
-}
-
-func writeReport(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }

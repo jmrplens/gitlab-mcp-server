@@ -727,26 +727,27 @@ audit-metrics:
 audit-action-spec-coverage:
 	go run ./cmd/audit_action_spec_coverage/
 
+## audit-1to1: run all three 1:1-audit gap streams (struct/action/metadata) and merge into plan/1to1-backlog.json.
+## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
+## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
+audit-1to1:
+	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
+	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+
 ## audit-struct-completeness: diff MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT).
+## Backward-compat wrapper over audit-1to1 -scope=structs.
 audit-struct-completeness:
-	go run ./cmd/audit_struct_completeness/ -gaps-only
+	go run ./cmd/audit_1to1/ -scope=structs -gaps-only
 
 ## audit-action-coverage: report client-go SDK endpoints no MCP action invokes (R-ACTION).
+## Backward-compat wrapper over audit-1to1 -scope=actions.
 audit-action-coverage:
-	go run ./cmd/audit_action_coverage/ -gaps-only
+	go run ./cmd/audit_1to1/ -scope=actions -gaps-only
 
 ## audit-metadata-completeness: report discovery-metadata gaps across the ActionSpec catalog (R-META).
+## Backward-compat wrapper over audit-1to1 -scope=metadata.
 audit-metadata-completeness:
-	go run ./cmd/audit_metadata_completeness/ -gaps-only
-
-## audit-1to1: run the three 1:1-audit gap streams and merge them into plan/1to1-backlog.json.
-audit-1to1:
-	$(call MKDIR_P,dist/1to1)
-	go run ./cmd/audit_struct_completeness/ -gaps-only -output dist/1to1/struct.json
-	go run ./cmd/audit_action_coverage/ -gaps-only -output dist/1to1/action.json
-	go run ./cmd/audit_metadata_completeness/ -gaps-only -output dist/1to1/metadata.json
-	go run ./cmd/gen_1to1_backlog/ -struct dist/1to1/struct.json -action dist/1to1/action.json -metadata dist/1to1/metadata.json -output plan/1to1-backlog.json
-	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+	go run ./cmd/audit_1to1/ -scope=metadata -gaps-only
 
 ## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
 audit-edition-tier:

@@ -1,69 +1,61 @@
-// Command gen_1to1_backlog merges the three 1:1-audit gap reports — struct
-// completeness (R-INPUT/R-OUTPUT), action coverage (R-ACTION), and metadata
-// completeness (R-META) — into a single per-package backlog that drives the
-// audit batches.
-//
-// It is a pure JSON transform over the reports emitted by audit_struct_
-// completeness, audit_action_coverage, and audit_metadata_completeness; the
-// make audit-1to1 target runs those auditors first and feeds their output here.
-//
-// Usage:
-//
-//	go run ./cmd/gen_1to1_backlog/ \
-//	  -struct dist/1to1/struct.json \
-//	  -action dist/1to1/action.json \
-//	  -metadata dist/1to1/metadata.json \
-//	  -output plan/1to1-backlog.json
-package main
+package merge
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 const schemaVersion = 1
 
-func main() {
-	structPath := flag.String("struct", "dist/1to1/struct.json", "path to audit_struct_completeness JSON")
-	actionPath := flag.String("action", "dist/1to1/action.json", "path to audit_action_coverage JSON")
-	metadataPath := flag.String("metadata", "dist/1to1/metadata.json", "path to audit_metadata_completeness JSON")
-	outputPath := flag.String("output", "plan/1to1-backlog.json", "path to write the merged backlog JSON")
-	flag.Parse()
+const backlogNote = "Merged 1:1 audit backlog. Each stream is a candidate list; intentional renames (e.g. branch→branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package."
 
-	backlog, err := buildBacklog(*structPath, *actionPath, *metadataPath)
-	if err != nil {
-		cmdutil.Fatalf("build 1:1 backlog: %v", err)
-	}
-	content, err := json.MarshalIndent(backlog, "", "  ")
-	if err != nil {
-		cmdutil.Fatalf("marshal backlog: %v", err)
-	}
-	content = append(content, '\n')
-	if writeErr := writeFile(*outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write backlog: %v", writeErr)
-	}
-}
-
-func buildBacklog(structPath, actionPath, metadataPath string) (backlog, error) {
+// BuildBacklogFromPaths reads three report files and returns the merged backlog
+// as indented JSON (with a trailing newline). This is the file-based path used
+// when the auditor reports already exist on disk (e.g. via the make target).
+func BuildBacklogFromPaths(structPath, actionPath, metadataPath string) ([]byte, error) {
 	var structRep structReport
 	if err := readJSON(structPath, &structRep); err != nil {
-		return backlog{}, err
+		return nil, err
 	}
 	var actionRep actionReport
 	if err := readJSON(actionPath, &actionRep); err != nil {
-		return backlog{}, err
+		return nil, err
 	}
 	var metaRep metadataReport
 	if err := readJSON(metadataPath, &metaRep); err != nil {
-		return backlog{}, err
+		return nil, err
 	}
+	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep))
+}
 
+// BuildBacklogFromBytes merges three in-memory report byte-slices and returns
+// the merged backlog as indented JSON (with a trailing newline). This is the
+// in-process path: audit_1to1 runs the three analyzers, marshals each result,
+// and feeds the bytes here so the merged output is produced by exactly the same
+// merge pipeline as BuildBacklogFromPaths — guaranteeing byte-for-byte
+// equivalence with the file-based oracle.
+func BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes []byte) ([]byte, error) {
+	var structRep structReport
+	if err := json.Unmarshal(structBytes, &structRep); err != nil {
+		return nil, fmt.Errorf("parse struct report: %w", err)
+	}
+	var actionRep actionReport
+	if err := json.Unmarshal(actionBytes, &actionRep); err != nil {
+		return nil, fmt.Errorf("parse action report: %w", err)
+	}
+	var metaRep metadataReport
+	if err := json.Unmarshal(metadataBytes, &metaRep); err != nil {
+		return nil, fmt.Errorf("parse metadata report: %w", err)
+	}
+	return marshalBacklog(mergeBacklog(structRep, actionRep, metaRep))
+}
+
+// mergeBacklog is the pure merge over the decoded input types. Both public
+// entry points funnel through here so the merge logic exists in exactly one
+// place.
+func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metadataReport) backlog {
 	byPackage := map[string]*backlogPackage{}
 	mergeStruct(byPackage, structRep)
 	mergeActions(byPackage, actionRep)
@@ -78,10 +70,18 @@ func buildBacklog(structPath, actionPath, metadataPath string) (backlog, error) 
 
 	return backlog{
 		SchemaVersion: schemaVersion,
-		Note:          "Merged 1:1 audit backlog. Each stream is a candidate list; intentional renames (e.g. branch→branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package.",
+		Note:          backlogNote,
 		Summary:       summarizeBacklog(packages),
 		Packages:      packages,
-	}, nil
+	}
+}
+
+func marshalBacklog(b backlog) ([]byte, error) {
+	content, err := json.MarshalIndent(b, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal backlog: %w", err)
+	}
+	return append(content, '\n'), nil
 }
 
 func mergeStruct(byPackage map[string]*backlogPackage, rep structReport) {
@@ -176,15 +176,4 @@ func readJSON(path string, target any) error {
 		return fmt.Errorf("parse %s: %w", path, unmarshalErr)
 	}
 	return nil
-}
-
-func writeFile(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }
