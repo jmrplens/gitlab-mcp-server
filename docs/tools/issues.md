@@ -351,35 +351,35 @@ Get issue statistics for a project.
 
 ### `gitlab_list_group_iterations`
 
-List iterations (sprints) for a group (Premium/Ultimate). Supports filtering by `state` (`opened`, `upcoming`, `current`, `closed`, `all`), `include_ancestors`, and `search` (title). Returns iterations with sequence, title, description, state, start and due dates, web URL, and pagination metadata.
+List iterations (sprints) for a group (Premium). Supports filtering by `state` (`opened`, `upcoming`, `current`, `closed`, `all`), `include_ancestors`, and `search` (title). Returns iterations with sequence, title, description, state, start and due dates, web URL, and pagination metadata.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_project_iterations`
 
-List iterations (sprints) for a project (Premium/Ultimate). Supports filtering by `state`, `include_ancestors` (pulls in ancestor-group iterations), and `search` (title). Returns iterations with id, iid, sequence, group_id, title, description, state, start/due dates, timestamps, web URL, and pagination metadata.
+List iterations (sprints) for a project (Premium). Supports filtering by `state`, `include_ancestors` (pulls in ancestor-group iterations), and `search` (title). Returns iterations with id, iid, sequence, group_id, title, description, state, start/due dates, timestamps, web URL, and pagination metadata.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_issue_iteration_event_list`
 
-List iteration events for an issue (Premium/Ultimate) — every assignment or removal of an iteration against the issue, with action, iteration, acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
+List iteration events for an issue (Premium) — every assignment or removal of an iteration against the issue, with action, iteration, acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_issue_iteration_event_get`
 
-Get a single iteration event for an issue (Premium/Ultimate) by `iteration_event_id`. Returns the event with action, the iteration object, and the acting user.
+Get a single iteration event for an issue (Premium) by `iteration_event_id`. Returns the event with action, the iteration object, and the acting user.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_issue_weight_event_list`
 
-List weight events for an issue (Premium/Ultimate) — every weight value set, with the weight, the acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
+List weight events for an issue (Premium) — every weight value set, with the weight, the acting user, and pagination metadata. Supports keyset or offset pagination (`page`, `per_page` 1–100, `pagination`, `page_token`, `order_by`, `sort` `asc|desc`).
 
 | Annotation | **Read** |
 | ---------- | -------- |
