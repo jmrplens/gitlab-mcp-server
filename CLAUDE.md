@@ -50,7 +50,6 @@ gitlab-mcp-server/
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_godocs/            # Audits Go documentation coverage
-│   ├── audit_meta_schema/       # Audits meta-tool schema generation
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_output/            # Audits MCP tool output quality
 │   ├── audit_test_names/        # Audits test function naming convention compliance

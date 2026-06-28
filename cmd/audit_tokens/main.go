@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -71,7 +72,22 @@ type resourceRegistrationOptions struct {
 
 // main creates the mock GitLab-backed client, measures all MCP catalog modes,
 // and prints token overhead comparisons for tools, resources, and prompts.
+//
+// With --compare-schemas it instead runs the meta-tool InputSchema sizing spike
+// (formerly the standalone audit_meta_schema binary), comparing the byte cost of
+// each META_PARAM_SCHEMA mode (opaque/full/compact).
 func main() {
+	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
+	flag.Parse()
+
+	if *compareSchemas {
+		if err := runMetaSchemaSizing(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
@@ -542,4 +558,145 @@ func fmtNum(n int) string {
 		result = append(result, c)
 	}
 	return string(result)
+}
+
+// runMetaSchemaSizing builds an in-memory MCP server with the full meta-tool
+// catalog and compares the generated action parameter schemas across all
+// supported META_PARAM_SCHEMA modes (opaque/full/compact), printing a sizing
+// table to stdout. Formerly the standalone audit_meta_schema binary.
+func runMetaSchemaSizing() error {
+	client, cleanup, err := auditclient.NewMock()
+	if err != nil {
+		return fmt.Errorf("client: %w", err)
+	}
+	defer cleanup()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
+	if err != nil {
+		return fmt.Errorf("build meta action catalog: %w", err)
+	}
+	routes := catalog.ActionMaps()
+	tools.RegisterMetaCatalog(server, catalog)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, cerr := server.Connect(ctx, st, nil); cerr != nil {
+		return fmt.Errorf("server connect: %w", cerr)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "spike-cli", Version: "0"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return fmt.Errorf("client connect: %w", err)
+	}
+	defer session.Close()
+
+	listed, err := session.ListTools(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("list tools: %w", err)
+	}
+	currentByName := map[string]map[string]any{}
+	for _, t := range listed.Tools {
+		if t.InputSchema == nil {
+			continue
+		}
+		raw, mErr := json.Marshal(t.InputSchema)
+		if mErr != nil {
+			return fmt.Errorf("marshal input schema for %s: %w", t.Name, mErr)
+		}
+		var m map[string]any
+		if uErr := json.Unmarshal(raw, &m); uErr != nil {
+			return fmt.Errorf("unmarshal input schema for %s: %w", t.Name, uErr)
+		}
+		currentByName[t.Name] = m
+	}
+
+	type row struct {
+		name      string
+		actions   int
+		opaque    int
+		full      int
+		compact   int
+		fullDelta int
+	}
+	rows := []row{}
+
+	names := make([]string, 0, len(routes))
+	for n := range routes {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	totalOpaque, totalFull, totalCompact := 0, 0, 0
+
+	for _, name := range names {
+		rmap := routes[name]
+		opaque := currentByName[name]
+		opaqueJSON, mErr := json.Marshal(opaque)
+		if mErr != nil {
+			return fmt.Errorf("marshal opaque schema for %s: %w", name, mErr)
+		}
+
+		full := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaFull)
+		compact := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaCompact)
+
+		fullJSON, mErr := json.Marshal(full)
+		if mErr != nil {
+			return fmt.Errorf("marshal full schema for %s: %w", name, mErr)
+		}
+		compactJSON, mErr := json.Marshal(compact)
+		if mErr != nil {
+			return fmt.Errorf("marshal compact schema for %s: %w", name, mErr)
+		}
+
+		r := row{
+			name:      name,
+			actions:   len(rmap),
+			opaque:    len(opaqueJSON),
+			full:      len(fullJSON),
+			compact:   len(compactJSON),
+			fullDelta: len(fullJSON) - len(opaqueJSON),
+		}
+		rows = append(rows, r)
+		totalOpaque += r.opaque
+		totalFull += r.full
+		totalCompact += r.compact
+	}
+
+	sort.Slice(rows, func(i, j int) bool { return rows[i].full > rows[j].full })
+
+	fmt.Println("============================================================")
+	fmt.Println(" Meta-tool InputSchema sizing spike")
+	fmt.Println("============================================================")
+	fmt.Println()
+	fmt.Printf("%-46s %7s %10s %10s %10s %10s\n",
+		"meta-tool", "actions", "opaque", "full", "compact", "Δ full")
+	fmt.Println(strings.Repeat("-", 96))
+	for _, r := range rows {
+		fmt.Printf("%-46s %7d %10s %10s %10s %+10s\n",
+			r.name, r.actions,
+			humanBytes(r.opaque), humanBytes(r.full), humanBytes(r.compact),
+			humanBytes(r.fullDelta))
+	}
+	fmt.Println(strings.Repeat("-", 96))
+	fmt.Printf("%-46s %7s %10s %10s %10s\n",
+		"TOTAL", "",
+		humanBytes(totalOpaque), humanBytes(totalFull), humanBytes(totalCompact))
+	fmt.Println()
+	fmt.Printf("Full / opaque   ratio: %.1fx\n", float64(totalFull)/float64(totalOpaque))
+	fmt.Printf("Compact / opaque ratio: %.1fx\n", float64(totalCompact)/float64(totalOpaque))
+	return nil
+}
+
+// humanBytes formats a byte count using compact B, KB, or MB units for the
+// schema sizing table.
+func humanBytes(n int) string {
+	switch {
+	case n >= 1024*1024:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	case n >= 1024:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
