@@ -51,10 +51,9 @@ gitlab-mcp-server/
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
-│   ├── audit_output/            # Audits MCP tool output quality
+│   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
 │   ├── audit_test_names/        # Audits test function naming convention compliance
-│   ├── audit_tokens/            # Audits token usage for model-facing surfaces
-│   ├── audit_tools/             # Audits MCP tool metadata violations
+│   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── find_dupes/              # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/

@@ -1,24 +1,13 @@
-// Command audit_output generates a markdown report of MCP tool output quality.
-// It creates in-memory MCP servers with all tools registered (individual + meta),
-// inspects descriptions for "Returns:" info, OutputSchema presence, Title field,
-// and content annotation readiness.
-//
-// Usage:
-//
-//	go run ./cmd/audit_output/
+// Output-quality audit functions (formerly audit_output).
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -50,15 +39,10 @@ type toolQualityStats struct {
 	SeeAlso int
 }
 
-// main runs the MCP tool output audit and prints a report.
-func main() {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
-	}
-	defer cleanup()
-
+// runOutputAudit runs the output-quality checks (OutputSchema presence,
+// "Returns:" info, Title field, "See also:" cross-refs, route OutputSchema)
+// and prints the report to stdout.
+func runOutputAudit(client *gitlabclient.Client) {
 	individual := listTools(client, false)
 	meta := listTools(client, true)
 
@@ -72,43 +56,7 @@ func main() {
 	findings = append(findings, auditSeeAlso(individual, "individual")...)
 	findings = append(findings, auditRouteOutputSchema(client)...)
 
-	printReport(individual, meta, findings)
-}
-
-// listTools returns all registered MCP tools by starting an in-memory server.
-func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
-	if meta {
-		if err := tools.RegisterAllMeta(server, client, edition.Ultimate); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		tools.RegisterAll(server, client, edition.Ultimate)
-	}
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return result.Tools
+	printOutputReport(individual, meta, findings)
 }
 
 // auditOutputSchema checks whether a tool declares an OutputSchema.
@@ -193,8 +141,8 @@ func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) [
 	return fs
 }
 
-// printReport prints the audit results as a formatted table.
-func printReport(individual, meta []*mcp.Tool, fs []finding) {
+// printOutputReport prints the audit results as a formatted table.
+func printOutputReport(individual, meta []*mcp.Tool, fs []finding) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Output Quality Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)

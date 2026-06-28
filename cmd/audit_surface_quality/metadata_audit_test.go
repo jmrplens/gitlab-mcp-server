@@ -1,5 +1,5 @@
-// main_test.go contains focused tests for the audit_tools command helpers.
-// Tests cover the small pure-function audits (naming, descriptions,
+// metadata_audit_test.go contains focused tests for the metadata audit
+// helpers. Tests cover the small pure-function audits (naming, descriptions,
 // annotations, schema validity) without spinning up the full MCP server.
 package main
 
@@ -249,7 +249,7 @@ func TestPtrBool_FormatsPointer(t *testing.T) {
 func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 	// Not parallel: captureStdout rebinds os.Stdout.
 	output := captureStdout(t, func() {
-		printReport(
+		printMetadataReport(
 			[]*mcp.Tool{{Name: "gitlab_x"}},
 			[]*mcp.Tool{{Name: "gitlab_y"}},
 			nil,
@@ -284,7 +284,7 @@ func TestPrintReport_GroupsViolationsByCategory(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printReport(individual, nil, violations, nil)
+		printMetadataReport(individual, nil, violations, nil)
 	})
 
 	for _, want := range []string{
@@ -315,7 +315,7 @@ func TestPrintReport_ListsAllMetaToolsAndTruncatesDescription(t *testing.T) {
 	vs := []violation{{tool: "tool_a", category: "naming", detail: "bad"}}
 
 	output := captureStdout(t, func() {
-		printReport(individual, meta, vs, nil)
+		printMetadataReport(individual, meta, vs, nil)
 	})
 
 	if !strings.Contains(output, "### Meta-Tools (1)") {

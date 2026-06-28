@@ -1,4 +1,4 @@
-// main_test.go covers the audit_output command helpers that score
+// output_audit_test.go covers the output audit helpers that score
 // individual and meta tools for output quality.
 //
 // Tests verify that the route-level OutputSchema scan, the percentage
@@ -279,11 +279,11 @@ func TestCollectToolQualityStats_EmptyInput(t *testing.T) {
 // TestPrintReport_EmptyFindingsWritesNoFindingsMessage verifies the report
 // prints the success message when no findings are present.
 func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
-	// Not t.Parallel: captureStdout rebinds os.Stdout and parallel tests would
+	// Not t.Parallel: captureOutputStdout rebinds os.Stdout and parallel tests would
 	// race for the global writer.
 
-	output := captureStdout(t, func() {
-		printReport([]*mcp.Tool{{Name: "ok", Title: "OK"}}, nil, nil)
+	output := captureOutputStdout(t, func() {
+		printOutputReport([]*mcp.Tool{{Name: "ok", Title: "OK"}}, nil, nil)
 	})
 
 	for _, want := range []string{
@@ -300,7 +300,7 @@ func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 // TestPrintReport_GroupsFindingsByCategory verifies findings are grouped and
 // listed in the report.
 func TestPrintReport_GroupsFindingsByCategory(t *testing.T) {
-	// Not t.Parallel: captureStdout rebinds os.Stdout and parallel tests would
+	// Not t.Parallel: captureOutputStdout rebinds os.Stdout and parallel tests would
 	// race for the global writer.
 
 	findings := []finding{
@@ -309,8 +309,8 @@ func TestPrintReport_GroupsFindingsByCategory(t *testing.T) {
 		{tool: "tool_c", category: "description-returns", detail: "no Returns"},
 	}
 
-	output := captureStdout(t, func() {
-		printReport([]*mcp.Tool{{Name: "tool_a"}}, []*mcp.Tool{{Name: "tool_b"}}, findings)
+	output := captureOutputStdout(t, func() {
+		printOutputReport([]*mcp.Tool{{Name: "tool_a"}}, []*mcp.Tool{{Name: "tool_b"}}, findings)
 	})
 
 	for _, want := range []string{
@@ -394,8 +394,9 @@ func TestAuditRouteOutputSchema_EmptyRoutesProducesNoFindings(t *testing.T) {
 	}
 }
 
-// captureStdout captures the output written to os.Stdout while fn runs.
-func captureStdout(t *testing.T, fn func()) string {
+// captureOutputStdout captures the output written to os.Stdout while fn runs.
+// Renamed from captureStdout to avoid collision with the metadata test suite.
+func captureOutputStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout
 	reader, writer, err := os.Pipe()

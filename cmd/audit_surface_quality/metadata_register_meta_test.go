@@ -1,5 +1,5 @@
-// register_meta_audit_test.go covers the package-level RegisterMeta
-// detection logic used by the audit_tools command.
+// metadata_register_meta_test.go covers the package-level RegisterMeta
+// detection logic used by the metadata audit.
 //
 // Tests build temporary Go sources with hand-written RegisterMeta functions
 // and exercise the discover / reference / classify pipeline. Each test
@@ -229,7 +229,7 @@ func writeTestFile(t *testing.T, root, name, content string) {
 	}
 }
 
-// captureStdout supports capture stdout assertions in main tests.
+// captureStdout supports capture stdout assertions in metadata tests.
 func captureStdout(t *testing.T, action func()) string {
 	t.Helper()
 	originalStdout := os.Stdout

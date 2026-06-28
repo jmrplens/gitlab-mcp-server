@@ -66,8 +66,7 @@ make golangci-lint                        # Go-only gate
 golangci-lint run --build-tags e2e ./internal/tools/branches/  # one package
 
 # Audit / regenerate
-go run ./cmd/audit_tools/
-go run ./cmd/audit_output/
+go run ./cmd/audit_surface_quality/
 go run ./cmd/audit_tokens/
 go run ./cmd/audit_dynamic_aliases/
 go run ./cmd/audit_test_names cmd internal test

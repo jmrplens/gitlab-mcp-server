@@ -377,10 +377,9 @@ The migration is enforced by source-level tests and audits:
   builder manifest without writing files.
 - `TestActionCatalog_BaselineCountsDoNotRegress` keeps CE, Enterprise, and
   GitLab.com Enterprise catalog action counts stable.
-- `make audit-dynamic-aliases`, `go run ./cmd/audit_output/`,
-  `go run ./cmd/audit_tools/`, and
-  `go run ./cmd/audit_tokens/` (with `--compare-schemas` for the meta-tool
-  InputSchema sizing spike) are the post-metadata-change surface audits.
+- `make audit-dynamic-aliases` and
+  `go run ./cmd/audit_surface_quality/` (with `-view=metadata` or `-view=output`
+  for individual checks) are the post-metadata-change surface audits.
 
 ## Useful Checks
 

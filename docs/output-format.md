@@ -268,7 +268,7 @@ Per-route schemas are populated automatically when using typed route constructor
 These schemas are:
 
 - **Exposed in `llms-full.txt`** under "Action Output Schemas" for each meta-tool, using collapsible `<details>` blocks per action
-- **Audited by `cmd/audit_output`** which reports routes with missing schemas (category `route-output-schema`)
+- **Audited by `cmd/audit_surface_quality -view=output`** which reports routes with missing schemas (category `route-output-schema`)
 - **Accessible programmatically** via `tools.BuildActionCatalog(...)`; meta-tools, dynamic tools, the `gitlab://tools` manifest, and audits project route maps from that canonical catalog
 - **Cached** by `reflect.Type` to avoid redundant schema generation
 

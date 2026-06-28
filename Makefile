@@ -6,7 +6,7 @@
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
+	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -456,9 +456,9 @@ audit-docs:
 	go run ./cmd/gen_testing_docs/ --check
 	$(MAKE) check-doc-links
 	go run ./cmd/audit_godocs/
-	go run ./cmd/audit_tools/
+	go run ./cmd/audit_surface_quality/ -view=metadata
 	go run ./cmd/audit_dynamic_aliases/
-	go run ./cmd/audit_output/
+	go run ./cmd/audit_surface_quality/ -view=output
 	cd site && pnpm run check
 	cd site && pnpm run build
 	cd site && pnpm run lint
@@ -704,20 +704,26 @@ check-action-catalog-manifest:
 
 # ─── Output Quality Audit ────────────────────────────────────────────────────
 
+## audit-surface-quality: consolidated MCP tool surface quality audit (both views).
+## Combines the former audit_tools (metadata) and audit_output (output quality).
+audit-surface-quality:
+	go run ./cmd/audit_surface_quality/
+
 ## audit-output: run MCP output quality audit on all tools.
-## Checks: OutputSchema, Description "Returns:", Title field, Content annotations.
-## Fails on regressions (non-zero findings).
+## Backward-compat wrapper over audit-surface-quality -view=output.
 audit-output:
-	go run ./cmd/audit_output/
+	go run ./cmd/audit_surface_quality/ -view=output
 
 ## audit-tokens: measure LLM context window overhead of all tool definitions.
 ## Reports per-tool token counts, domain totals, and mode comparison.
+## Use --compare-schemas for the meta-tool InputSchema sizing spike.
 audit-tokens:
 	go run ./cmd/audit_tokens/
 
 ## audit-tools: audit MCP tool metadata violations (naming, annotations).
+## Backward-compat wrapper over audit-surface-quality -view=metadata.
 audit-tools:
-	go run ./cmd/audit_tools/
+	go run ./cmd/audit_surface_quality/ -view=metadata
 
 ## audit-metrics: report MCP tool metrics (tool/resource/prompt counts).
 audit-metrics:

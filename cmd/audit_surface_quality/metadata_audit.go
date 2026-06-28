@@ -1,15 +1,7 @@
-// Command audit_tools generates a markdown report of all MCP tool metadata
-// violations. It creates an in-memory MCP server with all tools registered
-// (both individual and meta-tools), inspects their metadata, and outputs
-// findings to stdout.
-//
-// Usage:
-//
-//	go run ./cmd/audit_tools/
+// Metadata-quality audit functions (formerly audit_tools).
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -19,12 +11,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Naming patterns for MCP tool name validation.
@@ -59,15 +47,10 @@ type violation struct {
 	detail   string // Human-readable explanation of the violation.
 }
 
-// main audits MCP tool metadata for violations such as missing annotations.
-func main() {
-	client, cleanup, err := auditclient.NewMock()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
-	}
-	defer cleanup()
-
+// runMetadataAudit runs the metadata-quality checks (naming, descriptions,
+// annotations, schema shape, duplicates, register-meta inventory) and prints
+// the report to stdout.
+func runMetadataAudit(client *gitlabclient.Client) {
 	individualTools := listTools(client, false)
 	metaTools := listTools(client, true)
 
@@ -99,47 +82,7 @@ func main() {
 		violations = append(violations, auditRegisterMetaDefinitionViolations(registerMetaDefinitions)...)
 	}
 
-	printReport(individualTools, metaTools, violations, registerMetaDefinitions)
-}
-
-// listTools registers all MCP tools on an in-memory server and returns
-// the tool list. When meta is true, meta-tools are registered instead of
-// individual tools.
-func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
-	if meta {
-		if err := tools.RegisterAllMeta(server, client, edition.Ultimate); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		tools.RegisterAll(server, client, edition.Ultimate)
-	}
-	// Apply the same lockdown the production server uses so the audit
-	// reflects the schemas clients actually see.
-	toolutil.LockdownInputSchemas(server)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return result.Tools
+	printMetadataReport(individualTools, metaTools, violations, registerMetaDefinitions)
 }
 
 // auditNaming checks that every tool name matches the given regex pattern.
@@ -300,10 +243,10 @@ func isDeleteToolName(name string) bool {
 	return slices.Contains(strings.Split(name, "_"), "delete")
 }
 
-// printReport writes the full markdown audit report to stdout,
+// printMetadataReport writes the full markdown audit report to stdout,
 // including summary counts, violations grouped by category, and a
 // complete listing of all individual and meta-tools with their annotations.
-func printReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition) {
+func printMetadataReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Tool Metadata Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)
