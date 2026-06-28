@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	-o /out/gitlab-mcp-server ./cmd/server
 
 # --- Runtime stage ---
-FROM alpine:3.24.0
+FROM alpine:3.24.1
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates tzdata && \
