@@ -283,19 +283,6 @@ The evaluator measures whether each model chooses the correct meta-tool and
 action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
-<!-- START MODEL EVAL META SUMMARY -->
-Current published result: **Docker CE-on-Enterprise meta 20260527**.
-
-| Provider  | Model                       | Compatibility | Tool accuracy |       Recovery | Docker live status          |
-| --------- | --------------------------- | ------------- | ------------: | -------------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |     No repairs | 100.0% final across 274 ops |
-| Google    | `gemini-flash-latest`       | Review        |         74.3% | 100.0% (36/36) | 100.0% final across 274 ops |
-| OpenAI    | `gpt-5.4-nano`              | Review        |         99.3% |   100.0% (6/6) | 100.0% final across 274 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |   100.0% (5/5) | 100.0% final across 274 ops |
-
-The published model-evaluation set covers 560 task attempts and 1096 expected MCP operations. Across the selected reports, models emitted 1109 tool calls over 1145 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
-<!-- END MODEL EVAL META SUMMARY -->
-
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
 Current published result: **Docker CE dynamic 20260627-232303**.
 
