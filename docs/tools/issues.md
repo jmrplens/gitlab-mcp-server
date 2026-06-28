@@ -345,9 +345,9 @@ Get issue statistics for a project.
 
 ---
 
-## Iterations (Premium/Ultimate)
+## Iterations (Premium)
 
-> Iterations are time-boxed sprints (Premium/Ultimate). Iteration events record when an issue's iteration was assigned or removed and when its weight was set.
+> Iterations are time-boxed sprints (Premium). Iteration events record when an issue's iteration was assigned or removed and when its weight was set.
 
 ### `gitlab_list_group_iterations`
 

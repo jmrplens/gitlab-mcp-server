@@ -89,6 +89,7 @@ type reportSummary struct {
 	MissingTotal         int `json:"missing_total"`
 	OrphanTotal          int `json:"orphan_total"`
 	TierMismatchTotal    int `json:"tier_mismatch_total"`
+	UnassignedTotal      int `json:"unassigned_total"`
 	CleanDocs            int `json:"clean_docs"`
 	ReadmeCountDriftDocs int `json:"readme_count_drift_docs"`
 }
@@ -176,15 +177,24 @@ func parseFlags() cmdlineFlags {
 
 // check returns a non-empty diagnostic when the report has any
 // blocking findings. Empty string means the gate passes.
+//
+// UnassignedTotal blocks the gate too: when the catalog gains a new
+// group (or a tool whose owning group isn't claimed by any README
+// row), those tools would otherwise slip past DOC-002 silently. The
+// -check exit-non-zero on UnassignedTotal forces the orchestrator
+// to add explicit routing — either by extending docOwnershipRules
+// in mapping.go, by adding a new README Domains row, or by ADR-routing
+// the group into a parent doc's prefix allowlist.
 func (r report) check() string {
-	if r.Summary.MissingTotal == 0 && r.Summary.OrphanTotal == 0 && r.Summary.TierMismatchTotal == 0 {
+	if r.Summary.MissingTotal == 0 && r.Summary.OrphanTotal == 0 && r.Summary.TierMismatchTotal == 0 && r.Summary.UnassignedTotal == 0 {
 		return ""
 	}
 	return fmt.Sprintf(
-		"doc coverage: %d missing, %d orphan, %d tier_mismatch across %d/%d docs",
+		"doc coverage: %d missing, %d orphan, %d tier_mismatch, %d unassigned across %d/%d docs",
 		r.Summary.MissingTotal,
 		r.Summary.OrphanTotal,
 		r.Summary.TierMismatchTotal,
+		r.Summary.UnassignedTotal,
 		r.Summary.DocsWithFindings,
 		r.Summary.Docs,
 	)
@@ -404,16 +414,24 @@ func assembleFileList(mapping *docMapping, docEntries map[string]*fileFinding, u
 // CleanDocs; files with any blocking finding count toward
 // DocsWithFindings. ReadmeCountDriftDocs is the number of files whose
 // ExpectedCount diverges from ReadmeCount, which signals that the
-// Domains table needs a regen after catalog changes.
+// Domains table needs a regen after catalog changes. UnassignedTotal
+// sums the (unassigned) pseudo-entry's unassigned_expected and counts
+// catalog tools that no README row has been routed to.
 func summarize(files []fileFinding) reportSummary {
 	s := reportSummary{Docs: len(files)}
 	for _, f := range files {
 		s.MissingTotal += len(f.Missing)
 		s.OrphanTotal += len(f.Orphan)
 		s.TierMismatchTotal += len(f.TierMismatch)
-		if len(f.Missing) > 0 || len(f.Orphan) > 0 || len(f.TierMismatch) > 0 {
+		switch {
+		case f.DocPath == unassignedDocPath:
+			s.UnassignedTotal += len(f.UnassignedExpected) + len(f.UnassignedDocumented)
+			// Unassigned is itself a "finding" — every unassigned
+			// tool must be routed explicitly before merge.
 			s.DocsWithFindings++
-		} else if f.DocPath != unassignedDocPath {
+		case len(f.Missing) > 0 || len(f.Orphan) > 0 || len(f.TierMismatch) > 0:
+			s.DocsWithFindings++
+		default:
 			s.CleanDocs++
 		}
 		if !f.ReadmeCountMatches && f.DocPath != unassignedDocPath {

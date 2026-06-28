@@ -485,6 +485,15 @@ func TestCheck_FailsWhenFindingsPresent(t *testing.T) {
 	if r.check() == "" {
 		t.Error("check() = empty, want non-empty")
 	}
+	// Unassigned tools (catalog gained a new group before the README
+	// Domains table was updated) must also block -check so the
+	// orchestrator routes them explicitly instead of slipping past.
+	r = report{
+		Summary: reportSummary{UnassignedTotal: 1},
+	}
+	if r.check() == "" {
+		t.Error("check() = empty with UnassignedTotal=1, want non-empty")
+	}
 	r = report{}
 	if r.check() != "" {
 		t.Errorf("check() = %q, want empty", r.check())
