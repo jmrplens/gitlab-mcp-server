@@ -227,15 +227,18 @@ func projectPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 func projectGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := projectOptions("gitlab_project_get")
 	options.Usage = "Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup."
-	options.Aliases = []string{"gitlab_project_get", "get project", "show project", "fetch project metadata"}
+	options.Aliases = []string{"gitlab_project_get", "get project", "show project", "look up project", "fetch project metadata"}
 	options.RelatedActions = []string{actionProjectArchive, actionProjectDelete, actionProjectUpdate}
 	options.IndividualTool.Description = "Get a single project by ID or namespace path. Returns: project metadata including id, path_with_namespace, default_branch, visibility, and web URL. See also: gitlab_project_update, gitlab_project_archive, gitlab_project_delete."
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramProjectID: {
-			SemanticRole:     "scope_project",
-			ValueSource:      "Concrete numeric project ID or full namespace path from the prompt or a prior project result.",
-			ExampleBinding:   `params.project_id:"my-org/tools/gitlab-mcp-server"`,
-			CommonConfusions: []string{"Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query."},
+			SemanticRole:   "scope_project",
+			ValueSource:    "Concrete numeric project ID or full namespace path from the prompt or a prior project result.",
+			ExampleBinding: `params.project_id:"my-org/tools/gitlab-mcp-server"`,
+			CommonConfusions: []string{
+				"Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query.",
+				"A namespace path like group/project goes here directly — do not call discover_project.resolve for it (that action is only for a full git remote URL).",
+			},
 		},
 	}
 	return toolutil.NewReadActionSpec("get", route, options)

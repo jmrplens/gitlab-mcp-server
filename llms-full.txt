@@ -2414,7 +2414,7 @@ Parameter guidance:
 - feature_flag_update.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
-- ff_user_list_delete.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
+- ff_user_list_delete.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name., This deletes a feature flag user-list cohort, NOT the feature flag itself — to delete the flag use feature_flags.feature_flag_delete (by name).
 - ff_user_list_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - ff_user_list_get.user_list_iid: feature_flag_user_list_iid; source: Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.; avoid: Do not use the user list name as user_list_iid., The ID is project-scoped and distinct from the feature flag name.
 - ff_user_list_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
@@ -7400,7 +7400,7 @@ Parameter guidance:
 - fork.namespace_id: scope_namespace; source: Namespace ID (numeric) of the target group or user namespace.
 - fork.path: path_component; source: Path component relative to the project or repository root (no leading slash).
 - fork.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
-- get.project_id: scope_project; source: Concrete numeric project ID or full namespace path from the prompt or a prior project result.; avoid: Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query.
+- get.project_id: scope_project; source: Concrete numeric project ID or full namespace path from the prompt or a prior project result.; avoid: Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query., A namespace path like group/project goes here directly — do not call discover_project.resolve for it (that action is only for a full git remote URL).
 - hook_add.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - hook_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - hook_delete_custom_header.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
