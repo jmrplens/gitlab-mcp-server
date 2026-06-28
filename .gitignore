@@ -115,3 +115,7 @@ image.png
 
 # omo run-continuation scratch (external tooling)
 .omo/
+
+# Local opencode CLI agent config (per-developer, do not commit)
+/.opencode/
+/opencode.json
