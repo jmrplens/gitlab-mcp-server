@@ -347,36 +347,32 @@ func TestSiblingMatches_AcceptsPrefixedAndUnderscoreForms(t *testing.T) {
 func TestSeverityFor_OnlyEscalatesInNonCRUDClusters(t *testing.T) {
 	// Pure CRUD family: no batch/bulk/all/directory/single members.
 	pureCRUD := []string{"deploy_key_get", "deploy_key_add", "deploy_key_delete", "deploy_key_update"}
-	withClusterMembers(pureCRUD, func() {
-		for _, flag := range []string{"weak_aliases", "empty_related", "weak_individual_description"} {
-			if got := severityFor(flag, true); got != "warning" {
-				t.Errorf("pure CRUD cluster: severityFor(%q, inCluster) = %q, want warning", flag, got)
-			}
+	for _, flag := range []string{"weak_aliases", "empty_related", "weak_individual_description"} {
+		if got := severityFor(flag, true, pureCRUD); got != "warning" {
+			t.Errorf("pure CRUD cluster: severityFor(%q, inCluster) = %q, want warning", flag, got)
 		}
-	})
+	}
 
 	// Base-vs-variant cluster with a _batch member.
 	withBatch := []string{"link_create", "link_create_batch", "link_get", "link_list"}
-	withClusterMembers(withBatch, func() {
-		for _, flag := range []string{"weak_aliases", "empty_related", "weak_individual_description"} {
-			if got := severityFor(flag, true); got != "error" {
-				t.Errorf("base-vs-variant cluster: severityFor(%q, inCluster) = %q, want error", flag, got)
-			}
+	for _, flag := range []string{"weak_aliases", "empty_related", "weak_individual_description"} {
+		if got := severityFor(flag, true, withBatch); got != "error" {
+			t.Errorf("base-vs-variant cluster: severityFor(%q, inCluster) = %q, want error", flag, got)
 		}
-	})
+	}
 
 	// Out-of-cluster (e.g., a single-member or no cluster): always warning.
 	for _, flag := range []string{"weak_aliases", "empty_related", "weak_individual_description"} {
-		if got := severityFor(flag, false); got != "warning" {
+		if got := severityFor(flag, false, nil); got != "warning" {
 			t.Errorf("out-of-cluster: severityFor(%q, false) = %q, want warning", flag, got)
 		}
 	}
 
 	// Flags that are always error/warning regardless of cluster.
-	if got := severityFor("generic_usage", false); got != "error" {
+	if got := severityFor("generic_usage", false, nil); got != "error" {
 		t.Errorf("severityFor(generic_usage) = %q, want error", got)
 	}
-	if got := severityFor("missing_disambiguation", false); got != "error" {
+	if got := severityFor("missing_disambiguation", false, nil); got != "error" {
 		t.Errorf("severityFor(missing_disambiguation) = %q, want error", got)
 	}
 }

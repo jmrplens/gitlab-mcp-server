@@ -118,14 +118,14 @@ var usageSignalKeywords = []string{
 // _single) — pure CRUD families (create/get/list/delete/update on the
 // same resource) are not escalated because the verb is itself the
 // disambiguator and the action name is the natural description.
-func severityFor(flagName string, inCluster bool) string {
+func severityFor(flagName string, inCluster bool, clusterMembers []string) string {
 	switch flagName {
 	case "generic_usage", "missing_disambiguation":
 		return "error"
 	case "weak_aliases", "empty_related", "weak_individual_description":
 		// These three flags share the same escalation rule: only an error when
 		// the action sits in a cluster that contains a non-CRUD variant.
-		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
+		if inCluster && hasNonCRUDVariantInCluster(clusterMembers) {
 			return "error"
 		}
 		return "warning"
@@ -148,21 +148,6 @@ func severityFor(flagName string, inCluster bool) string {
 		return "warning"
 	}
 	return "info"
-}
-
-// currentClusterMembers is set by buildReport before iterating packages so
-// severityFor can apply the cluster-variant guard without threading the
-// cluster membership through every call site. Reset to nil for any auditor
-// use that doesn't set it (e.g. unit tests of severityFor).
-var currentClusterMembers []string
-
-// withClusterMembers returns a copy of fn invoked with currentClusterMembers
-// set to members, then resets the global. Used by buildReport to scope
-// severityFor's cluster-variant lookups to the current spec's cluster.
-func withClusterMembers(members []string, fn func()) {
-	currentClusterMembers = members
-	defer func() { currentClusterMembers = nil }()
-	fn()
 }
 
 // actionFinding records the discovery-completeness flags raised for one action.
@@ -359,25 +344,19 @@ func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 
 // buildPackageReports analyzes every spec and returns the per-package reports
 // ready for JSON output. Gaps-only mode filters clean packages.
-func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
+func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, _ bool) []packageReport {
 	byPackage := map[string]*packageReport{}
 	for _, group := range tools.CollectActionSpecs(client, true) {
 		for _, spec := range group.Actions {
 			owner := ownerPackage(group, spec)
 			clusterMembers := clusterMembersFor(allClusters, owner, spec.Name)
-			withClusterMembers(clusterMembers, func() {
-				pr := packageFor(byPackage, owner)
-				pr.Actions++
-				finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
-				if len(finding.Flags) == 0 {
-					return
-				}
-				if gapsOnly {
-					pr.Findings = append(pr.Findings, finding)
-					return
-				}
-				pr.Findings = append(pr.Findings, finding)
-			})
+			pr := packageFor(byPackage, owner)
+			pr.Actions++
+			finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
+			if len(finding.Flags) == 0 {
+				continue
+			}
+			pr.Findings = append(pr.Findings, finding)
 		}
 	}
 	packagesOut := make([]packageReport, 0, len(byPackage))
@@ -507,7 +486,7 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	}
 	sort.Strings(flags)
 
-	severity := highestSeverity(flags, inCluster)
+	severity := highestSeverity(flags, inCluster, clusterMembers)
 
 	return actionFinding{
 		Action:    spec.Name,
@@ -568,10 +547,10 @@ func isListOrDetailContent(spec toolutil.ActionSpec) bool {
 
 // highestSeverity returns the highest severity among the given flags,
 // upgrading empty_related/weak_aliases for cluster members.
-func highestSeverity(flags []string, inCluster bool) string {
+func highestSeverity(flags []string, inCluster bool, clusterMembers []string) string {
 	highest := severityInfo
 	for _, f := range flags {
-		r := severityRank(severityFor(f, inCluster))
+		r := severityRank(severityFor(f, inCluster, clusterMembers))
 		if r < highest {
 			highest = r
 		}
@@ -1202,7 +1181,7 @@ func summarize(packages []packageReport) reportSummary {
 				case "aliases_only_toolname":
 					s.AliasesOnlyToolname++
 				}
-				switch severityFor(flag, inCluster) {
+				switch severityFor(flag, inCluster, finding.Cluster) {
 				case "error":
 					s.Errors++
 				case "warning":
