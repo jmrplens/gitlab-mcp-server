@@ -26,8 +26,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// outputJSON switches stdout output from human-readable markdown to structured
+// JSON. Set by the -json flag.
+var outputJSON bool
+
 func main() {
 	view := flag.String("view", "all", "which audit view to run: metadata, output, or all")
+	flag.BoolVar(&outputJSON, "json", false, "emit JSON instead of markdown")
 	flag.Parse()
 
 	switch *view {
@@ -89,4 +94,19 @@ func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
 	}
 	return result.Tools
+}
+
+// jsonEntry is the JSON representation of a violation or finding.
+type jsonEntry struct {
+	Tool     string `json:"tool"`
+	Category string `json:"category"`
+	Detail   string `json:"detail"`
+}
+
+func toEntries(vs []violation) []jsonEntry {
+	out := make([]jsonEntry, len(vs))
+	for i, v := range vs {
+		out[i] = jsonEntry{v.tool, v.category, v.detail}
+	}
+	return out
 }

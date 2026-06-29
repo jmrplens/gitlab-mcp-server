@@ -80,6 +80,7 @@ func main() {
 	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
 	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
+	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
 
 	if *compareSchemas {
@@ -150,6 +151,32 @@ func main() {
 	metaEnterpriseCatalogActions := countActions(metaEnterpriseRoutes)
 	baseReachableActions := countActions(dynamicBaseRoutes)
 	enterpriseReachableActions := countActions(dynamicEnterpriseRoutes)
+
+	if *jsonOut {
+		summary := struct {
+			IndividualTools         int `json:"individual_tools"`
+			MetaBaseTools           int `json:"meta_base_tools"`
+			DynamicBaseTools        int `json:"dynamic_base_tools"`
+			IndividualTokens        int `json:"individual_tokens"`
+			MetaBaseTokens          int `json:"meta_base_tokens"`
+			MetaEnterpriseTokens    int `json:"meta_enterprise_tokens"`
+			DynamicBaseTokens       int `json:"dynamic_base_tokens"`
+			DynamicEnterpriseTokens int `json:"dynamic_enterprise_tokens"`
+			BaseReachableActions    int `json:"base_reachable_actions"`
+			ResourceTokens          int `json:"resource_tokens"`
+			PromptTokens            int `json:"prompt_tokens"`
+		}{
+			len(individualInfo), len(metaBaseInfo), len(dynamicBaseInfo),
+			indTotal, metaTotal, metaEntTotal, dynamicTotal, dynamicEntTotal,
+			baseReachableActions, individualResourceTokens, promptTokens,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if encErr := enc.Encode(summary); encErr != nil {
+			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
+		}
+		return
+	}
 
 	fmt.Println("## Mode Comparison")
 	fmt.Println()

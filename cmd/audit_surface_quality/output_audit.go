@@ -2,7 +2,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -143,6 +145,23 @@ func collectRouteOutputSchemaFindings(allRoutes map[string]toolutil.ActionMap) [
 
 // printOutputReport prints the audit results as a formatted table.
 func printOutputReport(individual, meta []*mcp.Tool, fs []finding) {
+	if outputJSON {
+		entries := make([]jsonEntry, len(fs))
+		for i, f := range fs {
+			entries[i] = jsonEntry{f.tool, f.category, f.detail}
+		}
+		report := struct {
+			View            string      `json:"view"`
+			IndividualTools int         `json:"individual_tools"`
+			MetaTools       int         `json:"meta_tools"`
+			Findings        int         `json:"findings"`
+			Entries         []jsonEntry `json:"entries"`
+		}{"output", len(individual), len(meta), len(fs), entries}
+		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+			fmt.Fprintf(os.Stderr, "encode json: %v\n", err)
+		}
+		return
+	}
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Output Quality Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)

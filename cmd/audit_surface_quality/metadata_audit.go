@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -247,6 +248,19 @@ func isDeleteToolName(name string) bool {
 // including summary counts, violations grouped by category, and a
 // complete listing of all individual and meta-tools with their annotations.
 func printMetadataReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition) {
+	if outputJSON {
+		report := struct {
+			View            string      `json:"view"`
+			IndividualTools int         `json:"individual_tools"`
+			MetaTools       int         `json:"meta_tools"`
+			Violations      int         `json:"violations"`
+			Entries         []jsonEntry `json:"entries"`
+		}{"metadata", len(individual), len(meta), len(vs), toEntries(vs)}
+		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
+			fmt.Fprintf(os.Stderr, "encode json: %v\n", err)
+		}
+		return
+	}
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Tool Metadata Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)

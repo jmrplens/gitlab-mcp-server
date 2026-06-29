@@ -50,6 +50,7 @@ var topDomains = 20
 // surface, and prints the metrics report to stdout.
 func main() {
 	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
+	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
 
 	client, cleanup, err := auditclient.NewMock()
@@ -96,6 +97,31 @@ func main() {
 		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
 			elicitationCount++
 		}
+	}
+
+	if *jsonOut {
+		summary := struct {
+			IndividualTools   int `json:"individual_tools"`
+			MetaBase          int `json:"meta_base"`
+			MetaEnterprise    int `json:"meta_enterprise"`
+			DynamicBase       int `json:"dynamic_base"`
+			DynamicEnterprise int `json:"dynamic_enterprise"`
+			Resources         int `json:"resources"`
+			Prompts           int `json:"prompts"`
+			ToolPackages      int `json:"tool_packages"`
+			SourceFiles       int `json:"source_files"`
+			TestFiles         int `json:"test_files"`
+		}{
+			len(individualTools), len(metaBase), len(metaEnterprise),
+			len(dynamicBase), len(dynamicEnterprise),
+			resourceCount, promptCount, toolPackages, srcFiles, testFiles,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if encErr := enc.Encode(summary); encErr != nil {
+			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
+		}
+		return
 	}
 
 	fmt.Println("=" + strings.Repeat("=", 59))

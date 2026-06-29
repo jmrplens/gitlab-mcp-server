@@ -120,3 +120,26 @@ image.png
 /.opencode/
 /opencode.json
 audit_dynamic_aliases
+
+# Stray compiled binaries from `go build ./cmd/...` without -o
+/audit_1to1
+/audit_catalog_first
+/audit_discovery_completeness
+/audit_doc_coverage
+/audit_dynamic_aliases
+/audit_edition_tier
+/audit_metrics
+/audit_string_dupes
+/audit_surface_quality
+/audit_test_names
+/audit_tokens
+/eval_mcp_surfaces
+/find_dupes
+/format_md_tables
+/gen_action_catalog_manifest
+/gen_docker_tools
+/gen_llms
+/gen_readme
+/gen_testing_docs
+/godoc_tool
+/gitlab-mcp-server
