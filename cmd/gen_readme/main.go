@@ -404,15 +404,15 @@ func listToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
 }
 
 func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
-	totalBytes := 0
+	totalTokens := 0
 	for _, t := range toolList {
 		b, err := json.Marshal(t)
 		if err != nil {
 			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
 		}
-		totalBytes += len(b)
+		totalTokens += toolutil.CountTokens(b)
 	}
-	return totalBytes / readmeBytesPerToken, nil
+	return totalTokens, nil
 }
 
 func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOptions) (int, error) {
@@ -451,7 +451,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 	}
 
 	return withReadmeSession(server, "resources", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
-		totalBytes := 0
+		totalTokens := 0
 		res, err := session.ListResources(ctx, nil)
 		if err != nil {
 			return 0, fmt.Errorf("list resources: %w", err)
@@ -461,7 +461,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
 			}
-			totalBytes += len(b)
+			totalTokens += toolutil.CountTokens(b)
 		}
 
 		tpl, err := session.ListResourceTemplates(ctx, nil)
@@ -473,9 +473,9 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
 			}
-			totalBytes += len(b)
+			totalTokens += toolutil.CountTokens(b)
 		}
-		return totalBytes / readmeBytesPerToken, nil
+		return totalTokens, nil
 	})
 }
 
@@ -484,7 +484,7 @@ func measurePrompts(client *gitlabclient.Client) (int, error) {
 	prompts.Register(server, client)
 
 	return withReadmeSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
-		totalBytes := 0
+		totalTokens := 0
 		promptList, err := session.ListPrompts(ctx, nil)
 		if err != nil {
 			return 0, fmt.Errorf("list prompts: %w", err)
@@ -494,9 +494,9 @@ func measurePrompts(client *gitlabclient.Client) (int, error) {
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
 			}
-			totalBytes += len(b)
+			totalTokens += toolutil.CountTokens(b)
 		}
-		return totalBytes / readmeBytesPerToken, nil
+		return totalTokens, nil
 	})
 }
 

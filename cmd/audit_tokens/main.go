@@ -183,11 +183,11 @@ func main() {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  Mode\tTools\tReachable actions\tTokens\tBytes\n")
 	fmt.Fprintf(tw, "  ────\t─────\t──────────────\t──────\t─────\n")
-	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), baseReachableActions, fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), enterpriseReachableActions, fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(totalBytes(individualInfo)))
+	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(totalBytes(metaBaseInfo)))
+	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(totalBytes(metaEnterpriseInfo)))
+	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), baseReachableActions, fmtNum(dynamicTotal), fmtNum(totalBytes(dynamicBaseInfo)))
+	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), enterpriseReachableActions, fmtNum(dynamicEntTotal), fmtNum(totalBytes(dynamicEnterpriseInfo)))
 	_ = tw.Flush()
 	fmt.Println()
 	if addedStandalone := baseReachableActions - metaBaseCatalogActions; addedStandalone > 0 {
@@ -210,11 +210,11 @@ func main() {
 	// Shared overhead (resources + prompts)
 	fmt.Println("## Shared Overhead (Resources + Prompts)")
 	fmt.Println()
-	fmt.Printf("  Resources (individual): ~%s tokens (%s bytes)\n", fmtNum(individualResourceTokens), fmtNum(individualResourceTokens*bytesPerTok))
-	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaBaseResourceTokens), fmtNum(metaBaseResourceTokens*bytesPerTok))
-	fmt.Printf("  Resources (dynamic): ~%s tokens (%s bytes)\n", fmtNum(dynamicBaseResourceTokens), fmtNum(dynamicBaseResourceTokens*bytesPerTok))
-	fmt.Printf("  Resources (dynamic-minimal): ~%s tokens (%s bytes)\n", fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicMinimalResourceTokens*bytesPerTok))
-	fmt.Printf("  Prompts (full): ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
+	fmt.Printf("  Resources (individual): ~%s tokens\n", fmtNum(individualResourceTokens))
+	fmt.Printf("  Resources (meta-tools): ~%s tokens\n", fmtNum(metaBaseResourceTokens))
+	fmt.Printf("  Resources (dynamic): ~%s tokens\n", fmtNum(dynamicBaseResourceTokens))
+	fmt.Printf("  Resources (dynamic-minimal): ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
+	fmt.Printf("  Prompts (full): ~%s tokens\n", fmtNum(promptTokens))
 	fmt.Println("  Prompts (dynamic-minimal): ~0 tokens (0 bytes)")
 	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaBaseResourceTokens+promptTokens))
@@ -350,7 +350,7 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
 			os.Exit(1)
 		}
-		tokens := len(b) / bytesPerTok
+		tokens := toolutil.CountTokens(b)
 		domain := extractDomain(t.Name)
 		infos = append(infos, toolTokenInfo{
 			Name:   t.Name,
@@ -418,7 +418,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		os.Exit(1)
 	}
 
-	totalBytes := 0
+	totalTokens := 0
 
 	res, err := session.ListResources(ctx, nil)
 	if err != nil {
@@ -429,7 +429,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		if mErr != nil {
 			fatalWithSession("marshal resource %s: %v\n", r.Name, mErr)
 		}
-		totalBytes += len(b)
+		totalTokens += toolutil.CountTokens(b)
 	}
 
 	tpl, err := session.ListResourceTemplates(ctx, nil)
@@ -441,12 +441,12 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		if mErr != nil {
 			fatalWithSession("marshal template %s: %v\n", t.Name, mErr)
 		}
-		totalBytes += len(b)
+		totalTokens += toolutil.CountTokens(b)
 	}
 
 	_ = session.Close()
 	_ = serverSession.Close()
-	return totalBytes / bytesPerTok
+	return totalTokens
 }
 
 // countActions returns the number of actions in a route catalog.
@@ -481,7 +481,7 @@ func measurePrompts(client *gitlabclient.Client) int {
 		os.Exit(1)
 	}
 
-	totalBytes := 0
+	totalTokens := 0
 	p, err := session.ListPrompts(ctx, nil)
 	if err == nil {
 		for _, pr := range p.Prompts {
@@ -492,12 +492,12 @@ func measurePrompts(client *gitlabclient.Client) int {
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
 				os.Exit(1)
 			}
-			totalBytes += len(b)
+			totalTokens += toolutil.CountTokens(b)
 		}
 	}
 	_ = session.Close()
 	_ = serverSession.Close()
-	return totalBytes / bytesPerTok
+	return totalTokens
 }
 
 // extractDomain returns the GitLab tool domain from names like
@@ -516,6 +516,15 @@ func totalTokens(infos []toolTokenInfo) int {
 	total := 0
 	for _, i := range infos {
 		total += i.Tokens
+	}
+	return total
+}
+
+// totalBytes sums actual byte sizes across a measured tool list.
+func totalBytes(infos []toolTokenInfo) int {
+	total := 0
+	for _, i := range infos {
+		total += i.Bytes
 	}
 	return total
 }

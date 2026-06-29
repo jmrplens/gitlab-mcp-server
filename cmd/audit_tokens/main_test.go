@@ -207,7 +207,7 @@ func TestFmtNum_AddsThousandsSeparators(t *testing.T) {
 }
 
 // TestMeasureTools_AssignsDomainAndComputesTokens verifies the tool token
-// estimator captures name, domain, byte length, and bytes/4 token estimate.
+// estimator captures name, domain, byte length, and token count.
 func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 	toolList := []*mcp.Tool{
 		{Name: "gitlab_project_get", Description: "Get a project."},
@@ -223,8 +223,8 @@ func TestMeasureTools_AssignsDomainAndComputesTokens(t *testing.T) {
 	names := map[string]bool{}
 	for _, info := range got {
 		names[info.Name] = true
-		if info.Tokens != info.Bytes/bytesPerTok {
-			t.Errorf("info %q: Tokens=%d, want Bytes/4 = %d", info.Name, info.Tokens, info.Bytes/bytesPerTok)
+		if info.Tokens <= 0 {
+			t.Errorf("info %q: Tokens=%d, want > 0 (real tokenizer)", info.Name, info.Tokens)
 		}
 		if info.Domain == "" {
 			t.Errorf("info %q: Domain is empty", info.Name)
