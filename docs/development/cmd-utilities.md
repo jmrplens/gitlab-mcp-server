@@ -6,28 +6,28 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 
 ## Quick reference
 
-| Utility                        | Category                  | Purpose                                                                | Make target                        |
-| ------------------------------ | ------------------------- | ---------------------------------------------------------------------- | ---------------------------------- |
-| `audit_1to1`                   | SDK/API parity audits     | Consolidated SDK↔API parity audit (struct/action/metadata gap streams) | `make audit-1to1`                  |
-| `audit_catalog_first`          | Catalog & metadata audits | Source-discovered ActionSpec catalog-first coverage inventory          | `make audit-catalog-first`         |
-| `audit_discovery_completeness` | Catalog & metadata audits | Extended META-001 model-discovery metadata quality auditor             | `make audit-discovery`             |
-| `audit_doc_coverage`           | Catalog & metadata audits | Per-doc-file gaps vs the action catalog (DOC-002)                      | `make audit-doc-coverage`          |
-| `audit_dynamic_aliases`        | Catalog & metadata audits | Dynamic-toolset alias governance (collisions, ambiguity)               | `make audit-dynamic-aliases`       |
-| `audit_edition_tier`           | Catalog & metadata audits | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating   | `make audit-edition-tier`          |
-| `audit_surface_quality`        | Surface quality audits    | Consolidated MCP tool surface quality audit (metadata + output)        | `make audit-surface-quality`       |
-| `audit_tokens`                 | Surface quality audits    | LLM context-window overhead of every tool/resource/prompt definition   | `make audit-tokens`                |
-| `audit_metrics`                | Surface quality audits    | Comprehensive metrics summary (tools, resources, prompts, codebase)    | `make audit-metrics`               |
-| `godoc_tool`                   | Source quality audits     | Godoc compliance auditor and fixer (audit + fix subcommands)           | `make audit-godocs`                |
-| `audit_test_names`             | Source quality audits     | Classifies `Test*` functions by naming pattern; emits rename hints     | `make audit-test-names`            |
-| `audit_string_dupes`           | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations    | —                                  |
-| `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                        | `make gen-action-catalog-manifest` |
-| `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                               | `make gen-llms`                    |
-| `gen_readme`                   | Generators                | Regenerates the managed token-footprint sections in `README.md`        | `make gen-readme`                  |
-| `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/testing/testing.md`        | `make gen-testing-docs`            |
-| `gen_docker_tools`             | Generators                | Generates a Docker MCP Registry-compatible `tools.json`                | —                                  |
-| `format_md_tables`             | Formatters                | Normalizes Markdown pipe tables in `README.md` and `docs/`             | part of `make audit-docs`          |
-| `eval_mcp_surfaces`            | Evaluation                | Evaluates model behavior across MCP tool surfaces                      | `make eval-surfaces-docker*`       |
-| `server`                       | Server                    | The main `gitlab-mcp-server` MCP binary (runtime entry point)          | `make build`, `make run`           |
+| Utility                        | Category                  | Purpose                                                                                                                           | Make target                               |
+| ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `audit_1to1`                   | SDK/API parity audits     | Consolidated SDK↔API parity audit (struct/action/metadata gap streams)                                                            | `make audit-1to1`                         |
+| `audit_catalog_first`          | Catalog & metadata audits | Source-discovered ActionSpec catalog-first coverage inventory                                                                     | `make audit-catalog-first`                |
+| `audit_discovery_completeness` | Catalog & metadata audits | Extended META-001 model-discovery metadata quality auditor                                                                        | `make audit-discovery`                    |
+| `audit_doc_coverage`           | Catalog & metadata audits | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                 | `make audit-doc-coverage`                 |
+| `audit_dynamic_aliases`        | Catalog & metadata audits | Dynamic-toolset alias governance (collisions, ambiguity)                                                                          | `make audit-dynamic-aliases`              |
+| `audit_edition_tier`           | Catalog & metadata audits | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                              | `make audit-edition-tier`                 |
+| `audit_surface_quality`        | Surface quality audits    | Consolidated MCP tool surface quality audit (metadata + output)                                                                   | `make audit-surface-quality`              |
+| `audit_tokens`                 | Surface quality audits    | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section | `make audit-tokens`, `make gen-footprint` |
+| `audit_metrics`                | Surface quality audits    | Comprehensive metrics summary (tools, resources, prompts, codebase)                                                               | `make audit-metrics`                      |
+| `godoc_tool`                   | Source quality audits     | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                      | `make audit-godocs`                       |
+| `audit_test_names`             | Source quality audits     | Classifies `Test*` functions by naming pattern; emits rename hints                                                                | `make audit-test-names`                   |
+| `audit_string_dupes`           | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations                                                               | —                                         |
+| `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                                                                                   | `make gen-action-catalog-manifest`        |
+| `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                                                                                          | `make gen-llms`                           |
+| `gen_stats`                    | Generators                | Regenerates the managed repository statistics section in `README.md`                                                              | `make gen-stats`                          |
+| `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/testing/testing.md`                                                                   | `make gen-testing-docs`                   |
+| `gen_docker_tools`             | Generators                | Generates a Docker MCP Registry-compatible `tools.json`                                                                           | —                                         |
+| `format_md_tables`             | Formatters                | Normalizes Markdown pipe tables in `README.md` and `docs/`                                                                        | part of `make audit-docs`                 |
+| `eval_mcp_surfaces`            | Evaluation                | Evaluates model behavior across MCP tool surfaces                                                                                 | `make eval-surfaces-docker*`              |
+| `server`                       | Server                    | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                     | `make build`, `make run`                  |
 
 ## SDK/API parity audits
 
@@ -276,7 +276,7 @@ The shared `listTools` applies `LockdownInputSchemas`, so the audit reflects exa
 
 ### audit_tokens
 
-Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using a bytes/4 heuristic. With `--compare-schemas`, it runs a sizing spike comparing `META_PARAM_SCHEMA` modes.
+Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using a bytes/4 heuristic. With `--compare-schemas`, it runs a sizing spike comparing `META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc.
 
 #### Usage
 
@@ -286,25 +286,34 @@ go run ./cmd/audit_tokens/
 
 # Compare META_PARAM_SCHEMA modes
 go run ./cmd/audit_tokens/ -compare-schemas
+
+# Regenerate the README token-footprint section + docs/development/token-footprint.md
+go run ./cmd/audit_tokens/ -footprint
 ```
 
 #### Flags
 
-| Flag               | Type   | Default | Description                                                                                                                |
-| ------------------ | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `-compare-schemas` | `bool` | `false` | Compare `META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit |
+| Flag               | Type   | Default | Description                                                                                                                                   |
+| ------------------ | ------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md` |
+| `-compare-schemas` | `bool` | `false` | Compare `META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                    |
+| `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                            |
+| `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                              |
+| `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                       |
 
 #### Output
 
-Default mode: a Markdown report to stdout with mode comparison, per-tool costs, and domain totals. `--compare-schemas` mode: a sizing table with opaque/full/compact byte costs per meta-tool.
+Default mode: a Markdown report to stdout with mode comparison, per-tool costs, and domain totals. `-compare-schemas` mode: a sizing table with opaque/full/compact byte costs per meta-tool. `-footprint` mode: rewrites the `<!-- START TOKEN FOOTPRINT -->` section of `README.md` and writes `docs/development/token-footprint.md`.
 
 #### Make targets
 
 - `make audit-tokens`
+- `make gen-footprint` — runs `-footprint` mode.
+- `make gen-readme` — umbrella that also regenerates the stats section.
 
 #### Notes
 
-The `--compare-schemas` mode replaces the former `audit_meta_schema` spike binary.
+The `--compare-schemas` mode replaces the former `audit_meta_schema` spike binary. The `-footprint` mode replaces the token-footprint half of the former `gen_readme` binary; the statistics half moved to `gen_stats`.
 
 ### audit_metrics
 
@@ -505,27 +514,34 @@ Rewrites `llms.txt` and `llms-full.txt` at the project root.
 - `make gen-llms`
 - `make check-llms` — CI gate, also part of `make audit-docs`.
 
-### gen_readme
+### gen_stats
 
-Regenerates the managed `README.md` sections between the `<!-- START TOKEN FOOTPRINT -->` / `<!-- END TOKEN FOOTPRINT -->` markers with statistics: visible tools, reachable actions, and tool-schema + shared tokens across dynamic/meta/individual × full/minimal.
+Regenerates the managed `README.md` repository statistics section between the `<!-- START STATS -->` / `<!-- END STATS -->` markers: file/function/line counts, code-pattern tallies, dependency and git history metrics, and "hall of fame" records (longest names, largest files).
 
 #### Usage
 
 ```bash
-go run ./cmd/gen_readme/
+go run ./cmd/gen_stats/
 ```
 
 #### Flags
 
-This utility takes no flags.
+- `--check` — verify the stats section is current without writing; exits non-zero if stale.
 
 #### Output
 
-Rewrites the managed `README.md` sections in place.
+Rewrites the managed stats section of `README.md` in place.
 
 #### Make targets
 
-- `make gen-readme`
+- `make gen-stats`
+- `make gen-readme` — convenience umbrella that also runs the token-footprint generator.
+
+> **Token footprint moved.** The README `<!-- START TOKEN FOOTPRINT -->` section and `docs/development/token-footprint.md` are now regenerated by the `-footprint` flag of `audit_tokens` (formerly the token-footprint half of `gen_readme`):
+>
+> ```bash
+> go run ./cmd/audit_tokens/ -footprint
+> ```
 
 ### gen_testing_docs
 

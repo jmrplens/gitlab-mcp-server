@@ -59,7 +59,7 @@ gitlab-mcp-server/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
-│   ├── gen_readme/              # Generates README sections from source metadata
+│   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   └── gen_testing_docs/        # Generates docs/testing/testing.md
 ├── internal/
 │   ├── autoupdate/              # Self-update: background startup checks, rename trick, restart activation

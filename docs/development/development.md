@@ -40,7 +40,7 @@ gitlab-mcp-server/
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
 │   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt
-│   ├── gen_readme/              # Regenerates README managed sections
+│   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
 │   └── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
 ├── internal/

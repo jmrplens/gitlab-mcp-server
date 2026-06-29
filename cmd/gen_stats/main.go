@@ -1,8 +1,19 @@
+// Command gen_stats auto-generates the repository statistics section in
+// README.md. It walks the source tree, classifies Go files, counts git
+// history and dependencies, and replaces the content between the
+// <!-- START STATS --> / <!-- END STATS --> markers.
+//
+// Usage:
+//
+//	go run ./cmd/gen_stats/
+//
+// With --check it verifies the section is current without writing.
 package main
 
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"io/fs"
 	"os"
@@ -15,16 +26,60 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 )
 
-// Marker constants for the stats section of README.md.
+// Marker constants for the stats section of README.md, plus generator paths.
 const (
 	statsStartMarker = "<!-- START STATS -->"
 	statsEndMarker   = "<!-- END STATS -->"
+	readmePath       = "README.md"
+	repoRoot         = "."
 	linesPerPage     = 55 // approximate readable lines per A4 page at 12pt
 
 	// scannerBufSize is the initial and maximum bufio.Scanner token size.
 	// 512 KB handles the largest generated Go files without reallocating.
 	scannerBufSize = 512 * 1024
 )
+
+// main regenerates the README stats section and exits non-zero on failure.
+// With --check it verifies the section is current without writing.
+func main() {
+	check := flag.Bool("check", false, "verify README stats section is current without writing")
+	flag.Parse()
+	if err := run(*check); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// run collects repository statistics and replaces the README stats section.
+// When check is true, it only verifies the section is current and returns an
+// error if it is stale.
+func run(check bool) error {
+	stats, err := collectStats(repoRoot)
+	if err != nil {
+		return fmt.Errorf("collecting stats: %w", err)
+	}
+	rendered := renderStats(stats)
+	if check {
+		data, readErr := os.ReadFile(readmePath) //#nosec G304 -- path is a hardcoded constant
+		if readErr != nil {
+			return readErr
+		}
+		text := string(data)
+		updated, replaceErr := computeReplacedText(text, statsStartMarker, statsEndMarker, rendered)
+		if replaceErr != nil {
+			return replaceErr
+		}
+		if updated != text {
+			return fmt.Errorf("%s stats section is stale; run go run ./cmd/gen_stats/", readmePath)
+		}
+		return nil
+	}
+	if replaceErr := replaceSection(readmePath, statsStartMarker, statsEndMarker, rendered); replaceErr != nil {
+		return replaceErr
+	}
+	fmt.Printf("Updated %s stats section\n", readmePath)
+	return nil
+}
 
 // repoStats accumulates filesystem-level measurements of the Go codebase.
 //
@@ -418,8 +473,8 @@ func renderStats(s *repoStats) string {
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
 		[][]string{
 			{"Source functions", fmtInt(srcFuncs)},
-			{"— exported (public)", fmtInt(s.ExportedFuncs)},
-			{"— unexported (private)", fmtInt(s.UnexportedFuncs)},
+			{"\u2014 exported (public)", fmtInt(s.ExportedFuncs)},
+			{"\u2014 unexported (private)", fmtInt(s.UnexportedFuncs)},
 			{"Unit test functions (`TestXxx`)", fmtInt(s.TestFuncs)},
 			{"Subtests (`t.Run(...)`)", fmtInt(s.Subtests)},
 			{"End-to-end test functions", fmtInt(s.E2ETestFuncs)},
@@ -432,11 +487,11 @@ func renderStats(s *repoStats) string {
 		[]string{"Observation", "Value"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
 		[][]string{
-			{"Test lines vs source lines", fmt.Sprintf("%.2f× more tests than code", testRatio)},
+			{"Test lines vs source lines", fmt.Sprintf("%.2f\u00d7 more tests than code", testRatio)},
 			{"Average source file length", "~" + fmtInt(avgSrc) + " lines"},
 			{"Average test file length", "~" + fmtInt(avgTest) + " lines"},
 			{"Comment lines in source", fmt.Sprintf("%s (~%.1f%% of source)", fmtInt(s.CommentLines), commentPct)},
-			{"Test functions per source function", fmt.Sprintf("%.1f×", testPerFunc)},
+			{"Test functions per source function", fmt.Sprintf("%.1f\u00d7", testPerFunc)},
 		},
 	))
 	b.WriteByte('\n')
@@ -474,8 +529,8 @@ func renderStats(s *repoStats) string {
 		[]string{"Record", "File"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
 		[][]string{
-			{"Longest source file", fmt.Sprintf("`%s` — %s lines", s.LargestSrcFile, fmtInt(s.LargestSrcLines))},
-			{"Longest test file", fmt.Sprintf("`%s` — %s lines", s.LargestTestFile, fmtInt(s.LargestTestLines))},
+			{"Longest source file", fmt.Sprintf("`%s` \u2014 %s lines", s.LargestSrcFile, fmtInt(s.LargestSrcLines))},
+			{"Longest test file", fmt.Sprintf("`%s` \u2014 %s lines", s.LargestTestFile, fmtInt(s.LargestTestLines))},
 		},
 	))
 	b.WriteByte('\n')
@@ -509,4 +564,40 @@ func fmtInt(n int) string {
 		buf = append(buf, c)
 	}
 	return string(buf)
+}
+
+// replaceSection replaces content between startMark and endMark in the file at
+// path, preserving both markers themselves.
+func replaceSection(path, startMark, endMark, content string) error {
+	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	result, err := computeReplacedText(string(data), startMark, endMark, content)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
+}
+
+// computeReplacedText returns the input text with the content between startMark
+// and endMark replaced by the new content string.
+func computeReplacedText(text, startMark, endMark, content string) (string, error) {
+	startIdx := strings.Index(text, startMark)
+	if startIdx < 0 {
+		return "", fmt.Errorf("start marker %s not found", startMark)
+	}
+
+	searchFrom := startIdx + len(startMark)
+	relEndIdx := strings.Index(text[searchFrom:], endMark)
+	if relEndIdx < 0 {
+		return "", fmt.Errorf("end marker %s not found after start marker", endMark)
+	}
+	endIdx := searchFrom + relEndIdx
+
+	before := text[:searchFrom]
+	after := text[endIdx:]
+	return before + "\n\n" + content + "\n" + after, nil
 }

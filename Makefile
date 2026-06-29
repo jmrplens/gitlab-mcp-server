@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint gen-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -686,9 +686,22 @@ check-server-json:
 check-openplugin:
 	scripts/check-openplugin.sh
 
-## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
-gen-readme:
-	go run ./cmd/gen_readme/
+## gen-readme: regenerate all managed README.md sections (token footprint + stats).
+gen-readme: gen-footprint gen-stats
+
+## update-all: run every generator and doc updater in one pass.
+## Generates: token footprint, repo stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
+update-all: gen-footprint gen-stats gen-llms gen-testing-docs gen-action-catalog-manifest
+	go run ./cmd/format_md_tables/
+	@echo "All generators and formatters complete."
+
+## gen-footprint: measure token footprint and write the README section + token-footprint.md.
+gen-footprint:
+	go run ./cmd/audit_tokens/ -footprint
+
+## gen-stats: regenerate the repository statistics section in README.md.
+gen-stats:
+	go run ./cmd/gen_stats/
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 gen-testing-docs:

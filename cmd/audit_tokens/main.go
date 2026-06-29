@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -77,11 +79,20 @@ type resourceRegistrationOptions struct {
 // (formerly the standalone audit_meta_schema binary), comparing the byte cost of
 // each META_PARAM_SCHEMA mode (opaque/full/compact).
 func main() {
+	footprint := flag.Bool("footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-footprint section + docs/development/token-footprint.md")
 	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
 	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
 	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
+
+	if *footprint {
+		if err := runFootprintMode(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if *compareSchemas {
 		if err := runMetaSchemaSizing(); err != nil {
@@ -737,4 +748,504 @@ func humanBytes(n int) string {
 	default:
 		return fmt.Sprintf("%d B", n)
 	}
+}
+
+// ─── Token footprint mode (-footprint) ────────────────────────────────────────
+//
+// The footprint mode measures every tier \u00d7 surface \u00d7 META_PARAM_SCHEMA
+// combination and writes the README managed section plus the standalone
+// docs/development/token-footprint.md reference. It was previously the
+// standalone cmd/gen_readme binary.
+
+// Footprint section markers and output paths.
+const (
+	footprintStartMarker  = "<!-- START TOKEN FOOTPRINT -->"
+	footprintEndMarker    = "<!-- END TOKEN FOOTPRINT -->"
+	detailedFootprintPath = "docs/development/token-footprint.md"
+	readmePath            = "README.md"
+)
+
+// tokenFootprintRow is a README-facing token measurement for one runtime
+// configuration.
+//
+// Configuration is the Markdown label rendered in the leftmost column.
+// MetaParamSchema is set for meta-tool configurations and empty ("n/a") for
+// dynamic and individual. VisibleTools is the number of MCP tools the server
+// exposes under this configuration. ReachableActions is the count of distinct
+// GitLab API actions a client can drive (matches VisibleTools for individual
+// mode). ToolSchemaTokens estimates the byte cost of publishing the visible
+// tool schemas. SharedTokens captures the resources-plus-prompts overhead for
+// this configuration.
+type tokenFootprintRow struct {
+	Tier             string
+	Configuration    string
+	MetaParamSchema  string
+	VisibleTools     int
+	ReachableActions int
+	ToolSchemaTokens int
+	SharedTokens     int
+}
+
+// sharedTokenMeasureOptions bundles the catalog metadata and capability
+// surface needed to estimate the shared (resources + prompts) token cost of
+// one runtime configuration.
+//
+// Routes is the catalog route map (used by the meta surface). ToolCatalog and
+// ToolList drive the tool-manifest templates. ToolSurface selects the MCP
+// surface label; CapabilitySurface toggles full vs minimal prompts and
+// workflow guides; PromptTokens is the pre-computed prompt catalog size.
+type sharedTokenMeasureOptions struct {
+	Routes            map[string]toolutil.ActionMap
+	ToolCatalog       *actioncatalog.Catalog
+	ToolList          []*mcp.Tool
+	ToolSurface       string
+	CapabilitySurface string
+	PromptTokens      int
+}
+
+func (r tokenFootprintRow) totalTokens() int {
+	return r.ToolSchemaTokens + r.SharedTokens
+}
+
+// runFootprintMode builds the mock-backed client and runs the full token
+// footprint measurement, mirroring the self-contained client pattern of
+// [runMetaSchemaSizing].
+func runFootprintMode() error {
+	client, cleanup, err := auditclient.NewMock()
+	if err != nil {
+		return fmt.Errorf("client: %w", err)
+	}
+	defer cleanup()
+	return runFootprint(client)
+}
+
+// runFootprint measures the full tier \u00d7 surface \u00d7 mode matrix and writes the
+// README managed section plus the detailed reference doc.
+func runFootprint(client *gitlabclient.Client) error {
+	rows, err := measureTokenFootprintRows(client)
+	if err != nil {
+		return fmt.Errorf("measuring token footprint: %w", err)
+	}
+	if replaceErr := replaceSection(readmePath, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows)); replaceErr != nil {
+		return replaceErr
+	}
+	detailedDoc := renderDetailedFootprint(rows)
+	if writeErr := os.WriteFile(filepath.Clean(detailedFootprintPath), []byte(detailedDoc), 0o600); writeErr != nil { //#nosec G306,G703 -- generated doc path is a compile-time constant
+		return fmt.Errorf("writing %s: %w", detailedFootprintPath, writeErr)
+	}
+	fmt.Printf("Updated %s token-footprint section and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, len(rows))
+	return nil
+}
+
+func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow, error) {
+	var allRows []tokenFootprintRow
+	tiers := []struct {
+		label string
+		tier  edition.Tier
+	}{
+		{"Free/CE", edition.Free},
+		{"Premium", edition.Premium},
+		{"Ultimate", edition.Ultimate},
+	}
+
+	for _, t := range tiers {
+		rows, err := measureTierFootprint(client, t.tier, t.label)
+		if err != nil {
+			return nil, err
+		}
+		allRows = append(allRows, rows...)
+	}
+	return allRows, nil
+}
+
+func measureTierFootprint(client *gitlabclient.Client, tier edition.Tier, tierLabel string) ([]tokenFootprintRow, error) {
+	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{
+		Tier:       tier,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build %s action catalog: %w", tierLabel, err)
+	}
+
+	dynamicCatalog, err := dynamictools.AddStandaloneCatalog(metaCatalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("add standalone dynamic catalog: %w", err)
+	}
+	metaRoutes := metaCatalog.ActionMaps()
+	dynamicRoutes := dynamicCatalog.ActionMaps()
+	reachableActions := countActions(dynamicRoutes)
+
+	dynamicTools, err := fpListDynamicTools(dynamicCatalog)
+	if err != nil {
+		return nil, err
+	}
+	individualTools, err := listIndividualToolsAtTier(client, tier)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicToolTokens, err := measureToolSchemaTokens(dynamicTools)
+	if err != nil {
+		return nil, err
+	}
+	individualToolTokens, err := measureToolSchemaTokens(individualTools)
+	if err != nil {
+		return nil, err
+	}
+	promptTokens, err := fpMeasurePrompts(client)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes: dynamicRoutes, ToolCatalog: dynamicCatalog, ToolList: dynamicTools,
+		ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+	dynamicMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes: dynamicRoutes, ToolCatalog: dynamicCatalog, ToolList: dynamicTools,
+		ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceMinimal, PromptTokens: promptTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+	metaFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes: metaRoutes, ToolCatalog: metaCatalog, ToolList: nil,
+		ToolSurface: config.ToolSurfaceMeta, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+	metaMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes: metaRoutes, ToolCatalog: metaCatalog, ToolList: nil,
+		ToolSurface: config.ToolSurfaceMeta, CapabilitySurface: config.CapabilitySurfaceMinimal, PromptTokens: promptTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+	individualFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		ToolList:    individualTools,
+		ToolSurface: config.ToolSurfaceIndividual, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rows := []tokenFootprintRow{
+		{Tier: tierLabel, Configuration: "`dynamic` / `full` (default)", VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicFullShared},
+		{Tier: tierLabel, Configuration: "`dynamic` / `minimal`", VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicMinimalShared},
+	}
+
+	metaSchemaModes := []string{"opaque", "compact", "full"}
+	for _, mode := range metaSchemaModes {
+		restore := tools.SetMetaParamSchemaScoped(mode)
+		metaTools, metaErr := listMetaToolsFromCatalog(client, metaCatalog)
+		if metaErr != nil {
+			restore()
+			return nil, metaErr
+		}
+		metaTokens, metaMeasureErr := measureToolSchemaTokens(metaTools)
+		restore()
+		if metaMeasureErr != nil {
+			return nil, metaMeasureErr
+		}
+		rows = append(
+			rows,
+			tokenFootprintRow{Tier: tierLabel, Configuration: fmt.Sprintf("`meta` / `full` (%s)", mode), MetaParamSchema: mode, VisibleTools: len(metaTools), ReachableActions: reachableActions, ToolSchemaTokens: metaTokens, SharedTokens: metaFullShared},
+			tokenFootprintRow{Tier: tierLabel, Configuration: fmt.Sprintf("`meta` / `minimal` (%s)", mode), MetaParamSchema: mode, VisibleTools: len(metaTools), ReachableActions: reachableActions, ToolSchemaTokens: metaTokens, SharedTokens: metaMinimalShared},
+		)
+	}
+
+	rows = append(rows, tokenFootprintRow{Tier: tierLabel, Configuration: "`individual` / `full`", VisibleTools: len(individualTools), ReachableActions: len(individualTools), ToolSchemaTokens: individualToolTokens, SharedTokens: individualFullShared})
+	return rows, nil
+}
+
+// renderReadmeFootprint renders the README managed section: only the default
+// surface (dynamic) across all tiers, plus a link to the detailed doc.
+func renderReadmeFootprint(rows []tokenFootprintRow) string {
+	var b strings.Builder
+	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`. For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
+	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
+
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		if !strings.Contains(row.Configuration, "dynamic") {
+			continue
+		}
+		tierCell := row.Tier
+		schemaCell := "n/a"
+		if row.MetaParamSchema != "" {
+			schemaCell = fmt.Sprintf("`%s`", row.MetaParamSchema)
+		}
+		tableRows = append(tableRows, []string{
+			row.Configuration, tierCell,
+			fmtNum(row.VisibleTools), fmtNum(row.ReachableActions),
+			schemaCell, fmtNum(row.ToolSchemaTokens),
+			fmtNum(row.SharedTokens), fmtNum(row.totalTokens()),
+		})
+	}
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`)", "Tier", "Visible tools", "Reachable actions", "`META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+	b.WriteString("\nRows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.\n")
+	return b.String()
+}
+
+// renderDetailedFootprint renders the full token matrix to a standalone doc
+// with explanatory prose. All surfaces \u00d7 all META_PARAM_SCHEMA modes \u00d7 all tiers.
+func renderDetailedFootprint(rows []tokenFootprintRow) string {
+	var b strings.Builder
+	b.WriteString("# Token Footprint Reference\n\n")
+	b.WriteString("> **Di\u00e1taxis type**: Reference\n")
+	b.WriteString("> **Audience**: Developers integrating with the MCP server\n")
+	b.WriteString("> **Generated by**: `go run ./cmd/audit_tokens/ -footprint`\n\n")
+	b.WriteString("---\n\n")
+
+	b.WriteString("## How tokens are counted\n\n")
+	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) \u2014 a pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
+
+	b.WriteString("## What each column means\n\n")
+	b.WriteString("| Column | Description |\n| --- | --- |\n")
+	b.WriteString("| **Configuration** | The `TOOL_SURFACE` / `CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action. |\n")
+	b.WriteString("| **Tier** | The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions. |\n")
+	b.WriteString("| **Visible tools** | How many MCP tool definitions the client receives at startup. |\n")
+	b.WriteString("| **Reachable actions** | How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing). |\n")
+	b.WriteString("| **META_PARAM_SCHEMA** | How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions). |\n")
+	b.WriteString("| **Tool schema tokens** | Token cost of the visible tool definitions (InputSchema, annotations, description). |\n")
+	b.WriteString("| **Shared tokens** | Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing. |\n")
+	b.WriteString("| **Total tokens** | Tool schema tokens + shared tokens. This is the approximate startup context-window cost. |\n\n")
+
+	b.WriteString("## Full matrix\n\n")
+	b.WriteString("All measurements are against the current source tree. The catalog is built in-memory with a mock GitLab client; no network calls are made.\n\n")
+
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		schemaCell := "n/a"
+		if row.MetaParamSchema != "" {
+			schemaCell = fmt.Sprintf("`%s`", row.MetaParamSchema)
+		}
+		tableRows = append(tableRows, []string{
+			row.Configuration, row.Tier,
+			fmtNum(row.VisibleTools), fmtNum(row.ReachableActions),
+			schemaCell, fmtNum(row.ToolSchemaTokens),
+			fmtNum(row.SharedTokens), fmtNum(row.totalTokens()),
+		})
+	}
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Configuration", "Tier", "Visible tools", "Reachable actions", "`META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+
+	b.WriteString("\n## Interpretation guide\n\n")
+	b.WriteString("- **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.\n")
+	b.WriteString("- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.\n")
+	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface \u2014 suitable only for clients with large context windows.\n")
+	b.WriteString("- **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.\n")
+	b.WriteString("- **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.\n")
+	return b.String()
+}
+
+func listMetaToolsFromCatalog(client *gitlabclient.Client, catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
+	server := newFootprintServer()
+	tools.RegisterMetaCatalog(server, catalog)
+	tools.RegisterMetaStandaloneTools(server, client)
+	return fpListToolsFromServer(server)
+}
+
+func listIndividualToolsAtTier(client *gitlabclient.Client, tier edition.Tier) ([]*mcp.Tool, error) {
+	server := newFootprintServer()
+	tools.RegisterAll(server, client, tier)
+	return fpListToolsFromServer(server)
+}
+
+// fpListDynamicTools is the footprint variant of [listDynamicTools]: it returns
+// an error instead of calling os.Exit so the footprint runner can surface
+// measurement failures cleanly.
+func fpListDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
+	server := newFootprintServer()
+	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	return fpListToolsFromServer(server)
+}
+
+func newFootprintServer() *mcp.Server {
+	return mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
+}
+
+// fpListToolsFromServer is the footprint variant of [listToolsFromServer]: it
+// returns an error instead of calling os.Exit.
+func fpListToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
+	return withFootprintSession(server, "tools", func(ctx context.Context, session *mcp.ClientSession) ([]*mcp.Tool, error) {
+		result, err := session.ListTools(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("list tools: %w", err)
+		}
+		return result.Tools, nil
+	})
+}
+
+func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
+	totalTokens := 0
+	for _, t := range toolList {
+		b, err := json.Marshal(t)
+		if err != nil {
+			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
+		}
+		totalTokens += toolutil.CountTokens(b)
+	}
+	return totalTokens, nil
+}
+
+func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOptions) (int, error) {
+	resourceTokens, err := fpMeasureResourcesWithOptions(client, opts.Routes, resourceRegistrationOptions{
+		Core:           opts.CapabilitySurface == config.CapabilitySurfaceFull,
+		ToolManifest:   true,
+		ToolSurface:    opts.ToolSurface,
+		ToolList:       opts.ToolList,
+		ToolCatalog:    opts.ToolCatalog,
+		WorkflowGuides: opts.CapabilitySurface == config.CapabilitySurfaceFull,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if opts.CapabilitySurface == config.CapabilitySurfaceFull {
+		return resourceTokens + opts.PromptTokens, nil
+	}
+	return resourceTokens, nil
+}
+
+// fpMeasureResourcesWithOptions is the footprint variant of
+// [measureResourcesWithOptions]: it returns an error instead of calling
+// os.Exit so measurement failures propagate to the footprint runner.
+func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	if opts.Core {
+		resources.Register(server, client)
+	}
+	if opts.ToolManifest {
+		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+			Surface:    opts.ToolSurface,
+			Tools:      opts.ToolList,
+			Catalog:    opts.ToolCatalog,
+			MetaRoutes: routes,
+		})
+	}
+	if opts.WorkflowGuides {
+		resources.RegisterWorkflowGuides(server)
+	}
+
+	return withFootprintSession(server, "resources", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalTokens := 0
+		res, err := session.ListResources(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resources: %w", err)
+		}
+		for _, r := range res.Resources {
+			b, mErr := json.Marshal(r)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
+			}
+			totalTokens += toolutil.CountTokens(b)
+		}
+
+		tpl, err := session.ListResourceTemplates(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resource templates: %w", err)
+		}
+		for _, t := range tpl.ResourceTemplates {
+			b, mErr := json.Marshal(t)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
+			}
+			totalTokens += toolutil.CountTokens(b)
+		}
+		return totalTokens, nil
+	})
+}
+
+// fpMeasurePrompts is the footprint variant of [measurePrompts]: it returns an
+// error instead of calling os.Exit.
+func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	prompts.Register(server, client)
+
+	return withFootprintSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalTokens := 0
+		promptList, err := session.ListPrompts(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list prompts: %w", err)
+		}
+		for _, pr := range promptList.Prompts {
+			b, mErr := json.Marshal(pr)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
+			}
+			totalTokens += toolutil.CountTokens(b)
+		}
+		return totalTokens, nil
+	})
+}
+
+// withFootprintSession connects server in-memory, runs fn against a fresh
+// client session, and returns fn's result. It is the error-returning analog
+// of the inline connect-and-exit pattern used by the rest of the audit.
+func withFootprintSession[T any](server *mcp.Server, label string, fn func(context.Context, *mcp.ClientSession) (T, error)) (T, error) {
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	var zero T
+
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return zero, fmt.Errorf("server connect %s: %w", label, err)
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return zero, fmt.Errorf("client connect %s: %w", label, err)
+	}
+	defer session.Close()
+
+	return fn(ctx, session)
+}
+
+// replaceSection replaces content between startMark and endMark in the file at
+// path, preserving both markers themselves.
+func replaceSection(path, startMark, endMark, content string) error {
+	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	result, err := computeReplacedText(string(data), startMark, endMark, content)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
+}
+
+// computeReplacedText returns the input text with the content between startMark
+// and endMark replaced by the new content string.
+func computeReplacedText(text, startMark, endMark, content string) (string, error) {
+	startIdx := strings.Index(text, startMark)
+	if startIdx < 0 {
+		return "", fmt.Errorf("start marker %s not found", startMark)
+	}
+
+	searchFrom := startIdx + len(startMark)
+	relEndIdx := strings.Index(text[searchFrom:], endMark)
+	if relEndIdx < 0 {
+		return "", fmt.Errorf("end marker %s not found after start marker", endMark)
+	}
+	endIdx := searchFrom + relEndIdx
+
+	before := text[:searchFrom]
+	after := text[endIdx:]
+	return before + "\n\n" + content + "\n" + after, nil
 }

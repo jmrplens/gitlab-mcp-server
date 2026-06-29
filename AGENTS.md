@@ -85,7 +85,7 @@ make inspector-stop
 
 | You edited                                          | Run                                                               |
 | --------------------------------------------------- | ----------------------------------------------------------------- |
-| Domain tool (added/renamed/changed input or output) | `go run ./cmd/gen_readme/`                                        |
+| Domain tool (added/renamed/changed input or output) | `go run ./cmd/audit_tokens/ -footprint` + `go run ./cmd/gen_stats/` |
 | ActionSpec metadata (catalog routes)                | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI) |
 | Pipe tables in `README.md` or `docs/`               | `go run ./cmd/format_md_tables/` (and `--check`)                  |
 | Tests, after a test phase                           | `go run ./cmd/gen_testing_docs/` (and `--check`)                  |
@@ -111,7 +111,7 @@ For a full walkthrough use the `create-mcp-tool` skill
 5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
    in the sub-package `markdown.go` `init()`. List formatters must add
    `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
-6. **Refresh**: `gen_readme`, `gen_action_catalog_manifest`, `format_md_tables`,
+6. **Refresh**: `audit_tokens -footprint` + `gen_stats`, `gen_action_catalog_manifest`, `format_md_tables`,
    `gen_testing_docs`, `gen_llms` (run `--check` on each before pushing).
 7. **Verify**: `make test-pkg PKG={domain}` and
    `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.

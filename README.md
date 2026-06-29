@@ -33,23 +33,20 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 <!-- START TOKEN FOOTPRINT -->
 
-Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`.
+Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`. For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
 **Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
-| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
-| ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          |             2 |               864 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 |             2 |               864 | n/a                 |              2,180 |         1,088 |        3,268 |
-| `meta` / `full` (opaque)                              |            33 |               864 | `opaque`            |            136,890 |        31,758 |      168,648 |
-| `meta` / `minimal` (opaque)                           |            33 |               864 | `opaque`            |            136,890 |         1,088 |      137,978 |
-| `meta` / `full` (compact)                             |            33 |               864 | `compact`           |            203,471 |        31,758 |      235,229 |
-| `meta` / `minimal` (compact)                          |            33 |               864 | `compact`           |            203,471 |         1,088 |      204,559 |
-| `meta` / `full` (full)                                |            33 |               864 | `full`              |            291,158 |        31,758 |      322,916 |
-| `meta` / `minimal` (full)                             |            33 |               864 | `full`              |            291,158 |         1,088 |      292,246 |
-| `individual` / `full`                                 |           860 |               860 | n/a                 |            779,989 |        31,758 |      811,747 |
+| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
+| ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               864 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`                                 | Free/CE  |             2 |               864 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,002 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`                                 | Premium  |             2 |             1,002 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,065 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,065 | n/a                 |              2,180 |         1,088 |        3,268 |
 
-Rows use the base Community Edition catalog (`GITLAB_TIER=free`). `META_PARAM_SCHEMA` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
+Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
 <!-- END TOKEN FOOTPRINT -->
 
@@ -435,10 +432,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       947 |     191,729 |
-| Unit tests (`_test.go`)  |       514 |     291,907 |
+| Source (`.go`, non-test) |       946 |     191,730 |
+| Unit tests (`_test.go`)  |       515 |     291,923 |
 | End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,603** | **518,813** |
+| **Total**                | **1,603** | **518,830** |
 
 ### Functions
 
@@ -447,8 +444,8 @@ Numbers nobody asked for, but here they are anyway.
 | Source functions                |  7,306 |
 | — exported (public)             |  2,549 |
 | — unexported (private)          |  4,757 |
-| Unit test functions (`TestXxx`) | 11,290 |
-| Subtests (`t.Run(...)`)         |  2,624 |
+| Unit test functions (`TestXxx`) | 11,293 |
+| Subtests (`t.Run(...)`)         |  2,625 |
 | End-to-end test functions       |    286 |
 
 ### Ratios worth noting
@@ -457,17 +454,17 @@ Numbers nobody asked for, but here they are anyway.
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~567 lines |
-| Comment lines in source            |  20,401 (~10.6% of source) |
+| Average test file length           |                 ~566 lines |
+| Comment lines in source            |  20,423 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,533 |
-| `defer` statements                 |   703 |
-| `struct` types defined             | 2,704 |
+| `if err != nil` checks             | 6,529 |
+| `defer` statements                 |   702 |
+| `struct` types defined             | 2,703 |
 | `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -478,7 +475,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   222 |
 | Direct dependencies (`go.mod`) |    12 |
 | Indirect dependencies          |    51 |
-| Git commits                    |   227 |
+| Git commits                    |   228 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -492,8 +489,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,485 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,591 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,486 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,581 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
