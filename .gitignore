@@ -119,3 +119,4 @@ image.png
 # Local opencode CLI agent config (per-developer, do not commit)
 /.opencode/
 /opencode.json
+audit_dynamic_aliases

@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,9 +44,14 @@ const (
 	metricLabelWidth = 48
 )
 
+var topDomains = 20
+
 // main builds the audit client, gathers runtime counts from the registered MCP
 // surface, and prints the metrics report to stdout.
 func main() {
+	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
+	flag.Parse()
+
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
@@ -141,7 +147,7 @@ func main() {
 	printRow("Test files (_test.go)", testFiles)
 	fmt.Println()
 
-	fmt.Println("## Catalog Domain Breakdown (GitLab.com enterprise, top 20)")
+	fmt.Printf("## Catalog Domain Breakdown (GitLab.com enterprise, top %d)\n", topDomains)
 	fmt.Println()
 	printDomainTable(countCatalogDomains(dynamicGitLabComEnterpriseCatalog))
 	fmt.Println()
@@ -588,7 +594,7 @@ func printDomainTable(domains map[string]int) {
 		}
 		return sorted[i].key < sorted[j].key
 	})
-	limit := min(20, len(sorted))
+	limit := min(topDomains, len(sorted))
 	fmt.Printf("  %-25s %s\n", "Domain", "Tools")
 	fmt.Printf("  %-25s %s\n", strings.Repeat("-", 25), strings.Repeat("-", 5))
 	for _, kv := range sorted[:limit] {

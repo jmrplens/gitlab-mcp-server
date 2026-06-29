@@ -78,6 +78,8 @@ type resourceRegistrationOptions struct {
 // each META_PARAM_SCHEMA mode (opaque/full/compact).
 func main() {
 	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
+	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
+	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
 	flag.Parse()
 
 	if *compareSchemas {
@@ -207,7 +209,7 @@ func main() {
 	// Top 30 individual tools by token cost
 	fmt.Println("## Top 30 Individual Tools by Token Cost")
 	fmt.Println()
-	printTopTools(individualInfo, 30)
+	printTopTools(individualInfo, *topTools)
 
 	// Top 20 meta-tools by token cost
 	fmt.Println("## Meta-Tools by Token Cost (base)")
@@ -222,7 +224,7 @@ func main() {
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
 	fmt.Println()
-	printDomainTotals(individualInfo, 20)
+	printDomainTotals(individualInfo, *topDomains)
 
 	// Grand total
 	fmt.Println("## Grand Total (what an LLM sees)")

@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -46,16 +47,20 @@ const (
 )
 
 // main regenerates the README managed sections and exits non-zero on failure.
+// With --check it verifies the sections are current without writing.
 func main() {
-	if err := run(); err != nil {
+	check := flag.Bool("check", false, "verify README managed sections are current without writing")
+	flag.Parse()
+	if err := run(*check); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 // run introspects the base catalog and replaces README sections with fresh
-// token footprint and repository statistics content.
-func run() error {
+// token footprint and repository statistics content. When check is true, it
+// only verifies the sections are current and returns an error if they are stale.
+func run(check bool) error {
 	client, closeClient, err := newReadmeClient()
 	if err != nil {
 		return err
@@ -71,13 +76,18 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("building token footprint: %w", err)
 	}
-	if replaceErr := replaceSection(readmePath, footprintStartMarker, footprintEndMarker, tokenFootprint); replaceErr != nil {
-		return replaceErr
-	}
 
 	stats, statsErr := collectStats(repoRoot)
 	if statsErr != nil {
 		return fmt.Errorf("collecting stats: %w", statsErr)
+	}
+
+	if check {
+		return checkSections(readmePath, tokenFootprint, renderStats(stats))
+	}
+
+	if replaceErr := replaceSection(readmePath, footprintStartMarker, footprintEndMarker, tokenFootprint); replaceErr != nil {
+		return replaceErr
 	}
 	if replaceErr := replaceSection(readmePath, statsStartMarker, statsEndMarker, renderStats(stats)); replaceErr != nil {
 		return replaceErr
@@ -544,24 +554,54 @@ func replaceSection(path, startMark, endMark, content string) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	text := string(data)
-	startIdx := strings.Index(text, startMark)
-	if startIdx < 0 {
-		return fmt.Errorf("start marker %s not found in %s", startMark, path)
+	result, err := computeReplacedText(string(data), startMark, endMark, content)
+	if err != nil {
+		return err
 	}
 
-	// Search for endMark only after startMark to avoid matching an earlier
-	// occurrence of the same marker string that belongs to a different section.
+	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
+}
+
+// checkSections reads the README and verifies both managed sections match the
+// freshly generated content. Returns an error describing which section is stale.
+func checkSections(path, footprintContent, statsContent string) error {
+	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	text := string(data)
+
+	updated, err := computeReplacedText(text, footprintStartMarker, footprintEndMarker, footprintContent)
+	if err != nil {
+		return err
+	}
+	updated, err = computeReplacedText(updated, statsStartMarker, statsEndMarker, statsContent)
+	if err != nil {
+		return err
+	}
+
+	if updated != text {
+		return fmt.Errorf("%s managed sections are stale; run go run ./cmd/gen_readme/", path)
+	}
+	return nil
+}
+
+// computeReplacedText returns the input text with the content between startMark
+// and endMark replaced by the new content string.
+func computeReplacedText(text, startMark, endMark, content string) (string, error) {
+	startIdx := strings.Index(text, startMark)
+	if startIdx < 0 {
+		return "", fmt.Errorf("start marker %s not found", startMark)
+	}
+
 	searchFrom := startIdx + len(startMark)
 	relEndIdx := strings.Index(text[searchFrom:], endMark)
 	if relEndIdx < 0 {
-		return fmt.Errorf("end marker %s not found after start marker in %s", endMark, path)
+		return "", fmt.Errorf("end marker %s not found after start marker", endMark)
 	}
 	endIdx := searchFrom + relEndIdx
 
 	before := text[:searchFrom]
 	after := text[endIdx:]
-	result := before + "\n\n" + content + "\n" + after
-
-	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
+	return before + "\n\n" + content + "\n" + after, nil
 }
