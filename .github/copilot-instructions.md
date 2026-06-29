@@ -34,7 +34,7 @@ gitlab-mcp-server/
 │   │   └── main.go         # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_llms/
 │   │   └── main.go         # Generates llms.txt and llms-full.txt for LLM discovery
-│   └── find_dupes/
+│   └── audit_string_dupes/
 │       └── main.go         # Finds duplicated string literals missing constants
 ├── internal/
 │   ├── config/             # Configuration loading (.env, flags)

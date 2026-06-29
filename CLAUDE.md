@@ -43,9 +43,8 @@ The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `q
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
-│   ├── find_dupes/              # Finds duplicated string literals missing constants
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META + merge)
-│   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
+│   ├── audit_catalog_first/     # Enforces catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
@@ -55,7 +54,7 @@ gitlab-mcp-server/
 │   ├── audit_test_names/        # Audits test function naming convention compliance
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
-│   ├── find_dupes/              # Finds duplicated string literals missing constants
+│   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata

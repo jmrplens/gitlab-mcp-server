@@ -729,9 +729,13 @@ audit-tools:
 audit-metrics:
 	go run ./cmd/audit_metrics/
 
-## audit-action-spec-coverage: generate ActionSpec surface coverage inventory.
+## audit-catalog-first: enforce catalog-first registration invariants (ADR-0004).
+audit-catalog-first:
+	go run ./cmd/audit_catalog_first/
+
+## audit-action-spec-coverage: backward-compat wrapper for audit-catalog-first.
 audit-action-spec-coverage:
-	go run ./cmd/audit_action_spec_coverage/
+	go run ./cmd/audit_catalog_first/
 
 ## audit-1to1: run all three 1:1-audit gap streams (struct/action/metadata) and merge into plan/1to1-backlog.json.
 ## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,

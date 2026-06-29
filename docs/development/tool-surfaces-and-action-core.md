@@ -71,7 +71,7 @@ The core pieces are:
 | `internal/tools/meta_catalog.go`              | Registers visible meta-tools from catalog groups                                                                              |
 | `internal/tools/dynamic/register.go`          | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog             |
 | `internal/tools/dynamic/standalone.go`        | Adds dynamic-only catalog actions that do not fit the normal meta route model                                                 |
-| `cmd/audit_action_spec_coverage`              | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
+| `cmd/audit_catalog_first`              | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
 
 The catalog stores executable routes with input schemas, output schemas,
 destructive flags, read-only status, icons, descriptions, aliases, tags, usage
@@ -177,7 +177,7 @@ Target builder rules:
 - `action_specs_manifest_gen.go` is generated from the source-defined
   `build*ActionSpecs` aggregation builders. Add or remove a builder in source,
   then run `make gen-action-catalog-manifest`; CI and audits should use
-  `make check-action-catalog-manifest` or `cmd/audit_action_spec_coverage` to
+  `make check-action-catalog-manifest` or `cmd/audit_catalog_first` to
   fail when the manifest is stale.
 - Domain packages should expose typed handlers, markdown formatters, and
   `ActionSpecs` without importing `internal/tools/actioncatalog`. Catalog
@@ -370,7 +370,7 @@ The migration is enforced by source-level tests and audits:
   catalog-backed spec points to a registered individual tool and every
   registered individual tool without ActionSpec metadata is an explicit
   standalone exception.
-- `cmd/audit_action_spec_coverage` writes `dist/action-spec-coverage.json` with
+- `cmd/audit_catalog_first` writes `dist/action-spec-coverage.json` with
   source-discovered surface classifications for domain coverage sweeps and
   fails when `action_specs_manifest_gen.go` is stale.
 - `make check-action-catalog-manifest` verifies the generated ActionSpec group

@@ -9,7 +9,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | Utility                        | Category                  | Purpose                                                                | Make target                        |
 | ------------------------------ | ------------------------- | ---------------------------------------------------------------------- | ---------------------------------- |
 | `audit_1to1`                   | SDK/API parity audits     | Consolidated SDK↔API parity audit (struct/action/metadata gap streams) | `make audit-1to1`                  |
-| `audit_action_spec_coverage`   | Catalog & metadata audits | Source-discovered ActionSpec catalog-first coverage inventory          | `make audit-action-spec-coverage`  |
+| `audit_catalog_first`          | Catalog & metadata audits | Source-discovered ActionSpec catalog-first coverage inventory          | `make audit-catalog-first`         |
 | `audit_discovery_completeness` | Catalog & metadata audits | Extended META-001 model-discovery metadata quality auditor             | `make audit-discovery`             |
 | `audit_doc_coverage`           | Catalog & metadata audits | Per-doc-file gaps vs the action catalog (DOC-002)                      | `make audit-doc-coverage`          |
 | `audit_dynamic_aliases`        | Catalog & metadata audits | Dynamic-toolset alias governance (collisions, ambiguity)               | `make audit-dynamic-aliases`       |
@@ -19,7 +19,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_metrics`                | Surface quality audits    | Comprehensive metrics summary (tools, resources, prompts, codebase)    | `make audit-metrics`               |
 | `godoc_tool`                   | Source quality audits     | Godoc compliance auditor and fixer (audit + fix subcommands)           | `make audit-godocs`                |
 | `audit_test_names`             | Source quality audits     | Classifies `Test*` functions by naming pattern; emits rename hints     | `make audit-test-names`            |
-| `find_dupes`                   | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations    | —                                  |
+| `audit_string_dupes`           | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations    | —                                  |
 | `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                        | `make gen-action-catalog-manifest` |
 | `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                               | `make gen-llms`                    |
 | `gen_readme`                   | Generators                | Regenerates the managed token-footprint sections in `README.md`        | `make gen-readme`                  |
@@ -70,7 +70,7 @@ This single binary replaces four former binaries. The legacy Make targets remain
 
 ## Catalog & metadata audits
 
-### audit_action_spec_coverage
+### audit_catalog_first
 
 Generates the source-discovered inventory of ActionSpec catalog-first coverage. It reports `RegisterTools`/`RegisterMeta`/`ActionSpecs` presence, surface classification, and dynamic-catalog counts, plus catalog-first invariant checks.
 
@@ -78,10 +78,10 @@ Generates the source-discovered inventory of ActionSpec catalog-first coverage. 
 
 ```bash
 # Write the inventory to the default path
-go run ./cmd/audit_action_spec_coverage/
+go run ./cmd/audit_catalog_first/
 
 # Print to stdout
-go run ./cmd/audit_action_spec_coverage/ -output=-
+go run ./cmd/audit_catalog_first/ -output=-
 ```
 
 #### Flags
@@ -96,7 +96,7 @@ A JSON report with invariant checks. The binary exits non-zero on catalog-first 
 
 #### Make targets
 
-- `make audit-action-spec-coverage`
+- `make audit-catalog-first`
 
 #### Notes
 
@@ -415,14 +415,14 @@ CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary print
 
 - `make audit-test-names` — runs with `cmd internal test`.
 
-### find_dupes
+### audit_string_dupes
 
 Scans non-test Go source for string literals appearing three or more times that are not already `const`/`var` values.
 
 #### Usage
 
 ```bash
-go run ./cmd/find_dupes/ ./internal/tools/branches/
+go run ./cmd/audit_string_dupes/ ./internal/tools/branches/
 ```
 
 #### Flags

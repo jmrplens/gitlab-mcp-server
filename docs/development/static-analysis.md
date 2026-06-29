@@ -110,7 +110,7 @@ gotestsum --version
 | `make audit-tokens`               | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)             |
 | `make audit-metrics`              | Report MCP tool/resource/prompt counts                                                           |
 | `make audit-1to1`                 | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                  |
-| `make audit-action-spec-coverage` | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`               |
+| `make audit-catalog-first` | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`               |
 | `make audit-dynamic-aliases`      | Audit Dynamic search aliases and canonical action reachability                                   |
 | `make audit-test-names`           | Audit test function naming convention compliance                                                 |
 | `make audit-godocs`               | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |

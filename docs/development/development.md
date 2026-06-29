@@ -25,7 +25,7 @@ gitlab-mcp-server/
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata)
-│   ├── audit_action_spec_coverage/ # ActionSpec catalog coverage inventory
+│   ├── audit_catalog_first/ # ActionSpec catalog coverage inventory
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
 │   ├── audit_doc_coverage/      # docs/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
@@ -35,7 +35,7 @@ gitlab-mcp-server/
 │   ├── audit_test_names/        # Test function naming convention compliance
 │   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike)
 │   ├── eval_mcp_surfaces/       # Model-facing MCP surface evaluation harness
-│   ├── find_dupes/              # Finds duplicated string literals missing constants
+│   ├── audit_string_dupes/              # Finds duplicated string literals missing constants
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
 │   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
