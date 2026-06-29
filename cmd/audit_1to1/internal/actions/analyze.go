@@ -50,10 +50,11 @@ type serviceCoverage struct {
 }
 
 type report struct {
-	SchemaVersion int               `json:"schema_version"`
-	ClientGoPath  string            `json:"client_go_path"`
-	Summary       reportSummary     `json:"summary"`
-	Services      []serviceCoverage `json:"services"`
+	SchemaVersion   int               `json:"schema_version"`
+	ClientGoPath    string            `json:"client_go_path"`
+	Summary         reportSummary     `json:"summary"`
+	Services        []serviceCoverage `json:"services"`
+	StaleAcceptances []string          `json:"stale_acceptances,omitempty"`
 }
 
 type reportSummary struct {
@@ -105,11 +106,25 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		services = append(services, cov)
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Service < services[j].Service })
+
+	var staleAcceptances []string
+	for _, use := range usage {
+		service := strings.TrimSuffix(use.named.Obj().Name(), "ServiceInterface")
+		for method := range use.called {
+			key := service + "." + method
+			if _, ok := acceptedMissingMethods[key]; ok {
+				staleAcceptances = append(staleAcceptances, key)
+			}
+		}
+	}
+	sort.Strings(staleAcceptances)
+
 	return report{
-		SchemaVersion: schemaVersion,
-		ClientGoPath:  clientGoPkgPath,
-		Summary:       summarize(services),
-		Services:      services,
+		SchemaVersion:    schemaVersion,
+		ClientGoPath:     clientGoPkgPath,
+		Summary:          summarize(services),
+		Services:         services,
+		StaleAcceptances: staleAcceptances,
 	}, nil
 }
 
