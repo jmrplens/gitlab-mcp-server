@@ -20,31 +20,35 @@ import (
 // column without reintroducing the detailed meta-tool catalog.
 func TestRenderTokenFootprint_IncludesOrderedConfigurationRows(t *testing.T) {
 	rows := []tokenFootprintRow{
-		{Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ReachableActions: 867, ToolSchemaTokens: 1962, SharedTokens: 18198},
-		{Configuration: "`dynamic` / `minimal`", VisibleTools: 2, ReachableActions: 867, ToolSchemaTokens: 1962, SharedTokens: 184},
-		{Configuration: "`meta` / `full`", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 34, ReachableActions: 867, ToolSchemaTokens: 63932, SharedTokens: 18198},
-		{Configuration: "`meta` / `minimal`", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 34, ReachableActions: 867, ToolSchemaTokens: 63932, SharedTokens: 760},
-		{Configuration: "`individual` / `full`", VisibleTools: 863, ReachableActions: 863, ToolSchemaTokens: 451000, SharedTokens: 17622},
+		{Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ReachableActions: 864, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Configuration: "`dynamic` / `minimal`", VisibleTools: 2, ReachableActions: 864, ToolSchemaTokens: 2180, SharedTokens: 1088},
+		{Configuration: "`meta` / `full` (opaque)", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 136890, SharedTokens: 31758},
+		{Configuration: "`meta` / `minimal` (opaque)", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 136890, SharedTokens: 1088},
+		{Configuration: "`meta` / `full` (compact)", MetaParamSchema: config.MetaParamSchemaCompact, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 203471, SharedTokens: 31758},
+		{Configuration: "`meta` / `minimal` (compact)", MetaParamSchema: config.MetaParamSchemaCompact, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 203471, SharedTokens: 1088},
+		{Configuration: "`meta` / `full` (full)", MetaParamSchema: config.MetaParamSchemaFull, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 291158, SharedTokens: 31758},
+		{Configuration: "`meta` / `minimal` (full)", MetaParamSchema: config.MetaParamSchemaFull, VisibleTools: 33, ReachableActions: 864, ToolSchemaTokens: 291158, SharedTokens: 1088},
+		{Configuration: "`individual` / `full`", VisibleTools: 860, ReachableActions: 860, ToolSchemaTokens: 779989, SharedTokens: 31758},
 	}
 
-	got := renderTokenFootprint(config.MetaParamSchemaOpaque, rows)
+	got := renderTokenFootprint(rows)
 	for _, want := range []string{
 		"| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |",
 		"`dynamic` / `full` (default)",
-		"20,160",
-		"`meta` / `full`",
+		"`meta` / `full` (opaque)",
 		"`opaque`",
-		"82,130",
-		"`META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas",
+		"`compact`",
+		"`full`",
+		"`META_PARAM_SCHEMA` affects only visible meta-tool input schemas",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("renderTokenFootprint() missing %q:\n%s", want, got)
 		}
 	}
 	assertBefore(t, got, "`dynamic` / `full`", "`dynamic` / `minimal`")
-	assertBefore(t, got, "`dynamic` / `minimal`", "`meta` / `full`")
-	assertBefore(t, got, "`meta` / `full`", "`meta` / `minimal`")
-	assertBefore(t, got, "`meta` / `minimal`", "`individual` / `full`")
+	assertBefore(t, got, "`dynamic` / `minimal`", "`meta` / `full` (opaque)")
+	assertBefore(t, got, "`meta` / `full` (opaque)", "`meta` / `minimal` (opaque)")
+	assertBefore(t, got, "`meta` / `minimal` (full)", "`individual` / `full`")
 	if strings.Contains(got, "| Meta-Tool | Actions | Description |") {
 		t.Fatalf("renderTokenFootprint() should not include detailed meta-tool table:\n%s", got)
 	}
@@ -60,15 +64,19 @@ func TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations(t 
 	}
 	defer closeClient()
 
-	rows, err := measureTokenFootprintRows(client, config.MetaParamSchemaOpaque)
+	rows, err := measureTokenFootprintRows(client)
 	if err != nil {
 		t.Fatalf("measureTokenFootprintRows() error = %v", err)
 	}
 	wantOrder := []string{
 		"`dynamic` / `full` (default)",
 		"`dynamic` / `minimal`",
-		"`meta` / `full`",
-		"`meta` / `minimal`",
+		"`meta` / `full` (opaque)",
+		"`meta` / `minimal` (opaque)",
+		"`meta` / `full` (compact)",
+		"`meta` / `minimal` (compact)",
+		"`meta` / `full` (full)",
+		"`meta` / `minimal` (full)",
 		"`individual` / `full`",
 	}
 	if len(rows) != len(wantOrder) {
@@ -89,27 +97,34 @@ func TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations(t 
 		t.Fatalf("meta minimal shared tokens = %d, want same as dynamic minimal %d", rows[3].SharedTokens, rows[1].SharedTokens)
 	}
 	if rows[2].MetaParamSchema != config.MetaParamSchemaOpaque || rows[3].MetaParamSchema != config.MetaParamSchemaOpaque {
-		t.Fatalf("meta schema modes = %q/%q, want opaque", rows[2].MetaParamSchema, rows[3].MetaParamSchema)
+		t.Fatalf("meta opaque schema modes = %q/%q, want opaque", rows[2].MetaParamSchema, rows[3].MetaParamSchema)
 	}
-	if rows[4].MetaParamSchema != "" {
-		t.Fatalf("individual schema mode = %q, want empty n/a marker", rows[4].MetaParamSchema)
+	if rows[4].MetaParamSchema != config.MetaParamSchemaCompact || rows[6].MetaParamSchema != config.MetaParamSchemaFull {
+		t.Fatalf("meta schema modes = %q/%q, want compact/full", rows[4].MetaParamSchema, rows[6].MetaParamSchema)
 	}
-	if rows[4].VisibleTools <= rows[2].VisibleTools {
-		t.Fatalf("individual visible tools = %d, want greater than meta %d", rows[4].VisibleTools, rows[2].VisibleTools)
+	indivIdx := len(rows) - 1
+	if rows[indivIdx].MetaParamSchema != "" {
+		t.Fatalf("individual schema mode = %q, want empty n/a marker", rows[indivIdx].MetaParamSchema)
+	}
+	if rows[indivIdx].VisibleTools <= rows[2].VisibleTools {
+		t.Fatalf("individual visible tools = %d, want greater than meta %d", rows[indivIdx].VisibleTools, rows[2].VisibleTools)
 	}
 
-	compactRows, err := measureTokenFootprintRows(client, config.MetaParamSchemaCompact)
-	if err != nil {
-		t.Fatalf("measureTokenFootprintRows(compact) error = %v", err)
+	// Verify all 3 META_PARAM_SCHEMA modes measured in one run, with increasing token costs.
+	opaqueTokens := rows[2].ToolSchemaTokens
+	compactTokens := rows[4].ToolSchemaTokens
+	fullTokens := rows[6].ToolSchemaTokens
+	if compactTokens <= opaqueTokens {
+		t.Fatalf("compact meta tokens = %d, want greater than opaque %d", compactTokens, opaqueTokens)
 	}
-	if compactRows[0].ToolSchemaTokens != rows[0].ToolSchemaTokens {
-		t.Fatalf("dynamic tool schema tokens changed with META_PARAM_SCHEMA: compact %d, opaque %d", compactRows[0].ToolSchemaTokens, rows[0].ToolSchemaTokens)
+	if fullTokens <= compactTokens {
+		t.Fatalf("full meta tokens = %d, want greater than compact %d", fullTokens, compactTokens)
 	}
-	if compactRows[2].ToolSchemaTokens <= rows[2].ToolSchemaTokens {
-		t.Fatalf("compact meta tool schema tokens = %d, want greater than opaque %d", compactRows[2].ToolSchemaTokens, rows[2].ToolSchemaTokens)
+	if rows[4].MetaParamSchema != config.MetaParamSchemaCompact {
+		t.Fatalf("compact meta schema mode = %q, want compact", rows[4].MetaParamSchema)
 	}
-	if compactRows[2].MetaParamSchema != config.MetaParamSchemaCompact {
-		t.Fatalf("compact meta schema mode = %q, want compact", compactRows[2].MetaParamSchema)
+	if rows[6].MetaParamSchema != config.MetaParamSchemaFull {
+		t.Fatalf("full meta schema mode = %q, want full", rows[6].MetaParamSchema)
 	}
 }
 

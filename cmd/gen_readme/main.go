@@ -72,7 +72,7 @@ func run(check bool) error {
 		return err
 	}
 
-	tokenFootprint, err := buildTokenFootprint(client, schemaMode)
+	tokenFootprint, err := buildTokenFootprint(client)
 	if err != nil {
 		return fmt.Errorf("building token footprint: %w", err)
 	}
@@ -186,18 +186,15 @@ func (r tokenFootprintRow) totalTokens() int {
 	return r.ToolSchemaTokens + r.SharedTokens
 }
 
-func buildTokenFootprint(client *gitlabclient.Client, schemaMode string) (string, error) {
-	rows, err := measureTokenFootprintRows(client, schemaMode)
+func buildTokenFootprint(client *gitlabclient.Client) (string, error) {
+	rows, err := measureTokenFootprintRows(client)
 	if err != nil {
 		return "", err
 	}
-	return renderTokenFootprint(schemaMode, rows), nil
+	return renderTokenFootprint(rows), nil
 }
 
-func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) ([]tokenFootprintRow, error) {
-	restoreSchemaMode := gitlabtools.SetMetaParamSchemaScoped(schemaMode)
-	defer restoreSchemaMode()
-
+func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow, error) {
 	metaCatalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 		Enterprise: false,
 		IncludeMCP: true,
@@ -218,20 +215,12 @@ func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) (
 	if err != nil {
 		return nil, err
 	}
-	metaTools, err := listMetaToolsFromCatalog(client, metaCatalog)
-	if err != nil {
-		return nil, err
-	}
 	individualTools, err := listIndividualTools(client)
 	if err != nil {
 		return nil, err
 	}
 
 	dynamicToolTokens, err := measureToolSchemaTokens(dynamicTools)
-	if err != nil {
-		return nil, err
-	}
-	metaToolTokens, err := measureToolSchemaTokens(metaTools)
 	if err != nil {
 		return nil, err
 	}
@@ -244,61 +233,45 @@ func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) (
 		return nil, err
 	}
 
+	// Shared tokens are identical across META_PARAM_SCHEMA modes (resources
+	// and prompts don't change). Compute once per surface × capability.
 	dynamicFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
-		Routes:            dynamicRoutes,
-		ToolCatalog:       dynamicCatalog,
-		ToolList:          dynamicTools,
-		ToolSurface:       config.ToolSurfaceDynamic,
-		CapabilitySurface: config.CapabilitySurfaceFull,
-		PromptTokens:      promptTokens,
+		Routes: dynamicRoutes, ToolCatalog: dynamicCatalog, ToolList: dynamicTools,
+		ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
 	})
 	if err != nil {
 		return nil, err
 	}
 	dynamicMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
-		Routes:            dynamicRoutes,
-		ToolCatalog:       dynamicCatalog,
-		ToolList:          dynamicTools,
-		ToolSurface:       config.ToolSurfaceDynamic,
-		CapabilitySurface: config.CapabilitySurfaceMinimal,
-		PromptTokens:      promptTokens,
+		Routes: dynamicRoutes, ToolCatalog: dynamicCatalog, ToolList: dynamicTools,
+		ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: config.CapabilitySurfaceMinimal, PromptTokens: promptTokens,
 	})
 	if err != nil {
 		return nil, err
 	}
 	metaFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
-		Routes:            metaRoutes,
-		ToolCatalog:       metaCatalog,
-		ToolList:          metaTools,
-		ToolSurface:       config.ToolSurfaceMeta,
-		CapabilitySurface: config.CapabilitySurfaceFull,
-		PromptTokens:      promptTokens,
+		Routes: metaRoutes, ToolCatalog: metaCatalog, ToolList: nil,
+		ToolSurface: config.ToolSurfaceMeta, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
 	})
 	if err != nil {
 		return nil, err
 	}
 	metaMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
-		Routes:            metaRoutes,
-		ToolCatalog:       metaCatalog,
-		ToolList:          metaTools,
-		ToolSurface:       config.ToolSurfaceMeta,
-		CapabilitySurface: config.CapabilitySurfaceMinimal,
-		PromptTokens:      promptTokens,
+		Routes: metaRoutes, ToolCatalog: metaCatalog, ToolList: nil,
+		ToolSurface: config.ToolSurfaceMeta, CapabilitySurface: config.CapabilitySurfaceMinimal, PromptTokens: promptTokens,
 	})
 	if err != nil {
 		return nil, err
 	}
 	individualFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
-		ToolList:          individualTools,
-		ToolSurface:       config.ToolSurfaceIndividual,
-		CapabilitySurface: config.CapabilitySurfaceFull,
-		PromptTokens:      promptTokens,
+		ToolList:    individualTools,
+		ToolSurface: config.ToolSurfaceIndividual, CapabilitySurface: config.CapabilitySurfaceFull, PromptTokens: promptTokens,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return []tokenFootprintRow{
+	rows := []tokenFootprintRow{
 		{
 			Configuration:    "`dynamic` / `full` (default)",
 			VisibleTools:     len(dynamicTools),
@@ -313,35 +286,56 @@ func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) (
 			ToolSchemaTokens: dynamicToolTokens,
 			SharedTokens:     dynamicMinimalShared,
 		},
-		{
-			Configuration:    "`meta` / `full`",
-			MetaParamSchema:  schemaMode,
-			VisibleTools:     len(metaTools),
-			ReachableActions: reachableActions,
-			ToolSchemaTokens: metaToolTokens,
-			SharedTokens:     metaFullShared,
-		},
-		{
-			Configuration:    "`meta` / `minimal`",
-			MetaParamSchema:  schemaMode,
-			VisibleTools:     len(metaTools),
-			ReachableActions: reachableActions,
-			ToolSchemaTokens: metaToolTokens,
-			SharedTokens:     metaMinimalShared,
-		},
-		{
-			Configuration:    "`individual` / `full`",
-			VisibleTools:     len(individualTools),
-			ReachableActions: len(individualTools),
-			ToolSchemaTokens: individualToolTokens,
-			SharedTokens:     individualFullShared,
-		},
-	}, nil
+	}
+
+	metaSchemaModes := []string{"opaque", "compact", "full"}
+	for _, mode := range metaSchemaModes {
+		restore := gitlabtools.SetMetaParamSchemaScoped(mode)
+		metaTools, metaErr := listMetaToolsFromCatalog(client, metaCatalog)
+		if metaErr != nil {
+			restore()
+			return nil, metaErr
+		}
+		metaTokens, metaMeasureErr := measureToolSchemaTokens(metaTools)
+		restore()
+		if metaMeasureErr != nil {
+			return nil, metaMeasureErr
+		}
+
+		rows = append(rows,
+			tokenFootprintRow{
+				Configuration:    fmt.Sprintf("`meta` / `full` (%s)", mode),
+				MetaParamSchema:  mode,
+				VisibleTools:     len(metaTools),
+				ReachableActions: reachableActions,
+				ToolSchemaTokens: metaTokens,
+				SharedTokens:     metaFullShared,
+			},
+			tokenFootprintRow{
+				Configuration:    fmt.Sprintf("`meta` / `minimal` (%s)", mode),
+				MetaParamSchema:  mode,
+				VisibleTools:     len(metaTools),
+				ReachableActions: reachableActions,
+				ToolSchemaTokens: metaTokens,
+				SharedTokens:     metaMinimalShared,
+			},
+		)
+	}
+
+	rows = append(rows, tokenFootprintRow{
+		Configuration:    "`individual` / `full`",
+		VisibleTools:     len(individualTools),
+		ReachableActions: len(individualTools),
+		ToolSchemaTokens: individualToolTokens,
+		SharedTokens:     individualFullShared,
+	})
+
+	return rows, nil
 }
 
-func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
+func renderTokenFootprint(rows []tokenFootprintRow) string {
 	var b strings.Builder
-	b.WriteString("Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the same byte/4 token heuristic as `cmd/audit_tokens`.\n\n")
+	b.WriteString("Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`.\n\n")
 	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
 
 	tableRows := make([][]string, 0, len(rows))
@@ -366,7 +360,7 @@ func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
 		tableRows,
 	))
 
-	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_TIER=free`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.\n", schemaMode)
+	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_TIER=free`). `META_PARAM_SCHEMA` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.\n")
 	return b.String()
 }
 
