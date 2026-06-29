@@ -45,6 +45,10 @@ const (
 	cacheSubdir   = "cmd/audit_edition_tier/.doccache"
 )
 
+// refreshDocs forces re-fetching docs from the remote even when cached.
+// Set by the -refresh flag.
+var refreshDocs bool
+
 // tier is the canonical 3-tier licensing level, mirroring internal/edition.Tier
 // but kept local so the auditor has no dependency on runtime config.
 type tier int
@@ -104,6 +108,7 @@ func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include domains that need tier work")
 	offline := flag.Bool("offline", false, "use only cached docs; do not fetch")
+	flag.BoolVar(&refreshDocs, "refresh", false, "force re-fetch docs even when cached")
 	flag.Parse()
 
 	root, err := cmdutil.RepositoryRoot(".")
@@ -379,10 +384,12 @@ func classifyDomain(dr domainReport, overrides []tier, page tier, fetched bool) 
 func fetchDoc(cacheDir, area string, offline bool) (string, error) {
 	cachePath := filepath.Join(cacheDir, filepath.FromSlash(area)+".md")
 	_ = os.MkdirAll(filepath.Dir(cachePath), 0o750)
-	if data, err := os.ReadFile(cachePath); err == nil {
-		return string(data), nil
+	if !refreshDocs {
+		if data, err := os.ReadFile(cachePath); err == nil {
+			return string(data), nil
+		}
 	}
-	if offline {
+	if offline && !refreshDocs {
 		return "", fmt.Errorf("not cached and offline: %s", area)
 	}
 	url := docBaseURL + area + ".md"

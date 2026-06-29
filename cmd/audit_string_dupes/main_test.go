@@ -25,7 +25,7 @@ func TestRun_NoArgsReturnsUsage(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	if code := run(nil, &stdout, &stderr); code != 1 {
+	if code := run(nil, &stdout, &stderr, 3, 3); code != 1 {
 		t.Fatalf("run() code = %d, want 1", code)
 	}
 	if stdout.Len() != 0 {
@@ -47,7 +47,7 @@ func TestRun_ScansFilesAndDirectories(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := run([]string{dir, file, filepath.Join(dir, "missing.go")}, &stdout, &stderr)
+	code := run([]string{dir, file, filepath.Join(dir, "missing.go")}, &stdout, &stderr, 3, 3)
 	if code != 0 {
 		t.Fatalf("run() code = %d, want 0", code)
 	}
@@ -79,10 +79,10 @@ func f() {
 }
 `)
 
-	got := countStringLiterals(node)
+	got := countStringLiterals(node, 3)
 	want := map[string]int{"dupe": 2}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("countStringLiterals() = %v, want %v", got, want)
+		t.Fatalf("countStringLiterals(, 3) = %v, want %v", got, want)
 	}
 }
 
@@ -118,10 +118,10 @@ func TestFilterDuplicates_ExcludesConstantsAndJSONFields(t *testing.T) {
 	}
 	constValues := map[string]bool{"already named": true}
 
-	got := filterDuplicates(counts, constValues)
+	got := filterDuplicates(counts, constValues, 3)
 	want := []entry{{val: "actionable duplicate", count: 3}}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("filterDuplicates() = %v, want %v", got, want)
+		t.Fatalf("filterDuplicates(, 3) = %v, want %v", got, want)
 	}
 }
 
@@ -151,7 +151,7 @@ func f() {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	findDupes(filename, &stdout, &stderr)
+	findDupes(filename, &stdout, &stderr, 3, 3)
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
@@ -223,11 +223,11 @@ func TestCountStringLiterals_IgnoresUnquotableLiterals(t *testing.T) {
 			}
 		}
 	}
-	got := countStringLiterals(node)
+	got := countStringLiterals(node, 3)
 	// After replacement, the only string in the AST has an unquotable
 	// value, so countStringLiterals must return an empty map.
 	if len(got) != 0 {
-		t.Errorf("countStringLiterals() = %v, want empty (unquotable literal should be skipped)", got)
+		t.Errorf("countStringLiterals(, 3) = %v, want empty (unquotable literal should be skipped)", got)
 	}
 }
 
@@ -279,7 +279,7 @@ func TestPrintDuplicates_WindowsPathSeparator(t *testing.T) {
 func TestFindDupes_ReadError(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	findDupes(filepath.Join(t.TempDir(), "does_not_exist.go"), &stdout, &stderr)
+	findDupes(filepath.Join(t.TempDir(), "does_not_exist.go"), &stdout, &stderr, 3, 3)
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty on read error", stdout.String())
 	}
@@ -298,7 +298,7 @@ func TestFindDupes_ParseError(t *testing.T) {
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	findDupes(filename, &stdout, &stderr)
+	findDupes(filename, &stdout, &stderr, 3, 3)
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty on parse error", stdout.String())
 	}
@@ -326,7 +326,7 @@ func f() {
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	findDupes(filename, &stdout, &stderr)
+	findDupes(filename, &stdout, &stderr, 3, 3)
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty when no duplicates", stdout.String())
 	}

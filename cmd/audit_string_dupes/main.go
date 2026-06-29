@@ -9,6 +9,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -23,14 +24,17 @@ import (
 
 // main finds duplicated string literals that should be extracted to constants.
 func main() {
-	if code := run(os.Args[1:], os.Stdout, os.Stderr); code != 0 {
+	threshold := flag.Int("threshold", 3, "minimum occurrence count to report a duplicate")
+	minLength := flag.Int("min-length", 3, "minimum string length to consider")
+	flag.Parse()
+	if code := run(flag.Args(), os.Stdout, os.Stderr, *threshold, *minLength); code != 0 {
 		os.Exit(code)
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdout, stderr io.Writer, threshold, minLength int) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: go run ./cmd/audit_string_dupes/ <dir|file>...")
+		fmt.Fprintln(stderr, "usage: go run ./cmd/audit_string_dupes/ [flags] <dir|file>...")
 		return 1
 	}
 	var files []string
@@ -55,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		})
 	}
 	for _, file := range files {
-		findDupes(file, stdout, stderr)
+		findDupes(file, stdout, stderr, threshold, minLength)
 	}
 	return 0
 }
@@ -68,7 +72,7 @@ type entry struct {
 
 // findDupes parses a single Go source file, counts string literal
 // occurrences, and prints those that appear three or more times.
-func findDupes(filename string, stdout, stderr io.Writer) {
+func findDupes(filename string, stdout, stderr io.Writer, threshold, minLength int) {
 	fset := token.NewFileSet()
 	src, err := os.ReadFile(filename) // #nosec G304,G703 -- CLI tool: user provides paths intentionally
 	if err != nil {
@@ -81,9 +85,9 @@ func findDupes(filename string, stdout, stderr io.Writer) {
 		return
 	}
 
-	counts := countStringLiterals(node)
+	counts := countStringLiterals(node, minLength)
 	constValues := collectConstValues(node)
-	dupes := filterDuplicates(counts, constValues)
+	dupes := filterDuplicates(counts, constValues, threshold)
 
 	sort.Slice(dupes, func(i, j int) bool {
 		return dupes[i].count > dupes[j].count
@@ -96,7 +100,7 @@ func findDupes(filename string, stdout, stderr io.Writer) {
 
 // countStringLiterals walks the AST and counts occurrences of each
 // string literal longer than 2 characters.
-func countStringLiterals(node *ast.File) map[string]int {
+func countStringLiterals(node *ast.File, minLength int) map[string]int {
 	counts := map[string]int{}
 	ast.Inspect(node, func(n ast.Node) bool {
 		lit, ok := n.(*ast.BasicLit)
@@ -107,7 +111,7 @@ func countStringLiterals(node *ast.File) map[string]int {
 		if err != nil {
 			return true
 		}
-		if len(val) < 3 {
+		if len(val) < minLength {
 			return true
 		}
 		counts[val]++
@@ -154,10 +158,10 @@ func collectStringValues(genDecl *ast.GenDecl, dest map[string]bool) {
 
 // filterDuplicates returns entries for string literals that appear at
 // least 3 times and are not already defined as constants or JSON field names.
-func filterDuplicates(counts map[string]int, constValues map[string]bool) []entry {
+func filterDuplicates(counts map[string]int, constValues map[string]bool, threshold int) []entry {
 	var dupes []entry
 	for val, count := range counts {
-		if count < 3 || constValues[val] || isJSONFieldName(val) {
+		if count < threshold || constValues[val] || isJSONFieldName(val) {
 			continue
 		}
 		dupes = append(dupes, entry{val, count})
