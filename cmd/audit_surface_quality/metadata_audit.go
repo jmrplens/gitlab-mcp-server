@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Naming patterns for MCP tool name validation.
@@ -28,13 +28,6 @@ var (
 const minDescLen = 20
 
 const markdownFourColumnSeparator = "| --- | --- | --- | --- |\n"
-
-// readSuffixes indicate read-only operations based on tool name endings.
-var readSuffixes = []string{
-	"_list", "_lists", "_get", "_search",
-	"_latest", "_blame", "_raw", "_diff", "_refs",
-	"_statuses", "_signature", "_languages", "_statistics",
-}
 
 // violation records a single metadata rule infraction for a tool.
 //
@@ -134,8 +127,8 @@ func auditAnnotationTypes(tls []*mcp.Tool) []violation {
 		if t.Annotations == nil {
 			continue
 		}
-		isRead := isReadToolName(t.Name)
-		isDelete := isDeleteToolName(t.Name)
+		isRead := toolutil.IsReadToolName(t.Name)
+		isDelete := toolutil.IsDeleteToolName(t.Name)
 
 		if isRead && !t.Annotations.ReadOnlyHint {
 			vs = append(vs, violation{t.Name, "annotation-type", "name suggests read-only but ReadOnlyHint is false"})
@@ -223,25 +216,6 @@ func auditDuplicates(tls []*mcp.Tool, kind string) []violation {
 		seen[t.Name] = true
 	}
 	return vs
-}
-
-// isReadToolName reports whether name ends with a read-only suffix such as
-// "_list", "_get", or "_search".
-func isReadToolName(name string) bool {
-	for _, sfx := range readSuffixes {
-		if strings.HasSuffix(name, sfx) {
-			return true
-		}
-	}
-	return false
-}
-
-// isDeleteToolName reports whether name contains or ends with "delete".
-func isDeleteToolName(name string) bool {
-	if strings.HasSuffix(name, "_delete") {
-		return true
-	}
-	return slices.Contains(strings.Split(name, "_"), "delete")
 }
 
 // printMetadataReport writes the full markdown audit report to stdout,

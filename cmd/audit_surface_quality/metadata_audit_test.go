@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -199,8 +200,8 @@ func TestIsReadToolName_DetectsReadSuffixes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			if got := isReadToolName(tt.in); got != tt.want {
-				t.Fatalf("isReadToolName(%q) = %v, want %v", tt.in, got, tt.want)
+			if got := toolutil.IsReadToolName(tt.in); got != tt.want {
+				t.Fatalf("toolutil.IsReadToolName(%q) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -221,8 +222,8 @@ func TestIsDeleteToolName_DetectsDeleteForms(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			if got := isDeleteToolName(tt.in); got != tt.want {
-				t.Fatalf("isDeleteToolName(%q) = %v, want %v", tt.in, got, tt.want)
+			if got := toolutil.IsDeleteToolName(tt.in); got != tt.want {
+				t.Fatalf("toolutil.IsDeleteToolName(%q) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}
