@@ -222,6 +222,7 @@ type reportSummary struct {
 	AliasesOnlyToolname       int `json:"aliases_only_toolname"`
 	Errors                    int `json:"errors"`
 	Warnings                  int `json:"warnings"`
+	Infos                     int `json:"infos"`
 }
 
 func main() {
@@ -293,14 +294,19 @@ func severityRank(s string) int {
 // check returns a non-nil error when any finding has severity at or above the
 // given threshold. Used by the -check CI gate.
 func (r report) check(threshold int) error {
-	if r.Summary.Errors > 0 && threshold == severityError {
-		return fmt.Errorf("discovery completeness: %d error-severity finding(s) present", r.Summary.Errors)
-	}
-	if r.Summary.Warnings > 0 && threshold == severityWarning && r.Summary.Errors == 0 {
-		return fmt.Errorf("discovery completeness: %d warning-or-worse finding(s) present", r.Summary.Warnings)
-	}
-	if threshold == severityInfo && (r.Summary.Errors > 0 || r.Summary.Warnings > 0) {
-		return fmt.Errorf("discovery completeness: %d info-or-worse finding(s) present", r.Summary.Errors+r.Summary.Warnings)
+	switch threshold {
+	case severityError:
+		if r.Summary.Errors > 0 {
+			return fmt.Errorf("discovery completeness: %d error-severity finding(s) present", r.Summary.Errors)
+		}
+	case severityWarning:
+		if count := r.Summary.Errors + r.Summary.Warnings; count > 0 {
+			return fmt.Errorf("discovery completeness: %d warning-or-worse finding(s) present", count)
+		}
+	case severityInfo:
+		if count := r.Summary.Errors + r.Summary.Warnings + r.Summary.Infos; count > 0 {
+			return fmt.Errorf("discovery completeness: %d info-or-worse finding(s) present", count)
+		}
 	}
 	return nil
 }
@@ -1201,6 +1207,8 @@ func summarize(packages []packageReport) reportSummary {
 					s.Errors++
 				case "warning":
 					s.Warnings++
+				case "info":
+					s.Infos++
 				}
 			}
 		}

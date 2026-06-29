@@ -518,13 +518,12 @@ func countLocalActionSpecTools(dir string) (int, error) {
 	return count, nil
 }
 
+// isActionSpecBuilderName reports whether a function name follows the
+// per-domain ActionSpecs builder convention. Any function whose name ends in
+// "ActionSpecs" is treated as a builder, except CollectActionSpecs which is a
+// utility in the central tools package.
 func isActionSpecBuilderName(name string) bool {
-	switch name {
-	case "ActionSpecs", "GroupActionSpecs", "IssueActionSpecs", "MergeRequestActionSpecs", "ProjectActionSpecs", "SnippetActionSpecs", "UserActionSpecs":
-		return true
-	default:
-		return false
-	}
+	return strings.HasSuffix(name, "ActionSpecs") && name != "CollectActionSpecs"
 }
 
 func countActionSpecStatements(statements []ast.Stmt, vars map[string]int) int {

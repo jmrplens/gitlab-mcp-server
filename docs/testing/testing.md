@@ -115,7 +115,7 @@
 | accessrequests          |        41 |          2 |      n/a |         8 |
 | accesstokens            |        96 |          2 |      n/a |        18 |
 | actioncatalog           |        31 |          4 |      n/a |         0 |
-| actioncompat            |        44 |          2 |      n/a |         0 |
+| actioncompat            |        44 |          2 |      n/a |         1 |
 | adminspecs              |         6 |          1 |      n/a |        91 |
 | alertmanagement         |        29 |          2 |      n/a |         4 |
 | appearance              |        10 |          1 |      n/a |         2 |
@@ -286,7 +286,7 @@
 | waitpoll                |        13 |          1 |      n/a |         0 |
 | wikis                   |        60 |          2 |      n/a |         6 |
 | workitems               |        80 |          2 |      n/a |         6 |
-| **Total**               | **8,263** |    **348** |          | **1,163** |
+| **Total**               | **8,263** |    **348** |          | **1,164** |
 
 </details>
 

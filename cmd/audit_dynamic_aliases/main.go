@@ -39,7 +39,7 @@ func run(stdout, stderr io.Writer) int {
 	findings := dynamic.AuditDefaultActionAliases(catalog)
 	errorCount := 0
 	for _, finding := range findings {
-		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Message)
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Source, finding.Message)
 		if finding.Severity == "error" {
 			errorCount++
 		}

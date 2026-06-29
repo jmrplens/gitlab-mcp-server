@@ -5,7 +5,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/find_dupes/ <dir|file>...
+//	go run ./cmd/audit_string_dupes/ <dir|file>...
 package main
 
 import (
@@ -30,7 +30,7 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: go run ./cmd/find_dupes/ <dir|file>...")
+		fmt.Fprintln(stderr, "usage: go run ./cmd/audit_string_dupes/ <dir|file>...")
 		return 1
 	}
 	var files []string

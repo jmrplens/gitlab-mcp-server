@@ -1,4 +1,4 @@
-// main_test.go covers the find_dupes command's literal-collection and
+// main_test.go covers the audit_string_dupes command's literal-collection and
 // filtering pipeline.
 //
 // Tests exercise AST counting, constant exclusion, JSON-field suppression,
@@ -31,7 +31,7 @@ func TestRun_NoArgsReturnsUsage(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "usage: go run ./cmd/find_dupes/") {
+	if !strings.Contains(stderr.String(), "usage: go run ./cmd/audit_string_dupes/") {
 		t.Fatalf("stderr = %q, want usage", stderr.String())
 	}
 }
