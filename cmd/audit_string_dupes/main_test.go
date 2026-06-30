@@ -146,6 +146,22 @@ func TestFilterDuplicates_ExcludesConstantsAndJSONFields(t *testing.T) {
 	}
 }
 
+// TestFilterDuplicates_RespectsThreshold verifies the non-default -threshold
+// knob added by this change: at threshold 4, a literal occurring three times is
+// excluded and only the four-occurrence literal is reported, so a regression
+// that ignores the flag fails.
+func TestFilterDuplicates_RespectsThreshold(t *testing.T) {
+	counts := map[string]int{
+		"three times": 3,
+		"four times":  4,
+	}
+	got := filterDuplicates(counts, nil, 4)
+	want := []entry{{val: "four times", count: 4}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("filterDuplicates(, 4) = %v, want %v", got, want)
+	}
+}
+
 // TestFindDupes_PrintsSortedDuplicateSummary verifies file-level scanning sorts
 // duplicates by count and prints only the source file base name.
 func TestFindDupes_PrintsSortedDuplicateSummary(t *testing.T) {

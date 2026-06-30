@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -50,29 +51,31 @@ func TestFootprintStaleTargets(t *testing.T) {
 	readme := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
 	detailed := renderDetailedFootprint(rows)
 
-	stale, err := footprintStaleTargets(readme, detailed, rows)
-	if err != nil {
-		t.Fatalf("footprintStaleTargets(current) error: %v", err)
-	}
-	if len(stale) != 0 {
-		t.Fatalf("expected no stale targets, got %v", stale)
-	}
+	t.Run("current content reports no stale targets", func(t *testing.T) {
+		stale, err := footprintStaleTargets(readme, detailed, rows)
+		if err != nil {
+			t.Fatalf("footprintStaleTargets(current) error: %v", err)
+		}
+		if len(stale) != 0 {
+			t.Fatalf("expected no stale targets, got %v", stale)
+		}
+	})
 
-	// Mutate the detailed doc only: it must be reported, the README must not.
-	stale, err = footprintStaleTargets(readme, detailed+"\nextra drift\n", rows)
-	if err != nil {
-		t.Fatalf("footprintStaleTargets(stale detailed) error: %v", err)
-	}
-	if len(stale) != 1 || !strings.Contains(stale[0], detailedFootprintPath) {
-		t.Fatalf("expected only %q stale, got %v", detailedFootprintPath, stale)
-	}
+	t.Run("detailed-doc drift reports only the detailed doc", func(t *testing.T) {
+		stale, err := footprintStaleTargets(readme, detailed+"\nextra drift\n", rows)
+		if err != nil {
+			t.Fatalf("footprintStaleTargets(stale detailed) error: %v", err)
+		}
+		if len(stale) != 1 || !strings.Contains(stale[0], detailedFootprintPath) {
+			t.Fatalf("expected only %q stale, got %v", detailedFootprintPath, stale)
+		}
+	})
 
-	// Mutate the README section: it must be reported as stale.
-	stale, err = footprintStaleTargets("no markers here", detailed, rows)
-	if err == nil {
-		t.Fatal("expected error when README lacks the footprint markers")
-	}
-	_ = stale
+	t.Run("missing README markers returns an error", func(t *testing.T) {
+		if _, err := footprintStaleTargets("no markers here", detailed, rows); err == nil {
+			t.Fatal("expected error when README lacks the footprint markers")
+		}
+	})
 }
 
 // TestMeasureTokenFootprintRows_AllTiersAllModes verifies the full measurement
@@ -117,9 +120,12 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes(t *testing.T) {
 	}
 }
 
-// TestMeasureToolSchemaTokens_PositiveForRealTokenizer verifies the schema
-// token estimator returns a positive count using the real tokenizer.
-func TestMeasureToolSchemaTokens_PositiveForRealTokenizer(t *testing.T) {
+// TestMeasureToolSchemaTokens_UsesRealTokenizer verifies the schema token
+// estimator runs the cl100k_base tokenizer, not the bytes/4 fallback. It counts
+// the same serialized tools both ways and asserts they differ, so a tokenizer
+// init/encode regression (silently dropping to bytes/4) fails here. The
+// tokenizer itself is unit-tested in tokens_test.go.
+func TestMeasureToolSchemaTokens_UsesRealTokenizer(t *testing.T) {
 	toolList := []*mcp.Tool{{Name: "a"}, {Name: "bb"}, {Name: "ccc"}}
 
 	got, err := measureToolSchemaTokens(toolList)
@@ -127,6 +133,18 @@ func TestMeasureToolSchemaTokens_PositiveForRealTokenizer(t *testing.T) {
 		t.Fatalf("measureToolSchemaTokens() error = %v", err)
 	}
 	if got <= 0 {
-		t.Fatalf("measureToolSchemaTokens() = %d, want > 0 (real tokenizer)", got)
+		t.Fatalf("measureToolSchemaTokens() = %d, want > 0", got)
+	}
+
+	fallback := 0
+	for _, tl := range toolList {
+		b, marshalErr := json.Marshal(tl)
+		if marshalErr != nil {
+			t.Fatalf("marshal: %v", marshalErr)
+		}
+		fallback += len(b) / 4
+	}
+	if got == fallback {
+		t.Fatalf("measureToolSchemaTokens() = %d == bytes/4 fallback; cl100k_base tokenizer did not engage", got)
 	}
 }
