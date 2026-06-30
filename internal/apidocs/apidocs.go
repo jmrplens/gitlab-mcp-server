@@ -1,6 +1,6 @@
-// Package apidocs is a shared fetcher for the GitLab API reference docs
-// (https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/<area>.md) used as
-// a source of truth alongside the client-go SDK by the audit utilities.
+// Package apidocs is a shared fetcher for the GitLab API reference docs (the
+// doc/api/<area>.md files in the gitlab-org/gitlab monorepo) used as a source of
+// truth alongside the client-go SDK by the audit utilities.
 //
 // Docs are cached on disk in a single shared, gitignored directory
 // (.cache/gitlab-api-docs/ under the repo root). A cached doc is reused while it
