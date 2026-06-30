@@ -41,6 +41,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: site
 
+      # IndexNow ownership-verification file, generated from the secret so the
+      # key isn't committed. Astro copies site/public/* into the build output,
+      # publishing it at /gitlab-mcp-server/<key>.txt.
+      - name: Write IndexNow key file
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: |
+          if [ -n "$INDEXNOW_KEY" ]; then
+            printf '%s' "$INDEXNOW_KEY" > "site/public/${INDEXNOW_KEY}.txt"
+            echo "Wrote site/public/${INDEXNOW_KEY}.txt"
+          else
+            echo "INDEXNOW_KEY not set — skipping IndexNow key file"
+          fi
+
       - run: pnpm run build
         working-directory: site
 
@@ -55,6 +69,63 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  indexnow:
+    name: Submit to IndexNow
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify IndexNow of updated URLs
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INDEXNOW_KEY:-}" ]; then
+            echo "INDEXNOW_KEY not set — skipping IndexNow submission"
+            exit 0
+          fi
+          # Use the actual deployed Pages URL (tracks a custom domain / CNAME and
+          # any repo/org rename automatically).
+          BASE="${PAGE_URL%/}"
+          if [ -z "$BASE" ]; then echo "No deploy page_url available; aborting"; exit 1; fi
+          HOST="$(printf '%s' "$BASE" | sed -E 's#^https?://([^/]+).*#\1#')"
+          echo "Site base: $BASE (host: $HOST)"
+          # Fetch the live sitemap with a short retry/backoff for deploy propagation.
+          idx=""
+          for attempt in 1 2 3 4 5; do
+            if idx=$(curl -fsSL "$BASE/sitemap-index.xml"); then break; fi
+            echo "sitemap fetch attempt ${attempt} failed; retrying in 10s…"
+            sleep 10
+          done
+          if [ -z "$idx" ]; then echo "Could not fetch sitemap after retries; aborting"; exit 1; fi
+          # Collect sub-sitemap URLs, then each sitemap's <loc> entries. A while
+          # loop over a here-string (not a pipe) keeps errors from being masked
+          # under `set -o pipefail`; a transient sub-sitemap fetch can't abort all.
+          subs=$(printf '%s' "$idx" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g')
+          urls=""
+          while IFS= read -r sm; do
+            [ -n "$sm" ] || continue
+            body=$(curl -fsSL "$sm" || true)
+            urls="${urls}$(printf '%s' "$body" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g')"$'\n'
+          done <<< "$subs"
+          url_json=$(printf '%s\n' "$urls" | grep . | jq -R . | jq -s .)
+          count=$(printf '%s' "$url_json" | jq 'length')
+          echo "Submitting $count URLs to IndexNow"
+          payload=$(jq -n \
+            --arg host "$HOST" \
+            --arg key "$INDEXNOW_KEY" \
+            --arg keyLocation "$BASE/${INDEXNOW_KEY}.txt" \
+            --argjson urlList "$url_json" \
+            '{host:$host, key:$key, keyLocation:$keyLocation, urlList:$urlList}')
+          code=$(curl -sS -o /tmp/indexnow.out -w '%{http_code}' \
+            -X POST "https://api.indexnow.org/IndexNow" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$payload")
+          echo "IndexNow responded HTTP $code"; cat /tmp/indexnow.out || true
+          case "$code" in 200|202) echo "OK" ;; *) echo "IndexNow submission failed"; exit 1 ;; esac

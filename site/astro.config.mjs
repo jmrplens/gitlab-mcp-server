@@ -154,8 +154,14 @@ const jsonLd = JSON.stringify({
 			},
 			author: { "@id": authorId },
 			sameAs: [
+				"https://www.wikidata.org/wiki/Q140389426",
 				"https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server",
 				"https://cursor.directory/plugins/gitlab-mcp-server",
+				"https://smithery.ai/servers/jmrp/gitlab-mcp-server",
+				"https://mcp.so/server/gitlab-mcp-server/jmrplens",
+				"https://www.pulsemcp.com/servers/jmrplens-gitlab",
+				"https://mcpservers.org/servers/jmrplens/gitlab-mcp-server",
+				"https://enterprisedna.co/directories/mcp/jmrplens-gitlab-mcp-server",
 			],
 		},
 		{
