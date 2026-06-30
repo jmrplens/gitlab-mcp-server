@@ -106,7 +106,7 @@ The migration is enforced by tests and audits:
 | `TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection` | Source registration files do not reintroduce manual individual `mcp.Tool` metadata outside documented exceptions                                |
 | `TestIndividualToolProjection_GoldenSnapshotParity`                     | Projected metadata matches `internal/tools/testdata/tools_individual.json` except explicit, reviewed gaps                                       |
 | `TestIndividualToolMetadata_CatalogBackedCoverage`                      | Every catalog-backed spec references a registered individual tool, and every individual tool without a spec is an explicit standalone exception |
-| `cmd/audit_catalog_first`                                        | Every source domain is classified across individual, meta, dynamic, and standalone surfaces                                                     |
+| `cmd/audit_catalog_first`                                               | Every source domain is classified across individual, meta, dynamic, and standalone surfaces                                                     |
 | `TestActionSpecCoverage_AllCatalogRoutesClassified`                     | Every GitLab.com Enterprise dynamic catalog route is spec-backed                                                                                |
 
 Run the focused checks before changing individual registration policy:

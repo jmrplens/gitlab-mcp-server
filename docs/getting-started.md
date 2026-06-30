@@ -19,7 +19,46 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 
 ---
 
+## Fastest path
+
+If you just want it running, pick one of these and skip the manual steps below.
+
+### One-click buttons
+
+Each registers a **Docker**-based server (auto-pulls the image on first run; needs [Docker](https://www.docker.com/)). VS Code prompts for your token; Cursor / LM Studio / Kiro add a `YOUR_GITLAB_TOKEN` placeholder you replace.
+
+[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Add to LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-dark.svg)](https://lmstudio.ai/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
+
+### Claude Code (`claude mcp add`)
+
+Docker (no install — pulls the image on first run):
+
+```bash
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+### One-line installer (native binary)
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
+
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+```
+
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). Prefer a guided flow with no JSON to edit? Run `gitlab-mcp-server --setup` after installing the binary (see [Step 2](#step-2-run-the-setup-wizard)).
+
+---
+
 ## Step 1: Download the Binary
+
+> Prefer the fast paths above? Skip to [Step 3](#step-3-open-your-ai-client). This section is the manual walkthrough.
 
 Download the latest release for your platform from the project [Releases](https://github.com/jmrplens/gitlab-mcp-server/releases) page:
 

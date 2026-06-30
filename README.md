@@ -208,7 +208,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 | **Progress**    | Tool execution progress reporting  |
 | **Elicitation** | 4 interactive creation wizards     |
 
-Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline, Roo Code. See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/).
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/).
 
 ## AI Model Tool-Use Evaluation
 
