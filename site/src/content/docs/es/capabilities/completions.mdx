@@ -1,13 +1,64 @@
 ---
 title: Autocompletado
-description: Autocompletado de argumentos para parámetros de herramientas
+description: Autocompletado de argumentos MCP que sugiere proyectos, ramas, usuarios y etiquetas de GitLab en tiempo real al componer parámetros de herramientas.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Qué es el autocompletado MCP en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El autocompletado son sugerencias de relleno en tiempo real para los parámetros de las herramientas en GitLab MCP Server. En lugar de memorizar IDs de proyectos, nombres de ramas o logins de usuario, escribes unos pocos caracteres y el servidor consulta GitLab para encontrar valores coincidentes mediante el método de protocolo MCP completion/complete. Esto convierte una búsqueda de varios pasos —por ejemplo, llamar a list_projects para encontrar un ID antes de crear una incidencia— en una única selección interactiva. GitLab MCP Server admite 17 tipos de argumentos de autocompletado, divididos en completadores globales que funcionan sin contexto de proyecto y completadores por proyecto que buscan dentro de un proyecto concreto."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué tipos de argumentos admiten autocompletado en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server admite 17 tipos de argumentos de autocompletado. Cuatro son completadores globales que no necesitan contexto de proyecto: project, group, user y namespace. Los 13 restantes son completadores por proyecto que buscan dentro de un proyecto seleccionado: branch, tag, milestone, label, merge_request, issue, pipeline, environment, release, wiki_slug, version, runner y board. Cada sugerencia se obtiene en directo de la API de búsqueda de GitLab, de modo que los resultados reflejan el estado actual de la instancia."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo mejora el autocompletado la precisión del asistente de IA?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El autocompletado reduce los errores en las llamadas a herramientas de la IA de varias formas. Elimina errores tipográficos porque el asistente selecciona entre sugerencias validadas en lugar de escribir valores exactos. Reduce los viajes de ida y vuelta al eliminar la necesidad de llamar a list_projects antes de create_issue. Aporta contexto al incluir los IDs junto a los nombres para elegir el valor correcto. Y ofrece búsqueda en tiempo real, con resultados que se actualizan a medida que se escribe, impulsados por la API de búsqueda de GitLab. El efecto neto es menos llamadas fallidas por identificadores no válidos."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué ocurre si mi cliente MCP no admite autocompletado?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El autocompletado requiere que el cliente MCP admita el método de protocolo completion/complete. Si tu cliente no lo admite, GitLab MCP Server simplemente no ofrece sugerencias y la funcionalidad de las herramientas no se ve afectada. Aún puedes descubrir valores válidos llamando a la acción list en cualquier meta-herramienta —por ejemplo, listar proyectos, ramas o etiquetas— y luego proporcionar el valor elegido directamente en la llamada a la herramienta."
+            }
+          }
+        ]
+      }
 ---
 
 import stats from "../../../../data/stats.json";
 
-El autocompletado proporciona sugerencias en tiempo real para los parámetros de las herramientas. En lugar de memorizar IDs de proyectos, nombres de ramas o nombres de usuario, escribes unos pocos caracteres y el servidor consulta GitLab para encontrar coincidencias.
+:::note[Documentación para desarrolladores]
+Esta página es la visión general orientada a usuarios. Para la referencia completa de autocompletado, consulta [docs/reference/capabilities/completions](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/completions.md).
+:::
 
-## El problema
+El autocompletado proporciona **sugerencias de relleno en tiempo real para los parámetros de las herramientas**. En lugar de memorizar IDs de proyectos, nombres de ramas o logins de usuario, escribes unos pocos caracteres y GitLab MCP Server consulta GitLab para encontrar valores coincidentes, devolviéndolos a través del método de protocolo MCP `completion/complete`. Esto transforma una búsqueda de varios pasos en una única selección interactiva.
+
+GitLab MCP Server admite **{stats.completions} tipos de argumentos de autocompletado**, organizados en completadores globales que funcionan en cualquier sitio y completadores por proyecto que buscan dentro de un proyecto elegido. Cada sugerencia se obtiene en directo, así que los resultados siempre reflejan el estado actual de la instancia de GitLab conectada.
+
+## ¿Qué problema resuelve el autocompletado?
+
+Sin autocompletado, proporcionar un identificador implica buscarlo primero — y eso suele costar una llamada adicional a una herramienta. Con autocompletado, el asistente resuelve el valor sobre la marcha a medida que el usuario escribe, de modo que ya no hace falta un paso de descubrimiento aparte.
 
 ```text
 Sin autocompletado:
@@ -17,9 +68,11 @@ Con autocompletado:
   El usuario escribe: "mcp" → El servidor sugiere: "group/gitlab-mcp-server", "group/redmine-mcp-server"
 ```
 
-Esto transforma una búsqueda de múltiples pasos en una **selección única e interactiva**.
+Esto reduce una búsqueda de múltiples pasos a una **selección única e interactiva**.
 
-## Cómo funciona
+## ¿Cómo funciona el autocompletado?
+
+Cuando el usuario empieza a escribir el valor de un argumento, el cliente MCP envía una solicitud `completion/complete` al servidor. El servidor consulta el endpoint correspondiente de GitLab y devuelve las coincidencias como sugerencias que el cliente muestra en un desplegable. Todo el ciclo ocurre mientras el usuario escribe.
 
 ```mermaid
 sequenceDiagram
@@ -36,9 +89,9 @@ sequenceDiagram
     AI->>U: Muestra desplegable con opciones
 ```
 
-## Tipos de argumentos soportados
+## ¿Qué tipos de argumentos admiten autocompletado?
 
-El servidor soporta **{stats.completions} tipos de argumentos de autocompletado** organizados en completadores globales y por proyecto:
+GitLab MCP Server admite **{stats.completions} tipos de argumentos de autocompletado**, organizados en completadores globales y por proyecto. Los completadores globales resuelven valores que existen a nivel de toda la instancia, mientras que los completadores por proyecto requieren un contexto de proyecto y buscan solo dentro de ese proyecto.
 
 ### Completadores globales
 
@@ -71,15 +124,33 @@ Requieren un contexto de proyecto y buscan dentro de ese proyecto:
 | `runner`        | Descripciones de runners    | `shared-runner-1` |
 | `board`         | Nombres de tableros         | `Development`     |
 
-## Cómo el autocompletado mejora la precisión de la IA
+## ¿Cómo mejora el autocompletado la precisión de la IA?
 
-El autocompletado reduce errores de varias formas:
+El autocompletado reduce errores en las llamadas a herramientas de la IA de varias formas concretas. En conjunto, recortan el número de llamadas fallidas por identificadores no válidos:
 
-1. **Elimina errores tipográficos** — Los usuarios seleccionan de sugerencias validadas en lugar de escribir valores exactos
-2. **Reduce viajes de ida y vuelta** — No es necesario llamar a `list_projects` antes de `create_issue`
-3. **Proporciona contexto** — Las sugerencias incluyen IDs junto con nombres, asegurando valores correctos
-4. **Búsqueda en tiempo real** — Los resultados se actualizan mientras el usuario escribe, potenciados por la API de búsqueda de GitLab
+1. **Elimina errores tipográficos** — El asistente selecciona de sugerencias validadas en lugar de escribir valores exactos.
+2. **Reduce viajes de ida y vuelta** — No es necesario llamar a `list_projects` antes de `create_issue`.
+3. **Proporciona contexto** — Las sugerencias incluyen IDs junto con nombres, asegurando valores correctos.
+4. **Búsqueda en tiempo real** — Los resultados se actualizan mientras el usuario escribe, potenciados por la API de búsqueda de GitLab.
 
 :::tip
 El autocompletado funciona mejor cuando el cliente MCP soporta el método de protocolo `completion/complete`. Si tu cliente no soporta autocompletado, aún puedes descubrir valores usando la acción `list` en cualquier meta-herramienta.
 :::
+
+## Preguntas frecuentes
+
+### ¿Qué es el autocompletado MCP?
+
+El autocompletado son **sugerencias de relleno en tiempo real para los parámetros de las herramientas**. Escribes unos pocos caracteres y GitLab MCP Server consulta GitLab mediante el método MCP `completion/complete`, devolviendo proyectos, ramas, usuarios, etiquetas y más coincidentes. Esto convierte una búsqueda de varios pasos —como llamar a `list_projects` para encontrar un ID antes de crear una incidencia— en una única selección interactiva. GitLab MCP Server admite {stats.completions} tipos de argumentos de autocompletado entre completadores globales y por proyecto.
+
+### ¿Qué tipos de argumentos admiten autocompletado?
+
+GitLab MCP Server admite {stats.completions} tipos de argumentos de autocompletado. Los cuatro completadores globales no necesitan contexto de proyecto: `project`, `group`, `user` y `namespace`. Los restantes completadores por proyecto buscan dentro de un proyecto seleccionado: `branch`, `tag`, `milestone`, `label`, `merge_request`, `issue`, `pipeline`, `environment`, `release`, `wiki_slug`, `version`, `runner` y `board`. Cada sugerencia se obtiene en directo de la API de búsqueda de GitLab, así que los resultados reflejan el estado actual de la instancia.
+
+### ¿Cómo mejora el autocompletado la precisión del asistente de IA?
+
+El autocompletado recorta las llamadas fallidas de cuatro maneras: elimina errores tipográficos porque el asistente elige entre sugerencias validadas; reduce los viajes de ida y vuelta al quitar la necesidad de llamar a `list_projects` antes de `create_issue`; aporta contexto al emparejar IDs con nombres; y ofrece búsqueda en tiempo real actualizada a medida que se escribe. El efecto neto es menos errores por identificadores no válidos.
+
+### ¿Qué ocurre si mi cliente MCP no admite autocompletado?
+
+El autocompletado requiere que el cliente MCP admita el método de protocolo `completion/complete`. Si tu cliente carece de él, GitLab MCP Server simplemente no ofrece sugerencias y la funcionalidad de las herramientas no se ve afectada. Aún puedes descubrir valores válidos llamando a la acción `list` en cualquier meta-herramienta —por ejemplo, listar proyectos, ramas o etiquetas— y luego proporcionar el valor elegido directamente.

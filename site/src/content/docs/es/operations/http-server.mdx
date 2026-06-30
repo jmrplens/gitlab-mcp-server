@@ -1,6 +1,49 @@
 ---
 title: Modo Servidor HTTP
-description: Despliegue multiusuario con autenticación por solicitud
+description: Despliega GitLab MCP Server como servicio HTTP multiusuario con autenticación por token en cada petición, pool aislado, OAuth y rate limiting.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cuándo debería usar el modo HTTP en lugar del modo stdio?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Usa el modo stdio para un único desarrollador con un cliente de IA local, donde cada cliente inicia su propio proceso de servidor. Usa el modo HTTP cuando un equipo comparte una instancia de servidor, para despliegues remotos o sin pantalla, para integración CI/CD con MCP y para pruebas con curl o clientes HTTP. En modo HTTP un único proceso de servidor atiende a varios clientes por la red, cada uno autenticándose con su propio token de GitLab."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo se autentican los clientes en el modo HTTP de GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera PRIVATE-TOKEN (recomendada) o una cabecera Authorization: Bearer; si ambas están presentes, PRIVATE-TOKEN tiene precedencia. Cuando el servidor arranca sin --gitlab-url, los clientes también envían una cabecera GITLAB-URL para elegir la instancia destino. Para producción, --auth-mode=oauth habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Los clientes del modo HTTP comparten estado o contexto?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. El modo HTTP usa un pool LRU limitado de instancias de servidor MCP indexado por el hash SHA-256 del token y la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan, solo los hashes SHA-256, y cuando el pool alcanza --max-http-clients se desaloja la entrada menos usada recientemente."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Por qué se caen mis sesiones MCP o se cortan los streams en modo HTTP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la sesión MCP (--session-timeout, por defecto 30m) y el timeout de conexión HTTP inactiva (--http-idle-timeout, por defecto 0 = desactivado). Como --http-idle-timeout vale 0 por defecto, la capa HTTP no cierra conexiones inactivas y --session-timeout es la vida efectiva de inactividad. Si las sesiones caen pronto, un --http-idle-timeout bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -506,3 +549,21 @@ Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramienta
 :::tip
 Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.
 :::
+
+## Preguntas frecuentes
+
+### ¿Cuándo debería usar el modo HTTP en lugar de stdio?
+
+Usa el **modo stdio** para un único desarrollador con un cliente de IA local, donde cada cliente inicia su propio proceso de servidor. Usa el **modo HTTP** cuando un equipo comparte una instancia de servidor, para despliegues remotos o sin pantalla, para integración CI/CD con MCP y para pruebas con curl o clientes HTTP. En modo HTTP un único proceso de servidor atiende a varios clientes por la red, cada uno autenticándose con su propio token de GitLab.
+
+### ¿Cómo se autentican los clientes en el modo HTTP?
+
+Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera `PRIVATE-TOKEN` (recomendada) o una cabecera `Authorization: Bearer`; si ambas están presentes, `PRIVATE-TOKEN` tiene precedencia. Cuando el servidor arranca sin `--gitlab-url`, los clientes también envían una cabecera `GITLAB-URL` para elegir la instancia destino. Para producción, `--auth-mode=oauth` habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens.
+
+### ¿Los clientes del modo HTTP comparten estado o contexto?
+
+No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan —solo los hashes SHA-256— y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente.
+
+### ¿Por qué se caen mis sesiones MCP o se cortan los streams?
+
+Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la **sesión MCP** (`--session-timeout`, por defecto `30m`) y el timeout de **conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado). Como `--http-idle-timeout` vale `0` por defecto, la capa HTTP no cierra conexiones inactivas, así que `--session-timeout` es la vida efectiva de inactividad. Si las sesiones caen pronto, un `--http-idle-timeout` bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos.

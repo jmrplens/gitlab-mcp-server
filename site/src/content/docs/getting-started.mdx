@@ -1,6 +1,49 @@
 ---
 title: Getting Started
-description: Install and configure GitLab MCP Server with your favorite AI client
+description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, or setup wizard — for VS Code, Claude, Cursor, and other MCP clients.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What GitLab token scope does GitLab MCP Server need?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server needs a Personal Access Token with the api scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the read_api scope and set GITLAB_READ_ONLY=true, which disables every mutating tool. Create tokens under GitLab, then Preferences, then Access Tokens."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I connect GitLab MCP Server to a self-managed GitLab instance?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Point GITLAB_URL at your instance, for example GITLAB_URL=https://gitlab.example.com. GITLAB_URL defaults to https://gitlab.com, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set GITLAB_SKIP_TLS_VERIFY=true to bypass certificate verification on a trusted network."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which tool mode does GitLab MCP Server use by default?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "By default GitLab MCP Server runs in dynamic mode, which exposes only two tools — gitlab_find_action and gitlab_execute_action — to keep the AI client's context small while still reaching every GitLab operation. Set TOOL_SURFACE=meta for consolidated domain-level meta-tools, or TOOL_SURFACE=individual for one tool per operation."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does my AI client fail to connect to GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_SKIP_TLS_VERIFY=true."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
@@ -10,7 +53,7 @@ import stats from "../../data/stats.json";
 For the complete technical reference, see [`docs/getting-started.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md) in the repository.
 :::
 
-Get up and running with GitLab MCP Server in under 5 minutes.
+GitLab MCP Server connects your AI assistant to GitLab in under five minutes. You install the server — as a Docker image, a native binary, or through a one-click button — give it a GitLab Personal Access Token, and register it with an MCP-compatible client such as VS Code, Claude Desktop, Cursor, or Claude Code. This guide covers every install path and how to verify the connection.
 
 ## Prerequisites
 
@@ -518,6 +561,24 @@ For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes 
 
 Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::
+
+## Common setup questions
+
+### What GitLab token scope does GitLab MCP Server need?
+
+GitLab MCP Server needs a Personal Access Token with the **`api`** scope for full read and write access to the GitLab REST and GraphQL API. For a read-only setup, create a token with the **`read_api`** scope and set `GITLAB_READ_ONLY=true`, which disables every mutating tool. Create tokens under **GitLab → Preferences → Access Tokens**.
+
+### How do I connect to a self-managed GitLab instance?
+
+Point `GITLAB_URL` at your instance, for example `GITLAB_URL=https://gitlab.example.com`. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only for self-managed Community or Enterprise Edition instances. If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` to bypass certificate verification on a trusted network.
+
+### Which tool mode does GitLab MCP Server use by default?
+
+By default GitLab MCP Server runs in **dynamic mode**, which exposes only two tools — `gitlab_find_action` and `gitlab_execute_action` — to keep the AI client's context small while still reaching every GitLab operation. Set `TOOL_SURFACE=meta` for consolidated domain-level meta-tools, or `TOOL_SURFACE=individual` for one tool per operation.
+
+### Why does my AI client fail to connect?
+
+A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that `GITLAB_URL` is correct and reachable from your machine, that the token carries the `api` scope (or `read_api` in read-only mode) and has not expired, and that self-signed certificates are handled by setting `GITLAB_SKIP_TLS_VERIFY=true`.
 
 ## Next steps
 

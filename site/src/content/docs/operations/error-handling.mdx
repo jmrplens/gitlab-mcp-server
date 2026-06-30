@@ -1,6 +1,49 @@
 ---
 title: Error Handling
-description: Error classification, rich diagnostics, and actionable hints
+description: How GitLab MCP Server classifies API errors by HTTP status, extracts rich diagnostics, and returns actionable hints to AI assistants.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How does GitLab MCP Server classify GitLab API errors?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Every error from the GitLab API is classified by HTTP status code into an actionable message — for example, 401 means the GITLAB_TOKEN may be invalid or expired, 403 means the token lacks required permissions, and 429 means too many requests. Network-level failures such as connection refused, DNS failure, timeout, and TLS handshake errors are classified too. Each error is then wrapped with the operation name and, when known, a corrective suggestion."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which error wrapping function does GitLab MCP Server use for each operation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Read-only operations (list, get, search) use WrapErr. Mutating operations (create, update, delete) use WrapErrWithMessage, which includes the specific detail extracted from the GitLab response. When a corrective action is known, WrapErrWithHint appends a suggestion, and WrapErrWithStatusHint scopes that hint to a single HTTP status code. A get operation returning 404 uses NotFoundResult instead of an error."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does a 404 from a get handler not appear as an error?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "For get handlers, 404 responses are treated as informational rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a CallToolResult with IsError true and domain-specific hints, logged at INFO level. This NotFoundResult pattern is applied to all 27 get handlers across 21 domains and gives the AI assistant actionable next steps such as listing available resources."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Should an AI assistant retry a failed GitLab MCP Server operation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It depends on whether the error is transient or permanent. Transient errors — 429, 5xx, timeouts, and connection refused — are safe to retry after a delay. Permanent errors — 4xx except 429 — indicate a problem with the request itself, so retrying produces the same result; fix the input parameters or configuration instead."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -196,3 +239,21 @@ Detail: 403 Forbidden
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
+
+## Frequently asked questions
+
+### How does the server classify GitLab API errors?
+
+GitLab MCP Server classifies every API error by **HTTP status code** into an actionable message: 401 signals an invalid or expired `GITLAB_TOKEN`, 403 signals missing permissions, 404 a missing resource or lack of access, 422 a validation failure, and 429 a rate limit. Network-level failures — connection refused, DNS failure, timeout, and TLS handshake errors — are classified separately. The classification drives both the wrapped error message and whether the failure is treated as retryable.
+
+### Which error wrapping function is used for which operation?
+
+Read-only operations (`list`, `get`, `search`) use `WrapErr`. Mutating operations (`create`, `update`, `delete`) use `WrapErrWithMessage`, which includes the specific detail extracted from the GitLab response. When a corrective action is known, `WrapErrWithHint` appends a suggestion, and `WrapErrWithStatusHint` scopes that hint to a single HTTP status code. A `get` operation returning 404 uses `NotFoundResult` instead of returning an error.
+
+### Why does a 404 not appear as an error?
+
+For `get` handlers, 404 responses are treated as **informational** rather than failures. Instead of returning an opaque Go error logged at ERROR level, the handler returns a `CallToolResult` with `IsError: true` and domain-specific hints, logged at INFO level. This `NotFoundResult` pattern is applied to all 27 get handlers across 21 domains and gives the AI assistant actionable next steps, such as listing available resources or checking the resource name.
+
+### Should the AI assistant retry a failed operation?
+
+It depends on whether the error is **transient** or **permanent**. Transient errors — 429, 5xx, timeouts, and connection refused — are safe to retry after a delay. Permanent errors — 4xx except 429 — indicate a problem with the request itself, so retrying produces the same result. For permanent errors, fix the input parameters or configuration instead of retrying.

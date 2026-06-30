@@ -1,6 +1,49 @@
 ---
 title: HTTP Server Mode
-description: Multi-user deployment with per-request authentication
+description: Deploy GitLab MCP Server as a multi-user HTTP service with per-request token authentication, an isolated server pool, OAuth, and rate limiting.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "When should I use HTTP mode instead of stdio mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use stdio mode for a single developer running a local AI client, where each client spawns its own server process. Use HTTP mode when a team shares one server instance, for remote or headless server deployments, for CI/CD integration with MCP, and for testing with curl or HTTP clients. In HTTP mode a single server process serves multiple clients over the network, each authenticating with its own GitLab token."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do clients authenticate in GitLab MCP Server HTTP mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Clients send their GitLab Personal Access Token on every request using the PRIVATE-TOKEN header (recommended) or an Authorization: Bearer header; if both are present, PRIVATE-TOKEN wins. When the server starts without --gitlab-url, clients also send a GITLAB-URL header to choose the target instance. For production, --auth-mode=oauth enables RFC 9728-compliant OAuth 2.1 with PKCE, so clients discover the authorization server and authorize in the browser instead of copying tokens."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do HTTP mode clients share state or context?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. HTTP mode uses a bounded LRU pool of MCP server instances keyed by the SHA-256 hash of each client's token and GitLab URL. Clients with the same token and same GitLab URL share one instance, while different tokens or different URLs get completely isolated instances. Raw tokens are never stored, only the SHA-256 hashes, and when the pool reaches --max-http-clients the least recently used entry is evicted."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why do my MCP sessions drop or streams get cut off in HTTP mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Two independent layers govern lifetime: the MCP session idle timeout (--session-timeout, default 30m) and the HTTP idle connection timeout (--http-idle-timeout, default 0 = disabled). Because --http-idle-timeout defaults to 0, the HTTP layer does not close idle connections and --session-timeout is the effective idle lifetime. If sessions drop early, a low --http-idle-timeout or a reverse-proxy read/idle timeout is usually closing long-lived SSE streams; raise the proxy timeout for long-running MCP streams."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -506,3 +549,21 @@ A successful response returns a JSON-RPC result with the list of available tools
 :::tip
 For production deployments, place the server behind a reverse proxy (nginx, Caddy) that handles TLS termination. The MCP endpoint at `/mcp` supports standard HTTP load balancing.
 :::
+
+## Frequently asked questions
+
+### When should I use HTTP mode instead of stdio?
+
+Use **stdio mode** for a single developer running a local AI client, where each client spawns its own server process. Use **HTTP mode** when a team shares one server instance, for remote or headless server deployments, for CI/CD integration with MCP, and for testing with curl or HTTP clients. In HTTP mode a single server process serves multiple clients over the network, each authenticating with its own GitLab token.
+
+### How do clients authenticate in HTTP mode?
+
+Clients send their GitLab Personal Access Token on every request using the `PRIVATE-TOKEN` header (recommended) or an `Authorization: Bearer` header; if both are present, `PRIVATE-TOKEN` wins. When the server starts without `--gitlab-url`, clients also send a `GITLAB-URL` header to choose the target instance. For production, `--auth-mode=oauth` enables RFC 9728–compliant OAuth 2.1 with PKCE, so clients discover the authorization server and authorize in the browser instead of copying tokens.
+
+### Do HTTP mode clients share state or context?
+
+No. HTTP mode uses a **bounded LRU pool** of MCP server instances keyed by the SHA-256 hash of each client's token **and** GitLab URL. Clients with the same token and same GitLab URL share one instance, while different tokens or different URLs get completely isolated instances. Raw tokens are never stored — only the SHA-256 hashes — and when the pool reaches `--max-http-clients` the least recently used entry is evicted.
+
+### Why do my MCP sessions drop or streams get cut off?
+
+Two independent layers govern lifetime: the **MCP session** idle timeout (`--session-timeout`, default `30m`) and the **HTTP idle connection** timeout (`--http-idle-timeout`, default `0` = disabled). Because `--http-idle-timeout` defaults to `0`, the HTTP layer does not close idle connections, so `--session-timeout` is the effective idle lifetime. If sessions drop early, a low `--http-idle-timeout` or a reverse-proxy read/idle timeout is usually closing long-lived SSE streams; raise the proxy timeout for long-running MCP streams.

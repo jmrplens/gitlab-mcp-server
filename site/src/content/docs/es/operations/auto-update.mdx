@@ -1,6 +1,49 @@
 ---
 title: Actualización Automática
-description: Actualizaciones automáticas del binario desde releases de GitHub
+description: Actualizaciones automáticas del binario de GitLab MCP Server desde releases de GitHub en stdio y HTTP, con modo solo verificación y reversión.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cómo desactivo las actualizaciones automáticas en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Establece AUTO_UPDATE=false en modo stdio o pasa --auto-update=false en modo HTTP para omitir todas las verificaciones de actualización. Para recibir aviso de nuevas versiones sin instalarlas, usa AUTO_UPDATE=check (o --auto-update=check), que detecta actualizaciones y registra su disponibilidad pero nunca reemplaza el binario. Los alias aceptados son 1/yes para true y 0/no para false, y el valor no distingue mayúsculas de minúsculas."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿La actualización interrumpe el servidor en ejecución?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. GitLab MCP Server aplica las actualizaciones con un truco de renombrado: el binario en ejecución se renombra a .old y el nuevo binario se escribe en la ruta original mientras el proceso actual sigue sirviendo peticiones MCP. La nueva versión solo se usa tras reiniciar el servidor. La verificación al inicio es no bloqueante y no fatal, así que un timeout de red o un release ausente se registra como advertencia y nunca impide que el servidor arranque."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿La actualización automática usa mi token o instancia de GitLab?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. La actualización automática solo se comunica con la API de GitHub Releases y es completamente independiente de tu configuración de GitLab. Los ajustes GITLAB_URL, GITLAB_TOKEN y GITLAB_SKIP_TLS_VERIFY no afectan a las verificaciones ni a las descargas. Por defecto obtiene releases de jmrplens/gitlab-mcp-server, que puedes sobrescribir con AUTO_UPDATE_REPO=propietario/repo."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo revierto GitLab MCP Server tras una actualización defectuosa?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El binario anterior se conserva junto al actual como gitlab-mcp-server.old (o .exe.old en Windows). Para revertir, detén el servidor y renombra el archivo .old de vuelta al nombre original. El archivo .old sobrante se limpia automáticamente en el próximo inicio exitoso, así que la reversión solo es posible hasta que se ejecute la siguiente actualización."
+            }
+          }
+        ]
+      }
 ---
 
 :::note[Documentación para desarrolladores]
@@ -148,3 +191,21 @@ Puedes apuntar la actualización automática a cualquier repositorio de GitHub q
 :::caution
 Los nombres de los assets del release **deben ser nombres de archivo exactos** (ej., `gitlab-mcp-server-linux-amd64`). Nunca añadas sufijos descriptivos como `(Linux AMD64)` — la librería de actualización busca por nombre exacto y fallará con nombres decorados.
 :::
+
+## Preguntas frecuentes
+
+### ¿Cómo desactivo las actualizaciones automáticas?
+
+Establece `AUTO_UPDATE=false` en modo stdio o pasa `--auto-update=false` en modo HTTP para omitir todas las verificaciones de actualización. Para recibir aviso de nuevas versiones sin instalarlas, usa `AUTO_UPDATE=check` (o `--auto-update=check`), que detecta actualizaciones y registra su disponibilidad pero nunca reemplaza el binario. Los alias aceptados son `1`/`yes` para `true` y `0`/`no` para `false`, y el valor no distingue mayúsculas de minúsculas.
+
+### ¿La actualización interrumpe el servidor en ejecución?
+
+No. GitLab MCP Server aplica las actualizaciones con un **truco de renombrado**: el binario en ejecución se renombra a `.old` y el nuevo binario se escribe en la ruta original mientras el proceso actual sigue sirviendo peticiones MCP. La nueva versión solo se usa tras reiniciar el servidor. La verificación al inicio es no bloqueante y no fatal, así que un timeout de red o un release ausente se registra como advertencia y nunca impide que el servidor arranque ni acepte peticiones MCP.
+
+### ¿La actualización automática usa mi token o instancia de GitLab?
+
+No. La actualización automática solo se comunica con la **API de GitHub Releases** y es completamente independiente de tu configuración de GitLab. Los ajustes `GITLAB_URL`, `GITLAB_TOKEN` y `GITLAB_SKIP_TLS_VERIFY` no afectan a las verificaciones ni a las descargas. Por defecto obtiene releases de `jmrplens/gitlab-mcp-server`, que puedes sobrescribir con `AUTO_UPDATE_REPO=propietario/repo` para seguir un fork personalizado.
+
+### ¿Cómo revierto tras una actualización defectuosa?
+
+El binario anterior se conserva junto al actual como `gitlab-mcp-server.old` (o `.exe.old` en Windows). Para revertir, detén el servidor y renombra el archivo `.old` de vuelta al nombre original. El archivo `.old` sobrante se limpia automáticamente en el próximo inicio exitoso, así que la reversión solo es posible hasta que se ejecute la siguiente actualización.

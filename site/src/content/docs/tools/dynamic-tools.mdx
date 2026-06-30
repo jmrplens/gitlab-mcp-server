@@ -1,6 +1,49 @@
 ---
 title: Dynamic toolset
-description: Low-token find and execute mode for large GitLab MCP catalogs
+description: The default low-token GitLab MCP mode — two tools (gitlab_find_action, gitlab_execute_action) search and run a full canonical action catalog.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is the dynamic toolset in GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The dynamic toolset is the default low-token mode of GitLab MCP Server. It keeps the complete GitLab action catalog available while exposing only two public tools to the AI client: gitlab_find_action finds the right GitLab action and returns its exact parameters, examples, and safety metadata, and gitlab_execute_action runs the selected action after validating the action ID and parameters. The model discovers only the schemas it needs for the current task, which keeps the initial MCP tool context very small. Dynamic mode is active when TOOL_SURFACE is unset; set TOOL_SURFACE=meta to use consolidated domain meta-tools instead."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does dynamic mode show only two tools?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Showing only two tools is intentional and expected in dynamic mode. Large MCP servers can spend a lot of context on tool discovery before the user asks anything — GitLab MCP Server can expose up to its full individual-tool catalog on GitLab.com Enterprise/Premium with Orbit. Dynamic mode exposes that whole catalog through gitlab_find_action and gitlab_execute_action, so the initial tools/list stays tiny. The assistant should find an action before executing it. This usually adds one discovery call per task while keeping the model's context budget free for the actual conversation."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are destructive actions still protected in dynamic mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Dynamic mode reuses the same safety model as meta-tools because both share the canonical action catalog. Destructive actions still require explicit confirmation unless the deployment has intentionally disabled prompts with YOLO_MODE or AUTOPILOT. Without confirmation, the server returns an error result instead of performing the action; to run it intentionally, pass confirm: true at the top level of the gitlab_execute_action arguments. Dynamic execution also validates parameters before dispatch and rejects unknown fields with repair guidance. For safer deployments, use GITLAB_READ_ONLY=true to remove mutating actions or GITLAB_SAFE_MODE=true to preview mutations without applying them."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does gitlab_find_action rank results?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "gitlab_find_action is more than a substring search. It normalizes the query, removes common stopwords, expands synonyms such as mr to merge request and show to get, then scores exact canonical IDs first, followed by aliases, tags, domain and action names, required params, schema enum values, schema fields, and broader metadata. Fuzzy typo recovery runs only when lexical search returns no or low-confidence matches, allowing up to two edits for terms of at least three characters. Find returns up to 20 results (capped at 50), and treats a result as high-confidence when it scores at least 80 and leads the next result by at least 15 points."
+            }
+          }
+        ]
+      }
 ---
 
 import stats from "../../../data/stats.json";
@@ -9,7 +52,7 @@ import stats from "../../../data/stats.json";
 This page is the user-facing overview. For the authoritative field-level contract and implementation notes, see [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/dynamic-tools.md) in the repository.
 :::
 
-The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only two public tools:
+The dynamic toolset is the **default low-token mode** for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only two public tools:
 
 | Tool                    | What it does                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
@@ -18,11 +61,11 @@ The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the co
 
 Dynamic find/execute is the default tool surface. Meta-tools remain available with `TOOL_SURFACE=meta` for clients that prefer consolidated domain dispatchers.
 
-## Why dynamic mode exists
+## Why does dynamic mode exist?
 
-Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to {stats.tools.gitlab_com} individual operations on GitLab.com Enterprise/Premium with Orbit, and the optional meta-tool catalog advertises {stats.meta.base} to {stats.meta.gitlab_com} domain tools.
+Dynamic mode exists to keep the model's tool context small while still reaching every GitLab operation. Large MCP servers can spend a lot of context on tool discovery before the user asks anything: GitLab MCP Server can expose up to {stats.tools.gitlab_com} individual operations on GitLab.com Enterprise/Premium with Orbit, and the optional meta-tool catalog advertises {stats.meta.base} to {stats.meta.gitlab_com} domain tools.
 
-Dynamic mode exposes that catalog through find and execute tools. The model discovers only what it needs for the current task.
+Dynamic mode exposes that catalog through find and execute tools instead. The model discovers only what it needs for the current task.
 
 ```mermaid
 flowchart LR
@@ -35,7 +78,9 @@ flowchart LR
 This usually adds one discovery call per task, but it keeps the initial MCP tool context very small.
 The catalog is shared with meta-tools, so dynamic mode reuses the same schemas, destructive-action safeguards, read-only filtering, safe-mode previews, token-scope filtering, and result formatting.
 
-## Enable dynamic mode
+## How do I enable dynamic mode?
+
+Enable dynamic mode by setting `TOOL_SURFACE=dynamic` (stdio) or `--tool-surface=dynamic` (HTTP). Dynamic mode is also the surface used when `TOOL_SURFACE` is unset, so most deployments get it by default.
 
 ### Stdio clients
 
@@ -75,9 +120,9 @@ gitlab-mcp-server --http \
 
 `CAPABILITY_SURFACE=minimal` keeps the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
-## The model workflow
+## How should the model use dynamic mode?
 
-Dynamic mode works best when the assistant follows a simple rhythm: find, execute.
+The model should follow a simple rhythm: **find, then execute**. Dynamic mode works best when the assistant first finds an action and its exact schema, then executes the canonical `domain.action` ID it received.
 
 ```mermaid
 sequenceDiagram
@@ -99,16 +144,16 @@ sequenceDiagram
 
 Each dynamic tool returns a normal MCP tool result: Markdown in `content`, JSON data in `structuredContent`, and `isError` on the result envelope when the server returns repair guidance. `gitlab_execute_action` does not use a special GitLab path. It dispatches to the same underlying action handler used by meta-tools, so schemas, policy checks, safe-mode previews, destructive confirmations, and result formatting stay consistent.
 
-## What each call returns
+## What does each call return?
+
+Each call returns a distinct payload: `gitlab_find_action` returns ranked candidate actions with their exact schemas, while `gitlab_execute_action` returns the backing handler's actual response. Find is deliberately cheap compared with advertising every GitLab operation in `tools/list` — the model pays for detailed schemas only when it needs a specific action.
 
 | Call                    | What the assistant receives                                                                                                                                                                      | How the assistant should use it                                                   |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | `gitlab_find_action`    | Ranked canonical action IDs with exact `input_schema`, backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, examples, optional explanations, and score | Pick the best `domain.action` candidate and build `params` from the schema        |
 | `gitlab_execute_action` | The existing action response from the backing handler, usually Markdown plus structured JSON                                                                                                     | Use the returned data to answer the user, or repair from `isError: true` feedback |
 
-Find is deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
-
-## How search finds actions
+## How does search find actions?
 
 `gitlab_find_action` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, optional params, schema property names, schema enum values, compact schema descriptions, and internal backend metadata.
 
@@ -174,9 +219,9 @@ Then execute it:
 
 The assistant should execute the canonical action ID returned by find. Aliases are useful for discovery, but canonical IDs are the stable execution contract.
 
-## Repair behavior
+## How does dynamic mode recover from errors?
 
-Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should use the message as feedback and retry the right step.
+Dynamic mode is built to be repairable. If a call returns `isError: true`, the assistant should treat the message as feedback and retry the correct step rather than giving up. Each failure maps to a specific recovery action.
 
 | Failure                       | Recovery                                                                          |
 | ----------------------------- | --------------------------------------------------------------------------------- |
@@ -186,9 +231,9 @@ Dynamic mode is built to be repairable. If a call returns `isError: true`, the a
 | Params are rejected           | Find the action and rebuild `params` from `input_schema`                          |
 | Destructive action is blocked | Ask the user for explicit approval before retrying with top-level `confirm: true` |
 
-## Destructive actions stay protected
+## Are destructive actions still protected?
 
-Dynamic mode reuses the same safety model as meta-tools. Destructive actions still require explicit confirmation unless your deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`.
+Yes. Dynamic mode reuses the same safety model as meta-tools. Destructive actions still require explicit confirmation unless your deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`.
 
 ```json
 {
@@ -223,6 +268,8 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 ## Dynamic vs meta-tools
 
+Dynamic mode and meta-tools share one catalog and one safety model; they differ only in how operations are surfaced to the model. Dynamic mode shows two discovery/execution tools and resolves actions on demand, while meta-tools show a fixed list of domain dispatchers.
+
 | Question                         | Meta-tools                                                | Dynamic toolset                               |
 | -------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
 | What is visible in `tools/list`? | {stats.meta.base} to {stats.meta.gitlab_com} domain tools | 2 public discovery/execution tools            |
@@ -241,6 +288,24 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 | Execute rejects parameters              | Find the action and retry with the exact field names and types                                                                                                                           |
 | Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                                                                                                       |
 | Discovery metadata feels thin           | Run `go run ./cmd/audit_discovery_completeness/` to confirm each action has aliases, usage, parameter guidance, and related actions; fill gaps using the link-create-batch gold standard |
+
+## Frequently asked questions
+
+### What is the difference between gitlab_find_action and gitlab_execute_action?
+
+`gitlab_find_action` and `gitlab_execute_action` are the two public tools of dynamic mode, and they play distinct roles. `gitlab_find_action` searches the canonical action catalog and returns ranked candidate actions with their exact `input_schema`, backing meta-tool, destructive flag, required params, usage hints, and examples — the assistant uses it to pick the best `domain.action` ID and build parameters. `gitlab_execute_action` then runs that action after validating the action ID and parameters, returning the backing handler's real response as Markdown plus structured JSON. The recommended rhythm is find, then execute: discover the schema first, then dispatch the canonical action ID.
+
+### Why does dynamic mode show only two tools?
+
+Showing only two tools is intentional and expected in dynamic mode. Large MCP servers can spend a lot of context on tool discovery before the user asks anything; GitLab MCP Server can expose up to {stats.tools.gitlab_com} individual operations on GitLab.com Enterprise/Premium with Orbit. Dynamic mode exposes that whole catalog through `gitlab_find_action` and `gitlab_execute_action`, so the initial `tools/list` stays tiny and the model's context budget is free for the conversation. The trade-off is one discovery call per task: the assistant should find an action before executing it.
+
+### Are destructive actions still protected in dynamic mode?
+
+Yes. Dynamic mode reuses the same safety model as meta-tools because both share the canonical action catalog. Destructive actions still require explicit confirmation unless the deployment has intentionally disabled prompts with `YOLO_MODE` or `AUTOPILOT`. Without confirmation, the server returns an error result instead of performing the action; to run it intentionally, pass `confirm: true` at the top level of the `gitlab_execute_action` arguments. Dynamic execution also validates parameters before dispatch and rejects unknown fields with repair guidance. For safer deployments, use `GITLAB_READ_ONLY=true` or `GITLAB_SAFE_MODE=true`.
+
+### How do I make dynamic mode use even less startup context?
+
+To minimize startup context, combine dynamic mode with the minimal capability surface by adding `CAPABILITY_SURFACE=minimal` (or `--capability-surface=minimal` in HTTP mode). Minimal keeps the tool manifest resources `gitlab://tools` and `gitlab://tools/{id}` and omits optional resources, prompts, and workflow guides. Dynamic mode still has full schema discovery because `gitlab_find_action` returns exact action schemas inline. Leave `META_PARAM_SCHEMA` at its default `opaque`, since it only affects meta-tool dispatcher schemas and has no effect on dynamic deployments.
 
 ## Further reading
 

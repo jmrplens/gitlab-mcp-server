@@ -1,6 +1,49 @@
 ---
 title: Manejo de Errores
-description: Clasificación de errores, diagnósticos detallados y sugerencias accionables
+description: Cómo GitLab MCP Server clasifica los errores de API por estado HTTP, extrae diagnósticos detallados y devuelve sugerencias accionables a los asistentes de IA.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cómo clasifica GitLab MCP Server los errores de la API de GitLab?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Cada error de la API de GitLab se clasifica por código de estado HTTP en un mensaje accionable; por ejemplo, 401 indica que GITLAB_TOKEN puede ser inválido o haber expirado, 403 que el token carece de permisos, y 429 demasiadas solicitudes. Los fallos a nivel de red como conexión rechazada, fallo DNS, timeout y errores de handshake TLS también se clasifican. Cada error se envuelve después con el nombre de la operación y, cuando se conoce, una sugerencia correctiva."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué función de envoltura de errores usa GitLab MCP Server para cada operación?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Las operaciones de solo lectura (list, get, search) usan WrapErr. Las operaciones de escritura (create, update, delete) usan WrapErrWithMessage, que incluye el detalle específico extraído de la respuesta de GitLab. Cuando se conoce la acción correctiva, WrapErrWithHint añade una sugerencia, y WrapErrWithStatusHint limita esa sugerencia a un único código de estado HTTP. Una operación get que devuelve 404 usa NotFoundResult en lugar de un error."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Por qué un 404 de un handler get no aparece como error?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Para los handlers get, las respuestas 404 se tratan como informativas en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un CallToolResult con IsError true y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón NotFoundResult se aplica a los 27 handlers get en 21 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Debería un asistente de IA reintentar una operación fallida?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Depende de si el error es transitorio o permanente. Los errores transitorios —429, 5xx, timeouts y conexión rechazada— son seguros de reintentar tras una espera. Los errores permanentes —4xx excepto 429— indican un problema con la propia solicitud, así que reintentar produce el mismo resultado; corrige los parámetros de entrada o la configuración en su lugar."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -39,7 +82,7 @@ Los errores a nivel de red también se clasifican:
 
 ## Funciones de envoltura de errores
 
-El servidor usa tres funciones de envoltura de errores, elegidas según el tipo de operación:
+El servidor usa cinco funciones de manejo de errores, elegidas según el tipo de operación:
 
 <Tabs>
   <TabItem label="WrapErr">
@@ -195,3 +238,21 @@ Detail: 403 Forbidden
 ❌ create_issue: validation failed — title is too long (maximum is 255 characters)
 💡 Shorten the title to 255 characters or less
 ```
+
+## Preguntas frecuentes
+
+### ¿Cómo clasifica el servidor los errores de la API de GitLab?
+
+GitLab MCP Server clasifica cada error de API por **código de estado HTTP** en un mensaje accionable: 401 señala un `GITLAB_TOKEN` inválido o expirado, 403 señala permisos faltantes, 404 un recurso inexistente o falta de acceso, 422 un fallo de validación y 429 un límite de velocidad. Los fallos a nivel de red —conexión rechazada, fallo DNS, timeout y errores de handshake TLS— se clasifican por separado. La clasificación determina tanto el mensaje de error envuelto como si el fallo se considera reintentable.
+
+### ¿Qué función de envoltura de errores se usa para cada operación?
+
+Las operaciones de solo lectura (`list`, `get`, `search`) usan `WrapErr`. Las operaciones de escritura (`create`, `update`, `delete`) usan `WrapErrWithMessage`, que incluye el detalle específico extraído de la respuesta de GitLab. Cuando se conoce la acción correctiva, `WrapErrWithHint` añade una sugerencia, y `WrapErrWithStatusHint` limita esa sugerencia a un único código de estado HTTP. Una operación `get` que devuelve 404 usa `NotFoundResult` en lugar de devolver un error.
+
+### ¿Por qué un 404 no aparece como error?
+
+Para los handlers `get`, las respuestas 404 se tratan como **informativas** en lugar de fallos. En vez de devolver un error Go opaco registrado a nivel ERROR, el handler devuelve un `CallToolResult` con `IsError: true` y sugerencias específicas del dominio, registrado a nivel INFO. Este patrón `NotFoundResult` se aplica a los 27 handlers get en 21 dominios y proporciona al asistente de IA los siguientes pasos accionables, como listar los recursos disponibles o verificar el nombre del recurso.
+
+### ¿Debería el asistente de IA reintentar una operación fallida?
+
+Depende de si el error es **transitorio** o **permanente**. Los errores transitorios —429, 5xx, timeouts y conexión rechazada— son seguros de reintentar tras una espera. Los errores permanentes —4xx excepto 429— indican un problema con la propia solicitud, así que reintentar produce el mismo resultado. Para errores permanentes, corrige los parámetros de entrada o la configuración en lugar de reintentar.

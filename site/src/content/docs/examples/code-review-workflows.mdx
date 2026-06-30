@@ -1,6 +1,6 @@
 ---
 title: Code Review Workflow Examples
-description: Merge request review and code analysis examples using GitLab MCP Server
+description: "Merge request review examples with GitLab MCP Server: list MRs, read diffs, check approvals, leave notes and discussions, merge, rebase, and compare branches."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Step-by-step examples for merge request review workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
+These step-by-step workflows cover the full merge request review cycle: finding MRs that need your attention, reading their diffs, checking approval state, leaving notes and threaded discussions, and finally merging or rebasing. Each example pairs the prompt you type with the exact meta-tool action the server runs, so you can reuse the call directly.
 
 ## MR review workflow
+
+This is the core review loop: list the open MRs assigned to you, read the file changes, post review feedback, and approve once the code looks good. The diagram traces a single MR (`!42`) through that sequence.
 
 ```mermaid
 sequenceDiagram
@@ -95,9 +97,13 @@ gitlab_merge_request → action: approve, project_id: "my-group/backend",
 
 ## AI-powered code review
 
+There is no separate "AI review" tool. AI-powered review happens when the assistant reads an MR's diff with `gitlab_merge_request → action: changes`, reasons over the code, and then writes its findings back as notes or threaded discussions. A typical request — _"Read the changes in MR !42 and flag any error-handling or security issues"_ — chains the read action above with the `note_create` and `discussion_create` actions below, all within a single conversation.
+
 ---
 
 ## MR discussions and notes
+
+Share review feedback directly on the MR. Post a single inline comment, open a threaded discussion for a larger topic, find threads that are still unresolved, or stage draft notes to publish your whole review at once.
 
 ### Add a review comment
 
@@ -143,6 +149,8 @@ Draft notes are only visible to you until you publish them all at once with `act
 
 ## MR lifecycle
 
+Drive a merge request through its full lifecycle: open it from a feature branch, rebase it onto the latest target, merge it (optionally squashing), or close it when an approach is superseded.
+
 ### Create an MR
 
 **Prompt**: "Create a merge request from branch feature/auth-refactor to main in the backend project"
@@ -183,6 +191,8 @@ gitlab_merge_request → action: update, project_id: "my-group/backend",
 ---
 
 ## Compare branches
+
+Before opening or merging an MR, compare two branches to see exactly what would change. The comparison returns the commits, changed files, and diff statistics between them.
 
 ### Diff between branches
 

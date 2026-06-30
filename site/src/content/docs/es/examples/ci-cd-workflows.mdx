@@ -1,6 +1,6 @@
 ---
 title: Ejemplos de flujos CI/CD
-description: Ejemplos prácticos de gestión de pipelines CI/CD con GitLab MCP Server
+description: "Ejemplos CI/CD paso a paso con GitLab MCP Server: diagnosticar pipelines fallidos, gestionar variables, programar builds, controlar entornos y leer métricas DORA."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Ejemplos paso a paso para flujos de trabajo CI/CD comunes. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
+Estos flujos CI/CD paso a paso muestran cómo diagnosticar fallos de pipelines, gestionar variables CI/CD, programar builds, controlar entornos, validar la configuración y leer métricas DORA — todo en lenguaje natural. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que veas con precisión qué ocurre por debajo y puedas reutilizar la llamada directamente.
 
-## Monitorizar estado de pipelines
+## Diagnosticar un pipeline fallido
+
+Cuando un pipeline falla, este flujo te lleva desde la lista de pipelines fallidos hasta el log del job concreto que explica el fallo — sin salir de tu asistente. Lista los pipelines fallidos, profundiza en los jobs que fallan y luego lee el log del job para encontrar la causa raíz.
 
 ```mermaid
 sequenceDiagram
@@ -86,6 +88,8 @@ Devuelve: salida completa del log del job. Útil para diagnosticar fallos en tes
 
 ## Gestionar variables CI/CD
 
+Configura el entorno en el que se ejecutan tus pipelines listando, creando y acotando variables CI/CD. Úsalo para inspeccionar lo que ya está definido, añadir secretos como tokens de despliegue con enmascaramiento y protección, o restringir una variable a un único entorno.
+
 ### Listar variables del proyecto
 
 **Prompt**: "¿Qué variables CI/CD están configuradas en el proyecto backend?"
@@ -118,6 +122,8 @@ gitlab_ci_variable → action: project_update, project_id: "my-group/backend",
 
 ## Programación de pipelines
 
+Automatiza pipelines recurrentes con programaciones basadas en cron —por ejemplo, un build nocturno— y revisa qué programaciones ya existen y cuándo se ejecutarán a continuación.
+
 ### Crear build nocturno
 
 **Prompt**: "Crea una programación de pipeline que se ejecute cada noche a las 2 AM UTC en la rama main"
@@ -140,6 +146,8 @@ Devuelve: descripciones, expresiones cron, próximas ejecuciones e información 
 ---
 
 ## Gestión de entornos
+
+Controla y sigue dónde se despliega tu código. Lista los entornos para ver su estado y sus URLs, revisa el historial de despliegues de producción y detén los entornos de revisión efímeros cuando ya no se necesiten.
 
 ### Listar entornos
 
@@ -171,6 +179,8 @@ gitlab_environment → action: stop, project_id: "my-group/backend", environment
 
 ## Validar configuración CI
 
+Detecta errores de `.gitlab-ci.yml` antes de que rompan un pipeline validando la configuración. El servidor devuelve el estado de validación junto con el YAML totalmente fusionado, para que confirmes que los includes y las plantillas se resuelven como esperas.
+
 ### Lint de configuración CI
 
 **Prompt**: "Valida el .gitlab-ci.yml en my-group/backend buscando errores de sintaxis"
@@ -184,6 +194,8 @@ Devuelve: estado de validación, YAML fusionado, advertencias y detalles de erro
 ---
 
 ## Métricas DORA
+
+Mide el rendimiento de entrega con las cuatro métricas DORA —frecuencia de despliegue, tiempo de entrega para cambios, tiempo de restauración del servicio y tasa de fallo en cambios— a nivel de proyecto o de grupo. Las métricas DORA requieren una licencia de GitLab Premium o Ultimate.
 
 ### Rendimiento del proyecto
 
@@ -209,7 +221,7 @@ Devuelve: métricas agregadas para todo el grupo, útil para dashboards de lider
 
 ## Llamadas CI/CD dinámicas primero
 
-La superficie dinámica predeterminada descubre acciones CI/CD exactas antes de ejecutar:
+En la superficie dinámica predeterminada, el asistente descubre primero la acción CI/CD exacta y su esquema, y luego la ejecuta — así los prompts anteriores se resuelven a IDs canónicos `domain.action` en lugar de a meta-herramientas con nombre. El patrón de dos pasos es buscar y luego ejecutar:
 
 ```text
 gitlab_find_action → query: "estado del último pipeline del proyecto"

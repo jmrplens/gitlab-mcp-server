@@ -1,6 +1,57 @@
 ---
 title: Meta-tools
-description: Domain-level tools that consolidate related operations
+description: Meta-tools group related GitLab operations into domain-level MCP tools that route on an action parameter, cutting tool count 95%+ while keeping full functionality.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What are meta-tools in GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with TOOL_SURFACE=meta. Instead of exposing each GitLab API operation as a separate MCP tool, a meta-tool groups related operations under a single domain-level tool with an action parameter that dispatches to the correct handler. For example, gitlab_issue handles list, get, create, update, and delete through one tool. Every individual tool operation remains available as an action within one of the domain meta-tools, so functionality is unchanged."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How much do meta-tools reduce the tool count?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Meta-tools reduce the registered tool count by more than 95% while preserving 100% of the functionality. Individual mode can register hundreds of tools — up to the GitLab.com Enterprise/Premium total with Orbit — whereas meta-tool mode exposes a small set of base domain tools, plus more when the Enterprise catalog is enabled. Each individual operation is still reachable as an action inside a domain meta-tool, so no capability is lost; only the token overhead of the tool list drops sharply."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I discover the exact parameters for a meta-tool action?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "By default META_PARAM_SCHEMA=opaque keeps each meta-tool schema small: clients see the valid action enum, while params stays an action-specific object. To discover the exact shape for one action, read the tool manifest resources. gitlab://tools lists visible tools and executable entries for the active surface, and gitlab://tools/{id} returns the accepted call shape and JSON Schema for a single action, such as gitlab://tools/gitlab_merge_request.create. These resources remain available even when CAPABILITY_SURFACE=minimal."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I enable Enterprise meta-tools?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The Enterprise/Premium catalog enables 16 additional meta-tools for GitLab Premium and Ultimate features. In stdio mode, set GITLAB_TIER=premium or GITLAB_TIER=ultimate; in HTTP mode, use --tier=premium or --tier=ultimate to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy GITLAB_ENTERPRISE=true and --enterprise flags are still honored as a fallback when the tier is unset, but are deprecated. Enabling the tier also adds enterprise-only action routes to existing base meta-tools such as gitlab_issue, gitlab_project, and gitlab_group."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why do some AI clients need meta-tool mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Some AI clients impose tool-count limits — for example, JetBrains AI Assistant limits MCP servers to 100 tools. Meta-tool mode keeps the visible tool list well within such constraints because it consolidates hundreds of operations into a small number of domain-level tools. If you instead select individual tools with TOOL_SURFACE=individual, clients with such limits will only see a subset of the complete individual tool set, hiding some operations."
+            }
+          }
+        ]
+      }
 ---
 
 import stats from "../../../data/stats.json";
@@ -9,11 +60,11 @@ import stats from "../../../data/stats.json";
 For the complete technical reference, see [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) in the repository.
 :::
 
-Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with `TOOL_SURFACE=meta`. Instead of exposing each GitLab API operation as a separate MCP tool, meta-tools **group related operations under a single tool** with an `action` parameter that dispatches to the correct handler.
+Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with `TOOL_SURFACE=meta`. Instead of exposing each GitLab API operation as a separate MCP tool, meta-tools **group related operations under a single tool** with an `action` parameter that dispatches to the correct handler. The result is a small, browsable tool list — a handful of domain-level tools such as `gitlab_issue`, `gitlab_project`, and `gitlab_pipeline` — that still reaches every GitLab operation.
 
-## Why meta-tools?
+## Why use meta-tools?
 
-LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
+Meta-tools exist to fit a complete GitLab API surface into a limited LLM context window. When an MCP server registers hundreds of individual tools (up to {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation. Meta-tool mode collapses those operations into domain-level tools, so the tool list stays small while functionality stays complete.
 
 | Mode              | Tool Count                                                                          | Token Overhead | Functionality           |
 | ----------------- | ----------------------------------------------------------------------------------- | -------------- | ----------------------- |
@@ -29,9 +80,9 @@ The `gitlab_server` update helper can appear separately for server maintenance a
 Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode ({stats.meta.base} base tools, {stats.meta.self_managed_enterprise} self-managed enterprise tools, or {stats.meta.gitlab_com} GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
 :::
 
-## How meta-tools work
+## How do meta-tools work?
 
-Each meta-tool defines an `action` enum that lists all available operations. The server validates the action and dispatches to the corresponding handler function internally.
+Each meta-tool defines an `action` enum that lists every operation it supports, then validates the chosen action and dispatches to the corresponding handler function internally. The `action` parameter is always required and must be one of the enumerated values; additional parameters depend on the chosen action. This is why one tool such as `gitlab_issue` can cover an entire domain without exposing a separate tool per operation.
 
 ```mermaid
 flowchart LR
@@ -49,9 +100,9 @@ flowchart LR
 
 The action parameter is always required and must be one of the enumerated values. Additional parameters depend on the chosen action.
 
-## Discovering action parameters
+## How do I discover action parameters?
 
-Meta-tools use a common envelope:
+Meta-tools use a common envelope, and the exact `params` shape for any action is discoverable through the tool manifest resources rather than inlined into every tool schema. By default, `META_PARAM_SCHEMA=opaque` keeps the tool schema small: clients see the valid `action` enum, while `params` remains an action-specific object.
 
 ```json
 {
@@ -62,7 +113,7 @@ Meta-tools use a common envelope:
 }
 ```
 
-By default, `META_PARAM_SCHEMA=opaque` keeps the tool schema small: clients see the valid `action` enum, while `params` remains an action-specific object. To discover the exact shape for a specific action, read the tool manifest resources:
+To discover the exact shape for a specific action, read the tool manifest resources:
 
 | Resource              | Use                                                                                          |
 | --------------------- | -------------------------------------------------------------------------------------------- |
@@ -293,3 +344,25 @@ You can check which tools your server has registered by looking at the startup l
 ## Discovery metadata
 
 Each meta-tool action carries discovery metadata (aliases, usage, parameter guidance, related actions) that helps models choose the correct action and shape parameters. Run `go run ./cmd/audit_discovery_completeness/` to score the catalog; the auditor produces a prioritized backlog used by domain agents to fill gaps following the link-create-batch gold standard.
+
+## Frequently asked questions
+
+### How much do meta-tools reduce the tool count?
+
+Meta-tools reduce the registered tool count by **more than 95%** while preserving 100% of the functionality. Individual mode can register hundreds of tools — {stats.tools.free} on CE, up to {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit — whereas meta-tool mode exposes {stats.meta.base} base domain tools (more with the Enterprise catalog). Every individual operation is still reachable as an action inside a domain meta-tool, so no capability is lost; only the token overhead of the tool list drops sharply.
+
+### What is the action parameter?
+
+The `action` parameter is the required field on every meta-tool. Each meta-tool defines an `action` enum listing the operations it supports, and the server validates the chosen action before dispatching to the corresponding handler. For example, `gitlab_issue` accepts `list`, `get`, `create`, `update`, `delete`, and more. The `action` is always required and must be one of the enumerated values; the remaining parameters live under `params` and depend on the action you choose.
+
+### How do I find the exact parameters for an action?
+
+By default `META_PARAM_SCHEMA=opaque` keeps each meta-tool schema small, so the exact `params` shape is discovered through the tool manifest resources. Read `gitlab://tools` to list visible tools and executable entries for the active surface, then read `gitlab://tools/{id}` — for example `gitlab://tools/gitlab_merge_request.create` — to get the accepted call shape and JSON Schema for one action. These manifest resources stay available even when `CAPABILITY_SURFACE=minimal`. Dynamic deployments can instead use `gitlab_find_action` for inline schemas.
+
+### How do I enable Enterprise meta-tools?
+
+The Enterprise/Premium catalog enables 16 additional meta-tools for GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags are still honored as a fallback when the tier is unset, but are deprecated. Enabling the tier also adds enterprise-only routes (such as iterations, project mirrors, and SSH certificates) to existing base meta-tools.
+
+### Why do some clients need meta-tool mode?
+
+Some AI clients impose tool-count limits — for example, JetBrains AI Assistant limits MCP servers to 100 tools. Meta-tool mode keeps the visible tool list well within such constraints because it consolidates hundreds of operations into {stats.meta.base} base domain tools (or {stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} with the Enterprise catalog). If you instead select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set, hiding some operations.

@@ -1,15 +1,62 @@
 ---
 title: Resources & Prompts
-description: MCP resources for read-only data and prompt templates
+description: How GitLab MCP Server exposes read-only MCP resources and reusable prompt templates — the two MCP primitives beyond tools that give AI assistants context.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is the difference between MCP resources, prompts, and tools?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server exposes three MCP primitives. Tools perform actions, such as creating an issue or merging a request. Resources provide read-only context data — for example a project's metadata or members — that a client can request at any time without invoking a tool. Prompts are reusable templates that collect GitLab data and return structured context to guide a workflow, such as reviewing a merge request. Resources and prompts add context; tools change state."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the difference between a static resource and a resource template?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A static resource is a fixed URI that always points to the same thing, such as gitlab://user/current for the authenticated user. A resource template contains placeholders like {project_id} or {group_id} that the client fills in at request time to read a specific project, group, issue, or merge request. MCP lists fixed resources through resources/list and templates through resources/templates/list."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I read an MCP resource from GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A client reads a resource with the MCP resources/read method, passing the resource URI in the params. For a static resource the URI is used as-is, for example gitlab://user/current. For a template, the client substitutes the actual identifier or URL-encoded path first, for example gitlab://project/my-group%2Fmy-project/issues. The server returns the resource content as structured JSON."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I disable resources and prompts in GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The CAPABILITY_SURFACE setting controls which capabilities are registered. The default value full registers resources, workflow guides, prompts, and the surface-aware gitlab://tools manifest. Setting CAPABILITY_SURFACE to minimal keeps only the gitlab://tools manifest, which is useful when a client does not consume resources or prompts and you want a smaller capability surface."
+            }
+          }
+        ]
+      }
 ---
 
 import stats from "../../../data/stats.json";
 
-Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two additional MCP primitives that provide context and reusable templates to AI assistants.
+:::note[Developer Documentation]
+This page is the user-facing overview. For the full reference, see [docs/reference/resources](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resources.md) and [docs/reference/prompts](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/prompts.md).
+:::
 
-## Resources
+Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two additional MCP primitives that provide context and reusable templates to AI assistants. Tools perform actions; resources supply read-only context on demand; prompts package a data-gathering workflow into a single reusable template.
 
-MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for providing background information that helps the LLM make better decisions.
+## What are MCP resources?
+
+MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for supplying background information — a project's metadata, members, labels, or latest pipeline — that helps the LLM make better decisions before it acts.
 
 The server exposes **{stats.resources} resources** across several categories:
 
@@ -116,7 +163,7 @@ Static best-practice guides for AI assistants — no API calls required.
 Resource URIs with `{project_id}`, `{group_id}`, etc. are **resource templates**. The client substitutes the actual ID or URL-encoded path when requesting the resource.
 :::
 
-### Accessing resources
+### How do I read a resource?
 
 MCP clients can request resources at any time using the `resources/read` method:
 
@@ -151,9 +198,9 @@ To inspect accepted call shapes, read the surface-aware tool manifest first and 
 }
 ```
 
-## Prompts
+## What are MCP prompts?
 
-MCP prompts are **reusable templates** that guide AI assistants through common workflows. The server collects relevant data from GitLab and returns structured context that the LLM uses to produce high-quality outputs.
+MCP prompts are **reusable templates** that guide AI assistants through common workflows. When a client requests a prompt, the server collects the relevant data from GitLab and returns structured context that the LLM uses to produce a high-quality output — a code review, a release-notes draft, or a team report — without the user re-explaining the task each time.
 
 The server provides **{stats.prompts} prompt templates** organized into categories:
 
@@ -250,7 +297,7 @@ Project configuration audit prompts.
 | `audit_project_workflow` | Audit labels, milestones, issue/MR templates                  |
 | `audit_project_full`     | Comprehensive audit combining all categories with a scorecard |
 
-### Using prompts
+### How do I use a prompt?
 
 Prompts are requested via the `prompts/get` MCP method:
 
@@ -278,3 +325,21 @@ The server returns a structured prompt with context-aware content that the LLM u
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
 :::
+
+## Frequently asked questions
+
+### What is the difference between resources, prompts, and tools?
+
+GitLab MCP Server exposes three MCP primitives. **Tools** perform actions, such as creating an issue or merging a request. **Resources** provide read-only context data — a project's metadata or members, for example — that a client can request at any time without invoking a tool. **Prompts** are reusable templates that collect GitLab data and return structured context to guide a workflow. In short, resources and prompts add context, while tools change state.
+
+### What is the difference between a static resource and a resource template?
+
+A **static resource** is a fixed URI that always points to the same thing, such as `gitlab://user/current`. A **resource template** contains placeholders like `{project_id}` or `{group_id}` that the client fills in at request time to read a specific project, group, issue, or merge request. MCP lists fixed resources through `resources/list` and templates through `resources/templates/list`, so a client that inspects only `resources/list` sees the {stats.resources} resources as 8 fixed URIs plus 37 templates.
+
+### Can I disable resources and prompts?
+
+Yes. The `CAPABILITY_SURFACE` setting controls which capabilities are registered. The default `full` registers resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest. Setting `CAPABILITY_SURFACE=minimal` keeps only the `gitlab://tools` manifest — useful when a client does not consume resources or prompts and you want a smaller capability surface.
+
+### How many resources and prompts are available?
+
+The server exposes **{stats.resources} resources** (8 fixed URIs plus 37 URI templates) and **{stats.prompts} prompt templates** organized into categories such as core MR analysis, cross-project dashboards, team reports, analytics, and audits. The exact counts are generated from the server's live capability registration, so this page stays in sync with the running server.

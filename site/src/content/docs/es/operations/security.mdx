@@ -1,6 +1,49 @@
 ---
 title: Seguridad
-description: Modelo de seguridad, gestión de tokens y mejores prácticas
+description: Modelo de seguridad de GitLab MCP Server — aislamiento de tokens, scopes, modos solo lectura y seguro, TLS, OAuth y verificación de integridad del release.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cómo protege GitLab MCP Server mi token de GitLab en modo stdio?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "En modo stdio el token de GitLab nunca sale del proceso local del servidor. Se carga desde el entorno y se usa exclusivamente para llamadas a la API de GitLab, nunca se envía al cliente MCP ni se incluye en las salidas de herramientas. El servidor se ejecuta como proceso local comunicándose por stdin/stdout, así que no se abren puertos de red, y solo necesita un token con los scopes requeridos para las operaciones que pretendas usar."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué scopes de token debería usar con GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Usa los scopes mínimos para tu flujo: read_api para operaciones de solo lectura, api para operaciones completas de crear/actualizar/eliminar, y read_repository o write_repository para acceso o modificación de archivos del repositorio. Si solo necesitas operaciones de lectura, usa read_api y habilita además GITLAB_READ_ONLY=true como defensa en profundidad. Al iniciar, el servidor detecta los scopes del token y desactiva las herramientas que requieren scopes que el token no posee."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cuál es la diferencia entre el modo solo lectura y el modo seguro?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El modo solo lectura (GITLAB_READ_ONLY=true) no registra ninguna herramienta de escritura, así que solo están disponibles list, get y search, una garantía firme a nivel de servidor. El modo seguro (GITLAB_SAFE_MODE=true) sí registra las herramientas de escritura pero las intercepta y devuelve una vista previa JSON estructurada del nombre, los parámetros y las anotaciones en lugar de ejecutarlas. Si ambos están activos, el modo solo lectura tiene precedencia y las herramientas de escritura se desactivan por completo."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo verifico la integridad de un binario de GitLab MCP Server descargado?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Cada GitHub Release incluye checksums.txt (hashes SHA-256) y checksums.txt.sigstore.json (un bundle de firma keyless Cosign/Sigstore con GitHub OIDC). La auto-actualización verifica los binarios contra checksums.txt automáticamente. Para instalaciones manuales, ejecuta cosign verify-blob con el bundle, anclando la identidad del certificado a este repositorio y el emisor OIDC a GitHub, y luego valida el hash del binario contra el checksum firmado. Si la verificación falla, no ejecutes el binario."
+            }
+          }
+        ]
+      }
 ---
 
 :::note[Documentación para desarrolladores]
@@ -291,3 +334,21 @@ Salida esperada: `gitlab-mcp-server-linux-amd64: OK` (o el nombre de archivo cor
 - ☐ Monitoriza patrones inusuales de llamadas a la API
 - ☐ Verifica la expiración del token o cambios de permisos
 - ☐ Habilita `LOG_LEVEL=info` para registros de auditoría en producción
+
+## Preguntas frecuentes
+
+### ¿Cómo protege GitLab MCP Server mi token en modo stdio?
+
+En modo stdio el token de GitLab **nunca sale del proceso local del servidor**. Se carga desde el entorno y se usa exclusivamente para llamadas a la API de GitLab —nunca se envía al cliente MCP ni se incluye en las salidas de herramientas. El servidor se ejecuta como proceso local comunicándose por stdin/stdout, así que no se abren puertos de red, y solo necesita un token con los scopes requeridos para las operaciones que pretendas usar.
+
+### ¿Qué scopes de token debería usar?
+
+Usa los **scopes mínimos** para tu flujo: `read_api` para operaciones de solo lectura, `api` para operaciones completas de crear/actualizar/eliminar, y `read_repository` o `write_repository` para acceso o modificación de archivos del repositorio. Si solo necesitas operaciones de lectura, usa `read_api` y habilita además `GITLAB_READ_ONLY=true` como defensa en profundidad. Al iniciar, el servidor detecta los scopes de tu token y desactiva las herramientas que requieren scopes que el token no posee.
+
+### ¿Cuál es la diferencia entre el modo solo lectura y el modo seguro?
+
+El **modo solo lectura** (`GITLAB_READ_ONLY=true`) no registra ninguna herramienta de escritura, así que solo están disponibles list, get y search —una garantía firme a nivel de servidor. El **modo seguro** (`GITLAB_SAFE_MODE=true`) sí registra las herramientas de escritura pero las intercepta y devuelve una vista previa JSON estructurada del nombre, los parámetros y las anotaciones en lugar de ejecutarlas. Si ambos están activos, el modo solo lectura tiene precedencia y las herramientas de escritura se desactivan por completo.
+
+### ¿Cómo verifico la integridad de un binario descargado?
+
+Cada GitHub Release incluye `checksums.txt` (hashes SHA-256) y `checksums.txt.sigstore.json` (un bundle de firma keyless Cosign/Sigstore con GitHub OIDC). La auto-actualización verifica los binarios contra `checksums.txt` automáticamente. Para instalaciones manuales, ejecuta `cosign verify-blob` con el bundle, anclando la identidad del certificado a este repositorio y el emisor OIDC a GitHub, y luego valida el hash del binario contra el checksum firmado. Si la verificación falla, **no ejecutes el binario**.

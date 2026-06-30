@@ -1,10 +1,57 @@
 ---
 title: Compatibilidad
-description: Compatibilidad de plataforma, edición de GitLab y clientes MCP para GitLab MCP Server
+description: Compatibilidad de plataforma, edición de GitLab y clientes MCP para GitLab MCP Server — CE y EE, seis binarios por SO/arquitectura y cualquier cliente MCP stdio o HTTP.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿GitLab MCP Server funciona con GitLab Community Edition?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sí. GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). En CE expone el catálogo base completo — meta-herramientas base, recursos MCP y prompts — que cubre proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, usuarios, grupos, búsqueda, despliegues, entornos y paquetes. Las funcionalidades exclusivas de Enterprise como merge trains, métricas DORA, gestión de vulnerabilidades, eventos de auditoría y políticas de cumplimiento requieren una licencia Premium o Ultimate y no están disponibles en CE."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo habilito las herramientas Enterprise en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Define el tier de licencia explícitamente o deja que el servidor lo autodetecte. En modo stdio, establece GITLAB_TIER=premium o GITLAB_TIER=ultimate; en modo HTTP pasa --tier=premium o --tier=ultimate. Cuando se omite el tier, el servidor autodetecta la edición desde GET /license por entrada token y URL, con valor por defecto free. Forzar el catálogo Enterprise/Premium añade 16 meta-herramientas exclusivas de Enterprise. Los flags heredados GITLAB_ENTERPRISE=true (stdio) y --enterprise (HTTP) siguen respetándose por compatibilidad, pero están deprecados."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué sistemas operativos y arquitecturas admite GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma es un binario estático único sin dependencias en tiempo de ejecución."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Qué clientes MCP son compatibles con GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code con GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed y Kiro. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP, prompts, completions, elicitation y notificaciones de progreso."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import stats from "../../../data/stats.json";
+
+:::note[Documentación para desarrolladores]
+Esta página es la matriz de compatibilidad orientada a usuarios. Para flags de tier, variables de entorno y configuración por cliente, consulta [docs/reference/configuration](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md).
+:::
 
 ## Compatibilidad con ediciones de GitLab
 
@@ -23,7 +70,7 @@ GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise 
 | Gestión de vulnerabilidades                         |       ❌       |       ✅        |
 | Eventos de auditoría                                |       ❌       |       ✅        |
 | Políticas de cumplimiento                           |       ❌       |       ✅        |
-| +16 meta-herramientas enterprise                    |       ✖        |       ✅        |
+| +16 meta-herramientas enterprise                    |       ❌       |       ✅        |
 
 Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad.
 
@@ -58,6 +105,8 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 
 ## Funcionalidades del protocolo MCP
 
+GitLab MCP Server implementa el conjunto completo de capacidades MCP más allá de las herramientas — recursos, prompts, completions, elicitation y notificaciones de progreso — para que los clientes compatibles obtengan datos contextuales, plantillas de prompts y autocompletado de argumentos además de las llamadas a herramientas.
+
 | Capacidad   |                                                                                                                       Soportada                                                                                                                        |
 | ----------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | Tools       | ✅ (hasta {stats.tools.ultimate_self_managed} autoalojadas Enterprise / {stats.tools.gitlab_com} GitLab.com + Orbit individuales / {stats.meta.base} base, {stats.meta.self_managed_enterprise} autoalojadas, {stats.meta.gitlab_com} GitLab.com meta) |
@@ -68,3 +117,21 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 | Progress    |                                                                                                                           ✅                                                                                                                           |
 
 Las cifras de {stats.tools.ultimate_self_managed} autoalojadas y {stats.tools.gitlab_com} en GitLab.com son el conjunto expandido de instancias de herramienta distintas. Los recuentos de {stats.meta.base} base, {stats.meta.self_managed_enterprise} autoalojadas y {stats.meta.gitlab_com} en GitLab.com son tamaños del catálogo de meta-herramientas cuyas acciones se expanden a esa superficie individual mayor.
+
+## Preguntas frecuentes
+
+### ¿GitLab MCP Server funciona con GitLab Community Edition?
+
+Sí. GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). En CE expone el catálogo base completo — {stats.meta.base} meta-herramientas base, {stats.resources} recursos y {stats.prompts} prompts — que cubre proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, usuarios, grupos, búsqueda, despliegues, entornos y paquetes. Las funcionalidades exclusivas de Enterprise como merge trains, métricas DORA, gestión de vulnerabilidades, eventos de auditoría y políticas de cumplimiento requieren una licencia Premium o Ultimate y no están disponibles en CE.
+
+### ¿Cómo habilito las herramientas Enterprise?
+
+Define el tier de licencia explícitamente o deja que el servidor lo autodetecte. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP pasa `--tier=premium` o `--tier=ultimate`. Cuando se omite el tier, el servidor autodetecta la edición desde `GET /license` por entrada token+URL, con valor por defecto `free`. Forzar el catálogo Enterprise/Premium añade 16 meta-herramientas exclusivas de Enterprise. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad, pero están deprecados.
+
+### ¿Qué sistemas operativos y arquitecturas se admiten?
+
+Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma es un binario estático único sin dependencias en tiempo de ejecución.
+
+### ¿Qué clientes MCP son compatibles con GitLab MCP Server?
+
+Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed y Kiro. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP ({stats.resources}), prompts ({stats.prompts}), completions ({stats.completions} tipos de argumento), elicitation y notificaciones de progreso.

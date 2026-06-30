@@ -1,11 +1,58 @@
 ---
 title: Casos de uso
-description: Flujos de trabajo y escenarios comunes para usar GitLab MCP Server con asistentes de IA
+description: Flujos de trabajo comunes de GitLab MCP Server — revisión de código, depuración CI/CD, gestión de issues, releases, informes y seguridad, en lenguaje natural.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Qué puedo hacer con GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server permite a un asistente de IA manejar GitLab mediante lenguaje natural en ocho flujos de trabajo comunes: revisión de código, automatización CI/CD, gestión de issues, gestión de releases, gestión de equipo, búsqueda de código, informes y analítica, y revisión de seguridad. En lugar de cambiar a la interfaz web de GitLab, describes el resultado — por ejemplo, 'Resume los cambios del MR !42 y comprueba problemas de seguridad' — y el asistente llama a las herramientas de GitLab correspondientes, las ejecuta y devuelve el resultado. Cada flujo de trabajo se corresponde con operaciones REST y GraphQL reales de GitLab expuestas como herramientas MCP."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿GitLab MCP Server puede revisar merge requests y dejar comentarios?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sí. El flujo de revisión de código usa las herramientas gitlab_merge_request, gitlab_mr_changes y gitlab_mr_discussion para que un asistente pueda listar MRs pendientes de revisión, resumir diffs, ejecutar un análisis de seguridad, publicar comentarios de revisión y aprobar. Una conversación típica es: 'Muestra los MRs abiertos en my-app que necesitan revisión', luego 'Resume los cambios del MR !42', 'Comprueba el MR !42 por problemas de seguridad', 'Deja un comentario sugiriendo validación de entrada' y 'Aprueba el MR !42'. Cada paso es una llamada de herramienta separada contra la API de GitLab."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo ayuda GitLab MCP Server a depurar pipelines CI/CD?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El flujo CI/CD usa gitlab_pipeline, gitlab_job y gitlab_ci_variable para inspeccionar y recuperar pipelines con fallos sin salir del editor. Puedes pedir el estado del último pipeline, listar los jobs fallidos de un pipeline concreto, obtener los logs de un job para encontrar el error, comprobar las variables CI del proyecto y reintentar los jobs fallidos. Por ejemplo, '¿Por qué falló el último pipeline en la rama feature/auth?' devuelve la etapa y el job con fallos para que el asistente explique el error y sugiera una solución."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿GitLab MCP Server puede generar informes y notas de release?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sí. El flujo de informes se apoya en prompts MCP predefinidos como standup, risk-assessment, workload y milestone-report para producir resúmenes de standup diarios, evaluaciones de riesgo, informes de progreso de hitos y análisis de carga de trabajo del equipo. La gestión de releases combina gitlab_release, gitlab_tag y gitlab_release_link para crear releases, gestionar tags y subir assets — por ejemplo, 'Genera notas de release comparando v1.0 con v2.0' ensambla un changelog a partir de los commits entre dos refs."
+            }
+          }
+        ]
+      }
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
 
-Explora lo que puedes lograr con GitLab MCP Server, organizado por flujo de trabajo en lugar de dominio de API.
+:::note[Documentación para desarrolladores]
+Esta página agrupa las capacidades por flujo de trabajo. Para transcripciones de comandos listas para copiar y recetas de extremo a extremo, consulta [docs/guides/examples](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/examples/usage-examples.md).
+:::
+
+GitLab MCP Server admite ocho flujos de trabajo comunes — revisión de código, automatización CI/CD, gestión de issues, gestión de releases, gestión de equipo, búsqueda de código, informes y revisión de seguridad — cada uno manejado por completo mediante lenguaje natural. Las tarjetas siguientes agrupan las capacidades por flujo de trabajo en lugar de por dominio de API.
 
 ## Flujos de trabajo
 
@@ -101,3 +148,21 @@ Explora lo que puedes lograr con GitLab MCP Server, organizado por flujo de trab
 3. _"Crea un issue para 'Implementar rate limiting' en el hito v3.0"_ — añade tareas faltantes
 4. _"Asigna el issue #234 a @alice"_ — distribuye el trabajo
 5. _"Genera un informe de progreso del hito v3.0"_ — crea resumen de estado
+
+## Preguntas frecuentes
+
+### ¿Qué puedo hacer con GitLab MCP Server?
+
+GitLab MCP Server permite a un asistente de IA manejar GitLab mediante lenguaje natural en ocho flujos de trabajo comunes: revisión de código, automatización CI/CD, gestión de issues, gestión de releases, gestión de equipo, búsqueda de código, informes y analítica, y revisión de seguridad. En lugar de cambiar a la interfaz web de GitLab, describes el resultado — por ejemplo, _"Resume los cambios del MR !42 y comprueba problemas de seguridad"_ — y el asistente llama a las herramientas de GitLab correspondientes, las ejecuta y devuelve el resultado. Cada flujo de trabajo se corresponde con operaciones REST y GraphQL reales de GitLab expuestas como herramientas MCP.
+
+### ¿GitLab MCP Server puede revisar merge requests y dejar comentarios?
+
+Sí. El flujo de revisión de código usa las herramientas `gitlab_merge_request`, `gitlab_mr_changes` y `gitlab_mr_discussion` para que un asistente pueda listar MRs pendientes de revisión, resumir diffs, ejecutar un análisis de seguridad, publicar comentarios de revisión y aprobar. Una conversación típica es: _"Muestra los MRs abiertos en my-app que necesitan revisión"_, luego _"Resume los cambios del MR !42"_, _"Comprueba el MR !42 por problemas de seguridad"_, _"Deja un comentario sugiriendo añadir validación de entrada"_ y _"Aprueba el MR !42"_. Cada paso es una llamada de herramienta separada contra la API de GitLab.
+
+### ¿Cómo ayuda GitLab MCP Server a depurar pipelines CI/CD?
+
+El flujo CI/CD usa `gitlab_pipeline`, `gitlab_job` y `gitlab_ci_variable` para inspeccionar y recuperar pipelines con fallos sin salir del editor. Puedes pedir el estado del último pipeline, listar los jobs fallidos de un pipeline concreto, obtener los logs de un job para encontrar el error, comprobar las variables CI del proyecto y reintentar los jobs fallidos. Por ejemplo, _"¿Por qué falló el último pipeline en la rama feature/auth?"_ devuelve la etapa y el job con fallos para que el asistente explique el error y sugiera una solución.
+
+### ¿GitLab MCP Server puede generar informes y notas de release?
+
+Sí. El flujo de informes se apoya en prompts MCP predefinidos como standup, risk-assessment, workload y milestone-report para producir resúmenes de standup diarios, evaluaciones de riesgo, informes de progreso de hitos y análisis de carga de trabajo del equipo. La gestión de releases combina `gitlab_release`, `gitlab_tag` y `gitlab_release_link` para crear releases, gestionar tags y subir assets — por ejemplo, _"Genera notas de release comparando v1.0 con v2.0"_ ensambla un changelog a partir de los commits entre dos refs.

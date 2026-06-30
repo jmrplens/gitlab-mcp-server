@@ -1,6 +1,6 @@
 ---
 title: Configuración
-description: Variables de entorno, configuración de clientes y opciones de despliegue
+description: Configura GitLab MCP Server con variables de entorno en modo stdio y flags de CLI en modo HTTP, además de configuración de clientes y opciones de despliegue.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -19,7 +19,7 @@ GitLab MCP Server se configura mediante variables de entorno en modo stdio y fla
 
 ## Variables requeridas
 
-Esta debe establecerse para que el servidor arranque en modo stdio:
+GitLab MCP Server requiere exactamente una variable para arrancar en modo stdio — el resto son opcionales y usan valores predeterminados seguros:
 
 | Variable       | Descripción                           | Ejemplo                      |
 | -------------- | ------------------------------------- | ---------------------------- |
