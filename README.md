@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="GitLab MCP Server — let your AI assistant drive GitLab in plain language" src="site/src/assets/banner-dark.svg" width="840">
+  <img alt="GitLab MCP Server — let your AI assistant drive GitLab in plain language" src="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/banner-dark.svg" width="840">
 </p>
 
 # GitLab MCP Server
