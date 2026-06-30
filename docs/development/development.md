@@ -115,7 +115,7 @@ graph TD
 7. **Capabilities** provide completions, progress, and elicitation
 8. **Server** runs over stdio (default) or HTTP (`--http`)
 
-See [Architecture Overview](../architecture.md) for detailed diagrams and component descriptions.
+See [Architecture Overview](../concepts/architecture.md) for detailed diagrams and component descriptions.
 
 ## Version Management
 
@@ -271,7 +271,7 @@ make test-e2e-docker
 
 This single command handles the full lifecycle: start GitLab CE container, wait for readiness, create test user/token, register CI runner, run tests, and tear down.
 
-For manual step-by-step execution, see [E2E Docker Mode](../testing/testing.md#docker-mode) in the testing guide.
+For manual step-by-step execution, see [E2E Docker Mode](testing/testing.md#docker-mode) in the testing guide.
 
 #### E2E Prerequisites
 
@@ -360,7 +360,7 @@ return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
 - `ContainsAny(err, substrs...)` — checks if `err.Error()` contains any of the given substrings
 - `ExtractGitLabMessage(err)` — extracts the specific message from `gl.ErrorResponse.Message`
 
-See [Error Handling](../error-handling.md) for the full architecture.
+See [Error Handling](../concepts/error-handling.md) for the full architecture.
 
 ## Adding a New Tool
 

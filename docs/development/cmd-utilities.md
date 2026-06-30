@@ -695,7 +695,7 @@ Evaluates model behavior across MCP tool surfaces by running typed evaluation ca
 
 ### server
 
-The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [cli-reference.md](../cli-reference.md) for the full CLI reference and [configuration.md](../configuration.md) for environment and configuration details.
+The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [cli-reference.md](../reference/cli.md) for the full CLI reference and [configuration.md](../reference/configuration.md) for environment and configuration details.
 
 **Make targets:** `make build` (builds `./dist/gitlab-mcp-server`), `make run` (builds and runs locally).
 
