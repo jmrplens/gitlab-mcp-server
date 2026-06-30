@@ -27,11 +27,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +45,15 @@ const (
 	schemaVersion = 1
 	docBaseURL    = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/"
 	cacheSubdir   = "cmd/audit_edition_tier/.doccache"
+
+	// Fetch tuning. GitLab's raw endpoint rate-limits bursts with HTTP 429
+	// (often carrying a Retry-After header). We retry with honored Retry-After
+	// first, exponential backoff + jitter as a fallback, and a polite delay
+	// between successful fetches so a -refresh of all docs does not get
+	// throttled mid-run.
+	fetchMaxAttempts = 6
+	fetchBaseSpacing = 500 * time.Millisecond
+	fetchMaxBackoff  = 60 * time.Second
 )
 
 // refreshDocs forces re-fetching docs from the remote even when cached.
@@ -394,50 +405,98 @@ func fetchDoc(cacheDir, area string, offline bool) (string, error) {
 	}
 	url := docBaseURL + area + ".md"
 	client := &http.Client{Timeout: 30 * time.Second}
-	// Be polite: GitLab raw rate-limits bursts (HTTP 429). Retry with backoff.
+	fmt.Fprintf(os.Stderr, "  fetching %s\n", area)
 	var lastErr error
-	for attempt := range 5 {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt*attempt) * time.Second)
-		}
-		body, status, err := fetchOnce(client, url)
+	for attempt := 1; attempt <= fetchMaxAttempts; attempt++ {
+		body, status, retryAfter, err := fetchOnce(client, url)
 		switch {
 		case err != nil:
 			lastErr = err
-			continue
-		case status == http.StatusTooManyRequests:
-			lastErr = fmt.Errorf("HTTP 429 for %s", url)
-			continue
+		case status == http.StatusTooManyRequests || status >= http.StatusInternalServerError:
+			lastErr = fmt.Errorf("HTTP %d for %s", status, url)
 		case status != http.StatusOK:
 			return "", fmt.Errorf("HTTP %d for %s", status, url)
+		default:
+			_ = os.WriteFile(cachePath, body, 0o600)
+			// Gentle inter-request spacing once a real fetch happened so a
+			// full -refresh sweep does not trip the rate limiter.
+			time.Sleep(fetchBaseSpacing)
+			return string(body), nil
 		}
-		_ = os.WriteFile(cachePath, body, 0o600)
-		// Gentle inter-request spacing once a real fetch happened.
-		time.Sleep(250 * time.Millisecond)
-		return string(body), nil
+		if attempt == fetchMaxAttempts {
+			break
+		}
+		wait := backoffDelay(attempt, retryAfter)
+		fmt.Fprintf(os.Stderr, "  fetch %s: %v; retry %d/%d in %s\n", area, lastErr, attempt+1, fetchMaxAttempts, wait.Round(time.Millisecond))
+		time.Sleep(wait)
 	}
-	return "", lastErr
+	return "", fmt.Errorf("giving up on %s after %d attempts: %w", area, fetchMaxAttempts, lastErr)
 }
 
-// fetchOnce performs a single GET and returns the body and status code.
-func fetchOnce(client *http.Client, url string) (body []byte, status int, err error) {
+// backoffDelay computes how long to wait before the next fetch attempt. A
+// server-provided Retry-After (HTTP 429) is honored first, capped at
+// fetchMaxBackoff; otherwise it falls back to exponential backoff
+// (1s, 2s, 4s, …) with full jitter to avoid synchronized retries.
+func backoffDelay(attempt int, retryAfter time.Duration) time.Duration {
+	if retryAfter > 0 {
+		return min(retryAfter, fetchMaxBackoff) + jitter(fetchBaseSpacing)
+	}
+	exp := time.Duration(1<<min(attempt-1, 5)) * time.Second // attempt 1 -> 1s … capped
+	exp = min(exp, fetchMaxBackoff)
+	return exp + jitter(exp/2)
+}
+
+// jitter returns a random duration in [0, span) (0 when span <= 0).
+func jitter(span time.Duration) time.Duration {
+	if span <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int64N(int64(span))) //#nosec G404 -- backoff jitter, not security-sensitive
+}
+
+// fetchOnce performs a single GET and returns the body, status code, and the
+// parsed Retry-After delay (0 when absent/unparsable).
+func fetchOnce(client *http.Client, url string) (body []byte, status int, retryAfter time.Duration, err error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	defer resp.Body.Close()
+	retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, nil
+		return nil, resp.StatusCode, retryAfter, nil
 	}
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, resp.StatusCode, err
+		return nil, resp.StatusCode, retryAfter, err
 	}
-	return body, resp.StatusCode, nil
+	return body, resp.StatusCode, retryAfter, nil
+}
+
+// parseRetryAfter interprets a Retry-After header value, which is either a
+// non-negative delta-seconds integer or an HTTP-date. Returns 0 when empty or
+// unparsable so the caller falls back to exponential backoff.
+func parseRetryAfter(v string) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	if secs, convErr := strconv.Atoi(v); convErr == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if t, parseErr := http.ParseTime(v); parseErr == nil {
+		if d := time.Until(t); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // parseDocTiers extracts the page-level tier and the set of distinct
