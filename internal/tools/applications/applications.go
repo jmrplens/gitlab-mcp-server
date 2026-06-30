@@ -105,6 +105,36 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 }
 
 // ---------------------------------------------------------------------------
+// Renew secret
+// ---------------------------------------------------------------------------.
+
+// RenewSecretInput is the input for renewing an application secret.
+type RenewSecretInput struct {
+	ID int64 `json:"id" jsonschema:"Application ID whose secret should be renewed,required"`
+}
+
+// RenewSecretOutput is the output for renewing an application secret. It carries
+// the application record including the freshly generated secret.
+type RenewSecretOutput struct {
+	toolutil.HintableOutput
+	ApplicationItem
+}
+
+// RenewSecret renews (rotates) the secret of an existing OAuth application
+// (admin). The previous secret is invalidated, so any client using it must be
+// updated with the new value returned here.
+func RenewSecret(ctx context.Context, client *gitlabclient.Client, input RenewSecretInput) (RenewSecretOutput, error) {
+	if input.ID <= 0 {
+		return RenewSecretOutput{}, toolutil.ErrRequiredInt64("renew_application_secret", "id")
+	}
+	app, _, err := client.GL().Applications.RenewApplicationSecret(input.ID, gl.WithContext(ctx))
+	if err != nil {
+		return RenewSecretOutput{}, toolutil.WrapErrWithStatusHint("renew_application_secret", err, http.StatusNotFound, "verify application id with gitlab_list_applications — requires administrator access")
+	}
+	return RenewSecretOutput{ApplicationItem: toItem(app)}, nil
+}
+
+// ---------------------------------------------------------------------------
 // Delete
 // ---------------------------------------------------------------------------.
 

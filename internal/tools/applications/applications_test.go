@@ -131,6 +131,69 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
+// TestRenewSecret verifies the RenewSecret handler.
+// The mock GitLab API at /api/v4/applications/2/renew-secret (POST) responds
+// with HTTP OK and the application carrying a fresh secret.
+// It asserts the returned output carries the renewed secret and identity fields.
+func TestRenewSecret(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/applications/2/renew-secret" {
+			t.Fatalf(fmtUnexpPath, r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf(fmtUnexpMethod, r.Method)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id": 2,
+			"application_id": "app-2",
+			"application_name": "Rotated App",
+			"secret": "freshsecret",
+			"callback_url": "http://example.com/callback",
+			"confidential": true,
+			"scopes": ["api"]
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: 2})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 2 {
+		t.Errorf("ID = %d, want 2", out.ID)
+	}
+	if out.Secret != "freshsecret" {
+		t.Errorf("Secret = %q, want freshsecret", out.Secret)
+	}
+	if out.ApplicationName != "Rotated App" {
+		t.Errorf("Name = %q, want Rotated App", out.ApplicationName)
+	}
+}
+
+// TestRenewSecret_ValidationError verifies RenewSecret rejects non-positive ids
+// before touching the GitLab API.
+func TestRenewSecret_ValidationError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("API should not be called")
+	}))
+	for _, id := range []int64{0, -1} {
+		if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: id}); err == nil {
+			t.Errorf("ID=%d: expected error, got nil", id)
+		}
+	}
+}
+
+// TestRenewSecret_Error verifies that RenewSecret returns a wrapped error when
+// the GitLab API responds with an error status.
+func TestRenewSecret_Error(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := testutil.NewTestClient(t, handler)
+	if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: 999}); err == nil {
+		t.Fatal(errExpectedNil)
+	}
+}
+
 // TestDelete_ValidationError verifies that Delete_ValidationError returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -222,6 +285,24 @@ func TestFormatCreateMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "sec") {
 		t.Error("missing secret")
+	}
+}
+
+// TestFormatRenewSecretMarkdown verifies the RenewSecret Markdown formatter
+// renders the application identity and the freshly rotated secret.
+func TestFormatRenewSecretMarkdown(t *testing.T) {
+	out := RenewSecretOutput{ApplicationItem: ApplicationItem{
+		ID: 2, ApplicationName: "Rotated", ApplicationID: "aid-2", Secret: "freshsecret", CallbackURL: "http://cb", Confidential: true,
+	}}
+	md := FormatRenewSecretMarkdown(out)
+	if !strings.Contains(md, "Renewed") {
+		t.Error("missing renewed heading")
+	}
+	if !strings.Contains(md, "Rotated") {
+		t.Error("missing app name")
+	}
+	if !strings.Contains(md, "freshsecret") {
+		t.Error("missing new secret")
 	}
 }
 
@@ -340,8 +421,8 @@ func TestCreate_WithConfidential(t *testing.T) {
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	specs := ActionSpecs(client)
-	if len(specs) != 3 {
-		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	if len(specs) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
 	}
 	byTool := applicationSpecsByTool(client)
 	for _, spec := range specs {
@@ -364,6 +445,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if deleteSpec.Usage == "" || len(deleteSpec.Aliases) == 0 || deleteSpec.ParameterGuidance["id"].SemanticRole == "" {
 		t.Fatalf("delete metadata incomplete: usage=%q aliases=%d id guidance=%q", deleteSpec.Usage, len(deleteSpec.Aliases), deleteSpec.ParameterGuidance["id"].SemanticRole)
 	}
+
+	renew := byTool["gitlab_renew_application_secret"]
+	if renew.Usage == "" || len(renew.Aliases) == 0 || renew.ParameterGuidance["id"].SemanticRole == "" || renew.IndividualTool.Description == "" {
+		t.Fatalf("renew metadata incomplete: usage=%q aliases=%d id guidance=%q description=%q", renew.Usage, len(renew.Aliases), renew.ParameterGuidance["id"].SemanticRole, renew.IndividualTool.Description)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +471,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 		{"create", "gitlab_create_application", map[string]any{
 			"name": "Test App", "redirect_uri": "http://cb", "scopes": "api",
 		}},
+		{"renew_secret", "gitlab_renew_application_secret", map[string]any{"id": float64(1)}},
 		{"delete", "gitlab_delete_application", map[string]any{"id": float64(1)}},
 	}
 
@@ -420,6 +507,7 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 		{"create_error", "gitlab_create_application", map[string]any{
 			"name": "X", "redirect_uri": "http://cb", "scopes": "api",
 		}},
+		{"renew_secret_error", "gitlab_renew_application_secret", map[string]any{"id": float64(99)}},
 		{"delete_error", "gitlab_delete_application", map[string]any{"id": float64(99)}},
 	}
 
@@ -455,6 +543,9 @@ func newApplicationsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	})
 	handler.HandleFunc("POST /api/v4/applications", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"application_id":"a2","application_name":"Test App","secret":"s2","callback_url":"http://cb","confidential":false,"scopes":["api"]}`)
+	})
+	handler.HandleFunc("POST /api/v4/applications/1/renew-secret", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"application_id":"a1","application_name":"App1","secret":"rotated","callback_url":"http://cb","confidential":true,"scopes":["api"]}`)
 	})
 	handler.HandleFunc("DELETE /api/v4/applications/1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

@@ -50,4 +50,21 @@ func FormatCreateMarkdown(out CreateOutput) string {
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatCreateMarkdown)
+	toolutil.RegisterMarkdown(FormatRenewSecretMarkdown)
+}
+
+// FormatRenewSecretMarkdown formats a renewed application secret as markdown.
+func FormatRenewSecretMarkdown(out RenewSecretOutput) string {
+	var sb strings.Builder
+	sb.WriteString("## Application Secret Renewed\n\n")
+	sb.WriteString("| Field | Value |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
+	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.ApplicationName))
+	fmt.Fprintf(&sb, "| App ID | %s |\n", toolutil.EscapeMdTableCell(out.ApplicationID))
+	fmt.Fprintf(&sb, "| Callback URL | %s |\n", toolutil.EscapeMdTableCell(out.CallbackURL))
+	fmt.Fprintf(&sb, "| Confidential | %v |\n", out.Confidential)
+	fmt.Fprintf(&sb, "| New Secret | %s |\n", toolutil.EscapeMdTableCell(out.Secret))
+	fmt.Fprintf(&sb, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(strings.Join(out.Scopes, ", ")))
+	toolutil.WriteHints(&sb, "Store the new secret securely — the previous secret is now invalid and any client using it must be updated")
+	return sb.String()
 }

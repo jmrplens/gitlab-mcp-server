@@ -534,13 +534,13 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
-	// dynamic catalog actions. 864 = 865 −1 group_milestone_burndown gated to
+	// dynamic catalog actions. 865 = 866 −1 group_milestone_burndown gated to
 	// Premium (burndown_events endpoint is Premium/Ultimate). See cmd/audit_edition_tier.
-	expectedBaseDynamicCatalogActions = 864
+	expectedBaseDynamicCatalogActions = 865
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1065
+	expectedEnterpriseDynamicCatalogActions = 1066
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1071
+	expectedGitLabComEnterpriseCatalogActions = 1072
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

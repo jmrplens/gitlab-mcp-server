@@ -136,6 +136,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDestructiveUpdateIndividualSpec("db_migration_mark", toolutil.DestructiveAction(client, dbmigrations.Mark), "gitlab_mark_migration"),
 		adminReadSpec("application_list", toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
+		adminCreateSpec("application_renew_secret", toolutil.RouteAction(client, applications.RenewSecret), "gitlab_renew_application_secret"),
 		adminDeleteSpec("application_delete", toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
 		adminApplicationStatisticsGetSpec(client),
 		adminMetadataGetSpec(client),
@@ -629,6 +630,12 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"create application", "register oauth application", "add instance oauth app"},
 		related:     []string{"admin.application_list", "admin.application_delete"},
 		description: "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
+	},
+	"gitlab_renew_application_secret": {
+		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.",
+		aliases:     []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"},
+		related:     []string{"admin.application_list", "admin.application_create"},
+		description: "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
 	},
 	"gitlab_delete_application": {
 		usage:       "Delete an instance-level OAuth application by id (admin only), revoking its credentials.",

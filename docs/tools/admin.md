@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Administration
-> **Individual tools**: 74
+> **Individual tools**: 75
 > **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_dependency_proxy` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Audit Events](https://docs.gitlab.com/ee/api/audit_events.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -359,6 +359,13 @@ Create an OAuth2 application (admin). Params: name (required), redirect_uri (req
 | Annotation | **Create** |
 | ---------- | ---------- |
 
+### `gitlab_renew_application_secret`
+
+Renew (rotate) an OAuth2 application secret (admin). Params: id (required). The previous secret is invalidated immediately and the response carries the new secret, which cannot be retrieved later.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
 ### `gitlab_delete_application`
 
 Delete an OAuth2 application (admin). Params: id (required).
@@ -696,40 +703,41 @@ Get a single project-level audit event by ID.
 | 38 | `gitlab_list_applications` | Applications | Read |
 | 39 | `gitlab_create_application` | Applications | Create |
 | 40 | `gitlab_delete_application` | Applications | Delete |
-| 41 | `gitlab_get_application_statistics` | Statistics | Read |
-| 42 | `gitlab_get_metadata` | Metadata | Read |
-| 43 | `gitlab_list_custom_attributes` | Custom Attributes | Read |
-| 44 | `gitlab_get_custom_attribute` | Custom Attributes | Read |
-| 45 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
-| 46 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
-| 47 | `gitlab_start_bulk_import` | Bulk Imports | Create |
-| 48 | `gitlab_list_bulk_imports` | Bulk Imports | Read |
-| 49 | `gitlab_get_bulk_import` | Bulk Imports | Read |
-| 50 | `gitlab_cancel_bulk_import` | Bulk Imports | Update |
-| 51 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
-| 52 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
-| 53 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
-| 54 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
-| 55 | `gitlab_list_terraform_states` | Terraform States | Read |
-| 56 | `gitlab_get_terraform_state` | Terraform States | Read |
-| 57 | `gitlab_delete_terraform_state` | Terraform States | Delete |
-| 58 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
-| 59 | `gitlab_lock_terraform_state` | Terraform States | Update |
-| 60 | `gitlab_unlock_terraform_state` | Terraform States | Update |
-| 61 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
-| 62 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
-| 63 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
-| 64 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
-| 65 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
-| 66 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
-| 67 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
-| 68 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
-| 69 | `gitlab_list_instance_audit_events` | Audit Events | Read |
-| 70 | `gitlab_get_instance_audit_event` | Audit Events | Read |
-| 71 | `gitlab_list_group_audit_events` | Audit Events | Read |
-| 72 | `gitlab_get_group_audit_event` | Audit Events | Read |
-| 73 | `gitlab_list_project_audit_events` | Audit Events | Read |
-| 74 | `gitlab_get_project_audit_event` | Audit Events | Read |
+| 41 | `gitlab_renew_application_secret` | Applications | Create |
+| 42 | `gitlab_get_application_statistics` | Statistics | Read |
+| 43 | `gitlab_get_metadata` | Metadata | Read |
+| 44 | `gitlab_list_custom_attributes` | Custom Attributes | Read |
+| 45 | `gitlab_get_custom_attribute` | Custom Attributes | Read |
+| 46 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
+| 47 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
+| 48 | `gitlab_start_bulk_import` | Bulk Imports | Create |
+| 49 | `gitlab_list_bulk_imports` | Bulk Imports | Read |
+| 50 | `gitlab_get_bulk_import` | Bulk Imports | Read |
+| 51 | `gitlab_cancel_bulk_import` | Bulk Imports | Update |
+| 52 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
+| 53 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
+| 54 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
+| 55 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
+| 56 | `gitlab_list_terraform_states` | Terraform States | Read |
+| 57 | `gitlab_get_terraform_state` | Terraform States | Read |
+| 58 | `gitlab_delete_terraform_state` | Terraform States | Delete |
+| 59 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
+| 60 | `gitlab_lock_terraform_state` | Terraform States | Update |
+| 61 | `gitlab_unlock_terraform_state` | Terraform States | Update |
+| 62 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
+| 63 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
+| 64 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
+| 65 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
+| 66 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
+| 67 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
+| 68 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
+| 69 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
+| 70 | `gitlab_list_instance_audit_events` | Audit Events | Read |
+| 71 | `gitlab_get_instance_audit_event` | Audit Events | Read |
+| 72 | `gitlab_list_group_audit_events` | Audit Events | Read |
+| 73 | `gitlab_get_group_audit_event` | Audit Events | Read |
+| 74 | `gitlab_list_project_audit_events` | Audit Events | Read |
+| 75 | `gitlab_get_project_audit_event` | Audit Events | Read |
 
 ### Destructive Tools (Require Confirmation)
 
