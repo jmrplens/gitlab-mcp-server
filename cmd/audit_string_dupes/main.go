@@ -27,6 +27,10 @@ func main() {
 	threshold := flag.Int("threshold", 3, "minimum occurrence count to report a duplicate")
 	minLength := flag.Int("min-length", 3, "minimum string length to consider")
 	flag.Parse()
+	if *threshold < 1 || *minLength < 1 {
+		fmt.Fprintln(os.Stderr, "threshold and min-length must be >= 1")
+		os.Exit(1)
+	}
 	if code := run(flag.Args(), os.Stdout, os.Stderr, *threshold, *minLength); code != 0 {
 		os.Exit(code)
 	}

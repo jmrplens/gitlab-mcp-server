@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -59,57 +60,58 @@ var generatedDocMarkerPairs = [][2]string{
 	{" provides the ", " value shared by this package."},
 }
 
-// processPath processes a Go file or recursively processes a directory.
-func processPath(path string) {
+// processPath processes a Go file or recursively processes a directory. It
+// returns an error when a path could not be statted/read/parsed/written so the
+// caller can exit non-zero instead of silently succeeding.
+func processPath(path string) error {
 	cleanPath := filepath.Clean(path)
 	info, err := os.Stat(cleanPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "stat %s: %v\n", cleanPath, err)
-		return
+		return fmt.Errorf("stat %s: %w", cleanPath, err)
 	}
 	if info.IsDir() {
-		processDir(cleanPath)
-		return
+		return processDir(cleanPath)
 	}
 	if strings.HasSuffix(info.Name(), ".go") {
-		processFile(cleanPath)
+		return processFile(cleanPath)
 	}
+	return nil
 }
 
-// processDir recursively walks a directory and processes each .go file.
-func processDir(dir string) {
+// processDir recursively walks a directory and processes each .go file,
+// joining any per-file errors so one failure does not hide the others.
+func processDir(dir string) error {
 	cleanDir := filepath.Clean(dir)
 	entries, err := os.ReadDir(cleanDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "readdir %s: %v\n", cleanDir, err)
-		return
+		return fmt.Errorf("readdir %s: %w", cleanDir, err)
 	}
+	var errs []error
 	for _, e := range entries {
 		if e.IsDir() {
-			processDir(filepath.Join(cleanDir, e.Name()))
+			errs = append(errs, processDir(filepath.Join(cleanDir, e.Name())))
 			continue
 		}
 		if !strings.HasSuffix(e.Name(), ".go") {
 			continue
 		}
-		processFile(filepath.Join(cleanDir, e.Name()))
+		errs = append(errs, processFile(filepath.Join(cleanDir, e.Name())))
 	}
+	return errors.Join(errs...)
 }
 
 // processFile parses a single Go file and adds missing doc comments to
 // undocumented functions, types, and methods.
-func processFile(path string) {
+func processFile(path string) error {
 	cleanPath := filepath.Clean(path)
 	src, err := os.ReadFile(cleanPath) //#nosec G304 -- paths come from CLI args, not user input
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "read %s: %v\n", cleanPath, err)
-		return
+		return fmt.Errorf("read %s: %w", cleanPath, err)
 	}
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, cleanPath, src, parser.ParseComments)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "parse %s: %v\n", cleanPath, err)
-		return
+		return fmt.Errorf("parse %s: %w", cleanPath, err)
 	}
 	pkgName := node.Name.Name
 	isTest := strings.HasSuffix(cleanPath, "_test.go")
@@ -117,7 +119,7 @@ func processFile(path string) {
 	insertions := collectDocInsertions(fset, node, pkgName, isTest)
 
 	if len(insertions) == 0 {
-		return
+		return nil
 	}
 
 	lines := splitLines(src)
@@ -144,15 +146,14 @@ func processFile(path string) {
 
 	if dryRun {
 		fmt.Printf("// dry-run: would update %s (%d insertions)\n", cleanPath, len(insertions))
-		return
+		return nil
 	}
 
-	err = os.WriteFile(cleanPath, []byte(result), 0o600) //#nosec G703 -- CLI tool, paths from args
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "write %s: %v\n", cleanPath, err)
-		return
+	if err = os.WriteFile(cleanPath, []byte(result), 0o600); err != nil { //#nosec G703 -- CLI tool, paths from args
+		return fmt.Errorf("write %s: %w", cleanPath, err)
 	}
 	fmt.Printf("documented %s (%d symbols)\n", cleanPath, len(insertions))
+	return nil
 }
 
 func collectDocInsertions(fset *token.FileSet, node *ast.File, pkgName string, isTest bool) []insertion {

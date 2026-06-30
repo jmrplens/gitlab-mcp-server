@@ -72,7 +72,9 @@ func main() {
 	}
 
 	if *apply || *dryRun {
-		runApply(args, os.Stdout, os.Stderr, *dryRun)
+		if !runApply(args, os.Stdout, os.Stderr, *dryRun) {
+			os.Exit(1)
+		}
 		return
 	}
 	if err := run(args, os.Stdout, os.Stderr); err != nil {
@@ -299,13 +301,17 @@ func mergeIntoSegments(words []string) string {
 
 // runApply scans test files and renames functions to match suggested names.
 // When dryRun is true it prints what would change without writing.
-func runApply(dirs []string, stdout, stderr io.Writer, dryRun bool) {
+// runApply renames test functions across dirs and returns ok=false when any
+// file or directory was skipped due to an error, so callers can exit non-zero.
+func runApply(dirs []string, stdout, stderr io.Writer, dryRun bool) (ok bool) {
 	totalRenames := 0
 	totalFiles := 0
+	ok = true
 	for _, dir := range dirs {
-		renames, files := applyDir(dir, stdout, stderr, dryRun)
+		renames, files, dirOK := applyDir(dir, stdout, stderr, dryRun)
 		totalRenames += renames
 		totalFiles += files
+		ok = ok && dirOK
 	}
 	mode := "applied"
 	if dryRun {
@@ -314,32 +320,38 @@ func runApply(dirs []string, stdout, stderr io.Writer, dryRun bool) {
 	fmt.Fprintf(stderr, "\n=== Rename Summary (%s) ===\n", mode)
 	fmt.Fprintf(stderr, "Files scanned: %d\n", totalFiles)
 	fmt.Fprintf(stderr, "Renames: %d\n", totalRenames)
+	return ok
 }
 
-// applyDir recursively walks a directory applying renames to test files.
-func applyDir(dir string, stdout, stderr io.Writer, dryRun bool) (renames, files int) {
+// applyDir recursively walks a directory applying renames to test files. ok is
+// false when readdir or any descended file/dir failed.
+func applyDir(dir string, stdout, stderr io.Writer, dryRun bool) (renames, files int, ok bool) {
 	cleanDir := filepath.Clean(dir)
 	entries, err := os.ReadDir(cleanDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "readdir %s: %v\n", cleanDir, err)
-		return 0, 0
+		return 0, 0, false
 	}
 	totalRenames := 0
 	totalFiles := 0
+	ok = true
 	for _, e := range entries {
 		path := filepath.Join(cleanDir, e.Name())
 		if e.IsDir() {
-			r, f := applyDir(path, stdout, stderr, dryRun)
+			r, f, sub := applyDir(path, stdout, stderr, dryRun)
 			totalRenames += r
 			totalFiles += f
+			ok = ok && sub
 			continue
 		}
 		if strings.HasSuffix(e.Name(), "_test.go") {
 			totalFiles++
-			totalRenames += applyFile(path, stdout, stderr, dryRun)
+			r, fileOK := applyFile(path, stdout, stderr, dryRun)
+			totalRenames += r
+			ok = ok && fileOK
 		}
 	}
-	return totalRenames, totalFiles
+	return totalRenames, totalFiles, ok
 }
 
 // collectRenames builds a map of old→new names for test functions that need
@@ -361,7 +373,8 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 			continue
 		}
 		name := fn.Name.Name
-		if !strings.HasPrefix(name, "Test") || (len(name) > 4 && unicode.IsLower(rune(name[4]))) || strings.HasPrefix(name, "TestMain") {
+		runes := []rune(name)
+		if !strings.HasPrefix(name, "Test") || (len(runes) > 4 && unicode.IsLower(runes[4])) || strings.HasPrefix(name, "TestMain") {
 			continue
 		}
 		pattern, suggested := classify(name)
@@ -375,32 +388,37 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 			continue
 		}
 		renames[name] = suggested
+		// Reserve the target so a second legacy name cannot map to the same
+		// suggestion and produce a duplicate (uncompilable) function name.
+		existing[suggested] = true
 	}
 	return renames
 }
 
-// applyFile renames test functions in a single file and returns the rename count.
-func applyFile(path string, stdout, stderr io.Writer, dryRun bool) int {
+// applyFile renames test functions in a single file. It returns the rename
+// count and ok=false when the file was skipped due to a parse/read/write error
+// or because the rename would produce invalid Go, so callers can surface the
+// failure via a non-zero exit. A file with no renames is not a failure.
+func applyFile(path string, stdout, stderr io.Writer, dryRun bool) (applied int, ok bool) {
 	cleanPath := filepath.Clean(path)
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, cleanPath, nil, 0)
 	if err != nil {
 		fmt.Fprintf(stderr, "parse %s: %v\n", cleanPath, err)
-		return 0
+		return 0, false
 	}
 
 	renames := collectRenames(node, cleanPath, stderr)
 	if len(renames) == 0 {
-		return 0
+		return 0, true
 	}
 
 	src, err := os.ReadFile(cleanPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "read %s: %v\n", cleanPath, err)
-		return 0
+		return 0, false
 	}
 	result := string(src)
-	applied := 0
 	for old, newName := range renames {
 		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(old) + `\b`)
 		if re.MatchString(result) {
@@ -410,19 +428,19 @@ func applyFile(path string, stdout, stderr io.Writer, dryRun bool) int {
 		}
 	}
 	if applied == 0 {
-		return 0
+		return 0, true
 	}
 
 	if _, parseErr := parser.ParseFile(token.NewFileSet(), cleanPath, []byte(result), 0); parseErr != nil {
 		fmt.Fprintf(stderr, "  ABORT %s: rename would produce invalid Go: %v\n", cleanPath, parseErr)
-		return 0
+		return 0, false
 	}
 	if dryRun {
-		return applied
+		return applied, true
 	}
 	if writeErr := os.WriteFile(cleanPath, []byte(result), 0o600); writeErr != nil { //#nosec G306,G703 -- CLI tool, user provides paths intentionally
 		fmt.Fprintf(stderr, "write %s: %v\n", cleanPath, writeErr)
-		return 0
+		return 0, false
 	}
-	return applied
+	return applied, true
 }

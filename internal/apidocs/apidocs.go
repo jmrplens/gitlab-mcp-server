@@ -64,6 +64,7 @@ type Fetcher struct {
 	maxAge   time.Duration
 	refresh  bool
 	offline  bool
+	strict   bool
 	client   *http.Client
 }
 
@@ -74,6 +75,11 @@ type Options struct {
 	// Offline never hits the network: cached docs are returned regardless of
 	// age, and a cache miss is an error.
 	Offline bool
+	// Strict disables the stale-cache fallback: when a download fails (e.g. an
+	// upstream 404/410 removal), the error is returned instead of serving an
+	// older cached copy. Authoritative callers such as -validate-docs set this
+	// so a deleted doc is not masked by a previously cached body.
+	Strict bool
 	// MaxAge overrides the freshness window; 0 uses DefaultMaxAge.
 	MaxAge time.Duration
 	// BaseURL overrides the doc root (used by tests); empty uses DefaultBaseURL.
@@ -97,6 +103,7 @@ func New(repoRoot string, opts Options) *Fetcher {
 		maxAge:   opts.MaxAge,
 		refresh:  opts.Refresh,
 		offline:  opts.Offline,
+		strict:   opts.Strict,
 		client:   opts.Client,
 	}
 	if f.baseURL == "" {
@@ -134,11 +141,15 @@ func (f *Fetcher) Fetch(area string) (string, error) {
 
 	body, err := f.download(area)
 	if err != nil {
-		// Fall back to a stale cached copy rather than failing the whole audit
-		// when the network is flaky and an older doc is on disk.
-		if stale, statErr := os.ReadFile(cachePath); statErr == nil { //#nosec G304 -- cache path is derived, not user input
-			cmdutil.Progressf("apidocs: %v; using stale cached %s", err, area)
-			return string(stale), nil
+		// In strict mode (authoritative validation) a download failure must
+		// surface so a removed upstream doc is not masked by a cached copy.
+		if !f.strict {
+			// Otherwise fall back to a stale cached copy rather than failing the
+			// whole audit when the network is flaky and an older doc is on disk.
+			if stale, statErr := os.ReadFile(cachePath); statErr == nil { //#nosec G304 -- cache path is derived, not user input
+				cmdutil.Progressf("apidocs: %v; using stale cached %s", err, area)
+				return string(stale), nil
+			}
 		}
 		return "", err
 	}

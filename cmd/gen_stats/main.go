@@ -62,12 +62,12 @@ func run(check bool) error {
 	if check {
 		data, readErr := os.ReadFile(readmePath) //#nosec G304 -- path is a hardcoded constant
 		if readErr != nil {
-			return readErr
+			return fmt.Errorf("read %s: %w", readmePath, readErr)
 		}
 		text := string(data)
 		updated, replaceErr := computeReplacedText(text, statsStartMarker, statsEndMarker, rendered)
 		if replaceErr != nil {
-			return replaceErr
+			return fmt.Errorf("replace stats section in %s: %w", readmePath, replaceErr)
 		}
 		if updated != text {
 			return fmt.Errorf("%s stats section is stale; run go run ./cmd/gen_stats/", readmePath)
@@ -75,7 +75,7 @@ func run(check bool) error {
 		return nil
 	}
 	if replaceErr := replaceSection(readmePath, statsStartMarker, statsEndMarker, rendered); replaceErr != nil {
-		return replaceErr
+		return fmt.Errorf("write stats section in %s: %w", readmePath, replaceErr)
 	}
 	fmt.Printf("Updated %s stats section\n", readmePath)
 	return nil

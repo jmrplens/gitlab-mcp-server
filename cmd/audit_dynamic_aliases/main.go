@@ -54,7 +54,7 @@ func run(stdout, stderr io.Writer, format string) int {
 			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
 			return 1
 		}
-	default:
+	case "tsv":
 		for _, finding := range findings {
 			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Source, finding.Message)
 		}
@@ -63,6 +63,9 @@ func run(stdout, stderr io.Writer, format string) int {
 			return 1
 		}
 		fmt.Fprintf(stdout, "dynamic alias audit passed: %d finding(s)\n", len(findings))
+	default:
+		fmt.Fprintf(stderr, "invalid -output %q (want tsv or json)\n", format)
+		return 2
 	}
 	if errorCount > 0 {
 		return 1

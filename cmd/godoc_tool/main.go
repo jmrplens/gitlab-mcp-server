@@ -45,8 +45,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, "fix: at least one file or directory path is required")
 			os.Exit(2)
 		}
+		var failed bool
 		for _, p := range fs.Args() {
-			processPath(p)
+			if err := processPath(p); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				failed = true
+			}
+		}
+		if failed {
+			os.Exit(1)
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q (valid: audit, fix)\n", os.Args[1])

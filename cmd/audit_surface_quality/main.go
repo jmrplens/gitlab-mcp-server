@@ -42,6 +42,13 @@ func main() {
 		os.Exit(2)
 	}
 
+	// -json runs a single audit view: -view=all would emit two top-level JSON
+	// documents back-to-back (unparseable), so require an explicit view.
+	if outputJSON && *view == "all" {
+		fmt.Fprintln(os.Stderr, "-json requires -view=metadata or -view=output")
+		os.Exit(2)
+	}
+
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)

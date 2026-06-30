@@ -86,6 +86,27 @@ func f() {
 	}
 }
 
+// TestCountStringLiterals_RespectsMinLength verifies the non-default min-length
+// knob added by this change actually filters: a 4-character literal is dropped
+// at min-length 5, guarding against a regression that ignores the flag.
+func TestCountStringLiterals_RespectsMinLength(t *testing.T) {
+	node := parseSource(t, `package sample
+
+func f() {
+	_ = "abcd"
+	_ = "abcd"
+	_ = "abcdef"
+	_ = "abcdef"
+}
+`)
+
+	got := countStringLiterals(node, 5)
+	want := map[string]int{"abcdef": 2} // "abcd" (4 chars) excluded by min-length 5
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("countStringLiterals(, 5) = %v, want %v", got, want)
+	}
+}
+
 // TestCollectConstValues_CollectsStringConstantsAndVariables verifies duplicate
 // reporting ignores values that already have a named constant or variable.
 func TestCollectConstValues_CollectsStringConstantsAndVariables(t *testing.T) {

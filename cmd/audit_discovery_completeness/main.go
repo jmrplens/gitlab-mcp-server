@@ -345,7 +345,7 @@ func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 
 // buildPackageReports analyzes every spec and returns the per-package reports
 // ready for JSON output. Gaps-only mode filters clean packages.
-func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, _ bool) []packageReport {
+func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
 	for _, group := range tools.CollectActionSpecs(client, true) {
 		for _, spec := range group.Actions {
@@ -362,6 +362,9 @@ func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecor
 	}
 	packagesOut := make([]packageReport, 0, len(byPackage))
 	for _, pr := range byPackage {
+		if gapsOnly && len(pr.Findings) == 0 {
+			continue
+		}
 		sort.Slice(pr.Findings, func(i, j int) bool { return pr.Findings[i].Action < pr.Findings[j].Action })
 		packagesOut = append(packagesOut, *pr)
 	}

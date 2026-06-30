@@ -53,6 +53,9 @@ func main() {
 	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
 	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
 	flag.Parse()
+	if topDomains < 0 {
+		cmdutil.Fatalf("-top-domains must be >= 0")
+	}
 
 	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces…")
 	client, cleanup, err := auditclient.NewMock()
@@ -121,7 +124,7 @@ func main() {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if encErr := enc.Encode(summary); encErr != nil {
-			fmt.Fprintf(os.Stderr, "encode json: %v\n", encErr)
+			cmdutil.Fatalf("encode json: %v", encErr)
 		}
 		return
 	}

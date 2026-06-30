@@ -38,7 +38,7 @@ import (
 func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
-	scope := flag.String("scope", "structs,actions,metadata", "comma-separated subset of {structs,actions,metadata}; default all (merged backlog)")
+	scope := flag.String("scope", "structs,actions,metadata", "one of {structs,actions,metadata} for a single-scope report, or all three (default) for the merged backlog; two-scope combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	refresh := flag.Bool("refresh", false, "with -validate-docs, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs, use only cached docs; do not fetch")
@@ -81,7 +81,9 @@ func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.D
 	if err != nil {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
-	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge})
+	// Strict: a download failure (e.g. an upstream 404 for a renamed/removed doc)
+	// must surface as a stale citation rather than be masked by a cached copy.
+	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
 	content, ok, err := runValidateDocs(root, fetcher)
 	if err != nil {
 		cmdutil.Fatalf("%v", err)

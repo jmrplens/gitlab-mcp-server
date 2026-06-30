@@ -173,6 +173,37 @@ func TestFetch_NetworkErrorFallsBackToStaleCache(t *testing.T) {
 	}
 }
 
+func TestFetch_StrictVsLenientOn404WithStaleCache(t *testing.T) {
+	// Server always 404s (doc removed upstream).
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+
+	seed := func(dir string) {
+		cachePath := filepath.Join(dir, "branches.md")
+		if err := os.WriteFile(cachePath, []byte("cached body"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		old := time.Now().Add(-30 * 24 * time.Hour) // stale, forces a download attempt
+		_ = os.Chtimes(cachePath, old, old)
+	}
+
+	// Lenient (default): a 404 with a stale cache falls back to the cached body.
+	lenientDir := t.TempDir()
+	seed(lenientDir)
+	lenient := New(lenientDir, Options{BaseURL: srv.URL + "/", MaxAge: time.Hour, CacheDir: lenientDir})
+	if got, err := lenient.Fetch("branches"); err != nil || got != "cached body" {
+		t.Fatalf("lenient: got %q err %v, want cached fallback", got, err)
+	}
+
+	// Strict: the 404 surfaces as an error instead of masking the removal.
+	strictDir := t.TempDir()
+	seed(strictDir)
+	strict := New(strictDir, Options{BaseURL: srv.URL + "/", MaxAge: time.Hour, CacheDir: strictDir, Strict: true})
+	if _, err := strict.Fetch("branches"); err == nil {
+		t.Fatal("strict: want error on 404 despite stale cache, got nil")
+	}
+}
+
 func TestCacheDir_UnderRepoRoot(t *testing.T) {
 	got := CacheDir(filepath.Join("repo", "root"))
 	want := filepath.Join("repo", "root", ".cache", "gitlab-api-docs")

@@ -80,7 +80,7 @@ func scanDocCitations(root string) ([]string, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".go") {
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		data, readErr := os.ReadFile(path) //#nosec G304,G122 -- scanning the repo's own audit_1to1 source tree, not user input
