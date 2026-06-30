@@ -1,6 +1,49 @@
 ---
 title: Configuración
 description: Configura GitLab MCP Server con variables de entorno en modo stdio y flags de CLI en modo HTTP, además de configuración de clientes y opciones de despliegue.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cuál es la configuración mínima de GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "En modo stdio basta con un único GITLAB_TOKEN con el scope api para arrancar, y cualquier otra variable es opcional y tiene un valor predeterminado seguro. GITLAB_URL usa https://gitlab.com por defecto, así que solo la estableces al conectar a una instancia autogestionada. Para una configuración de solo lectura, usa un token read_api y añade GITLAB_READ_ONLY=true. En modo HTTP no se configura ningún token en el servidor; cada cliente envía el suyo en cada petición."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Debo usar el modo stdio o el modo HTTP en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Usa el modo stdio, el predeterminado, para configuraciones locales de un solo usuario como integraciones con IDE (VS Code, Cursor, Claude Desktop); se configura mediante variables de entorno o un archivo .env. Usa el modo HTTP, activado con --http, para despliegues compartidos o remotos como Docker, Fly.io o Kubernetes, donde la configuración usa flags de CLI y cada cliente se autentica con su propio token de GitLab en cada petición."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo apunto GitLab MCP Server a una instancia de GitLab autogestionada?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Establece GITLAB_URL con la URL base de tu instancia, por ejemplo GITLAB_URL=https://gitlab.example.com; en modo HTTP usa el flag --gitlab-url. Si la instancia usa un certificado autofirmado o de CA interna, establece también GITLAB_SKIP_TLS_VERIFY=true, o --skip-tls-verify en modo HTTP, pero solo en una red de confianza porque desactiva la verificación de certificados para todas las conexiones a GitLab."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo elijo una superficie de herramientas en GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Establece la variable TOOL_SURFACE, o el flag --tool-surface en modo HTTP. La superficie dynamic es la predeterminada y la de menor consumo de tokens: expone gitlab_find_action y gitlab_execute_action mientras mantiene cada acción de GitLab accesible a través del catálogo canónico de acciones. Elige meta cuando un cliente prefiere despachadores consolidados por dominio con un parámetro action, e individual para registrar una herramienta MCP por cada operación de GitLab."
+            }
+          }
+        ]
+      }
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
@@ -9,7 +52,9 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 Para la referencia técnica completa, consulta [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md) en el repositorio.
 :::
 
-GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre las opciones que la mayoría de usuarios necesita; consulta la [referencia de variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md) y la [referencia CLI](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/cli.md) del repositorio para las tablas exhaustivas.
+GitLab MCP Server casi no necesita nada para arrancar. En **modo stdio** — el predeterminado que usan las integraciones con IDE — solo estableces dos cosas: con qué instancia de GitLab hablar (`GITLAB_URL`) y un personal access token para hacerlo (`GITLAB_TOKEN`). En GitLab.com hasta la URL es opcional, porque `GITLAB_URL` usa `https://gitlab.com` por defecto, así que un único `GITLAB_TOKEN` basta; apunta `GITLAB_URL` a tu propio host para instancias autogestionadas. En **modo HTTP** el servidor no guarda credencial alguna — cada cliente envía su propio token (y, opcionalmente, su propia URL de GitLab) en cada petición. Todo lo demás en esta página es opcional y viene con un valor predeterminado seguro.
+
+El modo stdio lee su configuración de variables de entorno o de un archivo `.env`; el modo HTTP lee flags de CLI. Esta página cubre las opciones que la mayoría de usuarios necesita; consulta la [referencia de variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md) y la [referencia CLI](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/cli.md) del repositorio para las tablas exhaustivas.
 
 :::tip[Orientación rápida]
 **Modo stdio** (por defecto) — configura mediante variables de entorno o un archivo `.env`. Este es el modo utilizado por las integraciones con IDE (VS Code, Cursor, Claude Desktop, etc.).
@@ -358,3 +403,21 @@ Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura 
 :::note
 Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
 :::
+
+## Preguntas frecuentes
+
+### ¿Cuál es la configuración mínima?
+
+En modo stdio, un único `GITLAB_TOKEN` con el scope `api` basta para arrancar — cualquier otra variable es opcional y usa un valor predeterminado seguro. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces al conectar a una instancia autogestionada. Para una configuración de solo lectura, usa un token `read_api` y añade `GITLAB_READ_ONLY=true`. En modo HTTP no se configura ningún token en el servidor; cada cliente envía el suyo en cada petición.
+
+### stdio vs HTTP — ¿qué modo uso?
+
+Usa el **modo stdio** (el predeterminado) para configuraciones locales de un solo usuario como integraciones con IDE (VS Code, Cursor, Claude Desktop); se configura mediante variables de entorno o un archivo `.env`. Usa el **modo HTTP** (`--http`) para despliegues compartidos o remotos como Docker, Fly.io o Kubernetes, donde la configuración usa flags de CLI y cada cliente se autentica con su propio token de GitLab en cada petición.
+
+### ¿Cómo apunto a una instancia de GitLab autogestionada?
+
+Establece `GITLAB_URL` con la URL base de tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com` (en modo HTTP, usa el flag `--gitlab-url`). Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_SKIP_TLS_VERIFY=true` (o `--skip-tls-verify` en modo HTTP), pero solo en una red de confianza — desactiva la verificación de certificados para todas las conexiones a GitLab.
+
+### ¿Cómo elijo una superficie de herramientas (dynamic, meta o individual)?
+
+Establece la variable `TOOL_SURFACE` (o el flag `--tool-surface` en modo HTTP). `dynamic` es la predeterminada y la de menor consumo de tokens: expone `gitlab_find_action` y `gitlab_execute_action` mientras mantiene cada acción de GitLab accesible a través del catálogo canónico de acciones. Elige `meta` cuando un cliente prefiere despachadores consolidados por dominio con un parámetro `action`, e `individual` para registrar una herramienta MCP por cada operación de GitLab.

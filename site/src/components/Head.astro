@@ -1,0 +1,79 @@
+---
+// Custom Starlight <Head> override.
+// Renders Starlight's default head, then layers per-page structured data
+// (TechArticle + BreadcrumbList) and per-page Twitter card tags on top.
+// The site-wide @graph (Person / WebSite / SoftwareApplication) lives in
+// astro.config.mjs; these IDs link the per-page nodes back into that graph.
+import Default from "@astrojs/starlight/components/Head.astro";
+
+const SITE = "https://jmrplens.github.io";
+const BASE = "/gitlab-mcp-server";
+const PERSON_ID = "https://jmrp.io/#person";
+const WEBSITE_ID = `${SITE}${BASE}/#website`;
+
+const route = (Astro.locals as Record<string, any>).starlightRoute;
+const data = route?.entry?.data ?? {};
+const title = data.title ?? "GitLab MCP Server";
+const description = data.description ?? "";
+
+const pathname = Astro.url.pathname; // e.g. /gitlab-mcp-server/tools/overview/
+const canonical = new URL(pathname, SITE).href;
+const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname; // /tools/overview/
+const lang = rel.startsWith("/es/") || rel === "/es" ? "es" : "en";
+const isHome = rel === "/" || rel === "" || rel === "/es/" || rel === "/es";
+
+// Git-derived last-updated date (Starlight `lastUpdated: true`).
+const updated =
+	route?.lastUpdated instanceof Date ? route.lastUpdated.toISOString() : undefined;
+
+// TechArticle for every content page (not the splash home).
+const techArticle = isHome
+	? null
+	: {
+			"@context": "https://schema.org",
+			"@type": "TechArticle",
+			headline: title,
+			...(description ? { description } : {}),
+			inLanguage: lang,
+			url: canonical,
+			mainEntityOfPage: canonical,
+			...(updated ? { datePublished: updated, dateModified: updated } : {}),
+			author: { "@id": PERSON_ID },
+			publisher: { "@id": PERSON_ID },
+			isPartOf: { "@id": WEBSITE_ID },
+		};
+
+// BreadcrumbList for every non-home page.
+function titleCase(seg: string) {
+	return seg.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+let breadcrumb = null;
+if (!isHome) {
+	const homeUrl = lang === "es" ? `${SITE}${BASE}/es/` : `${SITE}${BASE}/`;
+	const items = [{ "@type": "ListItem", position: 1, name: "Home", item: homeUrl }];
+	const segs = rel.split("/").filter(Boolean).filter((s) => s !== "es");
+	let acc = lang === "es" ? `${BASE}/es` : BASE;
+	segs.forEach((seg, i) => {
+		acc += `/${seg}`;
+		const last = i === segs.length - 1;
+		items.push({
+			"@type": "ListItem",
+			position: i + 2,
+			name: last ? title : titleCase(seg),
+			item: new URL(`${acc}/`, SITE).href,
+		});
+	});
+	breadcrumb = {
+		"@context": "https://schema.org",
+		"@type": "BreadcrumbList",
+		itemListElement: items,
+	};
+}
+---
+
+<Default />
+
+{techArticle && <script type="application/ld+json" is:inline set:html={JSON.stringify(techArticle)} />}
+{breadcrumb && <script type="application/ld+json" is:inline set:html={JSON.stringify(breadcrumb)} />}
+<meta name="twitter:title" content={title} />
+{description && <meta name="twitter:description" content={description} />}
