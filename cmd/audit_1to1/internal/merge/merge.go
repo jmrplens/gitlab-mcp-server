@@ -9,7 +9,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
 
-
 const backlogNote = "Merged 1:1 audit backlog. Each stream is a candidate list; intentional renames (e.g. branch→branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package."
 
 // BuildBacklogFromPaths reads three report files and returns the merged backlog
