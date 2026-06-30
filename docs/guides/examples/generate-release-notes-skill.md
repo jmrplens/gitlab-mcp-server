@@ -1,5 +1,7 @@
 # Generate Release Notes — Copilot Skill
 
+> **Diátaxis type**: How-to (skill template) · **Audience**: 🛠️ Contributors
+>
 > **Copy this file** to your project's `.github/skills/generate-release-notes/SKILL.md` to enable the
 > `generate-release-notes` skill in GitHub Copilot.
 >

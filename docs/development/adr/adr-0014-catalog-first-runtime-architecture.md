@@ -72,7 +72,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 - **IMP-001**: `internal/tools/action_specs_manifest_gen.go` is the audited aggregation point for domain spec builders.
 - **IMP-002**: `cmd/audit_catalog_first` enforces catalog coverage, no production legacy bridge calls, and no stale AI instruction guidance that recommends package-level `RegisterMeta` or domain `RegisterTools` as final patterns.
 - **IMP-003**: `cmd/audit_dynamic_aliases` enforces Dynamic compatibility alias ownership.
-- **IMP-004**: Model-backed evaluation reports live under ignored `dist/evaluation/mcp-surfaces/`; published baselines are generated into `docs/testing/model-results.md` only after review.
+- **IMP-004**: Model-backed evaluation reports live under ignored `dist/evaluation/mcp-surfaces/`; published baselines are generated into `docs/development/testing/model-results.md` only after review.
 
 ## Compliance Checklist
 

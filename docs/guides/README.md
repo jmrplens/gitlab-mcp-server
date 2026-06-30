@@ -17,7 +17,7 @@ over HTTP, wiring it into CI, keeping it current, or getting unstuck.
 | [CI/CD Usage](ci-cd.md)                   | Use the server inside CI/CD pipelines, with or without an LLM in the loop                                  |
 | [Auto-Update](auto-update.md)             | Enable, configure, or disable the self-update mechanism                                                    |
 | [Troubleshooting](troubleshooting.md)     | Diagnose common connection, TLS, tool, and transport problems                                              |
-| [Examples](examples/usage-examples.md)    | Walk through real-world, multi-step usage scenarios                                                        |
+| [Examples](examples/README.md)            | Walk through real-world, multi-step usage scenarios and skill templates                                    |
 
 **Looking for something else?**
 [Reference](../reference/README.md) for exact flags and variables ·

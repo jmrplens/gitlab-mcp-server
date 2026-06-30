@@ -2,7 +2,7 @@
 
 The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It exposes a tiny public MCP surface and lets the model discover the canonical GitLab action catalog progressively.
 
-> **Diataxis type**: Guide + Reference
+> **Diátaxis type**: Guide + Reference
 > **Audience**: Users, operators, and developers evaluating low-token MCP deployments
 > **Prerequisites**: Basic MCP tool-call concepts and a configured GitLab token
 > **Status**: Dynamic find/execute is the default tool surface. `TOOL_SURFACE=meta` remains available for clients that prefer consolidated domain meta-tools.

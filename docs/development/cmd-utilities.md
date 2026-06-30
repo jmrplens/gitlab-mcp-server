@@ -25,7 +25,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                                                                                   | `make gen-action-catalog-manifest`        |
 | `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                                                                                          | `make gen-llms`                           |
 | `gen_stats`                    | Generators                | Regenerates the managed repository statistics section in `README.md`                                                              | `make gen-stats`                          |
-| `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/testing/testing.md`                                                                   | `make gen-testing-docs`                   |
+| `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                       | `make gen-testing-docs`                   |
 | `gen_docker_tools`             | Generators                | Generates a Docker MCP Registry-compatible `tools.json`                                                                           | —                                         |
 | `format_md_tables`             | Formatters                | Normalizes Markdown pipe tables in `README.md` and `docs/`                                                                        | part of `make audit-docs`                 |
 | `eval_mcp_surfaces`            | Evaluation                | Evaluates model behavior across MCP tool surfaces                                                                                 | `make eval-surfaces-docker*`              |
@@ -155,7 +155,7 @@ This is a CI gate binary. The cluster-aware severity model is intentional layere
 
 ### audit_doc_coverage
 
-Reports per-doc-file gaps between `docs/tools/*.md` and the canonical action catalog (DOC-002): missing or orphan tools, tier-badge mismatches, and count drift.
+Reports per-doc-file gaps between `docs/reference/tools/*.md` and the canonical action catalog (DOC-002): missing or orphan tools, tier-badge mismatches, and count drift.
 
 #### Usage
 
@@ -169,13 +169,13 @@ go run ./cmd/audit_doc_coverage/ -check
 
 #### Flags
 
-| Flag           | Type     | Default                        | Description                                                         |
-| -------------- | -------- | ------------------------------ | ------------------------------------------------------------------- |
-| `-check`       | `bool`   | `false`                        | Exit non-zero if any file has missing/orphan/tier_mismatch findings |
-| `-docs-root`   | `string` | `docs/tools`                   | Directory of per-domain docs (relative to repo root)                |
-| `-gaps-only`   | `bool`   | `false`                        | Only include files that have at least one finding                   |
-| `-output`      | `string` | `plan/docs-tools-backlog.json` | Path to write the JSON report (relative to repo root)               |
-| `-readme-path` | `string` | `docs/tools/README.md`         | Path to the Domains-table README (relative to repo root)            |
+| Flag           | Type     | Default                          | Description                                                         |
+| -------------- | -------- | -------------------------------- | ------------------------------------------------------------------- |
+| `-check`       | `bool`   | `false`                          | Exit non-zero if any file has missing/orphan/tier_mismatch findings |
+| `-docs-root`   | `string` | `docs/tools`                     | Directory of per-domain docs (relative to repo root)                |
+| `-gaps-only`   | `bool`   | `false`                          | Only include files that have at least one finding                   |
+| `-output`      | `string` | `plan/docs-tools-backlog.json`   | Path to write the JSON report (relative to repo root)               |
+| `-readme-path` | `string` | `docs/reference/tools/README.md` | Path to the Domains-table README (relative to repo root)            |
 
 #### Output
 
@@ -577,7 +577,7 @@ Rewrites the managed stats section of `README.md` in place.
 
 ### gen_testing_docs
 
-Regenerates the managed test-metrics block in `docs/testing/testing.md`: package discovery, AST test counts, naming-pattern stats, coverage tables, and low-coverage exceptions.
+Regenerates the managed test-metrics block in `docs/development/testing/testing.md`: package discovery, AST test counts, naming-pattern stats, coverage tables, and low-coverage exceptions.
 
 #### Usage
 
@@ -594,19 +594,19 @@ go run ./cmd/gen_testing_docs/ -skip-coverage
 
 #### Flags
 
-| Flag               | Type     | Default                   | Description                                                              |
-| ------------------ | -------- | ------------------------- | ------------------------------------------------------------------------ |
-| `-check`           | `bool`   | `false`                   | Fail if the generated section is not current                             |
-| `-coverage-dir`    | `string` | `""`                      | Directory for temporary coverage profiles; defaults to a temp directory  |
-| `-file`            | `string` | `docs/testing/testing.md` | Testing documentation file to update                                     |
-| `-include-e2e-run` | `bool`   | `false`                   | Also run the build-tagged E2E suite; requires a GitLab test environment  |
-| `-skip-coverage`   | `bool`   | `false`                   | Skip `go test` coverage execution and update count-only sections         |
-| `-timeout`         | `string` | (from environment)        | `go test` timeout for coverage runs                                      |
-| `-top-tool-rows`   | `int`    | `25`                      | Number of high-test-count tool sub-packages to show in the summary table |
+| Flag               | Type     | Default                               | Description                                                              |
+| ------------------ | -------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| `-check`           | `bool`   | `false`                               | Fail if the generated section is not current                             |
+| `-coverage-dir`    | `string` | `""`                                  | Directory for temporary coverage profiles; defaults to a temp directory  |
+| `-file`            | `string` | `docs/development/testing/testing.md` | Testing documentation file to update                                     |
+| `-include-e2e-run` | `bool`   | `false`                               | Also run the build-tagged E2E suite; requires a GitLab test environment  |
+| `-skip-coverage`   | `bool`   | `false`                               | Skip `go test` coverage execution and update count-only sections         |
+| `-timeout`         | `string` | (from environment)                    | `go test` timeout for coverage runs                                      |
+| `-top-tool-rows`   | `int`    | `25`                                  | Number of high-test-count tool sub-packages to show in the summary table |
 
 #### Output
 
-Rewrites the managed sections of `docs/testing/testing.md`.
+Rewrites the managed sections of `docs/development/testing/testing.md`.
 
 #### Make targets
 
@@ -660,7 +660,7 @@ go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ -check
 
 # Format explicit paths
-go run ./cmd/format_md_tables/ README.md docs/tools/issues.md
+go run ./cmd/format_md_tables/ README.md docs/reference/tools/issues.md
 ```
 
 #### Flags
@@ -697,7 +697,7 @@ Evaluates model behavior across MCP tool surfaces by running typed evaluation ca
 
 ### server
 
-The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [cli-reference.md](../reference/cli.md) for the full CLI reference and [configuration.md](../reference/configuration.md) for environment and configuration details.
+The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [CLI Reference](../reference/cli.md) for the full CLI reference and [configuration.md](../reference/configuration.md) for environment and configuration details.
 
 **Make targets:** `make build` (builds `./dist/gitlab-mcp-server`), `make run` (builds and runs locally).
 
@@ -712,8 +712,8 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-footprint`                        | `audit_tokens -footprint`      | README token-footprint section and `docs/development/token-footprint.md` are current | Non-zero if either is stale                               |
 | `check-stats`                            | `gen_stats`                    | README repository-statistics section is current                                      | Non-zero if the section is stale                          |
 | `audit-discovery-check`                  | `audit_discovery_completeness` | No META-001 finding meets the configured severity threshold                          | Non-zero if any finding meets `-severity` (default error) |
-| `audit-doc-coverage-check`               | `audit_doc_coverage`           | No `docs/tools/*.md` has missing/orphan/tier_mismatch findings                       | Non-zero if any file has a finding                        |
+| `audit-doc-coverage-check`               | `audit_doc_coverage`           | No `docs/reference/tools/*.md` has missing/orphan/tier_mismatch findings             | Non-zero if any file has a finding                        |
 | `audit-godocs-check`                     | `godoc_tool audit`             | No package, symbol, or test Godoc findings remain                                    | Non-zero when findings are present                        |
 | `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity)                   | Non-zero (`1`) if any error-severity finding exists       |
 | `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
-| `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/testing/testing.md` test-metrics block is current                          | Non-zero if the generated section is stale                |
+| `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/development/testing/testing.md` test-metrics block is current              | Non-zero if the generated section is stale                |

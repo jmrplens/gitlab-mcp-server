@@ -21,7 +21,7 @@ The project has several documentation surfaces with different lifecycles:
 - Stable developer documentation under `docs/`.
 - User-facing Starlight documentation under `site/src/content/docs/`.
 - AI guidance files under `.github/`, `AGENTS.md`, `CLAUDE.md`, `llms.txt`, and `llms-full.txt`.
-- Generated current-state blocks in `README.md`, `docs/testing/testing.md`, and `docs/testing/model-results.md`.
+- Generated current-state blocks in `README.md`, `docs/development/testing/testing.md`, and `docs/development/testing/model-results.md`.
 - Temporary implementation plans, local evaluation reports, traces, and progress artifacts.
 
 The documentation should remain useful as product and architecture reference material. At the same time, command-managed
