@@ -532,6 +532,89 @@ func TestSorted_Diff(t *testing.T) {
 	}
 }
 
+// TestResolveOutputPath_ByPathKind verifies the -output resolution rules:
+// relative paths anchor to the repo root, while the "-" stdout sentinel and
+// absolute paths pass through verbatim (the absolute case is the guard that
+// stops an absolute -output from being joined onto repoRoot and writing inside
+// the repo).
+func TestResolveOutputPath_ByPathKind(t *testing.T) {
+	root := filepath.Join("home", "user", "repo")
+	abs := filepath.Join(string(filepath.Separator)+"tmp", "out.json")
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"relative anchors to repo root", "plan/backlog.json", filepath.Join(root, "plan/backlog.json")},
+		{"dash passes through as stdout", "-", "-"},
+		{"absolute passes through unchanged", abs, abs},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := resolveOutputPath(root, c.input); got != c.want {
+				t.Errorf("resolveOutputPath(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
+	}
+}
+
+// TestLoadOwnershipRules_ByFileState verifies the doc-ownership.json loader
+// across its three input states: a valid file (groups/prefixes parsed, the
+// human-only "note" field ignored), a missing file (empty non-error ruleset so
+// the auditor still runs on a bare checkout), and malformed JSON (an error
+// rather than partial rules).
+func TestLoadOwnershipRules_ByFileState(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("valid file parses groups and prefixes and ignores note", func(t *testing.T) {
+		valid := filepath.Join(dir, "doc-ownership.json")
+		const body = `{
+  "ci-cd.md": {
+    "note": "rationale that the parser must ignore",
+    "groups": ["gitlab_ci_variable"],
+    "prefixes": ["gitlab_branch_"]
+  }
+}`
+		if err := os.WriteFile(valid, []byte(body), 0o600); err != nil {
+			t.Fatalf("write valid file: %v", err)
+		}
+		rules, err := loadOwnershipRules(valid)
+		if err != nil {
+			t.Fatalf("loadOwnershipRules(valid) error: %v", err)
+		}
+		got, ok := rules["ci-cd.md"]
+		if !ok {
+			t.Fatalf("ci-cd.md missing from parsed rules: %v", rules)
+		}
+		if !reflect.DeepEqual(got.Groups, []string{"gitlab_ci_variable"}) {
+			t.Errorf("Groups = %v, want [gitlab_ci_variable]", got.Groups)
+		}
+		if !reflect.DeepEqual(got.Prefixes, []string{"gitlab_branch_"}) {
+			t.Errorf("Prefixes = %v, want [gitlab_branch_]", got.Prefixes)
+		}
+	})
+
+	t.Run("missing file yields empty ruleset without error", func(t *testing.T) {
+		rules, err := loadOwnershipRules(filepath.Join(dir, "does-not-exist.json"))
+		if err != nil {
+			t.Fatalf("loadOwnershipRules(missing) error: %v", err)
+		}
+		if len(rules) != 0 {
+			t.Errorf("missing file produced %d rules, want 0", len(rules))
+		}
+	})
+
+	t.Run("malformed JSON returns a parse error", func(t *testing.T) {
+		bad := filepath.Join(dir, "bad.json")
+		if werr := os.WriteFile(bad, []byte("{not json"), 0o600); werr != nil {
+			t.Fatalf("write bad file: %v", werr)
+		}
+		if _, derr := loadOwnershipRules(bad); derr == nil {
+			t.Error("loadOwnershipRules(malformed) returned nil error, want parse error")
+		}
+	})
+}
+
 // TestBuildReport_LiveBaseline is the integration smoke test against
 // the real catalog and the real docs/tools tree. It runs the full
 // pipeline and asserts the report shape, not the exact counts (which

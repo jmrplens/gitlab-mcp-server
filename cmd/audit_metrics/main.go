@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -43,9 +45,19 @@ const (
 	metricLabelWidth = 48
 )
 
+var topDomains = 20
+
 // main builds the audit client, gathers runtime counts from the registered MCP
 // surface, and prints the metrics report to stdout.
 func main() {
+	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
+	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
+	flag.Parse()
+	if topDomains < 0 {
+		cmdutil.Fatalf("-top-domains must be >= 0")
+	}
+
+	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces…")
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
@@ -90,6 +102,31 @@ func main() {
 		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
 			elicitationCount++
 		}
+	}
+
+	if *jsonOut {
+		summary := struct {
+			IndividualTools   int `json:"individual_tools"`
+			MetaBase          int `json:"meta_base"`
+			MetaEnterprise    int `json:"meta_enterprise"`
+			DynamicBase       int `json:"dynamic_base"`
+			DynamicEnterprise int `json:"dynamic_enterprise"`
+			Resources         int `json:"resources"`
+			Prompts           int `json:"prompts"`
+			ToolPackages      int `json:"tool_packages"`
+			SourceFiles       int `json:"source_files"`
+			TestFiles         int `json:"test_files"`
+		}{
+			len(individualTools), len(metaBase), len(metaEnterprise),
+			len(dynamicBase), len(dynamicEnterprise),
+			resourceCount, promptCount, toolPackages, srcFiles, testFiles,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if encErr := enc.Encode(summary); encErr != nil {
+			cmdutil.Fatalf("encode json: %v", encErr)
+		}
+		return
 	}
 
 	fmt.Println("=" + strings.Repeat("=", 59))
@@ -141,7 +178,7 @@ func main() {
 	printRow("Test files (_test.go)", testFiles)
 	fmt.Println()
 
-	fmt.Println("## Catalog Domain Breakdown (GitLab.com enterprise, top 20)")
+	fmt.Printf("## Catalog Domain Breakdown (GitLab.com enterprise, top %d)\n", topDomains)
 	fmt.Println()
 	printDomainTable(countCatalogDomains(dynamicGitLabComEnterpriseCatalog))
 	fmt.Println()
@@ -588,7 +625,7 @@ func printDomainTable(domains map[string]int) {
 		}
 		return sorted[i].key < sorted[j].key
 	})
-	limit := min(20, len(sorted))
+	limit := min(topDomains, len(sorted))
 	fmt.Printf("  %-25s %s\n", "Domain", "Tools")
 	fmt.Printf("  %-25s %s\n", strings.Repeat("-", 25), strings.Repeat("-", 5))
 	for _, kv := range sorted[:limit] {

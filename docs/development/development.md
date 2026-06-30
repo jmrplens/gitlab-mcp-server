@@ -16,20 +16,33 @@
 
 ## Project Structure
 
+> See [cmd-utilities.md](cmd-utilities.md) for the full CLI reference of every `cmd/` binary (flags, usage, Make targets).
+
 ```text
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
-│   ├── add_docs/                # AST tool: adds godoc comments to undocumented symbols
-│   ├── audit_godocs/            # Audits Go package, symbol, and test documentation
-│   ├── audit_output/            # Audits MCP tool output quality (schema, annotations, descriptions)
-│   ├── audit_test_names/        # Audits test function naming convention compliance
-│   ├── audit_tools/             # Audits MCP tool metadata violations (naming, annotations)
-│   ├── audit_metrics/           # Audits MCP tool annotation metrics and statistics
-│   ├── find_dupes/              # Finds duplicated string literals missing constants
-│   └── gen_llms/                # Generates llms.txt and llms-full.txt from tool metadata
+│   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata)
+│   ├── audit_catalog_first/ # ActionSpec catalog coverage inventory
+│   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
+│   ├── audit_doc_coverage/      # docs/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
+│   ├── audit_edition_tier/      # Doc-grounded Free/Premium/Ultimate tier audit
+│   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary
+│   ├── audit_surface_quality/   # Surface quality audit (-view metadata|output|all)
+│   ├── audit_test_names/        # Test function naming convention compliance
+│   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike)
+│   ├── eval_mcp_surfaces/       # Model-facing MCP surface evaluation harness
+│   ├── audit_string_dupes/              # Finds duplicated string literals missing constants
+│   ├── format_md_tables/        # Normalizes Markdown pipe tables
+│   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
+│   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
+│   ├── gen_llms/                # Generates llms.txt and llms-full.txt
+│   ├── gen_stats/               # Regenerates README stats section
+│   ├── gen_testing_docs/        # Regenerates testing.md managed sections
+│   └── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation
 │   ├── gitlab/                  # GitLab API client wrapper with TLS support

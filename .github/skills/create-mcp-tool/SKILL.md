@@ -229,7 +229,7 @@ Do not add package-local `RegisterTools` functions or package-level `RegisterMet
 
 Expected checks:
 
-- `make audit-action-spec-coverage`
+- `make audit-catalog-first`
 - `go test ./internal/tools -run 'TestActionSpecCoverage|TestRegisterAllDoesNotUseDomainRegisterTools' -count=1`
 - `go test ./internal/tools/{domain}/ -count=1`
 
@@ -338,7 +338,7 @@ golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 - [ ] Empty state handled in list formatters
 - [ ] `HintPreserveLinks` in list formatters with links
 - [ ] Error handling uses correct WrapErr variant
-- [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-action-spec-coverage`
+- [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-catalog-first`
 - [ ] Tests cover success, validation, API error, and markdown
 - [ ] `go test` + `golangci-lint` pass
 - [ ] Documentation updated

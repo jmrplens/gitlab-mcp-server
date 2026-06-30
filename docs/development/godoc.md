@@ -31,7 +31,7 @@ go install golang.org/x/pkgsite/cmd/pkgsite@latest
 
 ## Audit Scope
 
-The `cmd/audit_godocs` command scans every Go package returned by `go list ./...`.
+The `cmd/godoc_tool audit` subcommand scans every Go package returned by `go list ./...`.
 
 By default, it checks:
 
@@ -59,7 +59,7 @@ package config
 Command packages use `Command` instead of `Package`:
 
 ```go
-// Command audit_godocs audits Go package and symbol documentation.
+// Command godoc_tool audits Go package and symbol documentation.
 package main
 ```
 
@@ -100,7 +100,7 @@ Prefer one canonical `doc.go` package comment, then remove package-adjacent file
 ## CLI Reference
 
 ```bash
-go run ./cmd/audit_godocs/ [flags]
+go run ./cmd/godoc_tool/ audit [flags]
 ```
 
 | Flag                 | Default    | Description                                                  |

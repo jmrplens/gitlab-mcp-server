@@ -6,11 +6,11 @@
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
+	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -455,10 +455,10 @@ audit-docs:
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_testing_docs/ --check
 	$(MAKE) check-doc-links
-	go run ./cmd/audit_godocs/
-	go run ./cmd/audit_tools/
+	go run ./cmd/godoc_tool/ audit
+	go run ./cmd/audit_surface_quality/ -view=metadata
 	go run ./cmd/audit_dynamic_aliases/
-	go run ./cmd/audit_output/
+	go run ./cmd/audit_surface_quality/ -view=output
 	cd site && pnpm run check
 	cd site && pnpm run build
 	cd site && pnpm run lint
@@ -686,9 +686,30 @@ check-server-json:
 check-openplugin:
 	scripts/check-openplugin.sh
 
-## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
-gen-readme:
-	go run ./cmd/gen_readme/
+## gen-readme: regenerate all managed README.md sections (token footprint + stats).
+gen-readme: gen-footprint gen-stats
+
+## update-all: run every generator and doc updater in one pass.
+## Generates: token footprint, repo stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
+update-all: gen-footprint gen-stats gen-llms gen-testing-docs gen-action-catalog-manifest
+	go run ./cmd/format_md_tables/
+	@echo "All generators and formatters complete."
+
+## gen-footprint: measure token footprint and write the README section + token-footprint.md.
+gen-footprint:
+	go run ./cmd/audit_tokens/ -footprint
+
+## check-footprint: verify the README token-footprint section and token-footprint.md are current.
+check-footprint:
+	go run ./cmd/audit_tokens/ -footprint -check
+
+## gen-stats: regenerate the repository statistics section in README.md.
+gen-stats:
+	go run ./cmd/gen_stats/
+
+## check-stats: verify the README repository statistics section is current.
+check-stats:
+	go run ./cmd/gen_stats/ -check
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 gen-testing-docs:
@@ -704,49 +725,64 @@ check-action-catalog-manifest:
 
 # ─── Output Quality Audit ────────────────────────────────────────────────────
 
+## audit-surface-quality: consolidated MCP tool surface quality audit (both views).
+## Combines the former audit_tools (metadata) and audit_output (output quality).
+audit-surface-quality:
+	go run ./cmd/audit_surface_quality/
+
 ## audit-output: run MCP output quality audit on all tools.
-## Checks: OutputSchema, Description "Returns:", Title field, Content annotations.
-## Fails on regressions (non-zero findings).
+## Backward-compat wrapper over audit-surface-quality -view=output.
 audit-output:
-	go run ./cmd/audit_output/
+	go run ./cmd/audit_surface_quality/ -view=output
 
 ## audit-tokens: measure LLM context window overhead of all tool definitions.
 ## Reports per-tool token counts, domain totals, and mode comparison.
+## Use --compare-schemas for the meta-tool InputSchema sizing spike.
 audit-tokens:
 	go run ./cmd/audit_tokens/
 
 ## audit-tools: audit MCP tool metadata violations (naming, annotations).
+## Backward-compat wrapper over audit-surface-quality -view=metadata.
 audit-tools:
-	go run ./cmd/audit_tools/
+	go run ./cmd/audit_surface_quality/ -view=metadata
 
 ## audit-metrics: report MCP tool metrics (tool/resource/prompt counts).
 audit-metrics:
 	go run ./cmd/audit_metrics/
 
-## audit-action-spec-coverage: generate ActionSpec surface coverage inventory.
+## audit-catalog-first: enforce catalog-first registration invariants (ADR-0004).
+audit-catalog-first:
+	go run ./cmd/audit_catalog_first/
+
+## audit-action-spec-coverage: backward-compat wrapper for audit-catalog-first.
 audit-action-spec-coverage:
-	go run ./cmd/audit_action_spec_coverage/
+	go run ./cmd/audit_catalog_first/
+
+## audit-1to1: run all three 1:1-audit gap streams (struct/action/metadata) and merge into plan/1to1-backlog.json.
+## Single binary cmd/audit_1to1 consolidates the former audit_struct_completeness,
+## audit_action_coverage, audit_metadata_completeness, and gen_1to1_backlog.
+audit-1to1:
+	go run ./cmd/audit_1to1/ -gaps-only -output plan/1to1-backlog.json
+	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+
+## audit-1to1-validate-docs: verify every doc/api citation behind the 1:1 adjudication tables is still fetchable.
+audit-1to1-validate-docs:
+	go run ./cmd/audit_1to1/ -validate-docs
 
 ## audit-struct-completeness: diff MCP input/output structs vs client-go fields (R-INPUT/R-OUTPUT).
+## Backward-compat wrapper over audit-1to1 -scope=structs.
 audit-struct-completeness:
-	go run ./cmd/audit_struct_completeness/ -gaps-only
+	go run ./cmd/audit_1to1/ -scope=structs -gaps-only
 
 ## audit-action-coverage: report client-go SDK endpoints no MCP action invokes (R-ACTION).
+## Backward-compat wrapper over audit-1to1 -scope=actions.
 audit-action-coverage:
-	go run ./cmd/audit_action_coverage/ -gaps-only
+	go run ./cmd/audit_1to1/ -scope=actions -gaps-only
 
 ## audit-metadata-completeness: report discovery-metadata gaps across the ActionSpec catalog (R-META).
+## Backward-compat wrapper over audit-1to1 -scope=metadata.
 audit-metadata-completeness:
-	go run ./cmd/audit_metadata_completeness/ -gaps-only
-
-## audit-1to1: run the three 1:1-audit gap streams and merge them into plan/1to1-backlog.json.
-audit-1to1:
-	$(call MKDIR_P,dist/1to1)
-	go run ./cmd/audit_struct_completeness/ -gaps-only -output dist/1to1/struct.json
-	go run ./cmd/audit_action_coverage/ -gaps-only -output dist/1to1/action.json
-	go run ./cmd/audit_metadata_completeness/ -gaps-only -output dist/1to1/metadata.json
-	go run ./cmd/gen_1to1_backlog/ -struct dist/1to1/struct.json -action dist/1to1/action.json -metadata dist/1to1/metadata.json -output plan/1to1-backlog.json
-	@echo "1:1 audit backlog written to plan/1to1-backlog.json"
+	go run ./cmd/audit_1to1/ -scope=metadata -gaps-only
 
 ## audit-edition-tier: report each action's doc-grounded licensing tier vs current gating.
 audit-edition-tier:
@@ -785,12 +821,17 @@ audit-test-names:
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
-	go run ./cmd/audit_godocs/ --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
+	go run ./cmd/godoc_tool/ audit --include-tests --format=markdown --output=$(ANALYSIS_DIR)/godoc.md
 	@echo "Godoc report saved to $(ANALYSIS_DIR)/godoc.md"
 
 ## audit-godocs-check: fail when package, symbol, or test Godoc findings remain.
 audit-godocs-check:
-	go run ./cmd/audit_godocs/ --include-tests --fail-on-findings
+	go run ./cmd/godoc_tool/ audit --include-tests --fail-on-findings
+
+## fix-godocs: generate and insert godoc-compliant comments for the given paths.
+## Use --dry-run to preview changes without writing (e.g. make fix-godocs ARGS="--dry-run internal/tools/").
+fix-godocs:
+	go run ./cmd/godoc_tool/ fix $(ARGS)
 
 ## docs-local-go: serve local pkg.go.dev-style documentation at http://127.0.0.1:6060.
 docs-local-go:

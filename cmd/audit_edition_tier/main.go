@@ -26,24 +26,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
-const (
-	schemaVersion = 1
-	docBaseURL    = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/"
-	cacheSubdir   = "cmd/audit_edition_tier/.doccache"
-)
+const schemaVersion = 1
 
 // tier is the canonical 3-tier licensing level, mirroring internal/edition.Tier
 // but kept local so the auditor has no dependency on runtime config.
@@ -104,6 +99,8 @@ func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include domains that need tier work")
 	offline := flag.Bool("offline", false, "use only cached docs; do not fetch")
+	refresh := flag.Bool("refresh", false, "force re-fetch docs even when cached and fresh")
+	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "re-download cached docs older than this (default 7 days)")
 	flag.Parse()
 
 	root, err := cmdutil.RepositoryRoot(".")
@@ -111,7 +108,11 @@ func main() {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
 
-	rep, err := buildReport(root, *offline)
+	// Cancel the doc-fetch sweep on Ctrl+C so a slow refresh aborts promptly.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	fetcher := apidocs.New(root, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge})
+	rep, err := buildReport(ctx, fetcher)
 	if err != nil {
 		cmdutil.Fatalf("build edition tier report: %v", err)
 	}
@@ -196,7 +197,7 @@ func expectedTierForAction(id string, pageTier tier) (expected tier, reason stri
 	return pageTier, ""
 }
 
-func buildReport(root string, offline bool) (*report, error) {
+func buildReport(ctx context.Context, fetcher *apidocs.Fetcher) (*report, error) {
 	// Mechanical current-state: diff the CE and EE catalogs to learn each
 	// action's current binary gate.
 	ceCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
@@ -243,9 +244,6 @@ func buildReport(root string, offline bool) (*report, error) {
 		})
 	}
 
-	cacheDir := filepath.Join(root, cacheSubdir)
-	_ = os.MkdirAll(cacheDir, 0o750)
-
 	rep := &report{
 		SchemaVersion: schemaVersion,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
@@ -259,7 +257,7 @@ func buildReport(root string, offline bool) (*report, error) {
 	sort.Strings(pkgNames)
 
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(pkg, domains[pkg].actions, cacheDir, offline)
+		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, fetcher)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -285,7 +283,7 @@ func buildReport(root string, offline bool) (*report, error) {
 // buildDomainReport assembles the report for one owner package: it resolves the
 // doc area, fetches and parses the tier badges, tallies the current gating, and
 // classifies the domain for wave planning.
-func buildDomainReport(pkg string, actions []actionDetail, cacheDir string, offline bool) domainReport {
+func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, fetcher *apidocs.Fetcher) domainReport {
 	sort.Slice(actions, func(i, j int) bool { return actions[i].ID < actions[j].ID })
 
 	docArea, mapped := docAreaForPackage(pkg)
@@ -297,7 +295,7 @@ func buildDomainReport(pkg string, actions []actionDetail, cacheDir string, offl
 	case !mapped:
 		note = "no doc-area mapping"
 	default:
-		content, ferr := fetchDoc(cacheDir, docArea, offline)
+		content, ferr := fetcher.Fetch(ctx, docArea)
 		if ferr != nil {
 			note = "doc fetch failed: " + ferr.Error()
 		} else {
@@ -373,64 +371,6 @@ func classifyDomain(dr domainReport, overrides []tier, page tier, fetched bool) 
 	default:
 		return "mixed", true
 	}
-}
-
-// fetchDoc returns the raw markdown for a doc area, using an on-disk cache.
-func fetchDoc(cacheDir, area string, offline bool) (string, error) {
-	cachePath := filepath.Join(cacheDir, filepath.FromSlash(area)+".md")
-	_ = os.MkdirAll(filepath.Dir(cachePath), 0o750)
-	if data, err := os.ReadFile(cachePath); err == nil {
-		return string(data), nil
-	}
-	if offline {
-		return "", fmt.Errorf("not cached and offline: %s", area)
-	}
-	url := docBaseURL + area + ".md"
-	client := &http.Client{Timeout: 30 * time.Second}
-	// Be polite: GitLab raw rate-limits bursts (HTTP 429). Retry with backoff.
-	var lastErr error
-	for attempt := range 5 {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt*attempt) * time.Second)
-		}
-		body, status, err := fetchOnce(client, url)
-		switch {
-		case err != nil:
-			lastErr = err
-			continue
-		case status == http.StatusTooManyRequests:
-			lastErr = fmt.Errorf("HTTP 429 for %s", url)
-			continue
-		case status != http.StatusOK:
-			return "", fmt.Errorf("HTTP %d for %s", status, url)
-		}
-		_ = os.WriteFile(cachePath, body, 0o600)
-		// Gentle inter-request spacing once a real fetch happened.
-		time.Sleep(250 * time.Millisecond)
-		return string(body), nil
-	}
-	return "", lastErr
-}
-
-// fetchOnce performs a single GET and returns the body and status code.
-func fetchOnce(client *http.Client, url string) (body []byte, status int, err error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return nil, 0, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, nil
-	}
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, err
-	}
-	return body, resp.StatusCode, nil
 }
 
 // parseDocTiers extracts the page-level tier and the set of distinct

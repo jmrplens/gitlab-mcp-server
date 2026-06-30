@@ -118,14 +118,14 @@ var usageSignalKeywords = []string{
 // _single) — pure CRUD families (create/get/list/delete/update on the
 // same resource) are not escalated because the verb is itself the
 // disambiguator and the action name is the natural description.
-func severityFor(flagName string, inCluster bool) string {
+func severityFor(flagName string, inCluster bool, clusterMembers []string) string {
 	switch flagName {
 	case "generic_usage", "missing_disambiguation":
 		return "error"
 	case "weak_aliases", "empty_related", "weak_individual_description":
 		// These three flags share the same escalation rule: only an error when
 		// the action sits in a cluster that contains a non-CRUD variant.
-		if inCluster && hasNonCRUDVariantInCluster(currentClusterMembers) {
+		if inCluster && hasNonCRUDVariantInCluster(clusterMembers) {
 			return "error"
 		}
 		return "warning"
@@ -148,21 +148,6 @@ func severityFor(flagName string, inCluster bool) string {
 		return "warning"
 	}
 	return "info"
-}
-
-// currentClusterMembers is set by buildReport before iterating packages so
-// severityFor can apply the cluster-variant guard without threading the
-// cluster membership through every call site. Reset to nil for any auditor
-// use that doesn't set it (e.g. unit tests of severityFor).
-var currentClusterMembers []string
-
-// withClusterMembers returns a copy of fn invoked with currentClusterMembers
-// set to members, then resets the global. Used by buildReport to scope
-// severityFor's cluster-variant lookups to the current spec's cluster.
-func withClusterMembers(members []string, fn func()) {
-	currentClusterMembers = members
-	defer func() { currentClusterMembers = nil }()
-	fn()
 }
 
 // actionFinding records the discovery-completeness flags raised for one action.
@@ -222,6 +207,7 @@ type reportSummary struct {
 	AliasesOnlyToolname       int `json:"aliases_only_toolname"`
 	Errors                    int `json:"errors"`
 	Warnings                  int `json:"warnings"`
+	Infos                     int `json:"infos"`
 }
 
 func main() {
@@ -293,19 +279,25 @@ func severityRank(s string) int {
 // check returns a non-nil error when any finding has severity at or above the
 // given threshold. Used by the -check CI gate.
 func (r report) check(threshold int) error {
-	if r.Summary.Errors > 0 && threshold == severityError {
-		return fmt.Errorf("discovery completeness: %d error-severity finding(s) present", r.Summary.Errors)
-	}
-	if r.Summary.Warnings > 0 && threshold == severityWarning && r.Summary.Errors == 0 {
-		return fmt.Errorf("discovery completeness: %d warning-or-worse finding(s) present", r.Summary.Warnings)
-	}
-	if threshold == severityInfo && (r.Summary.Errors > 0 || r.Summary.Warnings > 0) {
-		return fmt.Errorf("discovery completeness: %d info-or-worse finding(s) present", r.Summary.Errors+r.Summary.Warnings)
+	switch threshold {
+	case severityError:
+		if r.Summary.Errors > 0 {
+			return fmt.Errorf("discovery completeness: %d error-severity finding(s) present", r.Summary.Errors)
+		}
+	case severityWarning:
+		if count := r.Summary.Errors + r.Summary.Warnings; count > 0 {
+			return fmt.Errorf("discovery completeness: %d warning-or-worse finding(s) present", count)
+		}
+	case severityInfo:
+		if count := r.Summary.Errors + r.Summary.Warnings + r.Summary.Infos; count > 0 {
+			return fmt.Errorf("discovery completeness: %d info-or-worse finding(s) present", count)
+		}
 	}
 	return nil
 }
 
 func buildReport(gapsOnly bool, minAliases int) (report, error) {
+	cmdutil.Progressf("audit_discovery_completeness: building catalog and analyzing discovery metadata…")
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		return report{}, fmt.Errorf("create audit client: %w", err)
@@ -359,23 +351,20 @@ func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecor
 		for _, spec := range group.Actions {
 			owner := ownerPackage(group, spec)
 			clusterMembers := clusterMembersFor(allClusters, owner, spec.Name)
-			withClusterMembers(clusterMembers, func() {
-				pr := packageFor(byPackage, owner)
-				pr.Actions++
-				finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
-				if len(finding.Flags) == 0 {
-					return
-				}
-				if gapsOnly {
-					pr.Findings = append(pr.Findings, finding)
-					return
-				}
-				pr.Findings = append(pr.Findings, finding)
-			})
+			pr := packageFor(byPackage, owner)
+			pr.Actions++
+			finding := analyzeSpec(spec, projected, clusterMembers, minAliases)
+			if len(finding.Flags) == 0 {
+				continue
+			}
+			pr.Findings = append(pr.Findings, finding)
 		}
 	}
 	packagesOut := make([]packageReport, 0, len(byPackage))
 	for _, pr := range byPackage {
+		if gapsOnly && len(pr.Findings) == 0 {
+			continue
+		}
 		sort.Slice(pr.Findings, func(i, j int) bool { return pr.Findings[i].Action < pr.Findings[j].Action })
 		packagesOut = append(packagesOut, *pr)
 	}
@@ -501,7 +490,7 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	}
 	sort.Strings(flags)
 
-	severity := highestSeverity(flags, inCluster)
+	severity := highestSeverity(flags, inCluster, clusterMembers)
 
 	return actionFinding{
 		Action:    spec.Name,
@@ -562,10 +551,10 @@ func isListOrDetailContent(spec toolutil.ActionSpec) bool {
 
 // highestSeverity returns the highest severity among the given flags,
 // upgrading empty_related/weak_aliases for cluster members.
-func highestSeverity(flags []string, inCluster bool) string {
+func highestSeverity(flags []string, inCluster bool, clusterMembers []string) string {
 	highest := severityInfo
 	for _, f := range flags {
-		r := severityRank(severityFor(f, inCluster))
+		r := severityRank(severityFor(f, inCluster, clusterMembers))
 		if r < highest {
 			highest = r
 		}
@@ -1196,11 +1185,13 @@ func summarize(packages []packageReport) reportSummary {
 				case "aliases_only_toolname":
 					s.AliasesOnlyToolname++
 				}
-				switch severityFor(flag, inCluster) {
+				switch severityFor(flag, inCluster, finding.Cluster) {
 				case "error":
 					s.Errors++
 				case "warning":
 					s.Warnings++
+				case "info":
+					s.Infos++
 				}
 			}
 		}

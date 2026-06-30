@@ -157,16 +157,28 @@ func main() {
 	}
 	content = append(content, '\n')
 
-	if writeErr := writeReport(filepath.Join(repoRoot, flags.outputPath), content); writeErr != nil {
+	if writeErr := writeReport(resolveOutputPath(repoRoot, flags.outputPath), content); writeErr != nil {
 		cmdutil.Fatalf("write report: %v", writeErr)
 	}
+}
+
+// resolveOutputPath resolves the -output flag value. "-" (stdout) and absolute
+// paths are used verbatim; relative paths resolve against the repo root so the
+// default plan/ location works regardless of the caller's cwd. Without the
+// IsAbs guard, an absolute -output path would be joined onto repoRoot and write
+// a stray tree inside the repo.
+func resolveOutputPath(repoRoot, outputPath string) string {
+	if outputPath == "-" || filepath.IsAbs(outputPath) {
+		return outputPath
+	}
+	return filepath.Join(repoRoot, outputPath)
 }
 
 // parseFlags parses CLI options. -output defaults to
 // plan/docs-tools-backlog.json (under the repo root).
 func parseFlags() cmdlineFlags {
 	var flags cmdlineFlags
-	flag.StringVar(&flags.outputPath, "output", defaultBacklogPath, "path to write JSON report (relative to repo root)")
+	flag.StringVar(&flags.outputPath, "output", defaultBacklogPath, "path to write JSON report (relative paths resolve against repo root; absolute paths used as-is; '-' for stdout)")
 	flag.BoolVar(&flags.gapsOnly, "gaps-only", false, "only include files that have at least one finding")
 	flag.BoolVar(&flags.checkMode, "check", false, "exit non-zero if any file has missing/orphan/tier_mismatch findings")
 	flag.StringVar(&flags.docsRoot, "docs-root", defaultDocsRoot, "directory of per-domain docs (relative to repo root)")
@@ -182,8 +194,8 @@ func parseFlags() cmdlineFlags {
 // group (or a tool whose owning group isn't claimed by any README
 // row), those tools would otherwise slip past DOC-002 silently. The
 // -check exit-non-zero on UnassignedTotal forces the orchestrator
-// to add explicit routing — either by extending docOwnershipRules
-// in mapping.go, by adding a new README Domains row, or by ADR-routing
+// to add explicit routing — either by extending docs/tools/doc-ownership.json,
+// by adding a new README Domains row, or by ADR-routing
 // the group into a parent doc's prefix allowlist.
 func (r report) check() string {
 	if r.Summary.MissingTotal == 0 && r.Summary.OrphanTotal == 0 && r.Summary.TierMismatchTotal == 0 && r.Summary.UnassignedTotal == 0 {
@@ -442,8 +454,13 @@ func summarize(files []fileFinding) reportSummary {
 }
 
 // writeReport writes content to outputPath, creating parent
-// directories as needed.
+// directories as needed. The sentinel "-" writes to stdout, matching the
+// -output convention of audit_1to1 and audit_discovery_completeness.
 func writeReport(outputPath string, content []byte) error {
+	if outputPath == "-" {
+		_, err := os.Stdout.Write(content)
+		return err
+	}
 	if dir := filepath.Dir(outputPath); dir != "" {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err

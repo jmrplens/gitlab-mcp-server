@@ -4,8 +4,9 @@
 # GPG secret keys (NEVER commit private keys)
 keys/*.secret.asc
 
-# Doc-grounded tier auditor cache (regenerable fetched GitLab API docs)
-cmd/audit_edition_tier/.doccache/
+# Shared GitLab API reference doc cache (regenerable; cmd/internal/apidocs)
+# Consumed by audit_edition_tier and audit_1to1; 7-day TTL, re-downloaded on demand.
+.cache/
 
 # Go build artifacts
 bin/
@@ -26,7 +27,7 @@ dist/
 /find_dupes
 /gen_docker_tools
 /gen_llms
-/gen_readme
+/gen_stats
 /gitlab-mcp-server
 
 # Go workspace lock (Go 1.18+, only relevant if go.work is added)
@@ -119,3 +120,26 @@ image.png
 # Local opencode CLI agent config (per-developer, do not commit)
 /.opencode/
 /opencode.json
+
+# Stray compiled binaries from `go build ./cmd/...` without -o
+/audit_1to1
+/audit_catalog_first
+/audit_discovery_completeness
+/audit_doc_coverage
+/audit_dynamic_aliases
+/audit_edition_tier
+/audit_metrics
+/audit_string_dupes
+/audit_surface_quality
+/audit_test_names
+/audit_tokens
+/eval_mcp_surfaces
+/find_dupes
+/format_md_tables
+/gen_action_catalog_manifest
+/gen_docker_tools
+/gen_llms
+/gen_stats
+/gen_testing_docs
+/godoc_tool
+/gitlab-mcp-server

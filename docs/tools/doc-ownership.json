@@ -1,0 +1,273 @@
+{
+  "access.md": {
+    "note": "Every token, deploy key, deploy token, access request, invite, and job-token-scoped tool, plus the CRUD half of project/group member management. The README row says 'various' — the team hand-curated these tools and this allowlist mirrors that.",
+    "prefixes": [
+      "gitlab_project_access_token_",
+      "gitlab_group_access_token_",
+      "gitlab_personal_access_token_",
+      "gitlab_deploy_token_",
+      "gitlab_deploy_key_",
+      "gitlab_access_request_",
+      "gitlab_project_invite",
+      "gitlab_group_invite",
+      "gitlab_get_job_token_access_settings",
+      "gitlab_patch_job_token_access_settings",
+      "gitlab_list_job_token_inbound_allowlist",
+      "gitlab_list_job_token_group_allowlist",
+      "gitlab_add_project_job_token_allowlist",
+      "gitlab_add_group_job_token_allowlist",
+      "gitlab_remove_project_job_token_allowlist",
+      "gitlab_remove_group_job_token_allowlist",
+      "gitlab_project_member_add",
+      "gitlab_project_member_edit",
+      "gitlab_project_member_delete",
+      "gitlab_group_member_add",
+      "gitlab_group_member_edit",
+      "gitlab_group_member_delete"
+    ]
+  },
+  "admin.md": {
+    "note": "Owns the audit-event surface (Premium group gitlab_audit_event has no dedicated meta-tool doc). The README Domains table doesn't list this group; audit events live here by team convention (admin is the natural home for instance-level endpoints).",
+    "prefixes": [
+      "gitlab_list_instance_audit_events",
+      "gitlab_get_instance_audit_event",
+      "gitlab_list_group_audit_events",
+      "gitlab_get_group_audit_event",
+      "gitlab_list_project_audit_events",
+      "gitlab_get_project_audit_event"
+    ]
+  },
+  "analytics-compliance.md": {
+    "note": "README lists gitlab_group (enterprise routes), gitlab_compliance_policy, gitlab_project_alias. DORA metrics is documented here too, but its group name is gitlab_dora_metrics, not gitlab_group.",
+    "groups": [
+      "gitlab_compliance_policy",
+      "gitlab_project_alias",
+      "gitlab_dora_metrics"
+    ],
+    "prefixes": [
+      "gitlab_get_recently_created_issues_count",
+      "gitlab_get_recently_created_mr_count",
+      "gitlab_get_recently_added_members_count",
+      "gitlab_get_project_dora_metrics",
+      "gitlab_get_group_dora_metrics",
+      "gitlab_get_compliance_policy_settings",
+      "gitlab_update_compliance_policy_settings",
+      "gitlab_list_project_aliases",
+      "gitlab_get_project_alias",
+      "gitlab_create_project_alias",
+      "gitlab_delete_project_alias",
+      "gitlab_get_project_statistics"
+    ]
+  },
+  "boards.md": {
+    "note": "Owns the board/label/milestone surfaces even though they live inside gitlab_project/gitlab_group groups. Naming prefixes are how the team distinguishes project-management surfaces from core project CRUD.",
+    "prefixes": [
+      "gitlab_board_",
+      "gitlab_label_",
+      "gitlab_milestone_"
+    ]
+  },
+  "branches.md": {
+    "note": "Owns all gitlab_branch_* and gitlab_protected_branch_* tools (one group, gitlab_branch).",
+    "prefixes": [
+      "gitlab_branch_",
+      "gitlab_protected_branch_"
+    ]
+  },
+  "capabilities.md": {
+    "note": "Claims gitlab_server so capabilities.md owns gitlab_server_status and its share of the MCP maintenance surface. Without this, the first-claimer rule (admin.md claims gitlab_server earlier) would route gitlab_server_status to admin.md.",
+    "groups": [
+      "gitlab_server"
+    ]
+  },
+  "ci-cd.md": {
+    "note": "The README row lists gitlab_pipeline, gitlab_job, 'etc.' but omits the adjacent groups that build the rest of the CI/CD surface (CI variables, CI lint, CI catalog).",
+    "groups": [
+      "gitlab_ci_variable",
+      "gitlab_ci_lint",
+      "gitlab_ci_catalog"
+    ]
+  },
+  "epics.md": {
+    "note": "Owns the epic core surface (epics, epic notes, epic issues, epic discussions, group epic boards). These tools live in the gitlab_group catalog group; the README's 'gitlab_epic' entry is a routing label rather than a real group, so the prefix allowlist is the canonical ownership signal.",
+    "prefixes": [
+      "gitlab_epic_",
+      "gitlab_list_epic_discussions",
+      "gitlab_get_epic_discussion",
+      "gitlab_create_epic_discussion",
+      "gitlab_add_epic_discussion_note",
+      "gitlab_delete_epic_discussion_note",
+      "gitlab_update_epic_discussion_note",
+      "gitlab_group_epic_board_"
+    ]
+  },
+  "identity-security.md": {
+    "note": "README lists gitlab_group_scim, gitlab_member_role, 'etc.' The 'etc.' captures the enterprise routes inside gitlab_group / gitlab_project.",
+    "groups": [
+      "gitlab_group_scim",
+      "gitlab_member_role"
+    ],
+    "prefixes": [
+      "gitlab_group_scim",
+      "gitlab_list_group_scim_identities",
+      "gitlab_get_group_scim_identity",
+      "gitlab_update_group_scim_identity",
+      "gitlab_delete_group_scim_identity",
+      "gitlab_member_role",
+      "gitlab_list_instance_member_roles",
+      "gitlab_list_group_member_roles",
+      "gitlab_create_instance_member_role",
+      "gitlab_create_group_member_role",
+      "gitlab_delete_instance_member_role",
+      "gitlab_delete_group_member_role",
+      "gitlab_group_credential",
+      "gitlab_list_group_personal_access_tokens",
+      "gitlab_revoke_group_personal_access_token",
+      "gitlab_list_group_ssh_keys",
+      "gitlab_delete_group_ssh_key",
+      "gitlab_group_ssh_certificate",
+      "gitlab_list_group_ssh_certificates",
+      "gitlab_create_group_ssh_certificate",
+      "gitlab_delete_group_ssh_certificate",
+      "gitlab_security_settings",
+      "gitlab_get_project_security_settings",
+      "gitlab_update_project_secret_push_protection",
+      "gitlab_update_group_secret_push_protection",
+      "gitlab_group_ldap_link_list",
+      "gitlab_group_ldap_link_add",
+      "gitlab_group_ldap_link_delete",
+      "gitlab_group_ldap_link_delete_for_provider",
+      "gitlab_group_ldap_sync",
+      "gitlab_group_saml_link_list",
+      "gitlab_group_saml_link_get",
+      "gitlab_group_saml_link_add",
+      "gitlab_group_saml_link_delete",
+      "gitlab_group_saml_users_list"
+    ]
+  },
+  "integrations.md": {
+    "note": "Owns the integration/badge/topic/import surface that lives inside gitlab_project and gitlab_group. Epic-discussion tools are intentionally absent — they live in epics.md via the wider 'gitlab_epic_' prefix, which wins under longest-match-wins for the bare tool names too.",
+    "prefixes": [
+      "gitlab_list_integrations",
+      "gitlab_get_integration",
+      "gitlab_delete_integration",
+      "gitlab_set_jira_integration",
+      "gitlab_list_project_badges",
+      "gitlab_get_project_badge",
+      "gitlab_add_project_badge",
+      "gitlab_edit_project_badge",
+      "gitlab_delete_project_badge",
+      "gitlab_preview_project_badge",
+      "gitlab_list_group_badges",
+      "gitlab_get_group_badge",
+      "gitlab_add_group_badge",
+      "gitlab_edit_group_badge",
+      "gitlab_delete_group_badge",
+      "gitlab_preview_group_badge",
+      "gitlab_list_topics",
+      "gitlab_get_topic",
+      "gitlab_create_topic",
+      "gitlab_update_topic",
+      "gitlab_delete_topic",
+      "gitlab_import_from_github",
+      "gitlab_import_from_bitbucket_server",
+      "gitlab_import_from_bitbucket_cloud",
+      "gitlab_import_github_gists",
+      "gitlab_cancel_github_import",
+      "gitlab_get_group_datadog_integration",
+      "gitlab_set_group_datadog_integration",
+      "gitlab_delete_group_datadog_integration"
+    ]
+  },
+  "merge-requests.md": {
+    "note": "Owns the merge-train and external-status-check surfaces (Premium/Ultimate groups) whose owning catalog group has no dedicated meta-tool doc. The README Domains table doesn't list these groups; they live here by team convention.",
+    "prefixes": [
+      "gitlab_list_project_merge_trains",
+      "gitlab_list_merge_request_in_merge_train",
+      "gitlab_get_merge_request_on_merge_train",
+      "gitlab_add_merge_request_to_merge_train",
+      "gitlab_list_project_status_checks",
+      "gitlab_list_project_mr_external_status_checks",
+      "gitlab_list_project_external_status_checks",
+      "gitlab_create_project_external_status_check",
+      "gitlab_update_project_external_status_check",
+      "gitlab_delete_project_external_status_check",
+      "gitlab_retry_failed_external_status_check_for_project_mr",
+      "gitlab_set_project_mr_external_status_check_status"
+    ]
+  },
+  "mirrors.md": {
+    "note": "Owns a small set of project mirror tools that live inside gitlab_project (per buildProjectActionSpecs). The README's 'gitlab_project (enterprise routes)' annotation is the source.",
+    "prefixes": [
+      "gitlab_add_project_mirror",
+      "gitlab_delete_project_mirror",
+      "gitlab_edit_project_mirror",
+      "gitlab_force_push_mirror_update",
+      "gitlab_get_project_mirror",
+      "gitlab_get_project_mirror_public_key",
+      "gitlab_list_project_mirrors"
+    ]
+  },
+  "notifications.md": {
+    "note": "The README row says 'various'. The canonical group it touches is gitlab_notification (global/group/project notification settings); the events surface is owned via the prefix list below.",
+    "groups": [
+      "gitlab_notification"
+    ],
+    "prefixes": [
+      "gitlab_notification_",
+      "gitlab_issue_emoji_",
+      "gitlab_issue_note_emoji_",
+      "gitlab_issue_label_event_",
+      "gitlab_issue_milestone_event_",
+      "gitlab_issue_state_event_",
+      "gitlab_mr_emoji_",
+      "gitlab_mr_note_emoji_",
+      "gitlab_mr_label_event_",
+      "gitlab_mr_milestone_event_",
+      "gitlab_mr_state_event_",
+      "gitlab_snippet_emoji_",
+      "gitlab_snippet_note_emoji_"
+    ]
+  },
+  "packages.md": {
+    "note": "Owns the dependency-list surface (Ultimate group 'dependencies' has no dedicated meta-tool doc). The README Domains table doesn't list this group; dependencies live here by team convention (packages is the natural home for inventory / export workflows).",
+    "prefixes": [
+      "gitlab_list_project_dependencies",
+      "gitlab_create_dependency_list_export",
+      "gitlab_get_dependency_list_export",
+      "gitlab_download_dependency_list_export"
+    ]
+  },
+  "security.md": {
+    "note": "Owns feature flags, secure files, error tracking, alert metric images, impersonation tokens, and the admin-side user-token creation tool (gitlab_create_personal_access_token). The PAT listing tools live in access.md via the 'personal_access_token_' prefix; admin-user PAT creation lives here.",
+    "prefixes": [
+      "gitlab_feature_flag_",
+      "gitlab_ff_user_list_",
+      "gitlab_list_secure_files",
+      "gitlab_show_secure_file",
+      "gitlab_create_secure_file",
+      "gitlab_remove_secure_file",
+      "gitlab_get_error_tracking_settings",
+      "gitlab_enable_disable_error_tracking",
+      "gitlab_list_error_tracking_client_keys",
+      "gitlab_create_error_tracking_client_key",
+      "gitlab_delete_error_tracking_client_key",
+      "gitlab_list_alert_metric_images",
+      "gitlab_upload_alert_metric_image",
+      "gitlab_update_alert_metric_image",
+      "gitlab_delete_alert_metric_image",
+      "gitlab_list_impersonation_tokens",
+      "gitlab_get_impersonation_token",
+      "gitlab_create_impersonation_token",
+      "gitlab_revoke_impersonation_token",
+      "gitlab_create_personal_access_token"
+    ]
+  },
+  "tags.md": {
+    "note": "Owns all gitlab_tag_* and gitlab_protected_tag_* tools. Note: gitlab_tag_protect is a mutating tool; the auditor's destructive detection handles the Write annotation.",
+    "prefixes": [
+      "gitlab_tag_",
+      "gitlab_protected_tag_"
+    ]
+  }
+}

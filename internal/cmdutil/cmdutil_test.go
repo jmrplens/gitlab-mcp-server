@@ -113,3 +113,15 @@ func TestFatalf_WritesMessageAndExits(t *testing.T) {
 	Fatalf("failed: %s", "boom")
 	t.Fatal("Fatalf() returned without exiting")
 }
+
+func TestProgressf_WritesToStderrWithNewline(t *testing.T) {
+	var stderr bytes.Buffer
+	previous := progressStderr
+	t.Cleanup(func() { progressStderr = previous })
+	progressStderr = &stderr
+
+	Progressf("step %d/%d: %s", 2, 3, "working")
+	if got, want := stderr.String(), "step 2/3: working\n"; got != want {
+		t.Fatalf("Progressf() stderr = %q, want %q", got, want)
+	}
+}

@@ -18,25 +18,25 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,541 |
-| Unit test functions                                   | 11,259 |
+| Total test functions                                  | 11,581 |
+| Unit test functions                                   | 11,299 |
 | E2E test functions                                    |    282 |
-| cmd test functions                                    |    849 |
-| Test files (internal/)                                |    453 |
-| Test files (cmd/)                                     |     59 |
+| cmd test functions                                    |    896 |
+| Test files (internal/)                                |    451 |
+| Test files (cmd/)                                     |     68 |
 | Test files (test/e2e/suite/)                          |    139 |
 | Tool sub-packages tested                              |    174 |
-| Core packages tested                                  |     17 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.1% |
-| Overall coverage (`go test ./internal/...`)           |  94.7% |
+| Core packages tested                                  |     16 |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.9% |
+| Overall coverage (`go test ./internal/...`)           |  94.6% |
 | Average package coverage                              |  95.4% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,281 | 89.1% |
-| `TestFunc` (no underscore)             |    933 |  8.1% |
+| `TestFunc_Scenario` (2-part)           | 10,316 | 89.1% |
+| `TestFunc` (no underscore)             |    938 |  8.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,864 |         92 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,857 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (174) |          8,263 |        348 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            282 |        139 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            849 |         59 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,541** |    **651** |                                                                                                 |
+| cmd packages            |            896 |         68 | server entry point and developer command utilities                                              |
+| **Total**               |     **11,581** |    **658** |                                                                                                 |
 
 ### Core Packages
 
@@ -58,10 +58,9 @@
 | ------------ | --------: | -------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | auditclient  |         2 |   100.0% | Package auditclient creates GitLab clients for command-line audit tools.                                                                                                                                          |
 | autoupdate   |       122 |    94.7% | Package autoupdate provides self-update capability for the gitlab-mcp-server MCP server.                                                                                                                          |
-| cmdutil      |         4 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
+| cmdutil      |         5 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
 | completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
 | config       |        72 |    98.6% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
-| docgen       |         8 |   100.0% | Package docgen contains helpers for generated project documentation.                                                                                                                                              |
 | edition      |         4 |    82.6% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
 | elicitation  |        79 |    92.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab       |        44 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
@@ -71,9 +70,9 @@
 | resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil     |       630 |    97.2% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil     |       630 |    97.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       287 |    92.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,864** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,857** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -115,7 +114,7 @@
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        96 |          2 |    99.8% |        18 |
 | actioncatalog           |        31 |          4 |    99.1% |         0 |
-| actioncompat            |        44 |          2 |   100.0% |         0 |
+| actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        91 |
 | alertmanagement         |        29 |          2 |    98.9% |         4 |
 | appearance              |        10 |          1 |   100.0% |         2 |
@@ -286,7 +285,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |    99.4% |         6 |
 | workitems               |        80 |          2 |   100.0% |         6 |
-| **Total**               | **8,263** |    **348** |          | **1,163** |
+| **Total**               | **8,263** |    **348** |          | **1,164** |
 
 </details>
 
@@ -296,33 +295,34 @@
 
 | Package                                        | Coverage |
 | ---------------------------------------------- | -------: |
-| cmd/add_docs                                   |    67.1% |
-| cmd/audit_action_coverage                      |    77.6% |
-| cmd/audit_action_spec_coverage                 |    80.9% |
-| cmd/audit_discovery_completeness               |    78.5% |
-| cmd/audit_dynamic_aliases                      |    60.0% |
-| cmd/audit_edition_tier                         |    21.8% |
-| cmd/audit_godocs                               |    50.7% |
-| cmd/audit_meta_schema                          |    83.7% |
-| cmd/audit_metadata_completeness                |    66.4% |
-| cmd/audit_metrics                              |    56.2% |
-| cmd/audit_output                               |    64.5% |
-| cmd/audit_struct_completeness                  |    91.2% |
-| cmd/audit_test_names                           |    91.9% |
-| cmd/audit_tokens                               |    45.3% |
-| cmd/audit_tools                                |    75.5% |
+| cmd/audit_1to1                                 |    39.0% |
+| cmd/audit_1to1/internal/actions                |    87.7% |
+| cmd/audit_1to1/internal/merge                  |    85.4% |
+| cmd/audit_1to1/internal/metadata               |    73.5% |
+| cmd/audit_1to1/internal/structs                |    95.3% |
+| cmd/audit_catalog_first                        |    80.8% |
+| cmd/audit_discovery_completeness               |    78.0% |
+| cmd/audit_doc_coverage                         |    81.6% |
+| cmd/audit_dynamic_aliases                      |    48.4% |
+| cmd/audit_edition_tier                         |    26.0% |
+| cmd/audit_metrics                              |    54.1% |
+| cmd/audit_string_dupes                         |    90.7% |
+| cmd/audit_surface_quality                      |    71.8% |
+| cmd/audit_test_names                           |    48.1% |
+| cmd/audit_tokens                               |    58.7% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
 | cmd/eval_mcp_surfaces/internal/evaluator       |    69.2% |
 | cmd/eval_mcp_surfaces/internal/evaluator/cases |    99.6% |
 | cmd/eval_mcp_surfaces/internal/termio          |    45.7% |
-| cmd/find_dupes                                 |    96.7% |
 | cmd/format_md_tables                           |    92.7% |
-| cmd/gen_1to1_backlog                           |    67.8% |
 | cmd/gen_action_catalog_manifest                |    58.3% |
 | cmd/gen_docker_tools                           |    83.3% |
 | cmd/gen_llms                                   |    27.3% |
-| cmd/gen_readme                                 |    34.0% |
-| cmd/gen_testing_docs                           |    27.6% |
+| cmd/gen_stats                                  |    51.3% |
+| cmd/gen_testing_docs                           |    27.4% |
+| cmd/godoc_tool                                 |    58.9% |
+| cmd/internal/apidocs                           |    86.7% |
+| cmd/internal/docgen                            |    99.5% |
 | cmd/server                                     |    78.6% |
 
 ### Core Packages
@@ -334,7 +334,6 @@
 | cmdutil     |   100.0% |
 | completions |   100.0% |
 | config      |    98.6% |
-| docgen      |   100.0% |
 | edition     |    82.6% |
 | elicitation |    92.5% |
 | gitlab      |   100.0% |
@@ -344,7 +343,7 @@
 | resources   |   100.0% |
 | serverpool  |    99.6% |
 | testutil    |    95.9% |
-| toolutil    |    97.2% |
+| toolutil    |    97.0% |
 | wizard      |    92.0% |
 
 ### Tool Sub-Packages
@@ -529,29 +528,30 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/audit_edition_tier** (21.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_edition_tier** (26.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_llms** (27.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_testing_docs** (27.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_readme** (34.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_tokens** (45.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_testing_docs** (27.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1** (39.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_metrics** (56.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_test_names** (48.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_dynamic_aliases** (48.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_stats** (51.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_metrics** (54.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_output** (64.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_metadata_completeness** (66.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_1to1_backlog** (67.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_tokens** (58.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/godoc_tool** (58.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evaluator** (69.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_tools** (75.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_action_coverage** (77.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_discovery_completeness** (78.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_surface_quality** (71.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/metadata** (73.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_discovery_completeness** (78.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
-- **cmd/audit_action_spec_coverage** (80.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_catalog_first** (80.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_doc_coverage** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (82.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/gen_docker_tools** (83.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_meta_schema** (83.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/merge** (85.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/internal/apidocs** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/actions** (87.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->

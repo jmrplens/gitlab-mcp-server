@@ -11,6 +11,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/shirou/gopsutil/v4 v4.26.5
+	github.com/tiktoken-go/tokenizer v0.8.0
 	gitlab.com/gitlab-org/api/client-go/v2 v2.43.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/time v0.15.0
@@ -32,6 +33,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
+	github.com/dlclark/regexp2/v2 v2.1.0 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect

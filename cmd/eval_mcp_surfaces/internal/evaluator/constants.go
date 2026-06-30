@@ -1,5 +1,17 @@
 package evaluator
 
+import "os"
+
+// defaultModel is the provider:model label used when no explicit model
+// flag or EVAL_MODELS environment variable is supplied. Override at repo
+// level via the EVAL_DEFAULT_MODEL environment variable.
+var defaultModel = func() string {
+	if v := os.Getenv("EVAL_DEFAULT_MODEL"); v != "" {
+		return v
+	}
+	return "anthropic:claude-haiku-4-5-20251001"
+}()
+
 // Default directory, model, and backend identifiers used to bootstrap the
 // evaluator when explicit flags are absent. All values are mirrored on the
 // command line so flag documentation should stay in sync with this block.
@@ -10,9 +22,6 @@ const (
 	// defaultFixtures is the JSON file used to persist live fixture state
 	// between prepare-fixtures and use-fixtures invocations.
 	defaultFixtures = "dist/evaluation/mcp-surfaces/e2e-fixtures.json"
-	// defaultModel is the provider:model label used when no explicit model
-	// flag or EVAL_MODELS environment variable is supplied.
-	defaultModel = "anthropic:claude-haiku-4-5-20251001"
 	// backendMock keeps the catalog offline; no live GitLab calls execute.
 	backendMock = "mock"
 	// backendGitLab switches the catalog backend to a real GitLab instance.

@@ -3,6 +3,8 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -17,14 +19,16 @@ import (
 // Severity, Problem, Alias, Canonical, Message. Findings with Severity="error"
 // fail the command; warnings and informational findings are printed for review.
 func main() {
-	os.Exit(run(os.Stdout, os.Stderr))
+	format := flag.String("output", "tsv", "output format: tsv or json")
+	flag.Parse()
+	os.Exit(run(os.Stdout, os.Stderr, *format))
 }
 
 // run is the testable entry point that builds the catalog, adds standalone
-// dynamic routes, runs [dynamic.AuditDefaultActionAliases], and writes one
-// TSV line per finding to stdout. The function returns a process-style exit
+// dynamic routes, runs [dynamic.AuditDefaultActionAliases], and writes
+// findings to stdout in the requested format. Returns a process-style exit
 // code: 0 when no error-severity findings remain, 1 otherwise.
-func run(stdout, stderr io.Writer) int {
+func run(stdout, stderr io.Writer, format string) int {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(stderr, "build action catalog: %v\n", err)
@@ -39,15 +43,32 @@ func run(stdout, stderr io.Writer) int {
 	findings := dynamic.AuditDefaultActionAliases(catalog)
 	errorCount := 0
 	for _, finding := range findings {
-		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Message)
 		if finding.Severity == "error" {
 			errorCount++
 		}
 	}
+
+	switch format {
+	case "json":
+		if encErr := json.NewEncoder(stdout).Encode(findings); encErr != nil {
+			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
+			return 1
+		}
+	case "tsv":
+		for _, finding := range findings {
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\t%s\n", finding.Severity, finding.Problem, finding.Alias, finding.Canonical, finding.Source, finding.Message)
+		}
+		if errorCount > 0 {
+			fmt.Fprintf(stderr, "dynamic alias audit failed: %d error(s)\n", errorCount)
+			return 1
+		}
+		fmt.Fprintf(stdout, "dynamic alias audit passed: %d finding(s)\n", len(findings))
+	default:
+		fmt.Fprintf(stderr, "invalid -output %q (want tsv or json)\n", format)
+		return 2
+	}
 	if errorCount > 0 {
-		fmt.Fprintf(stderr, "dynamic alias audit failed: %d error(s)\n", errorCount)
 		return 1
 	}
-	fmt.Fprintf(stdout, "dynamic alias audit passed: %d finding(s)\n", len(findings))
 	return 0
 }
