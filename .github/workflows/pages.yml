@@ -41,6 +41,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: site
 
+      # IndexNow ownership-verification file, generated from the secret so the
+      # key isn't committed. Astro copies site/public/* into the build output,
+      # publishing it at /gitlab-mcp-server/<key>.txt.
+      - name: Write IndexNow key file
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: |
+          if [ -n "$INDEXNOW_KEY" ]; then
+            printf '%s' "$INDEXNOW_KEY" > "site/public/${INDEXNOW_KEY}.txt"
+            echo "Wrote site/public/${INDEXNOW_KEY}.txt"
+          else
+            echo "INDEXNOW_KEY not set — skipping IndexNow key file"
+          fi
+
       - run: pnpm run build
         working-directory: site
 
@@ -58,3 +72,40 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  indexnow:
+    name: Submit to IndexNow
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify IndexNow of updated URLs
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INDEXNOW_KEY:-}" ]; then
+            echo "INDEXNOW_KEY not set — skipping IndexNow submission"
+            exit 0
+          fi
+          BASE="https://jmrplens.github.io/gitlab-mcp-server"
+          # Let the deploy propagate, then read the live sitemap(s).
+          sleep 20
+          urls=$(curl -fsSL "$BASE/sitemap-index.xml" \
+            | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
+            | while read -r sm; do curl -fsSL "$sm" \
+                | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g'; done)
+          url_json=$(printf '%s\n' "$urls" | grep . | jq -R . | jq -s .)
+          count=$(printf '%s' "$url_json" | jq 'length')
+          echo "Submitting $count URLs to IndexNow"
+          payload=$(jq -n \
+            --arg host "jmrplens.github.io" \
+            --arg key "$INDEXNOW_KEY" \
+            --arg keyLocation "$BASE/${INDEXNOW_KEY}.txt" \
+            --argjson urlList "$url_json" \
+            '{host:$host, key:$key, keyLocation:$keyLocation, urlList:$urlList}')
+          code=$(curl -sS -o /tmp/indexnow.out -w '%{http_code}' \
+            -X POST "https://api.indexnow.org/IndexNow" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$payload")
+          echo "IndexNow responded HTTP $code"; cat /tmp/indexnow.out || true
+          case "$code" in 200|202) echo "OK" ;; *) echo "IndexNow submission failed"; exit 1 ;; esac
