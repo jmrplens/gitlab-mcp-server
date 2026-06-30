@@ -3,7 +3,7 @@
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
 gitlab-mcp-server v2.3.0 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
-It provides up to 1067 individual MCP tools across 93 GitLab API domains, 32 base meta-tools, 48 self-managed enterprise meta-tools, 49 GitLab.com Enterprise meta-tools,
+It provides up to 1068 individual MCP tools across 94 GitLab API domains, 32 base meta-tools, 48 self-managed enterprise meta-tools, 49 GitLab.com Enterprise meta-tools,
 a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
@@ -43,7 +43,7 @@ When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_fin
 Meta-tool overview:
 
 When TOOL_SURFACE=meta, 32 domain meta-tools are registered instead of
-up to 1067 individual tools. Enterprise/Premium entries register 48 meta-tools on self-managed GitLab,
+up to 1068 individual tools. Enterprise/Premium entries register 48 meta-tools on self-managed GitLab,
 or 49 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
 

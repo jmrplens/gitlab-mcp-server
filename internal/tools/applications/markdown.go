@@ -31,23 +31,38 @@ func FormatListMarkdown(out ListOutput) string {
 	return sb.String()
 }
 
+// formatApplicationDetail renders a single application as a field/value table.
+// It is shared by the create and renew-secret formatters, which differ only in
+// the heading, the label used for the secret row, and the closing hint.
+func formatApplicationDetail(heading string, item ApplicationItem, secretLabel, hint string) string {
+	var sb strings.Builder
+	sb.WriteString("## " + heading + "\n\n")
+	sb.WriteString("| Field | Value |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| ID | %d |\n", item.ID)
+	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(item.ApplicationName))
+	fmt.Fprintf(&sb, "| App ID | %s |\n", toolutil.EscapeMdTableCell(item.ApplicationID))
+	fmt.Fprintf(&sb, "| Callback URL | %s |\n", toolutil.EscapeMdTableCell(item.CallbackURL))
+	fmt.Fprintf(&sb, "| Confidential | %v |\n", item.Confidential)
+	fmt.Fprintf(&sb, "| %s | %s |\n", secretLabel, toolutil.EscapeMdTableCell(item.Secret))
+	fmt.Fprintf(&sb, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(strings.Join(item.Scopes, ", ")))
+	toolutil.WriteHints(&sb, hint)
+	return sb.String()
+}
+
 // FormatCreateMarkdown formats a created application as markdown.
 func FormatCreateMarkdown(out CreateOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Application Created\n\n")
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.ApplicationName))
-	fmt.Fprintf(&sb, "| App ID | %s |\n", toolutil.EscapeMdTableCell(out.ApplicationID))
-	fmt.Fprintf(&sb, "| Callback URL | %s |\n", toolutil.EscapeMdTableCell(out.CallbackURL))
-	fmt.Fprintf(&sb, "| Confidential | %v |\n", out.Confidential)
-	fmt.Fprintf(&sb, "| Secret | %s |\n", toolutil.EscapeMdTableCell(out.Secret))
-	fmt.Fprintf(&sb, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(strings.Join(out.Scopes, ", ")))
-	toolutil.WriteHints(&sb, "Store the application secret securely — it cannot be retrieved later")
-	return sb.String()
+	return formatApplicationDetail("Application Created", out.ApplicationItem, "Secret",
+		"Store the application secret securely — it cannot be retrieved later")
+}
+
+// FormatRenewSecretMarkdown formats a renewed application secret as markdown.
+func FormatRenewSecretMarkdown(out RenewSecretOutput) string {
+	return formatApplicationDetail("Application Secret Renewed", out.ApplicationItem, "New Secret",
+		"Store the new secret securely — the previous secret is now invalid and any client using it must be updated")
 }
 
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
 	toolutil.RegisterMarkdown(FormatCreateMarkdown)
+	toolutil.RegisterMarkdown(FormatRenewSecretMarkdown)
 }

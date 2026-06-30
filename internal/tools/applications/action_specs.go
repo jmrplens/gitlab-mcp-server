@@ -10,8 +10,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		applicationReadSpec("application_list", toolutil.RouteAction(client, List), "gitlab_list_applications"),
 		applicationCreateSpec("application_create", toolutil.RouteAction(client, Create), "gitlab_create_application"),
+		applicationRenewSecretSpec("application_renew_secret", toolutil.RouteAction(client, RenewSecret), "gitlab_renew_application_secret"),
 		applicationDeleteSpec("application_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_delete_application"),
 	}
+}
+
+func applicationRenewSecretSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, applicationOptionsForAction(name, individualTool))
 }
 
 func applicationReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -61,6 +66,17 @@ func applicationOptionsForAction(actionName, individualTool string) toolutil.Act
 			},
 		}
 		options.IndividualTool.Description = "Create an OAuth application in GitLab. Returns: created application record including client ID and secret. See also: gitlab_list_applications, gitlab_delete_application."
+	case "application_renew_secret":
+		options.Usage = "Renew (rotate) the secret of an existing OAuth application by numeric id. The previous secret is invalidated immediately, so update every client that uses it with the new value returned."
+		options.Aliases = []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"id": {
+				SemanticRole:   "oauth_application_id",
+				ValueSource:    "Numeric application ID from list output.",
+				ExampleBinding: "params.id:12",
+			},
+		}
+		options.IndividualTool.Description = "Renew (rotate) an OAuth application secret by id. Returns: the application record including the freshly generated secret (store it securely — it cannot be retrieved later). See also: gitlab_list_applications, gitlab_create_application."
 	case "application_delete":
 		options.Usage = "Delete an OAuth application by numeric id. Use only after confirming the client is no longer in use."
 		options.Aliases = []string{"delete application", "remove oauth app", "revoke oauth client"}

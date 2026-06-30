@@ -179901,6 +179901,77 @@
     }
   },
   {
+    "name": "gitlab_renew_application_secret",
+    "description": "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Application ID whose secret should be renewed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "application_id": {
+          "type": "string"
+        },
+        "application_name": {
+          "type": "string"
+        },
+        "callback_url": {
+          "type": "string"
+        },
+        "confidential": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "secret": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "application_id",
+        "application_name",
+        "secret",
+        "callback_url",
+        "confidential"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_repair_geo_site",
     "description": "Repair a Geo site's OAuth application. Returns: the repaired site (or a hint to refresh via get when GitLab returns no body). See also: gitlab_get_geo_site, gitlab_get_status_geo_site.",
     "inputSchema": {

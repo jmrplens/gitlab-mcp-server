@@ -20,7 +20,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~861 Free/CE; ~998 Premium; ~1061 Ultimate (self-managed) / ~1067 on GitLab.com Ultimate with Orbit |
+| MCP Tools (individual)    | By instance tier: ~862 Free/CE; ~999 Premium; ~1062 Ultimate (self-managed) / ~1068 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 44 Ultimate                                                       |
 | Meta-mode tools           | 32 base (Free/CE) / 48 self-managed Ultimate / 49 GitLab.com Ultimate (Orbit)                              |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
@@ -486,7 +486,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~861 Free/CE, ~998 Premium, ~1061 Ultimate self-managed, ~1067 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~862 Free/CE, ~999 Premium, ~1062 Ultimate self-managed, ~1068 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
