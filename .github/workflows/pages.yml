@@ -69,6 +69,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
@@ -81,18 +83,19 @@ jobs:
       - name: Notify IndexNow of updated URLs
         env:
           INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           set -euo pipefail
           if [ -z "${INDEXNOW_KEY:-}" ]; then
             echo "INDEXNOW_KEY not set — skipping IndexNow submission"
             exit 0
           fi
-          # Derive the public site URL from the GitHub context so a repo rename
-          # or org move needs no edit here.
-          HOST="$(echo "${GITHUB_REPOSITORY_OWNER}.github.io" | tr '[:upper:]' '[:lower:]')"
-          REPO="${GITHUB_REPOSITORY#*/}"
-          BASE="https://${HOST}/${REPO}"
-          echo "Site base: $BASE"
+          # Use the actual deployed Pages URL (tracks a custom domain / CNAME and
+          # any repo/org rename automatically).
+          BASE="${PAGE_URL%/}"
+          if [ -z "$BASE" ]; then echo "No deploy page_url available; aborting"; exit 1; fi
+          HOST="$(printf '%s' "$BASE" | sed -E 's#^https?://([^/]+).*#\1#')"
+          echo "Site base: $BASE (host: $HOST)"
           # Fetch the live sitemap with a short retry/backoff for deploy propagation.
           idx=""
           for attempt in 1 2 3 4 5; do
@@ -101,10 +104,16 @@ jobs:
             sleep 10
           done
           if [ -z "$idx" ]; then echo "Could not fetch sitemap after retries; aborting"; exit 1; fi
-          urls=$(printf '%s' "$idx" \
-            | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
-            | while read -r sm; do curl -fsSL "$sm" \
-                | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g'; done)
+          # Collect sub-sitemap URLs, then each sitemap's <loc> entries. A while
+          # loop over a here-string (not a pipe) keeps errors from being masked
+          # under `set -o pipefail`; a transient sub-sitemap fetch can't abort all.
+          subs=$(printf '%s' "$idx" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g')
+          urls=""
+          while IFS= read -r sm; do
+            [ -n "$sm" ] || continue
+            body=$(curl -fsSL "$sm" || true)
+            urls="${urls}$(printf '%s' "$body" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g')"$'\n'
+          done <<< "$subs"
           url_json=$(printf '%s\n' "$urls" | grep . | jq -R . | jq -s .)
           count=$(printf '%s' "$url_json" | jq 'length')
           echo "Submitting $count URLs to IndexNow"
