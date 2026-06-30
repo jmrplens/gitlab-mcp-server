@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -58,7 +59,7 @@ func TestRunValidateDocs_OKWhenCitedDocsCached(t *testing.T) {
 	}
 	fetcher := apidocs.New(root, apidocs.Options{Offline: true, CacheDir: cache})
 
-	out, ok, err := runValidateDocs(root, fetcher)
+	out, ok, err := runValidateDocs(context.Background(), root, fetcher)
 	if err != nil {
 		t.Fatalf("runValidateDocs: %v", err)
 	}
@@ -83,7 +84,7 @@ func TestRunValidateDocs_StaleWhenMissing(t *testing.T) {
 	}
 	fetcher := apidocs.New(root, apidocs.Options{Offline: true, CacheDir: t.TempDir()})
 
-	out, ok, err := runValidateDocs(root, fetcher)
+	out, ok, err := runValidateDocs(context.Background(), root, fetcher)
 	if err != nil {
 		t.Fatalf("runValidateDocs: %v", err)
 	}

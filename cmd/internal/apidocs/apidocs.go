@@ -13,6 +13,7 @@ package apidocs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -46,9 +47,21 @@ const (
 	maxBackoff  = 60 * time.Second
 )
 
-// sleepFn is the backoff/spacing sleep, indirected so tests can make retries
-// instant.
-var sleepFn = time.Sleep
+// sleepCtx waits for d or until ctx is cancelled, returning ctx.Err() on
+// cancellation. It is indirected so tests can make retries instant.
+var sleepCtx = func(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
 
 // CacheDir returns the shared, gitignored API-doc cache directory for the given
 // repository root.
@@ -121,8 +134,9 @@ func New(repoRoot string, opts Options) *Fetcher {
 // Fetch returns the markdown for one doc area (e.g. "branches"). It serves a
 // cached copy when present and fresh (younger than MaxAge) unless Refresh is
 // set; otherwise it downloads, caches, and returns the doc. In Offline mode it
-// returns the cached copy at any age and never downloads.
-func (f *Fetcher) Fetch(area string) (string, error) {
+// returns the cached copy at any age and never downloads. The context cancels an
+// in-flight download and aborts the retry backoff.
+func (f *Fetcher) Fetch(ctx context.Context, area string) (string, error) {
 	cachePath := filepath.Join(f.cacheDir, filepath.FromSlash(area)+".md")
 
 	if cached, ok := f.cachedIfUsable(cachePath); ok {
@@ -136,7 +150,7 @@ func (f *Fetcher) Fetch(area string) (string, error) {
 		return "", fmt.Errorf("apidocs: create cache dir: %w", err)
 	}
 
-	body, err := f.download(area)
+	body, err := f.download(ctx, area)
 	if err != nil {
 		// In strict mode (authoritative validation) a download failure must
 		// surface so a removed upstream doc is not masked by a cached copy.
@@ -179,13 +193,14 @@ func (f *Fetcher) cachedIfUsable(cachePath string) (string, bool) {
 }
 
 // download fetches one area with retry, honoring Retry-After and falling back to
-// jittered exponential backoff.
-func (f *Fetcher) download(area string) ([]byte, error) {
+// jittered exponential backoff. A cancelled context aborts the wait between
+// attempts and returns promptly.
+func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
 	url := f.baseURL + area + ".md"
 	cmdutil.Progressf("apidocs: fetching %s", area)
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		body, status, retryAfter, err := fetchOnce(f.client, url)
+		body, status, retryAfter, err := fetchOnce(ctx, f.client, url)
 		switch {
 		case err != nil:
 			lastErr = err
@@ -195,7 +210,8 @@ func (f *Fetcher) download(area string) ([]byte, error) {
 			return nil, fmt.Errorf("HTTP %d for %s", status, url)
 		default:
 			// Gentle spacing so a full sweep does not trip the rate limiter.
-			sleepFn(baseSpacing)
+			// A cancel here is harmless — the body is already in hand.
+			_ = sleepCtx(ctx, baseSpacing)
 			return body, nil
 		}
 		if attempt == maxAttempts {
@@ -203,7 +219,9 @@ func (f *Fetcher) download(area string) ([]byte, error) {
 		}
 		wait := backoffDelay(attempt, retryAfter)
 		cmdutil.Progressf("apidocs: %s: %v; retry %d/%d in %s", area, lastErr, attempt+1, maxAttempts, wait.Round(time.Millisecond))
-		sleepFn(wait)
+		if sleepErr := sleepCtx(ctx, wait); sleepErr != nil {
+			return nil, fmt.Errorf("apidocs: %s retry aborted: %w", area, errors.Join(lastErr, sleepErr))
+		}
 	}
 	return nil, fmt.Errorf("apidocs: giving up on %s after %d attempts: %w", area, maxAttempts, lastErr)
 }
@@ -229,8 +247,8 @@ func jitter(span time.Duration) time.Duration {
 
 // fetchOnce performs a single GET and returns the body, status, and parsed
 // Retry-After delay (0 when absent/unparsable).
-func fetchOnce(client *http.Client, url string) (body []byte, status int, retryAfter time.Duration, err error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
+func fetchOnce(ctx context.Context, client *http.Client, url string) (body []byte, status int, retryAfter time.Duration, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, 0, 0, err
 	}

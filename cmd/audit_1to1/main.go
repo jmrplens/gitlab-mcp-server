@@ -19,9 +19,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -81,10 +83,13 @@ func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.D
 	if err != nil {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
+	// Cancel the doc-fetch sweep on Ctrl+C so a slow validation aborts promptly.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	// Strict: a download failure (e.g. an upstream 404 for a renamed/removed doc)
 	// must surface as a stale citation rather than be masked by a cached copy.
 	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
-	content, ok, err := runValidateDocs(root, fetcher)
+	content, ok, err := runValidateDocs(ctx, root, fetcher)
 	if err != nil {
 		cmdutil.Fatalf("%v", err)
 	}

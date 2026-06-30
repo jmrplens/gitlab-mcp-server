@@ -1,6 +1,7 @@
 package apidocs
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,9 +11,10 @@ import (
 	"time"
 )
 
-// TestMain makes backoff/spacing instant so retry tests run fast.
+// TestMain makes backoff/spacing instant so retry tests run fast, while still
+// honoring cancellation so the context-aware paths stay covered.
 func TestMain(m *testing.M) {
-	sleepFn = func(time.Duration) {}
+	sleepCtx = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
 	os.Exit(m.Run())
 }
 
@@ -35,7 +37,7 @@ func TestFetch_DownloadsThenServesFreshCache(t *testing.T) {
 	f := New(dir, Options{BaseURL: srv.URL + "/"})
 	f.cacheDir = dir // isolate cache to temp dir
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil {
 		t.Fatalf("first Fetch: %v", err)
 	}
@@ -47,7 +49,7 @@ func TestFetch_DownloadsThenServesFreshCache(t *testing.T) {
 	}
 
 	// Second fetch: cache is fresh, no new download.
-	if _, err2 := f.Fetch("branches"); err2 != nil {
+	if _, err2 := f.Fetch(context.Background(), "branches"); err2 != nil {
 		t.Fatalf("second Fetch: %v", err2)
 	}
 	if *hits != 1 {
@@ -71,7 +73,7 @@ func TestFetch_StaleCacheTriggersRedownload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -90,7 +92,7 @@ func TestFetch_RefreshForcesDownload(t *testing.T) {
 	f := New(dir, Options{BaseURL: srv.URL + "/", Refresh: true})
 	f.cacheDir = dir
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -113,12 +115,12 @@ func TestFetch_OfflineServesCachedAnyAgeAndErrorsOnMiss(t *testing.T) {
 	old := time.Now().Add(-30 * 24 * time.Hour)
 	_ = os.Chtimes(cachePath, old, old)
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil || got != "cached" {
 		t.Fatalf("offline cached: body=%q err=%v", got, err)
 	}
 	// Cache miss offline is an error, no network hit.
-	if _, missErr := f.Fetch("missing"); missErr == nil {
+	if _, missErr := f.Fetch(context.Background(), "missing"); missErr == nil {
 		t.Fatal("offline miss: want error")
 	}
 	if *hits != 0 {
@@ -141,7 +143,7 @@ func TestFetch_RetriesOn429ThenSucceeds(t *testing.T) {
 	f := New(dir, Options{BaseURL: srv.URL + "/"})
 	f.cacheDir = dir
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil {
 		t.Fatalf("Fetch with one 429: %v", err)
 	}
@@ -167,7 +169,7 @@ func TestFetch_NetworkErrorFallsBackToStaleCache(t *testing.T) {
 	f := New(dir, Options{BaseURL: base, MaxAge: time.Hour})
 	f.cacheDir = dir
 
-	got, err := f.Fetch("branches")
+	got, err := f.Fetch(context.Background(), "branches")
 	if err != nil || got != "stale-but-usable" {
 		t.Fatalf("stale fallback: body=%q err=%v", got, err)
 	}
@@ -191,7 +193,7 @@ func TestFetch_StrictVsLenientOn404WithStaleCache(t *testing.T) {
 	lenientDir := t.TempDir()
 	seed(lenientDir)
 	lenient := New(lenientDir, Options{BaseURL: srv.URL + "/", MaxAge: time.Hour, CacheDir: lenientDir})
-	if got, err := lenient.Fetch("branches"); err != nil || got != "cached body" {
+	if got, err := lenient.Fetch(context.Background(), "branches"); err != nil || got != "cached body" {
 		t.Fatalf("lenient: got %q err %v, want cached fallback", got, err)
 	}
 
@@ -199,7 +201,7 @@ func TestFetch_StrictVsLenientOn404WithStaleCache(t *testing.T) {
 	strictDir := t.TempDir()
 	seed(strictDir)
 	strict := New(strictDir, Options{BaseURL: srv.URL + "/", MaxAge: time.Hour, CacheDir: strictDir, Strict: true})
-	if _, err := strict.Fetch("branches"); err == nil {
+	if _, err := strict.Fetch(context.Background(), "branches"); err == nil {
 		t.Fatal("strict: want error on 404 despite stale cache, got nil")
 	}
 }

@@ -22,10 +22,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"slices"
 	"sort"
 	"strings"
@@ -106,8 +108,11 @@ func main() {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
 
+	// Cancel the doc-fetch sweep on Ctrl+C so a slow refresh aborts promptly.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	fetcher := apidocs.New(root, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge})
-	rep, err := buildReport(fetcher)
+	rep, err := buildReport(ctx, fetcher)
 	if err != nil {
 		cmdutil.Fatalf("build edition tier report: %v", err)
 	}
@@ -192,7 +197,7 @@ func expectedTierForAction(id string, pageTier tier) (expected tier, reason stri
 	return pageTier, ""
 }
 
-func buildReport(fetcher *apidocs.Fetcher) (*report, error) {
+func buildReport(ctx context.Context, fetcher *apidocs.Fetcher) (*report, error) {
 	// Mechanical current-state: diff the CE and EE catalogs to learn each
 	// action's current binary gate.
 	ceCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
@@ -252,7 +257,7 @@ func buildReport(fetcher *apidocs.Fetcher) (*report, error) {
 	sort.Strings(pkgNames)
 
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(pkg, domains[pkg].actions, fetcher)
+		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, fetcher)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -278,7 +283,7 @@ func buildReport(fetcher *apidocs.Fetcher) (*report, error) {
 // buildDomainReport assembles the report for one owner package: it resolves the
 // doc area, fetches and parses the tier badges, tallies the current gating, and
 // classifies the domain for wave planning.
-func buildDomainReport(pkg string, actions []actionDetail, fetcher *apidocs.Fetcher) domainReport {
+func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, fetcher *apidocs.Fetcher) domainReport {
 	sort.Slice(actions, func(i, j int) bool { return actions[i].ID < actions[j].ID })
 
 	docArea, mapped := docAreaForPackage(pkg)
@@ -290,7 +295,7 @@ func buildDomainReport(pkg string, actions []actionDetail, fetcher *apidocs.Fetc
 	case !mapped:
 		note = "no doc-area mapping"
 	default:
-		content, ferr := fetcher.Fetch(docArea)
+		content, ferr := fetcher.Fetch(ctx, docArea)
 		if ferr != nil {
 			note = "doc fetch failed: " + ferr.Error()
 		} else {

@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -41,7 +42,7 @@ type docCitationIssue struct {
 // each cited area is fetchable and non-empty. It returns the report JSON and a
 // boolean that is true when every citation validated (callers exit non-zero
 // otherwise so this can gate CI).
-func runValidateDocs(root string, fetcher *apidocs.Fetcher) (report []byte, ok bool, err error) {
+func runValidateDocs(ctx context.Context, root string, fetcher *apidocs.Fetcher) (report []byte, ok bool, err error) {
 	areas, err := scanDocCitations(root)
 	if err != nil {
 		return nil, false, err
@@ -50,7 +51,7 @@ func runValidateDocs(root string, fetcher *apidocs.Fetcher) (report []byte, ok b
 	rep := docValidationReport{SchemaVersion: shared.SchemaVersion, Checked: len(areas)}
 	cmdutil.Progressf("audit_1to1: validating %d cited API docs against the live source…", len(areas))
 	for _, area := range areas {
-		content, fetchErr := fetcher.Fetch(area)
+		content, fetchErr := fetcher.Fetch(ctx, area)
 		switch {
 		case fetchErr != nil:
 			rep.Stale = append(rep.Stale, docCitationIssue{Area: area, Error: fetchErr.Error()})
