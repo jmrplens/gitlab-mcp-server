@@ -10,6 +10,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,8 +37,9 @@ type docMappingRow struct {
 // hardcoded group→doc overrides needed to handle routed tools and
 // "various" rows.
 type docMapping struct {
-	Rows     []docMappingRow
-	Override docOverrideMap
+	Rows      []docMappingRow
+	Override  docOverrideMap
+	Ownership map[string]docOwnershipRule
 }
 
 // docOverrideMap is the set of catalog tools that should be
@@ -64,10 +66,47 @@ func loadDocMapping(readmePath string) (*docMapping, error) {
 	if err != nil {
 		return nil, err
 	}
+	ownershipPath := filepath.Join(filepath.Dir(readmePath), "doc-ownership.json")
+	ownership, err := loadOwnershipRules(ownershipPath)
+	if err != nil {
+		return nil, fmt.Errorf("load ownership rules: %w", err)
+	}
 	return &docMapping{
-		Rows:     rows,
-		Override: hardcodedDocOverrides(),
+		Rows:      rows,
+		Override:  hardcodedDocOverrides(),
+		Ownership: ownership,
 	}, nil
+}
+
+// loadOwnershipRules reads the doc-ownership.json data file that supplements
+// the README table with group extensions and prefix routing for docs whose
+// README rows use "various" or "etc.". A missing file is treated as "no
+// extra rules" so the auditor still runs against a bare checkout.
+//
+// Each entry may carry a "note" field documenting why the doc claims those
+// groups/prefixes; it is human rationale only and intentionally ignored by
+// the parser below (the anonymous struct reads "groups" and "prefixes" and
+// silently drops any other key).
+func loadOwnershipRules(path string) (map[string]docOwnershipRule, error) {
+	data, err := os.ReadFile(path) //#nosec G304 -- path derived from readmePath, not user input
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]docOwnershipRule{}, nil
+		}
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var raw map[string]struct {
+		Groups   []string `json:"groups"`
+		Prefixes []string `json:"prefixes"`
+	}
+	if uerr := json.Unmarshal(data, &raw); uerr != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, uerr)
+	}
+	result := make(map[string]docOwnershipRule, len(raw))
+	for doc, r := range raw {
+		result[doc] = docOwnershipRule{Groups: r.Groups, Prefixes: r.Prefixes}
+	}
+	return result, nil
 }
 
 // parseDomainsTable reads the Domains section of docs/tools/README.md
@@ -258,7 +297,7 @@ func hardcodedDocOverrides() docOverrideMap {
 // without forcing every doc to enumerate every tool by hand.
 func computeExpectedByDoc(mapping *docMapping, catalog *catalogSnapshot) (out map[string][]string, unassigned []string) {
 	firstClaimer := buildFirstClaimer(mapping)
-	prefixRules := buildPrefixRules()
+	prefixRules := buildPrefixRules(mapping)
 	overrideDoc := buildOverrideDoc(mapping)
 
 	out = make(map[string][]string)
@@ -335,344 +374,15 @@ type docOwnershipRule struct {
 	Prefixes []string
 }
 
-// docOwnershipRules is the single source of truth for per-doc
-// catalog ownership. Each entry is one docs/tools/<doc>.md file's
-// claim on catalog groups (used by the first-claimer rule) plus
-// naming prefixes (used by longest-match-wins routing).
-var docOwnershipRules = map[string]docOwnershipRule{
-	// CI/CD's README row lists `gitlab_pipeline`, `gitlab_job`,
-	// "etc." but omits the adjacent groups that build the rest
-	// of the CI/CD surface (CI variables, CI lint, CI catalog).
-	"ci-cd.md": {
-		Groups: []string{
-			"gitlab_ci_variable",
-			"gitlab_ci_lint",
-			"gitlab_ci_catalog",
-		},
-	},
-	// MCP Capabilities lists gitlab_server as its meta-tool but
-	// the first-claimer rule (admin.md claims gitlab_server
-	// earlier) would route gitlab_server_status to admin.md.
-	// Claiming gitlab_server here ensures capabilities.md owns
-	// its share of the MCP maintenance surface.
-	"capabilities.md": {
-		Groups: []string{"gitlab_server"},
-	},
-	// Notifications & Events's README row says "various". The
-	// canonical groups it touches are gitlab_notification (the
-	// global/group/project notification settings meta-tool); the
-	// events surface is owned via the wiki prefix list below.
-	"notifications.md": {
-		Groups: []string{"gitlab_notification"},
-		Prefixes: []string{
-			"gitlab_notification_",
-			"gitlab_issue_emoji_",
-			"gitlab_issue_note_emoji_",
-			"gitlab_issue_label_event_",
-			"gitlab_issue_milestone_event_",
-			"gitlab_issue_state_event_",
-			"gitlab_mr_emoji_",
-			"gitlab_mr_note_emoji_",
-			"gitlab_mr_label_event_",
-			"gitlab_mr_milestone_event_",
-			"gitlab_mr_state_event_",
-			"gitlab_snippet_emoji_",
-			"gitlab_snippet_note_emoji_",
-		},
-	},
-	// Analytics & Compliance lists gitlab_group (enterprise
-	// routes), gitlab_compliance_policy, gitlab_project_alias
-	// — DORA metrics is also documented here but its group
-	// name is gitlab_dora_metrics, not gitlab_group.
-	"analytics-compliance.md": {
-		Groups: []string{
-			"gitlab_compliance_policy",
-			"gitlab_project_alias",
-			"gitlab_dora_metrics",
-		},
-		Prefixes: []string{
-			"gitlab_get_recently_created_issues_count",
-			"gitlab_get_recently_created_mr_count",
-			"gitlab_get_recently_added_members_count",
-			"gitlab_get_project_dora_metrics",
-			"gitlab_get_group_dora_metrics",
-			"gitlab_get_compliance_policy_settings",
-			"gitlab_update_compliance_policy_settings",
-			"gitlab_list_project_aliases",
-			"gitlab_get_project_alias",
-			"gitlab_create_project_alias",
-			"gitlab_delete_project_alias",
-			"gitlab_get_project_statistics",
-		},
-	},
-	// Identity & Security lists gitlab_group_scim,
-	// gitlab_member_role, "etc." The "etc." captures the
-	// enterprise routes inside gitlab_group / gitlab_project.
-	"identity-security.md": {
-		Groups: []string{
-			"gitlab_group_scim",
-			"gitlab_member_role",
-		},
-		Prefixes: []string{
-			"gitlab_group_scim",
-			"gitlab_list_group_scim_identities",
-			"gitlab_get_group_scim_identity",
-			"gitlab_update_group_scim_identity",
-			"gitlab_delete_group_scim_identity",
-			"gitlab_member_role",
-			"gitlab_list_instance_member_roles",
-			"gitlab_list_group_member_roles",
-			"gitlab_create_instance_member_role",
-			"gitlab_create_group_member_role",
-			"gitlab_delete_instance_member_role",
-			"gitlab_delete_group_member_role",
-			"gitlab_group_credential",
-			"gitlab_list_group_personal_access_tokens",
-			"gitlab_revoke_group_personal_access_token",
-			"gitlab_list_group_ssh_keys",
-			"gitlab_delete_group_ssh_key",
-			"gitlab_group_ssh_certificate",
-			"gitlab_list_group_ssh_certificates",
-			"gitlab_create_group_ssh_certificate",
-			"gitlab_delete_group_ssh_certificate",
-			"gitlab_security_settings",
-			"gitlab_get_project_security_settings",
-			"gitlab_update_project_secret_push_protection",
-			"gitlab_update_group_secret_push_protection",
-			"gitlab_group_ldap_link_list",
-			"gitlab_group_ldap_link_add",
-			"gitlab_group_ldap_link_delete",
-			"gitlab_group_ldap_link_delete_for_provider",
-			"gitlab_group_ldap_sync",
-			"gitlab_group_saml_link_list",
-			"gitlab_group_saml_link_get",
-			"gitlab_group_saml_link_add",
-			"gitlab_group_saml_link_delete",
-			"gitlab_group_saml_users_list",
-		},
-	},
-	// branches.md owns all gitlab_branch_* and
-	// gitlab_protected_branch_* tools (one group, gitlab_branch).
-	"branches.md": {
-		Prefixes: []string{
-			"gitlab_branch_",
-			"gitlab_protected_branch_",
-		},
-	},
-	// tags.md owns all gitlab_tag_* and gitlab_protected_tag_*
-	// tools. Note: gitlab_tag_protect is a mutating tool that
-	// should be a Write annotation; auditor's destructive
-	// detection handles that.
-	"tags.md": {
-		Prefixes: []string{
-			"gitlab_tag_",
-			"gitlab_protected_tag_",
-		},
-	},
-	// mirrors.md owns a small set of project mirror tools that
-	// live inside gitlab_project (per buildProjectActionSpecs).
-	// The README's "gitlab_project (enterprise routes)"
-	// annotation is the source.
-	"mirrors.md": {
-		Prefixes: []string{
-			"gitlab_add_project_mirror",
-			"gitlab_delete_project_mirror",
-			"gitlab_edit_project_mirror",
-			"gitlab_force_push_mirror_update",
-			"gitlab_get_project_mirror",
-			"gitlab_get_project_mirror_public_key",
-			"gitlab_list_project_mirrors",
-		},
-	},
-	// boards.md owns the board/label/milestone surfaces even
-	// though they live inside gitlab_project / gitlab_group
-	// groups. Naming prefixes are how the team distinguishes
-	// "project-management" surfaces from "core project CRUD".
-	"boards.md": {
-		Prefixes: []string{
-			"gitlab_board_",
-			"gitlab_label_",
-			"gitlab_milestone_",
-		},
-	},
-	// access.md owns every token, deploy key, deploy token,
-	// access request, invite, and job-token-scoped tool — plus
-	// the CRUD half of project/group member management. The
-	// README's "various" annotation means the team explicitly
-	// hand-curated these tools; the allowlist mirrors that.
-	"access.md": {
-		Prefixes: []string{
-			"gitlab_project_access_token_",
-			"gitlab_group_access_token_",
-			"gitlab_personal_access_token_",
-			"gitlab_deploy_token_",
-			"gitlab_deploy_key_",
-			"gitlab_access_request_",
-			"gitlab_project_invite",
-			"gitlab_group_invite",
-			"gitlab_get_job_token_access_settings",
-			"gitlab_patch_job_token_access_settings",
-			"gitlab_list_job_token_inbound_allowlist",
-			"gitlab_list_job_token_group_allowlist",
-			"gitlab_add_project_job_token_allowlist",
-			"gitlab_add_group_job_token_allowlist",
-			"gitlab_remove_project_job_token_allowlist",
-			"gitlab_remove_group_job_token_allowlist",
-			"gitlab_project_member_add",
-			"gitlab_project_member_edit",
-			"gitlab_project_member_delete",
-			"gitlab_group_member_add",
-			"gitlab_group_member_edit",
-			"gitlab_group_member_delete",
-		},
-	},
-	// security.md owns feature flags, secure files, error
-	// tracking, alert metric images, impersonation tokens, and
-	// the admin-side user-token creation tool
-	// (gitlab_create_personal_access_token). The PAT listing
-	// tools live in access.md via the "personal_access_token_"
-	// prefix; admin-user PAT creation lives here.
-	"security.md": {
-		Prefixes: []string{
-			"gitlab_feature_flag_",
-			"gitlab_ff_user_list_",
-			"gitlab_list_secure_files",
-			"gitlab_show_secure_file",
-			"gitlab_create_secure_file",
-			"gitlab_remove_secure_file",
-			"gitlab_get_error_tracking_settings",
-			"gitlab_enable_disable_error_tracking",
-			"gitlab_list_error_tracking_client_keys",
-			"gitlab_create_error_tracking_client_key",
-			"gitlab_delete_error_tracking_client_key",
-			"gitlab_list_alert_metric_images",
-			"gitlab_upload_alert_metric_image",
-			"gitlab_update_alert_metric_image",
-			"gitlab_delete_alert_metric_image",
-			"gitlab_list_impersonation_tokens",
-			"gitlab_get_impersonation_token",
-			"gitlab_create_impersonation_token",
-			"gitlab_revoke_impersonation_token",
-			"gitlab_create_personal_access_token",
-		},
-	},
-	// integrations.md owns the integration/badge/topic/import
-	// surface that lives inside gitlab_project and gitlab_group.
-	// Epic-discussion tools are intentionally absent — they live
-	// in epics.md via the wider "gitlab_epic_" prefix which wins
-	// under longest-match-wins for the bare tool names too.
-	"integrations.md": {
-		Prefixes: []string{
-			"gitlab_list_integrations",
-			"gitlab_get_integration",
-			"gitlab_delete_integration",
-			"gitlab_set_jira_integration",
-			"gitlab_list_project_badges",
-			"gitlab_get_project_badge",
-			"gitlab_add_project_badge",
-			"gitlab_edit_project_badge",
-			"gitlab_delete_project_badge",
-			"gitlab_preview_project_badge",
-			"gitlab_list_group_badges",
-			"gitlab_get_group_badge",
-			"gitlab_add_group_badge",
-			"gitlab_edit_group_badge",
-			"gitlab_delete_group_badge",
-			"gitlab_preview_group_badge",
-			"gitlab_list_topics",
-			"gitlab_get_topic",
-			"gitlab_create_topic",
-			"gitlab_update_topic",
-			"gitlab_delete_topic",
-			"gitlab_import_from_github",
-			"gitlab_import_from_bitbucket_server",
-			"gitlab_import_from_bitbucket_cloud",
-			"gitlab_import_github_gists",
-			"gitlab_cancel_github_import",
-			"gitlab_get_group_datadog_integration",
-			"gitlab_set_group_datadog_integration",
-			"gitlab_delete_group_datadog_integration",
-		},
-	},
-	// epics.md owns the epic core surface (epics, epic notes,
-	// epic issues, epic discussions, group epic boards). These
-	// tools live in the gitlab_group catalog group per
-	// buildGroupActionSpecs — the README's "gitlab_epic" entry
-	// refers to a routing label rather than a real group, so
-	// the prefix allowlist is the canonical ownership signal.
-	"epics.md": {
-		Prefixes: []string{
-			"gitlab_epic_",
-			"gitlab_list_epic_discussions",
-			"gitlab_get_epic_discussion",
-			"gitlab_create_epic_discussion",
-			"gitlab_add_epic_discussion_note",
-			"gitlab_delete_epic_discussion_note",
-			"gitlab_update_epic_discussion_note",
-			"gitlab_group_epic_board_",
-		},
-	},
-	// merge-requests.md owns the merge-train and external-status-
-	// check surfaces (Premium/Ultimate groups) whose owning
-	// catalog group has no dedicated meta-tool doc. The README
-	// Domains table doesn't list these groups; they live in
-	// merge-requests.md by team convention.
-	"merge-requests.md": {
-		Prefixes: []string{
-			"gitlab_list_project_merge_trains",
-			"gitlab_list_merge_request_in_merge_train",
-			"gitlab_get_merge_request_on_merge_train",
-			"gitlab_add_merge_request_to_merge_train",
-			"gitlab_list_project_status_checks",
-			"gitlab_list_project_mr_external_status_checks",
-			"gitlab_list_project_external_status_checks",
-			"gitlab_create_project_external_status_check",
-			"gitlab_update_project_external_status_check",
-			"gitlab_delete_project_external_status_check",
-			"gitlab_retry_failed_external_status_check_for_project_mr",
-			"gitlab_set_project_mr_external_status_check_status",
-		},
-	},
-	// admin.md owns the audit-event surface (Premium group) whose
-	// owning catalog group `gitlab_audit_event` has no dedicated
-	// meta-tool doc. The README Domains table doesn't list this
-	// group; audit events live in admin.md by team convention
-	// (admin is the natural home for instance-level endpoints).
-	"admin.md": {
-		Prefixes: []string{
-			"gitlab_list_instance_audit_events",
-			"gitlab_get_instance_audit_event",
-			"gitlab_list_group_audit_events",
-			"gitlab_get_group_audit_event",
-			"gitlab_list_project_audit_events",
-			"gitlab_get_project_audit_event",
-		},
-	},
-	// packages.md owns the dependency-list surface (Ultimate
-	// group) whose owning catalog group `dependencies` has no
-	// dedicated meta-tool doc. The README Domains table doesn't
-	// list this group; dependencies live in packages.md by team
-	// convention (packages is the natural home for inventory /
-	// export workflows).
-	"packages.md": {
-		Prefixes: []string{
-			"gitlab_list_project_dependencies",
-			"gitlab_create_dependency_list_export",
-			"gitlab_get_dependency_list_export",
-			"gitlab_download_dependency_list_export",
-		},
-	},
-}
-
 // groupExtensions projects docOwnershipRules into the group→doc map
 // used by the first-claimer lookup in computeExpectedByDoc. Keys are
 // the canonical "docs/tools/<name>.md" form so the per-doc lookup
 // in buildReport matches the fileFinding entries directly. Docs
 // with no group claims are skipped (the first-claimer rule does not
 // claim them).
-func groupExtensions() map[string][]string {
+func groupExtensions(rules map[string]docOwnershipRule) map[string][]string {
 	out := make(map[string][]string)
-	for doc, rule := range docOwnershipRules {
+	for doc, rule := range rules {
 		if len(rule.Groups) == 0 {
 			continue
 		}
@@ -686,9 +396,9 @@ func groupExtensions() map[string][]string {
 // assignTool. Keys are the canonical "docs/tools/<name>.md" form so
 // the longest-match-wins lookup finds the right doc; docs with no
 // prefix claims are skipped.
-func parsePrefixAllowlists() map[string][]string {
+func parsePrefixAllowlists(rules map[string]docOwnershipRule) map[string][]string {
 	out := make(map[string][]string)
-	for doc, rule := range docOwnershipRules {
+	for doc, rule := range rules {
 		if len(rule.Prefixes) == 0 {
 			continue
 		}
@@ -715,7 +425,7 @@ func buildFirstClaimer(mapping *docMapping) map[string]string {
 			firstClaimer[g] = canonicalDoc
 		}
 	}
-	for d, groups := range groupExtensions() {
+	for d, groups := range groupExtensions(mapping.Ownership) {
 		canonicalDoc := canonicalOverridePath(d)
 		for _, g := range groups {
 			if _, taken := firstClaimer[g]; taken {
@@ -737,8 +447,8 @@ type prefixRule struct {
 // buildPrefixRules flattens the per-doc prefix allowlist into a
 // single slice, sorted longest-prefix-first so the best match is
 // found first during assignTool.
-func buildPrefixRules() []prefixRule {
-	prefixByDoc := parsePrefixAllowlists()
+func buildPrefixRules(mapping *docMapping) []prefixRule {
+	prefixByDoc := parsePrefixAllowlists(mapping.Ownership)
 	docKeys := make([]string, 0, len(prefixByDoc))
 	for d := range prefixByDoc {
 		docKeys = append(docKeys, d)

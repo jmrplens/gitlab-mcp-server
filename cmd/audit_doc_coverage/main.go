@@ -182,8 +182,8 @@ func parseFlags() cmdlineFlags {
 // group (or a tool whose owning group isn't claimed by any README
 // row), those tools would otherwise slip past DOC-002 silently. The
 // -check exit-non-zero on UnassignedTotal forces the orchestrator
-// to add explicit routing — either by extending docOwnershipRules
-// in mapping.go, by adding a new README Domains row, or by ADR-routing
+// to add explicit routing — either by extending docs/tools/doc-ownership.json,
+// by adding a new README Domains row, or by ADR-routing
 // the group into a parent doc's prefix allowlist.
 func (r report) check() string {
 	if r.Summary.MissingTotal == 0 && r.Summary.OrphanTotal == 0 && r.Summary.TierMismatchTotal == 0 && r.Summary.UnassignedTotal == 0 {

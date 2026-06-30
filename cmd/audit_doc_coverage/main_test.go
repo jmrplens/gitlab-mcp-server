@@ -532,6 +532,60 @@ func TestSorted_Diff(t *testing.T) {
 	}
 }
 
+// TestLoadOwnershipRules verifies the doc-ownership.json loader:
+// it parses groups/prefixes, silently ignores the human-only "note"
+// field, treats a missing file as an empty (non-error) ruleset so the
+// auditor still runs on a bare checkout, and surfaces malformed JSON
+// as an error rather than producing partial rules.
+func TestLoadOwnershipRules(t *testing.T) {
+	dir := t.TempDir()
+
+	// Valid file: groups + prefixes parsed, "note" ignored.
+	valid := filepath.Join(dir, "doc-ownership.json")
+	const body = `{
+  "ci-cd.md": {
+    "note": "rationale that the parser must ignore",
+    "groups": ["gitlab_ci_variable"],
+    "prefixes": ["gitlab_branch_"]
+  }
+}`
+	if err := os.WriteFile(valid, []byte(body), 0o600); err != nil {
+		t.Fatalf("write valid file: %v", err)
+	}
+	rules, err := loadOwnershipRules(valid)
+	if err != nil {
+		t.Fatalf("loadOwnershipRules(valid) error: %v", err)
+	}
+	got, ok := rules["ci-cd.md"]
+	if !ok {
+		t.Fatalf("ci-cd.md missing from parsed rules: %v", rules)
+	}
+	if !reflect.DeepEqual(got.Groups, []string{"gitlab_ci_variable"}) {
+		t.Errorf("Groups = %v, want [gitlab_ci_variable]", got.Groups)
+	}
+	if !reflect.DeepEqual(got.Prefixes, []string{"gitlab_branch_"}) {
+		t.Errorf("Prefixes = %v, want [gitlab_branch_]", got.Prefixes)
+	}
+
+	// Missing file: empty ruleset, no error.
+	rules, err = loadOwnershipRules(filepath.Join(dir, "does-not-exist.json"))
+	if err != nil {
+		t.Fatalf("loadOwnershipRules(missing) error: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Errorf("missing file produced %d rules, want 0", len(rules))
+	}
+
+	// Malformed JSON: error, not partial rules.
+	bad := filepath.Join(dir, "bad.json")
+	if werr := os.WriteFile(bad, []byte("{not json"), 0o600); werr != nil {
+		t.Fatalf("write bad file: %v", werr)
+	}
+	if _, derr := loadOwnershipRules(bad); derr == nil {
+		t.Error("loadOwnershipRules(malformed) returned nil error, want parse error")
+	}
+}
+
 // TestBuildReport_LiveBaseline is the integration smoke test against
 // the real catalog and the real docs/tools tree. It runs the full
 // pipeline and asserts the report shape, not the exact counts (which
