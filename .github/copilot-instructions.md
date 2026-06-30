@@ -16,26 +16,27 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ```text
 gitlab-mcp-server/
-├── cmd/                    # Entry points and dev utilities
-│   ├── server/
-│   │   └── main.go         # MCP server entry point
-│   │   └── shutdown.go     # --shutdown flag: terminate all running instances
-│   ├── add_docs/
-│   │   └── main.go         # AST tool: adds godoc comments to undocumented symbols
-│   ├── audit_tools/
-│   │   └── main.go         # Audits MCP tool metadata violations
-│   ├── audit_output/
-│   │   └── main.go         # Audits MCP tool output quality (OutputSchema, annotations)
-│   ├── audit_metrics/
-│   │   └── main.go         # Audits MCP tool metrics (tool count, resource count, etc.)
-│   ├── audit_test_names/
-│   │   └── main.go         # Audits test function naming convention compliance
-│   ├── format_md_tables/
-│   │   └── main.go         # Formats Markdown pipe tables in README.md and docs/
-│   ├── gen_llms/
-│   │   └── main.go         # Generates llms.txt and llms-full.txt for LLM discovery
-│   └── audit_string_dupes/
-│       └── main.go         # Finds duplicated string literals missing constants
+├── cmd/                    # 20 dev utility binaries — see docs/development/cmd-utilities.md for the full reference
+│   ├── server/             # MCP server entry point (+ --shutdown flag)
+│   ├── audit_1to1/         # 1:1 SDK↔API parity audit (-scope structs|actions|metadata; -validate-docs)
+│   ├── audit_catalog_first/        # Catalog-first registration invariants (ADR-0004)
+│   ├── audit_discovery_completeness/ # Discovery-metadata quality audit (META-001)
+│   ├── audit_doc_coverage/ # docs/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_dynamic_aliases/ # Dynamic-toolset alias governance
+│   ├── audit_edition_tier/ # Doc-grounded licensing tier vs binary gating
+│   ├── audit_surface_quality/ # MCP surface metadata + output quality (-view; was audit_tools + audit_output)
+│   ├── audit_tokens/       # Token overhead; -footprint, --compare-schemas (was audit_meta_schema); cl100k_base tokenizer (tokens.go)
+│   ├── audit_metrics/      # MCP tool/resource/prompt metrics
+│   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run)
+│   ├── audit_string_dupes/ # Duplicated string literals missing constants
+│   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
+│   ├── format_md_tables/   # Markdown pipe-table normalizer
+│   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
+│   ├── gen_docker_tools/   # Docker MCP Registry tools.json
+│   ├── gen_llms/           # llms.txt / llms-full.txt
+│   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
+│   ├── gen_testing_docs/   # docs/testing/testing.md test-metrics block
+│   └── eval_mcp_surfaces/  # Model-behavior evaluation across MCP surfaces
 ├── internal/
 │   ├── config/             # Configuration loading (.env, flags)
 │   ├── gitlab/             # GitLab API client wrapper

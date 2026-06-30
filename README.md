@@ -33,7 +33,7 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 <!-- START TOKEN FOOTPRINT -->
 
-Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`. For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
+Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
 **Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
@@ -432,19 +432,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       949 |     191,881 |
-| Unit tests (`_test.go`)  |       517 |     292,365 |
+| Source (`.go`, non-test) |       949 |     191,946 |
+| Unit tests (`_test.go`)  |       518 |     292,456 |
 | End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,608** | **519,423** |
+| **Total**                | **1,609** | **519,579** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
 | Source functions                |  7,322 |
-| — exported (public)             |  2,554 |
-| — unexported (private)          |  4,768 |
-| Unit test functions (`TestXxx`) | 11,309 |
+| — exported (public)             |  2,553 |
+| — unexported (private)          |  4,769 |
+| Unit test functions (`TestXxx`) | 11,314 |
 | Subtests (`t.Run(...)`)         |  2,625 |
 | End-to-end test functions       |    286 |
 
@@ -454,16 +454,16 @@ Numbers nobody asked for, but here they are anyway.
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~565 lines |
-| Comment lines in source            |  20,454 (~10.7% of source) |
+| Average test file length           |                 ~564 lines |
+| Comment lines in source            |  20,478 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,560 |
-| `defer` statements                 |   702 |
+| `if err != nil` checks             | 6,559 |
+| `defer` statements                 |   703 |
 | `struct` types defined             | 2,707 |
 | `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
@@ -475,7 +475,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   224 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   241 |
+| Git commits                    |   242 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -489,7 +489,7 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,488 pages of A4                                                                                   |
+| Source code printed at 55 lines/page | ~3,489 pages of A4                                                                                   |
 | Source lines mentioning `"gitlab"`   | 12,392 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |

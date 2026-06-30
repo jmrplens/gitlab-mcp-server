@@ -55,7 +55,7 @@ go run ./cmd/audit_1to1/ -validate-docs
 | ---------------- | ---------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-gaps-only`     | `bool`     | `false`                    | Only include entries with at least one finding                                                                                                     |
 | `-output`        | `string`   | `-`                        | Path to write the JSON report, or `-` for stdout                                                                                                   |
-| `-scope`         | `string`   | `structs,actions,metadata` | Comma-separated subset of `{structs,actions,metadata}`; default all (merged backlog)                                                               |
+| `-scope`         | `string`   | `structs,actions,metadata` | A single `{structs,actions,metadata}` scope, or all three (default, merged backlog); two-scope combinations are rejected                           |
 | `-validate-docs` | `bool`     | `false`                    | Instead of the audit, verify every `doc/api/<area>.md` citation in the adjudication tables is still fetchable (exits non-zero on a stale citation) |
 | `-refresh`       | `bool`     | `false`                    | With `-validate-docs`, force re-fetch of cited docs even when cached and fresh                                                                     |
 | `-offline`       | `bool`     | `false`                    | With `-validate-docs`, use only cached docs; do not fetch                                                                                          |
@@ -196,11 +196,13 @@ go run ./cmd/audit_dynamic_aliases/
 
 #### Flags
 
-This utility takes no flags.
+| Flag      | Type     | Default | Description                    |
+| --------- | -------- | ------- | ------------------------------ |
+| `-output` | `string` | `tsv`   | Output format: `tsv` or `json` |
 
 #### Output
 
-Tab-separated values to stdout (`Severity\tProblem\tAlias\tCanonical\tMessage`). The binary exits `1` if any error-severity finding is present.
+With `-output tsv` (default): tab-separated values to stdout (`Severity\tProblem\tAlias\tCanonical\tSource\tMessage`) plus a pass/fail summary line. With `-output json`: the findings as a JSON array. Any other value is rejected with exit `2`. The binary exits `1` if any error-severity finding is present.
 
 #### Make targets
 
@@ -208,7 +210,7 @@ Tab-separated values to stdout (`Severity\tProblem\tAlias\tCanonical\tMessage`).
 
 #### Notes
 
-No flags and no arguments. The TSV schema is the machine-readable contract consumed by CI.
+The TSV schema is the machine-readable contract consumed by CI; `-output json` is available for programmatic consumers.
 
 ### audit_edition_tier
 
@@ -267,13 +269,14 @@ go run ./cmd/audit_surface_quality/ -view=output
 
 #### Flags
 
-| Flag    | Type     | Default | Description                                             |
-| ------- | -------- | ------- | ------------------------------------------------------- |
-| `-view` | `string` | `all`   | Which audit view to run: `metadata`, `output`, or `all` |
+| Flag    | Type     | Default | Description                                                                                                                                      |
+| ------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-view` | `string` | `all`   | Which audit view to run: `metadata`, `output`, or `all`                                                                                          |
+| `-json` | `bool`   | `false` | Emit JSON instead of Markdown; requires `-view=metadata` or `-view=output` (rejected with `-view=all`, which would emit two top-level documents) |
 
 #### Output
 
-A Markdown report to stdout with summary tables, violations/findings grouped by category, and a full tool listing.
+A Markdown report to stdout with summary tables, violations/findings grouped by category, and a full tool listing. With `-json` (single view), a JSON document for that view.
 
 #### Make targets
 
@@ -343,11 +346,14 @@ go run ./cmd/audit_metrics/
 
 #### Flags
 
-This utility takes no flags.
+| Flag           | Type   | Default | Description                                            |
+| -------------- | ------ | ------- | ------------------------------------------------------ |
+| `-json`        | `bool` | `false` | Emit a JSON summary instead of the Markdown report     |
+| `-top-domains` | `int`  | `20`    | Number of domains to list by tool count (must be >= 0) |
 
 #### Output
 
-A Markdown report to stdout.
+A Markdown report to stdout by default, or a JSON summary with `-json`.
 
 #### Make targets
 
@@ -442,17 +448,25 @@ CSV to stdout (`file,current_name,pattern,suggested_name`), with a summary print
 
 ### audit_string_dupes
 
-Scans non-test Go source for string literals appearing three or more times that are not already `const`/`var` values.
+Scans non-test Go source for string literals appearing often enough (default: three or more times) and long enough (default: three or more characters) that are not already `const`/`var` values.
 
 #### Usage
 
 ```bash
 go run ./cmd/audit_string_dupes/ ./internal/tools/branches/
+
+# Custom thresholds
+go run ./cmd/audit_string_dupes/ -threshold 4 -min-length 5 ./internal/
 ```
 
 #### Flags
 
-This utility takes no flags; pass positional path arguments.
+| Flag          | Type  | Default | Description                                                   |
+| ------------- | ----- | ------- | ------------------------------------------------------------- |
+| `-threshold`  | `int` | `3`     | Minimum occurrence count to report a duplicate (must be >= 1) |
+| `-min-length` | `int` | `3`     | Minimum string length to consider (must be >= 1)              |
+
+Pass one or more positional path arguments after the flags.
 
 #### Positional arguments
 
