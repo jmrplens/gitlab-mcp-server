@@ -44,11 +44,15 @@ function Write-Info { param([string]$Message) Write-Host "==> $Message" -Foregro
 $binName = 'gitlab-mcp-server'
 
 # --- detect architecture ---------------------------------------------------
-$arch = switch ($env:PROCESSOR_ARCHITECTURE) {
+# PROCESSOR_ARCHITECTURE reports the *process* architecture, so a 32-bit
+# PowerShell on 64-bit Windows says 'x86'. PROCESSOR_ARCHITEW6432 carries the
+# real OS architecture in that case, so prefer it when present.
+$procArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+$arch = switch ($procArch) {
     'AMD64' { 'amd64' }
     'ARM64' { 'arm64' }
     'x86' { throw 'unsupported architecture x86 (32-bit); no 32-bit build is published' }
-    default { throw "unsupported architecture '$($env:PROCESSOR_ARCHITECTURE)'" }
+    default { throw "unsupported architecture '$procArch'" }
 }
 
 $asset = "$binName-windows-$arch.exe"
@@ -69,27 +73,32 @@ try {
     Invoke-WebRequest -Uri "$base/$asset" -OutFile $assetPath -UseBasicParsing
 
     # --- verify checksum ---------------------------------------------------
-    Write-Info 'verifying checksum'
-    $sumsPath = Join-Path $tmp 'checksums.txt'
-    try {
-        Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile $sumsPath -UseBasicParsing
+    # Integrity verification is mandatory by default (fail closed). Set the
+    # environment variable ALLOW_UNVERIFIED=1 to bypass, at your own risk.
+    if ($env:ALLOW_UNVERIFIED -eq '1') {
+        Write-Info 'WARNING: ALLOW_UNVERIFIED=1 - skipping checksum verification'
+    }
+    else {
+        Write-Info 'verifying checksum'
+        $sumsPath = Join-Path $tmp 'checksums.txt'
+        try {
+            Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile $sumsPath -UseBasicParsing
+        }
+        catch {
+            throw "could not fetch checksums.txt to verify the download; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
+        }
         $want = (Get-Content $sumsPath |
                 Where-Object { $_ -match "\s$([regex]::Escape($asset))$" } |
                 ForEach-Object { ($_ -split '\s+')[0] } |
                 Select-Object -First 1)
-        $got = (Get-FileHash -Algorithm SHA256 -Path $assetPath).Hash.ToLower()
         if (-not $want) {
-            Write-Info "WARNING: $asset not listed in checksums.txt; skipping verification"
+            throw "$asset is not listed in checksums.txt; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
         }
-        elseif ($want.ToLower() -ne $got) {
+        $got = (Get-FileHash -Algorithm SHA256 -Path $assetPath).Hash.ToLower()
+        if ($want.ToLower() -ne $got) {
             throw "checksum mismatch for $asset (want $want, got $got)"
         }
-        else {
-            Write-Info 'checksum OK'
-        }
-    }
-    catch [System.Net.WebException] {
-        Write-Info 'WARNING: could not fetch checksums.txt; skipping verification'
+        Write-Info 'checksum OK'
     }
 
     # --- install -----------------------------------------------------------
@@ -100,8 +109,10 @@ try {
 
     # --- ensure on PATH (user scope) ---------------------------------------
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if (($userPath -split ';') -notcontains $InstallDir) {
-        [Environment]::SetEnvironmentVariable('Path', "$userPath;$InstallDir", 'User')
+    $pathList = if ($userPath) { $userPath -split ';' } else { @() }
+    if ($pathList -notcontains $InstallDir) {
+        $newPath = if ($userPath) { "$userPath;$InstallDir" } else { $InstallDir }
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
         $env:Path = "$env:Path;$InstallDir"
         Write-Info "added $InstallDir to your user PATH (restart your terminal to pick it up)"
     }

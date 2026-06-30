@@ -60,12 +60,15 @@ else
 fi
 
 # --- pick a checksum tool --------------------------------------------------
+# Integrity verification is mandatory by default (fail closed): a download that
+# cannot be verified is rejected rather than installed. Set ALLOW_UNVERIFIED=1
+# to bypass on systems without a sha256 tool — at your own risk.
 if command -v sha256sum >/dev/null 2>&1; then
 	sha256() { sha256sum "$1" | cut -d' ' -f1; }
 elif command -v shasum >/dev/null 2>&1; then
 	sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
 else
-	sha256() { echo ""; } # no tool: skip verification with a warning
+	sha256() { echo ""; }
 fi
 
 tmp=$(mktemp -d)
@@ -74,25 +77,25 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 info "downloading $asset ($VERSION)"
 dl "$base/$asset" "$tmp/$asset" || err "download failed: $base/$asset"
 
-info "verifying checksum"
-if dl "$base/checksums.txt" "$tmp/checksums.txt" 2>/dev/null; then
-	want=$(grep " ${asset}\$" "$tmp/checksums.txt" 2>/dev/null | cut -d' ' -f1 || true)
-	got=$(sha256 "$tmp/$asset")
-	if [ -z "$got" ]; then
-		info "WARNING: no sha256 tool found; skipping checksum verification"
-	elif [ -z "$want" ]; then
-		info "WARNING: $asset not listed in checksums.txt; skipping verification"
-	elif [ "$want" != "$got" ]; then
-		err "checksum mismatch for $asset (want $want, got $got)"
-	else
-		info "checksum OK"
-	fi
+if [ "${ALLOW_UNVERIFIED:-0}" = "1" ]; then
+	info "WARNING: ALLOW_UNVERIFIED=1 — skipping checksum verification"
 else
-	info "WARNING: could not fetch checksums.txt; skipping verification"
+	info "verifying checksum"
+	got=$(sha256 "$tmp/$asset")
+	[ -n "$got" ] || err "no sha256 tool (need sha256sum or shasum) to verify the download; install one or re-run with ALLOW_UNVERIFIED=1"
+	dl "$base/checksums.txt" "$tmp/checksums.txt" 2>/dev/null || err "could not fetch checksums.txt to verify the download; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
+	# Strip CR so a checksums.txt saved with CRLF still matches the $-anchored grep.
+	want=$(tr -d '\r' <"$tmp/checksums.txt" | grep " ${asset}\$" | cut -d' ' -f1 || true)
+	[ -n "$want" ] || err "$asset is not listed in checksums.txt; aborting (set ALLOW_UNVERIFIED=1 to bypass)"
+	[ "$want" = "$got" ] || err "checksum mismatch for $asset (want $want, got $got)"
+	info "checksum OK"
 fi
 
 # --- install ---------------------------------------------------------------
 mkdir -p "$INSTALL_DIR"
+# Unlink an existing binary first so re-installing over a running server does not
+# fail with "Text file busy".
+rm -f "$INSTALL_DIR/$BIN_NAME" 2>/dev/null || true
 install -m 0755 "$tmp/$asset" "$INSTALL_DIR/$BIN_NAME" 2>/dev/null ||
 	{ cp "$tmp/$asset" "$INSTALL_DIR/$BIN_NAME" && chmod 0755 "$INSTALL_DIR/$BIN_NAME"; }
 
