@@ -29,9 +29,50 @@ Antes de comenzar, asegúrate de tener:
 Para configuraciones de solo lectura, puedes usar un token con scope `read_api` y habilitar `GITLAB_READ_ONLY=true`. Esto desactiva todas las herramientas de escritura.
 :::
 
+## Instalación rápida
+
+Elige una — cada vía termina contigo escribiendo un prompt a tu asistente. Para la referencia completa por cliente, consulta [Configuración manual](#configuración-manual) más abajo.
+
+### Botones de un clic
+
+Registran un servidor basado en **Docker** (descarga la imagen en la primera ejecución; necesitas [Docker](https://www.docker.com/) instalado). VS Code te pide el token; Cursor / LM Studio / Kiro añaden un marcador `YOUR_GITLAB_TOKEN` que debes sustituir.
+
+[![Instalar en VS Code](https://img.shields.io/badge/Instalar_en-VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D)
+[![Instalar en Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Añadir a LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-dark.svg)](https://lmstudio.ai/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
+[![Añadir a Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
+
+### Claude Code (`claude mcp add`)
+
+Docker (sin instalar nada — descarga la imagen en la primera ejecución):
+
+```bash
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+### Instalador de una línea (binario nativo)
+
+Instala el binario en tu PATH y lo registra. Las actualizaciones las gestiona el auto-update integrado del binario.
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
+
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+```
+
+¿GitLab autoalojado? Añade `--env GITLAB_URL=https://gitlab.example.com` (y `--env GITLAB_SKIP_TLS_VERIFY=true` para certificados autofirmados).
+
+:::tip[¿Prefieres una vía guiada?]
+El [asistente de configuración](#asistente-de-configuración) integrado recoge tu token y configura tu cliente por ti — sin editar JSON. Ejecuta `gitlab-mcp-server --setup` tras instalar el binario.
+:::
+
 ## Descarga
 
-Descarga el último binario para tu plataforma desde la página de [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
+¿Prefieres colocar el binario tú mismo? Descarga el último binario para tu plataforma desde la página de [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
 | Plataforma            | Binario                               |
 | --------------------- | ------------------------------------- |
@@ -303,24 +344,6 @@ Abre la barra lateral de Cline → haz clic en el icono de servidores MCP → **
 - **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
 - **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
 - **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
-
-```json
-{
-	"mcpServers": {
-		"gitlab": {
-			"command": "/ruta/a/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-			}
-		}
-	}
-}
-```
-
-</TabItem>
-<TabItem label="Roo Code">
-
-Abre la barra lateral de Roo Code → haz clic en el icono de servidores MCP → **Edit Global MCP** (configuración global) o **Edit Project MCP** (crea `.roo/mcp.json`):
 
 ```json
 {

@@ -71,7 +71,7 @@ The core pieces are:
 | `internal/tools/meta_catalog.go`              | Registers visible meta-tools from catalog groups                                                                              |
 | `internal/tools/dynamic/register.go`          | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog             |
 | `internal/tools/dynamic/standalone.go`        | Adds dynamic-only catalog actions that do not fit the normal meta route model                                                 |
-| `cmd/audit_catalog_first`              | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
+| `cmd/audit_catalog_first`                     | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
 
 The catalog stores executable routes with input schemas, output schemas,
 destructive flags, read-only status, icons, descriptions, aliases, tags, usage

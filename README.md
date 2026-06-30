@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="" src="site/src/assets/banner-dark.svg" width="840">
+  <img alt="GitLab MCP Server — let your AI assistant drive GitLab in plain language" src="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/banner-dark.svg" width="840">
 </p>
 
 # GitLab MCP Server
@@ -8,28 +8,174 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jmrplens/gitlab-mcp-server)](https://goreportcard.com/report/github.com/jmrplens/gitlab-mcp-server)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v2.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2)
-[![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
-[![GitLab Mirror](https://img.shields.io/badge/GitLab-mirror-FC6D26?logo=gitlab&logoColor=white)](https://gitlab.com/jmrp/gitlab-mcp-server)
-
-</p>
-
-<p align="center">
-
+![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=coverage)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
-![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
+[![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
 
 </p>
 
-A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as MCP tools, resources, and prompts for AI assistants. Single static binary — zero dependencies.
+**Connect your AI assistant to GitLab so it can review merge requests, triage pipelines, manage issues, and draft releases — in plain language.** One static binary (or a container), [1000+ GitLab tools](#tool-surfaces) over the full REST + GraphQL API, working with Claude, Cursor, VS Code, and any MCP client.
 
-> **Security first**: Continuously monitored on [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) with quality gates, coverage, and security scanning. Supports read-only mode, safe mode (dry-run preview), and self-hosted GitLab with TLS verification.
->
-> **Repository mirror**: GitHub is the canonical repository. A read-only mirror of the code and releases is available on [GitLab.com](https://gitlab.com/jmrp/gitlab-mcp-server) for discoverability; please open code contributions on GitHub.
+You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
-## Token Footprint
+> "Review merge request !15 — is it safe to merge?" · "Why did the last pipeline fail?" · "List open issues assigned to me" · "Generate release notes from v1.0 to v2.0"
+
+---
+
+## Install in 60 seconds
+
+Pick one. Each path ends with you typing a prompt to your assistant.
+
+### One-click install
+
+<table>
+  <tr>
+    <th align="left">Client</th>
+    <th align="left">One-click button</th>
+    <th align="left">Token step</th>
+  </tr>
+  <tr>
+    <td><b>VS Code</b></td>
+    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D"><img alt="Install in VS Code" src="https://img.shields.io/badge/Install_in-VS_Code-0098FF?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
+    <td>prompts you (masked)</td>
+  </tr>
+  <tr>
+    <td><b>VS Code Insiders</b></td>
+    <td><a href="https://insiders.vscode.dev/redirect/mcp/install?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22%24%7Binput%3Agitlab_token%7D%22%7D%2C%22inputs%22%3A%5B%7B%22id%22%3A%22gitlab_token%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22GitLab%20Personal%20Access%20Token%20%28api%20scope%29%22%2C%22password%22%3Atrue%7D%5D%7D&amp;quality=insiders"><img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/Install_in-VS_Code_Insiders-24bfa5?style=flat-square&amp;logo=visualstudiocode&amp;logoColor=white" /></a></td>
+    <td>prompts you (masked)</td>
+  </tr>
+  <tr>
+    <td><b>Cursor</b></td>
+    <td><a href="https://cursor.com/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Install in Cursor" src="https://cursor.com/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
+  </tr>
+  <tr>
+    <td><b>LM Studio</b></td>
+    <td><a href="https://lmstudio.ai/install-mcp?name=gitlab&amp;config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D"><img alt="Add to LM Studio" src="https://files.lmstudio.ai/deeplink/mcp-install-dark.svg" height="28" /></a></td>
+    <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
+  </tr>
+  <tr>
+    <td><b>Kiro</b></td>
+    <td><a href="https://kiro.dev/launch/mcp/add?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D"><img alt="Add to Kiro" src="https://kiro.dev/images/add-to-kiro.svg" height="28" /></a></td>
+    <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
+  </tr>
+</table>
+
+Each button registers the **Docker**-based server (auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). Need a token? [Create a Personal Access Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) with the **`api`** scope. Self-managed GitLab? Add a `GITLAB_URL` env var in your client's MCP config after install.
+
+### Claude Code (`claude mcp add`)
+
+Docker (no install — pulls the image on first run):
+
+```bash
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+Or install the native binary first, then register it:
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
+
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
+```
+
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
+
+### Guided setup (any client, no flags to remember)
+
+The binary ships a **setup wizard** that collects your GitLab token and configures your MCP client for you — ideal if you'd rather not edit JSON:
+
+```bash
+gitlab-mcp-server --setup
+```
+
+It auto-detects VS Code, Claude Desktop, Claude Code, Cursor, and Windsurf and writes the right config. On Windows, double-click the `.exe` to launch it.
+
+### Manual JSON (Claude Desktop, Cursor, VS Code, …)
+
+<details>
+<summary>Show JSON config for native binary and Docker</summary>
+
+Native binary (Claude Desktop `mcpServers`, Cursor, etc.):
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+VS Code (`.vscode/mcp.json`, note `servers` + `type`):
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+Docker variant — replace `"command"`/`"args"` with:
+
+```json
+"command": "docker",
+"args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"]
+```
+
+For a shared, long-running HTTP deployment instead of per-user stdio, see [HTTP Server Mode](docs/http-server-mode.md).
+
+</details>
+
+**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/examples/usage-examples.md).
+
+---
+
+## Why this server
+
+- 🗣️ **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
+- 🧰 **The whole platform — [1000+ tools](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
+- 🪶 **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window. ([Token footprint →](#token-footprint))
+- ✅ **Proven with real models.** An automated evaluator runs Anthropic, Google, OpenAI, and Qwen against live GitLab instances: **99.5% aggregate success** across thousands of operations. ([Results →](#ai-model-tool-use-evaluation))
+- 🔒 **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) quality/security gates.
+- 🖥️ **Runs anywhere.** One static binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).
+
+<details>
+<summary>More: resources, prompts, and capabilities</summary>
+
+- **45 MCP resources** (read-only data: projects, issues, pipelines, MRs, branches, members, the surface-aware `gitlab://tools` manifest, and workflow best-practice guides).
+- **37 MCP prompts** (code review, pipeline status, risk assessment, release notes, standup, analytics, audit, and more).
+- **4 elicitation wizards** (interactive issue/MR/release/project creation).
+- **3 MCP capabilities** (completions, progress, elicitation) and **50 SVG tool icons** for visual identification in MCP clients.
+- **Pagination** on every list endpoint with full metadata.
+
+</details>
+
+## Tool surfaces
+
+The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The default needs no configuration.
+
+| Surface                       | Visible tools                                     | Best for                                                         |
+| ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
+| **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
+| **Meta-tools** (`meta`)       | 32 base / 48 Premium / 49 GitLab.com Enterprise   | Domain-grouped dispatchers with an `action` parameter.           |
+| **Individual** (`individual`) | ~861 Free/CE · ~998 Premium · 1061–1067 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
+
+Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/dynamic-tools.md) and [Meta-Tools Reference](docs/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
+
+### Token Footprint
 
 <!-- START TOKEN FOOTPRINT -->
 
@@ -50,214 +196,6 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 <!-- END TOKEN FOOTPRINT -->
 
-## Highlights
-
-- **1061 MCP tools** on self-managed Enterprise/Premium, or **1067 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 175 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_action` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 32 base, 48 on self-managed Enterprise/Premium, or 49 on GitLab.com Enterprise/Premium
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against populated GitLab CE and licensed Enterprise instances measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
-- **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
-- **45 MCP resources** in default dynamic/full mode — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), the surface-aware `gitlab://tools` manifest and `gitlab://tools/{id}` detail template, and 5 workflow best-practice guides
-- **37 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, Git workflow quality, audit
-- **3 MCP capabilities** — completions, progress, elicitation
-- **50 tool icons** — base64-encoded SVG icons (`Sizes: ["any"]`) on all tools, resources, and prompts for visual identification in MCP clients
-- **Pagination** on all list endpoints with metadata (total items, pages, next/prev)
-- **Transports**: stdio (default for desktop AI) and HTTP (Streamable HTTP for remote clients)
-- **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
-- **Self-hosted GitLab** with self-signed TLS certificate support
-
-## Example Prompts
-
-Once connected, just talk to your AI assistant in natural language:
-
-> "List my GitLab projects"
-> "Show me open merge requests in my-app"
-> "Create a merge request from feature-login to main"
-> "Review merge request !15 — is it safe to merge?"
-> "List open issues assigned to me"
-> "What's the pipeline status for project 42?"
-> "Why did the last pipeline fail?"
-> "Generate release notes from v1.0 to v2.0"
-
-The server handles the translation from natural language to GitLab API calls. You do not need to know project IDs, API endpoints, or JSON syntax — the AI assistant figures that out for you. See [Usage Examples](docs/examples/usage-examples.md) for more scenarios.
-
-## Quick Start
-
-### 1. Get the server
-
-Download the latest binary for your platform from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases) and make it executable:
-
-```bash
-chmod +x gitlab-mcp-server-*  # Linux/macOS only
-```
-
-Or pull the published container image:
-
-```bash
-docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
-```
-
-### 2. Configure GitLab access
-
-**Recommended**: Run the built-in setup wizard — it configures your GitLab connection and MCP client in one step:
-
-```bash
-./gitlab-mcp-server --setup
-```
-
-> **Tip**: The wizard supports three user interfaces and selects the best one automatically (Web UI → TUI → CLI). Force a specific mode with `--setup-mode web|tui|cli`. The Web UI ships with inline help tooltips on every advanced option. On Windows, double-click the `.exe` to launch the wizard automatically.
-
-The wizard configures **stdio MCP clients** (VS Code, Claude Desktop, Cursor, etc.). It is not used for the long-running HTTP server mode — see [HTTP Server Mode](docs/http-server-mode.md) for that. If `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so you can re-run it to change just one or two fields without re-typing the rest. Leave the token field blank to keep the stored token.
-
-Manual setup only needs a GitLab Personal Access Token with `api` scope:
-
-```env
-GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-```
-
-`GITLAB_URL` defaults to `https://gitlab.com`; add it only when you connect to a self-managed GitLab instance.
-
-```env
-GITLAB_URL=https://gitlab.example.com
-```
-
-### 3. Connect your MCP client
-
-Most desktop clients use stdio: the client starts one local MCP server process and talks to it over stdin/stdout. Choose one of these runtime patterns.
-
-#### Native binary (stdio)
-
-VS Code and Cursor-style MCP configuration:
-
-Add to `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "servers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-Claude Desktop uses the same server command under `mcpServers`:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "/path/to/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-For client-specific paths, secure token prompts, HTTP OAuth, and extra IDEs, see [IDE Configuration](docs/ide-configuration.md).
-
-#### Docker launched by an IDE (stdio)
-
-If an IDE starts Docker as the MCP server process, keep `docker run -i` and pass `--http=false` after the image name. Do not publish port 8080 in this mode.
-
-```json
-{
-  "servers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "GITLAB_TOKEN",
-        "-e",
-        "GITLAB_URL",
-        "-e",
-        "GITLAB_SKIP_TLS_VERIFY",
-        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
-        "--http=false"
-      ],
-      "env": {
-        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
-        "GITLAB_URL": "https://gitlab.com",
-        "GITLAB_SKIP_TLS_VERIFY": "false"
-      }
-    }
-  }
-}
-```
-
-#### Docker or binary as an HTTP MCP server
-
-Use HTTP mode for shared, remote, or multi-user deployments. The Docker image
-starts in HTTP mode by default, but the flags are shown explicitly here for
-clarity. These examples publish the container port on host loopback only;
-`--http-addr=0.0.0.0:8080` binds inside the container.
-
-```bash
-# Fixed GitLab instance for all clients
-docker run -d --name gitlab-mcp-server -p 127.0.0.1:8080:8080 \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest \
-  --http \
-  --http-addr=0.0.0.0:8080 \
-  --gitlab-url=https://gitlab.com
-
-# Multi-instance mode: clients send GITLAB-URL per request
-docker run -d --name gitlab-mcp-server -p 127.0.0.1:8080:8080 \
-  ghcr.io/jmrplens/gitlab-mcp-server:latest \
-  --http \
-  --http-addr=0.0.0.0:8080
-```
-
-HTTP clients authenticate each request with `PRIVATE-TOKEN` or `Authorization: Bearer`:
-
-```jsonc
-{
-  "servers": {
-    "gitlab": {
-      "type": "http",
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-In multi-instance mode, clients must also send `GITLAB-URL`. See [HTTP Server Mode](docs/http-server-mode.md) for OAuth, reverse proxy, rate limit, and server-pool details.
-
-### 4. Verify
-
-Open your AI client and try:
-
-> _"List my GitLab projects"_
-
-See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for detailed setup instructions.
-
-## Tool Modes
-
-Three registration modes, controlled by `TOOL_SURFACE`:
-
-| Mode                          | Tools                                                                              | Description                                                                                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Toolset** (default) | 2 visible tools                                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
-| **Meta-Tools**                | 32 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 32/48/49 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual**                | 893 CE / 1061 self-managed enterprise / 1067 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
-
-For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Minimal keeps the surface-aware `gitlab://tools` manifest so dynamic, meta, and individual deployments can still read accepted call shapes. The default remains `full`.
-
-Dynamic mode is now the default low-token find/execute surface; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance. Set `TOOL_SURFACE=meta` to use the consolidated domain meta-tool catalog.
-
-The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-tools.md), including action counts, Enterprise/Premium markers, and examples.
-
 ## Compatibility
 
 | MCP Capability  | Support                            |
@@ -270,19 +208,11 @@ The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-too
 | **Progress**    | Tool execution progress reporting  |
 | **Elicitation** | 4 interactive creation wizards     |
 
-Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline, Roo Code.
-
-See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/) for detailed client support.
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/).
 
 ## AI Model Tool-Use Evaluation
 
-The project includes an automated evaluator for model-facing MCP quality. It can
-run schema-only checks against the tool catalog or execute validated model tool
-calls through MCP against Docker GitLab CE or licensed Enterprise instances
-populated with fixtures.
-The evaluator measures whether each model chooses the correct meta-tool and
-action, sends valid parameters, recovers from actionable GitLab errors, and
-respects destructive-action safeguards.
+The project includes an automated evaluator for model-facing MCP quality. It runs schema-only checks against the tool catalog or executes validated model tool calls through MCP against Docker GitLab CE or licensed Enterprise instances populated with fixtures. It measures whether each model chooses the correct action, sends valid parameters, recovers from actionable GitLab errors, and respects destructive-action safeguards — across Anthropic, Google, OpenAI, and Qwen.
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
 Current published result: **Docker CE dynamic 20260627-232303**.
@@ -296,6 +226,9 @@ Current published result: **Docker CE dynamic 20260627-232303**.
 
 The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2265 tool calls over 2265 model requests, with 99.5% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
+
+<details>
+<summary>Enterprise meta &amp; dynamic evaluation results</summary>
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
 Current published result: **Docker Enterprise meta 20260527**.
@@ -323,9 +256,11 @@ Current published result: **Docker Enterprise dynamic 20260628-015421**.
 The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
+</details>
+
 ## Documentation
 
-Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map when you need the source-of-truth reference for a specific area:
+Full documentation is at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map for the source-of-truth reference on a specific area:
 
 | Document                                             | Description                                                                            |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -346,29 +281,6 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Architecture](docs/architecture.md)                 | System architecture, component design, data flow                                       |
 | [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing                                                 |
 | [Troubleshooting](docs/troubleshooting.md)           | Common startup, token, TLS, transport, and tool-discovery issues                       |
-
-## Tech Stack
-
-| Component     | Technology                                       |
-| ------------- | ------------------------------------------------ |
-| Language      | Go 1.26+                                         |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.42.0 |
-| Transport     | stdio (default), HTTP (Streamable HTTP)          |
-
-## Building from Source
-
-```bash
-git clone https://github.com/jmrplens/gitlab-mcp-server.git
-cd gitlab-mcp-server
-make build
-```
-
-See the [Development Guide](docs/development/development.md) for cross-compilation and contributing guidelines.
-
-## Container Image
-
-The published image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Runtime examples live in [Quick Start](#quick-start) next to MCP client configuration, and Docker Compose/source-build details live in the [Development Guide](docs/development/development.md#docker).
 
 ## FAQ
 
@@ -410,21 +322,33 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
 </details>
 
-## Contributing
+## Building from Source
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch naming, commit conventions, and pull request process.
+```bash
+git clone https://github.com/jmrplens/gitlab-mcp-server.git
+cd gitlab-mcp-server
+make build
+```
 
-## Security
+The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. See the [Development Guide](docs/development/development.md) for cross-compilation, Docker Compose, and contributing guidelines.
 
-See [SECURITY.md](SECURITY.md) for the security policy and vulnerability reporting.
+| Component     | Technology                                       |
+| ------------- | ------------------------------------------------ |
+| Language      | Go 1.26+                                         |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.43.0 |
+| Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
-## Code of Conduct
+## Contributing & Security
 
-See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+- **Contributing**: see [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch naming, commit conventions, and the PR process.
+- **Security**: see [SECURITY.md](SECURITY.md) for the security policy and vulnerability reporting.
+- **Code of Conduct**: see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) ([Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)).
 
-## Unnecessary Statistics
+> **Repository mirror**: GitHub is the canonical repository. A read-only mirror is available on [GitLab.com](https://gitlab.com/jmrp/gitlab-mcp-server) for discoverability; please open contributions on GitHub.
 
-Numbers nobody asked for, but here they are anyway.
+<details>
+<summary><strong>Unnecessary statistics</strong> — numbers nobody asked for</summary>
 
 <!-- START STATS -->
 
@@ -475,7 +399,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   224 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   247 |
+| Git commits                    |   216 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
@@ -495,3 +419,5 @@ Numbers nobody asked for, but here they are anyway.
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
 <!-- END STATS -->
+
+</details>

@@ -109,8 +109,8 @@
 
   <g font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
     <text x="196" y="48" font-size="33" font-weight="760" fill="#F5F3FF" filter="url(#text-glow)">GitLab MCP Server</text>
-    <text x="198" y="72" font-size="14.5" font-weight="520" fill="#C4B5FD">Three MCP surfaces over one canonical action catalog</text>
-    <text x="198" y="91" font-size="13.2" font-weight="560" fill="#A7F3D0" opacity="0.9">Complete GitLab API coverage, exposed through MCP</text>
+    <text x="198" y="72" font-size="14.5" font-weight="520" fill="#C4B5FD">Let your AI assistant drive GitLab in plain language</text>
+    <text x="198" y="91" font-size="13.2" font-weight="560" fill="#A7F3D0" opacity="0.9">1000+ tools over the full GitLab API · Claude · Cursor · VS Code · any MCP client</text>
 
     <g transform="translate(198 108)">
       <path d="M6 62H588" stroke="url(#catalog-line)" stroke-width="1.6" opacity="0.72"/>
@@ -121,8 +121,8 @@
       <g>
         <rect x="0" y="0" width="188" height="54" rx="10" fill="url(#meta-grad)" stroke="#7C67D9" stroke-width="0.8"/>
         <text x="14" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Meta-tools</text>
-        <text x="14" y="44" font-size="17" font-weight="800" fill="#FCA326">33 / 49 / 50</text>
-        <text x="112" y="43" font-size="11.5" font-weight="620" fill="#DDD6FE">tools</text>
+        <text x="14" y="44" font-size="17" font-weight="800" fill="#FCA326">32 / 48 / 49</text>
+        <text x="126" y="43" font-size="11.5" font-weight="620" fill="#DDD6FE">tools</text>
       </g>
 
       <g transform="translate(201 0)">
@@ -136,7 +136,7 @@
       <g transform="translate(402 0)">
         <rect x="0" y="0" width="188" height="54" rx="10" fill="url(#individual-grad)" stroke="#FC6D26" stroke-width="0.8"/>
         <text x="14" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Individual</text>
-        <text x="112" y="22" font-size="15" font-weight="800" fill="#FDBA74">1014+</text>
+        <text x="112" y="22" font-size="15" font-weight="800" fill="#FDBA74">1000+</text>
         <text x="14" y="43" font-size="11.7" font-weight="650" fill="#FED7AA">full tool projection</text>
       </g>
     </g>
