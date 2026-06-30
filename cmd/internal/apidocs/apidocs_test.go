@@ -204,6 +204,21 @@ func TestFetch_StrictVsLenientOn404WithStaleCache(t *testing.T) {
 	}
 }
 
+func TestJitter_RangeAndNonPositive(t *testing.T) {
+	if got := jitter(0); got != 0 {
+		t.Errorf("jitter(0) = %v, want 0", got)
+	}
+	if got := jitter(-5 * time.Second); got != 0 {
+		t.Errorf("jitter(negative) = %v, want 0", got)
+	}
+	span := 100 * time.Millisecond
+	for range 50 {
+		if got := jitter(span); got < 0 || got >= span {
+			t.Fatalf("jitter(%v) = %v, want [0,%v)", span, got, span)
+		}
+	}
+}
+
 func TestCacheDir_UnderRepoRoot(t *testing.T) {
 	got := CacheDir(filepath.Join("repo", "root"))
 	want := filepath.Join("repo", "root", ".cache", "gitlab-api-docs")

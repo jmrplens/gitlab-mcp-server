@@ -88,7 +88,7 @@ func Run(root string, gapsOnly bool) ([]byte, error) {
 }
 
 func buildReport(root string, gapsOnly bool) (report, error) {
-	pkgs, err := loadToolPackages(root)
+	pkgs, err := shared.LoadToolPackages(root)
 	if err != nil {
 		return report{}, err
 	}
@@ -125,33 +125,6 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 		Services:         services,
 		StaleAcceptances: staleAcceptances,
 	}, nil
-}
-
-func loadToolPackages(root string) ([]*packages.Package, error) {
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports,
-		Dir: root,
-	}
-	loaded, err := packages.Load(cfg, "./internal/tools/...")
-	if err != nil {
-		return nil, fmt.Errorf("load packages: %w", err)
-	}
-	var fatal []string
-	out := make([]*packages.Package, 0, len(loaded))
-	for _, pkg := range loaded {
-		for _, perr := range pkg.Errors {
-			fatal = append(fatal, perr.Error())
-		}
-		if !strings.Contains(pkg.PkgPath, shared.ToolsPkgInfix) || pkg.TypesInfo == nil {
-			continue
-		}
-		out = append(out, pkg)
-	}
-	if len(fatal) > 0 {
-		return nil, fmt.Errorf("package load errors:\n%s", strings.Join(fatal, "\n"))
-	}
-	return out, nil
 }
 
 // collectServiceUsage walks every call expression in pkg and records calls whose

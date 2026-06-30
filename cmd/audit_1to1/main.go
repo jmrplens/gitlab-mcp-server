@@ -31,7 +31,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 

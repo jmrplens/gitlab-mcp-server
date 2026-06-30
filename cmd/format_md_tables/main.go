@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 

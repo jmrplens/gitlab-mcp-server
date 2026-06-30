@@ -23,7 +23,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 )
 
 // Marker constants for the stats section of README.md, plus generator paths.
@@ -65,7 +65,7 @@ func run(check bool) error {
 			return fmt.Errorf("read %s: %w", readmePath, readErr)
 		}
 		text := string(data)
-		updated, replaceErr := computeReplacedText(text, statsStartMarker, statsEndMarker, rendered)
+		updated, replaceErr := docgen.ComputeReplacedSection(text, statsStartMarker, statsEndMarker, rendered)
 		if replaceErr != nil {
 			return fmt.Errorf("replace stats section in %s: %w", readmePath, replaceErr)
 		}
@@ -74,7 +74,7 @@ func run(check bool) error {
 		}
 		return nil
 	}
-	if replaceErr := replaceSection(readmePath, statsStartMarker, statsEndMarker, rendered); replaceErr != nil {
+	if replaceErr := docgen.ReplaceSection(readmePath, statsStartMarker, statsEndMarker, rendered); replaceErr != nil {
 		return fmt.Errorf("write stats section in %s: %w", readmePath, replaceErr)
 	}
 	fmt.Printf("Updated %s stats section\n", readmePath)
@@ -564,40 +564,4 @@ func fmtInt(n int) string {
 		buf = append(buf, c)
 	}
 	return string(buf)
-}
-
-// replaceSection replaces content between startMark and endMark in the file at
-// path, preserving both markers themselves.
-func replaceSection(path, startMark, endMark, content string) error {
-	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	result, err := computeReplacedText(string(data), startMark, endMark, content)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
-}
-
-// computeReplacedText returns the input text with the content between startMark
-// and endMark replaced by the new content string.
-func computeReplacedText(text, startMark, endMark, content string) (string, error) {
-	startIdx := strings.Index(text, startMark)
-	if startIdx < 0 {
-		return "", fmt.Errorf("start marker %s not found", startMark)
-	}
-
-	searchFrom := startIdx + len(startMark)
-	relEndIdx := strings.Index(text[searchFrom:], endMark)
-	if relEndIdx < 0 {
-		return "", fmt.Errorf("end marker %s not found after start marker", endMark)
-	}
-	endIdx := searchFrom + relEndIdx
-
-	before := text[:searchFrom]
-	after := text[endIdx:]
-	return before + "\n\n" + content + "\n" + after, nil
 }

@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 

@@ -118,9 +118,6 @@ func New(repoRoot string, opts Options) *Fetcher {
 	return f
 }
 
-// CacheDir reports where this fetcher caches docs.
-func (f *Fetcher) CacheDir() string { return f.cacheDir }
-
 // Fetch returns the markdown for one doc area (e.g. "branches"). It serves a
 // cached copy when present and fresh (younger than MaxAge) unless Refresh is
 // set; otherwise it downloads, caches, and returns the doc. In Offline mode it

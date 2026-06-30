@@ -23,10 +23,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -867,7 +867,7 @@ func runFootprintCheck(client *gitlabclient.Client) error {
 func footprintStaleTargets(readmeText, detailedText string, rows []tokenFootprintRow) ([]string, error) {
 	var stale []string
 
-	updated, err := computeReplacedText(readmeText, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
+	updated, err := docgen.ComputeReplacedSection(readmeText, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
 	if err != nil {
 		return nil, err
 	}
@@ -887,7 +887,7 @@ func runFootprint(client *gitlabclient.Client) error {
 	if err != nil {
 		return fmt.Errorf("measuring token footprint: %w", err)
 	}
-	if replaceErr := replaceSection(readmePath, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows)); replaceErr != nil {
+	if replaceErr := docgen.ReplaceSection(readmePath, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows)); replaceErr != nil {
 		return replaceErr
 	}
 	detailedDoc := renderDetailedFootprint(rows)
@@ -1283,40 +1283,4 @@ func withFootprintSession[T any](server *mcp.Server, label string, fn func(conte
 	defer session.Close()
 
 	return fn(ctx, session)
-}
-
-// replaceSection replaces content between startMark and endMark in the file at
-// path, preserving both markers themselves.
-func replaceSection(path, startMark, endMark, content string) error {
-	data, err := os.ReadFile(path) //#nosec G304 -- path is a hardcoded constant
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	result, err := computeReplacedText(string(data), startMark, endMark, content)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- README path is a compile-time constant, not user input
-}
-
-// computeReplacedText returns the input text with the content between startMark
-// and endMark replaced by the new content string.
-func computeReplacedText(text, startMark, endMark, content string) (string, error) {
-	startIdx := strings.Index(text, startMark)
-	if startIdx < 0 {
-		return "", fmt.Errorf("start marker %s not found", startMark)
-	}
-
-	searchFrom := startIdx + len(startMark)
-	relEndIdx := strings.Index(text[searchFrom:], endMark)
-	if relEndIdx < 0 {
-		return "", fmt.Errorf("end marker %s not found after start marker", endMark)
-	}
-	endIdx := searchFrom + relEndIdx
-
-	before := text[:searchFrom]
-	after := text[endIdx:]
-	return before + "\n\n" + content + "\n" + after, nil
 }
