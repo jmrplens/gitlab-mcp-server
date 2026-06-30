@@ -183,14 +183,19 @@ func TestRenewSecret_ValidationError(t *testing.T) {
 }
 
 // TestRenewSecret_Error verifies that RenewSecret returns a wrapped error when
-// the GitLab API responds with an error status.
+// the GitLab API responds with an error status, and that the 404 status hint is
+// preserved so callers get an actionable message.
 func TestRenewSecret_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	client := testutil.NewTestClient(t, handler)
-	if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: 999}); err == nil {
+	_, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: 999})
+	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "verify application id") {
+		t.Errorf("wrapped error missing 404 status hint %q: %v", "verify application id", err)
 	}
 }
 
