@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/audit_action_spec_coverage/
+//	go run ./cmd/audit_catalog_first/
 package main
 
 import (

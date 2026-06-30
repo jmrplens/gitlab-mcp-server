@@ -445,8 +445,8 @@ This utility takes no flags; pass positional path arguments.
 
 #### Positional arguments
 
-| Argument        | Type       | Description   |
-| --------------- | ---------- | ------------- |
+| Argument             | Type       | Description   |
+| -------------------- | ---------- | ------------- |
 | `<dir&#124;file>...` | positional | Paths to scan |
 
 #### Output
@@ -678,13 +678,15 @@ The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains the markdown/llms/testing/formatter/godoc/surface/alias checks plus link and site checks.
 
-| Make target                              | Utility                        | What it gates                                                      | Exit behavior                                             |
-| ---------------------------------------- | ------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------- |
-| `check-action-catalog-manifest`          | `gen_action_catalog_manifest`  | Generated ActionSpec manifest is current                           | Non-zero if the manifest is stale                         |
-| `check-llms`                             | `gen_llms`                     | `llms.txt` and `llms-full.txt` are current and structurally valid  | Non-zero if either file is stale or malformed             |
-| `audit-discovery-check`                  | `audit_discovery_completeness` | No META-001 finding meets the configured severity threshold        | Non-zero if any finding meets `-severity` (default error) |
-| `audit-doc-coverage-check`               | `audit_doc_coverage`           | No `docs/tools/*.md` has missing/orphan/tier_mismatch findings     | Non-zero if any file has a finding                        |
-| `audit-godocs-check`                     | `godoc_tool audit`             | No package, symbol, or test Godoc findings remain                  | Non-zero when findings are present                        |
-| `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity) | Non-zero (`1`) if any error-severity finding exists       |
-| `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                            | Non-zero if any table needs formatting                    |
-| `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/testing/testing.md` test-metrics block is current        | Non-zero if the generated section is stale                |
+| Make target                              | Utility                        | What it gates                                                                        | Exit behavior                                             |
+| ---------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `check-action-catalog-manifest`          | `gen_action_catalog_manifest`  | Generated ActionSpec manifest is current                                             | Non-zero if the manifest is stale                         |
+| `check-llms`                             | `gen_llms`                     | `llms.txt` and `llms-full.txt` are current and structurally valid                    | Non-zero if either file is stale or malformed             |
+| `check-footprint`                        | `audit_tokens -footprint`      | README token-footprint section and `docs/development/token-footprint.md` are current | Non-zero if either is stale                               |
+| `check-stats`                            | `gen_stats`                    | README repository-statistics section is current                                      | Non-zero if the section is stale                          |
+| `audit-discovery-check`                  | `audit_discovery_completeness` | No META-001 finding meets the configured severity threshold                          | Non-zero if any finding meets `-severity` (default error) |
+| `audit-doc-coverage-check`               | `audit_doc_coverage`           | No `docs/tools/*.md` has missing/orphan/tier_mismatch findings                       | Non-zero if any file has a finding                        |
+| `audit-godocs-check`                     | `godoc_tool audit`             | No package, symbol, or test Godoc findings remain                                    | Non-zero when findings are present                        |
+| `audit-dynamic-aliases`                  | `audit_dynamic_aliases`        | No error-severity alias governance finding (collisions, ambiguity)                   | Non-zero (`1`) if any error-severity finding exists       |
+| `audit-docs` → `format_md_tables -check` | `format_md_tables`             | All Markdown pipe tables are normalized                                              | Non-zero if any table needs formatting                    |
+| `audit-docs` → `gen_testing_docs -check` | `gen_testing_docs`             | The `docs/testing/testing.md` test-metrics block is current                          | Non-zero if the generated section is stale                |

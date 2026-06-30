@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -706,6 +706,10 @@ check-footprint:
 ## gen-stats: regenerate the repository statistics section in README.md.
 gen-stats:
 	go run ./cmd/gen_stats/
+
+## check-stats: verify the README repository statistics section is current.
+check-stats:
+	go run ./cmd/gen_stats/ -check
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 gen-testing-docs:
