@@ -6,7 +6,7 @@ description: Multi-user deployment with per-request authentication
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/http-server-mode.md) in the repository.
+For the complete technical reference, see [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md) in the repository.
 :::
 
 By default, GitLab MCP Server runs in **stdio mode** — each AI client spawns its own server process. **HTTP mode** is an alternative where a single server process serves multiple clients over the network, each authenticating with their own GitLab token.
@@ -145,7 +145,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 }
 ```
 
-- **`clientId`**: The Application ID from your GitLab OAuth Application (see [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md))
+- **`clientId`**: The Application ID from your GitLab OAuth Application (see [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md))
 - **`scopes`**: Must include `api` for full tool functionality
 
 VS Code handles OAuth discovery and authorization automatically.
@@ -171,7 +171,7 @@ Claude Code discovers the OAuth metadata and opens the browser for authorization
 </Tabs>
 
 :::tip
-OAuth mode requires a GitLab OAuth Application. See the [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) guide for setup instructions.
+OAuth mode requires a GitLab OAuth Application. See the [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) guide for setup instructions.
 :::
 
 :::note
@@ -488,7 +488,7 @@ This replaces the running machines with the new version atomically and preserves
 
 ### OAuth on Fly.io
 
-The shipped `fly.toml` runs in **legacy auth mode** (PAT per request). OAuth mode is also supported but requires a stable public URL known at startup so the OAuth discovery endpoints (`/.well-known/oauth-protected-resource`) advertise the right metadata. To enable OAuth, set `--auth-mode=oauth` and `--gitlab-url=<your-default>` in the `cmd` array, then redeploy. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for the GitLab OAuth Application setup.
+The shipped `fly.toml` runs in **legacy auth mode** (PAT per request). OAuth mode is also supported but requires a stable public URL known at startup so the OAuth discovery endpoints (`/.well-known/oauth-protected-resource`) advertise the right metadata. To enable OAuth, set `--auth-mode=oauth` and `--gitlab-url=<your-default>` in the `cmd` array, then redeploy. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for the GitLab OAuth Application setup.
 
 ## Health check
 

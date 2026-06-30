@@ -4,7 +4,7 @@ description: Security model, token management, and best practices
 ---
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/security.md) in the repository.
+For the complete technical reference, see [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) in the repository.
 :::
 
 GitLab MCP Server is designed with a security-first architecture. This page covers the security model, credential handling, and best practices for safe deployment.
@@ -196,7 +196,7 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 - Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h)
 - The `PRIVATE-TOKEN` header remains supported for backward compatibility
 
-See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.
+See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.
 
 ## Verifying release integrity
 

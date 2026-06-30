@@ -4,7 +4,7 @@ description: Herramientas a nivel de dominio que consolidan operaciones relacion
 ---
 
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/meta-tools.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) en el repositorio.
 :::
 
 Las meta-herramientas son un modo de operación explícito de GitLab MCP Server, habilitado con `TOOL_SURFACE=meta`. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
