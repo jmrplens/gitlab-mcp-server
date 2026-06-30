@@ -182,6 +182,7 @@ func main() {
 	if err != nil {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
+	cmdutil.Progressf("audit_catalog_first: scanning internal/tools source for ActionSpec catalog coverage…")
 	report, err := buildCoverageReport(root)
 	if err != nil {
 		cmdutil.Fatalf("build coverage report: %v", err)

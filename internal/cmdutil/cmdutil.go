@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	fatalStderr io.Writer = os.Stderr
-	exitProcess           = os.Exit
+	fatalStderr    io.Writer = os.Stderr
+	progressStderr io.Writer = os.Stderr
+	exitProcess              = os.Exit
 )
 
 // RepositoryRoot walks upward from start until it finds the module root.
@@ -35,4 +36,12 @@ func RepositoryRoot(start string) (string, error) {
 func Fatalf(message string, args ...any) {
 	fmt.Fprintf(fatalStderr, message+"\n", args...)
 	exitProcess(1)
+}
+
+// Progressf writes a formatted progress line to stderr so long-running command
+// utilities show activity instead of looking stale. It writes to stderr (never
+// stdout) so it never pollutes JSON or generated output captured from stdout. A
+// trailing newline is added automatically.
+func Progressf(message string, args ...any) {
+	fmt.Fprintf(progressStderr, message+"\n", args...)
 }

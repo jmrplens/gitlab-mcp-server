@@ -23,6 +23,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -125,12 +126,14 @@ func main() {
 	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
 	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
 
+	cmdutil.Progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces…")
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
 	dynamicBaseTools := listDynamicTools(dynamicBaseCatalog)
 	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
 
+	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)…")
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
@@ -904,7 +907,8 @@ func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow
 		{"Ultimate", edition.Ultimate},
 	}
 
-	for _, t := range tiers {
+	for i, t := range tiers {
+		cmdutil.Progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces × schema modes)…", i+1, len(tiers), t.label)
 		rows, err := measureTierFootprint(client, t.tier, t.label)
 		if err != nil {
 			return nil, err

@@ -31,6 +31,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -229,6 +230,7 @@ func parseOptions(args []string) (options, error) {
 
 // collectMetrics discovers packages, counts tests, and runs coverage commands.
 func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error) {
+	cmdutil.Progressf("gen_testing_docs: discovering packages…")
 	infos, err := listPackages(ctx)
 	if err != nil {
 		return repositoryMetrics{}, err
@@ -241,6 +243,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 	coverageByPackage := map[string]coverageValue{}
 	if !opts.skipCoverage {
+		cmdutil.Progressf("gen_testing_docs: running unit-test coverage for ./internal/… and ./cmd/… (this can take a few minutes)…")
 		combinedCoverage, combinedTotal, internalTotal, coverageErr := runUnitCoverage(ctx, opts)
 		if coverageErr != nil {
 			return repositoryMetrics{}, coverageErr
