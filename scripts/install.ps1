@@ -32,7 +32,12 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Interactive installer UX')]
 param(
     [string]$Version = $(if ($env:VERSION) { $env:VERSION } else { 'latest' }),
-    [string]$InstallDir = $(if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\gitlab-mcp-server' }),
+    [string]$InstallDir = $(
+        if ($env:INSTALL_DIR) { $env:INSTALL_DIR }
+        elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Programs\gitlab-mcp-server' }
+        elseif ($env:USERPROFILE) { Join-Path $env:USERPROFILE 'AppData\Local\Programs\gitlab-mcp-server' }
+        else { throw 'Cannot determine an install directory: set INSTALL_DIR, or ensure LOCALAPPDATA/USERPROFILE is defined.' }
+    ),
     [string]$Repo = $(if ($env:REPO) { $env:REPO } else { 'jmrplens/gitlab-mcp-server' })
 )
 
