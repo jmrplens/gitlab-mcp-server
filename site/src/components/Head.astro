@@ -6,12 +6,20 @@
 // astro.config.mjs; these IDs link the per-page nodes back into that graph.
 import Default from "@astrojs/starlight/components/Head.astro";
 
-const SITE = "https://jmrplens.github.io";
-const BASE = "/gitlab-mcp-server";
+// Derive origin + base path from Astro config so a domain/base rename needs no
+// code change here. PERSON_ID mirrors `authorId` in astro.config.mjs (an
+// external identity URL that can't be derived from the site origin).
+const SITE = import.meta.env.SITE ?? "https://jmrplens.github.io";
+const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PERSON_ID = "https://jmrp.io/#person";
 const WEBSITE_ID = `${SITE}${BASE}/#website`;
 
-const route = (Astro.locals as Record<string, any>).starlightRoute;
+// Minimal typed view of the Starlight route data we consume.
+interface RouteData {
+	entry?: { data?: { title?: string; description?: string } };
+	lastUpdated?: Date;
+}
+const route = (Astro.locals as { starlightRoute?: RouteData }).starlightRoute;
 const data = route?.entry?.data ?? {};
 const title = data.title ?? "GitLab MCP Server";
 const description = data.description ?? "";
@@ -43,14 +51,26 @@ const techArticle = isHome
 			isPartOf: { "@id": WEBSITE_ID },
 		};
 
-// BreadcrumbList for every non-home page.
+// BreadcrumbList for every non-home page, with locale-aware labels.
 function titleCase(seg: string) {
 	return seg.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+// Localized labels for the known top-level section segments (slugs stay English
+// across locales, so intermediate breadcrumb names need translating).
+const SECTION_LABELS: Record<string, { en: string; es: string }> = {
+	tools: { en: "Tools", es: "Herramientas" },
+	operations: { en: "Operations", es: "Operaciones" },
+	capabilities: { en: "Capabilities", es: "Capacidades" },
+	examples: { en: "Examples", es: "Ejemplos" },
+};
+function segLabel(seg: string, locale: "en" | "es") {
+	return SECTION_LABELS[seg]?.[locale] ?? titleCase(seg);
 }
 let breadcrumb = null;
 if (!isHome) {
 	const homeUrl = lang === "es" ? `${SITE}${BASE}/es/` : `${SITE}${BASE}/`;
-	const items = [{ "@type": "ListItem", position: 1, name: "Home", item: homeUrl }];
+	const homeName = lang === "es" ? "Inicio" : "Home";
+	const items = [{ "@type": "ListItem", position: 1, name: homeName, item: homeUrl }];
 	const segs = rel.split("/").filter(Boolean).filter((s) => s !== "es");
 	let acc = lang === "es" ? `${BASE}/es` : BASE;
 	segs.forEach((seg, i) => {
@@ -59,7 +79,7 @@ if (!isHome) {
 		items.push({
 			"@type": "ListItem",
 			position: i + 2,
-			name: last ? title : titleCase(seg),
+			name: last ? title : segLabel(seg, lang),
 			item: new URL(`${acc}/`, SITE).href,
 		});
 	});
