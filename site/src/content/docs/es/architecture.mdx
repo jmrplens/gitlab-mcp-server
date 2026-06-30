@@ -161,6 +161,19 @@ Cada operación ordinaria de GitLab se define una sola vez en el catálogo de ac
 
 Como todas las superficies comparten la misma entrada del catálogo, los schemas, el filtrado de solo lectura, las confirmaciones de acciones destructivas, las previsualizaciones de safe mode, el filtrado por scopes, el formato Markdown y la salida JSON se mantienen consistentes entre modos.
 
+### Gating por nivel (tier)
+
+Las entradas del catálogo también son conscientes del nivel: cada acción y cada schema de entrada/salida se etiqueta con la edición de GitLab más baja (`free`, `premium` o `ultimate`) que la expone. Al arrancar, el servidor resuelve el nivel activo (`GITLAB_TIER` / `--tier`, o autodetección vía `GET /license`) y llama a `pruneSchemaFieldsByTier` (en `internal/tools/action_catalog.go`) para descartar las acciones exclusivas de premium/ultimate y podar las entradas de schema por campo que estén restringidas por edición. Esto mantiene coherentes las meta-herramientas, las herramientas individuales y la superficie dinámica: una acción exclusiva de Premium se oculta en todas partes en cuanto el nivel se resuelve a `free`.
+
+```mermaid
+graph LR
+    catalog[Catálogo de acciones canónico] --> meta["Meta-herramientas<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit en GitLab.com Enterprise"]
+    catalog --> individual["Herramientas individuales<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* en GitLab.com Enterprise"]
+    catalog --> dynamic["Herramientas dinámicas<br/>gitlab_find_action + gitlab_execute_action<br/>+ IDs de dominio orbit.* en GitLab.com Enterprise"]
+```
+
+Orbit se proyecta a través del mismo catálogo que cualquier otro dominio: en modo meta aparece como la meta-herramienta `gitlab_orbit` con seis acciones; en modo individual aparece como seis herramientas `gitlab_orbit_*`; en modo dinámico sus acciones se descubren como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` mediante `gitlab_find_action`/`gitlab_execute_action`.
+
 ### Modo meta-herramientas
 
 Con `TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden herramientas Enterprise/Premium para un total de {stats.meta.self_managed_enterprise}, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
