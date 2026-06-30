@@ -1,5 +1,5 @@
 // Command gen_testing_docs regenerates the managed test metrics section in
-// docs/testing/testing.md.
+// docs/development/testing/testing.md.
 //
 // It discovers Go packages, counts Test* functions by parsing _test.go files,
 // runs unit-test coverage for ./internal/... and ./cmd/..., and replaces the
@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	defaultDocPath = "docs/testing/testing.md"
+	defaultDocPath = "docs/development/testing/testing.md"
 	startMarker    = "<!-- START TESTING STATS -->"
 	endMarker      = "<!-- END TESTING STATS -->"
 	fallbackStart  = "## Overview"
@@ -81,7 +81,7 @@ var (
 
 // options controls how the generator collects and writes documentation data.
 //
-// docPath is the testing reference file to update (default docs/testing/testing.md).
+// docPath is the testing reference file to update (default docs/development/testing/testing.md).
 // check enables non-mutating CI mode that fails when the generated block
 // would change. skipCoverage skips running `go test -cover` and only
 // updates count-only sections. topToolRows caps the high-test-count tool

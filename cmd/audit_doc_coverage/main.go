@@ -1,7 +1,7 @@
 // Package main implements the audit_doc_coverage command.
 //
 // audit_doc_coverage reports per-doc-file gaps between
-// docs/tools/<doc>.md and the canonical action catalog. It produces
+// docs/reference/tools/<doc>.md and the canonical action catalog. It produces
 // plan/docs-tools-backlog.json (gitignored) listing, per file:
 //
 //   - missing: catalog tools expected in the doc but not documented
@@ -42,17 +42,17 @@ const (
 
 	// defaultToolsReadmePath is the source-of-truth for the per-doc
 	// expected counts and group→doc mapping.
-	defaultToolsReadmePath = "docs/tools/README.md"
+	defaultToolsReadmePath = "docs/reference/tools/README.md"
 
 	// defaultDocsRoot is the directory holding the per-domain docs that the
 	// auditor compares against the catalog.
-	defaultDocsRoot = "docs/tools"
+	defaultDocsRoot = "docs/reference/tools"
 )
 
-// fileFinding captures the audit findings for one docs/tools/*.md file.
+// fileFinding captures the audit findings for one docs/reference/tools/*.md file.
 //
 // ExpectedCount is derived from the canonical action catalog using the
-// group→doc mapping parsed from docs/tools/README.md plus the hardcoded
+// group→doc mapping parsed from docs/reference/tools/README.md plus the hardcoded
 // overrides in mapping.go (branch-rules routed tools, project-discovery,
 // capabilities, "various" rows, etc.). DocumentedCount is the number of
 // distinct `gitlab_*` references found in the doc itself. ReadmeCount is
@@ -194,7 +194,7 @@ func parseFlags() cmdlineFlags {
 // group (or a tool whose owning group isn't claimed by any README
 // row), those tools would otherwise slip past DOC-002 silently. The
 // -check exit-non-zero on UnassignedTotal forces the orchestrator
-// to add explicit routing — either by extending docs/tools/doc-ownership.json,
+// to add explicit routing — either by extending docs/reference/tools/doc-ownership.json,
 // by adding a new README Domains row, or by ADR-routing
 // the group into a parent doc's prefix allowlist.
 func (r report) check() string {
@@ -262,7 +262,7 @@ func buildReport(repoRoot, docsRoot, readmePath string, catalog *catalogSnapshot
 // a fileFinding keyed by its repo-relative path. The parallel
 // absByRel/relByBase maps let later phases open files by their
 // canonical doc path even when the docsRoot layout differs from
-// docs/tools/ (only possible in tests).
+// docs/reference/tools/ (only possible in tests).
 func buildDocEntries(repoRoot string, docPaths []string) (docEntries map[string]*fileFinding, absByRel, relByBase map[string]string) {
 	docEntries = make(map[string]*fileFinding, len(docPaths))
 	absByRel = make(map[string]string, len(docPaths))

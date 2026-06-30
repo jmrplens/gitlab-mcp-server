@@ -3,7 +3,7 @@
 // Tests verify the AST-based test counter, naming-pattern classification,
 // the catalog-tool-counting heuristics, the combined-coverage profile
 // parser, and the marker/legacy section replacement used to update
-// docs/testing/testing.md.
+// docs/development/testing/testing.md.
 package main
 
 import (

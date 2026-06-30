@@ -1,6 +1,6 @@
 // Package main: README "Domains" table parser + group→doc mapping.
 //
-// The mapping is derived from docs/tools/README.md. Most rows list
+// The mapping is derived from docs/reference/tools/README.md. Most rows list
 // one or more gitlab_* meta-tool names that map directly to catalog
 // groups; a handful of rows use "various" or include routed tools
 // that must be split off their owning group. Both cases are
@@ -22,8 +22,8 @@ import (
 
 // docsToolsPrefix is the repo-relative directory containing every
 // per-domain tool reference doc. README "Document" links resolve
-// against it (e.g. "access.md" -> "docs/tools/access.md").
-const docsToolsPrefix = "docs/tools/"
+// against it (e.g. "access.md" -> "docs/reference/tools/access.md").
+const docsToolsPrefix = "docs/reference/tools/"
 
 // docMappingRow captures one row of the README "Domains" table.
 type docMappingRow struct {
@@ -44,7 +44,7 @@ type docMapping struct {
 
 // docOverrideMap is the set of catalog tools that should be
 // attributed to a doc file even though their owning group maps
-// elsewhere. Keys are doc files (relative to docs/tools); values
+// elsewhere. Keys are doc files (relative to docs/reference/tools); values
 // are the IndividualTool.Name strings expected in that doc.
 //
 // Examples of why this exists:
@@ -59,7 +59,7 @@ type docMapping struct {
 //     utility.
 type docOverrideMap map[string][]string
 
-// loadDocMapping parses docs/tools/README.md and merges in the
+// loadDocMapping parses docs/reference/tools/README.md and merges in the
 // hardcoded overrides that handle routed tools and "various" rows.
 func loadDocMapping(readmePath string) (*docMapping, error) {
 	rows, err := parseDomainsTable(readmePath)
@@ -109,7 +109,7 @@ func loadOwnershipRules(path string) (map[string]docOwnershipRule, error) {
 	return result, nil
 }
 
-// parseDomainsTable reads the Domains section of docs/tools/README.md
+// parseDomainsTable reads the Domains section of docs/reference/tools/README.md
 // and returns one row per table entry. Only the | Domain | Tools |
 // Meta-tool | Document | columns are parsed; other columns (when
 // added) are ignored.
@@ -169,7 +169,7 @@ func parseDomainsTable(readmePath string) ([]docMappingRow, error) {
 
 // relativeDocPath converts a README "Document" link target (e.g.
 // "access.md") to the repo-relative doc path used in the report
-// (e.g. "docs/tools/access.md").
+// (e.g. "docs/reference/tools/access.md").
 func relativeDocPath(link string) string {
 	link = strings.TrimSpace(link)
 	link = strings.TrimSuffix(link, ".md")
@@ -349,14 +349,14 @@ func computeExpectedByDoc(mapping *docMapping, catalog *catalogSnapshot) (out ma
 // ordered from most specific to most generic.
 //
 // Each entry is a comment-and-table combo:
-//   - The doc basename identifies the file under docs/tools/.
+//   - The doc basename identifies the file under docs/reference/tools/.
 //   - The list of prefixes enumerates every IndividualTool.Name
 //     segment that this doc owns, regardless of owning group.
 //
 // The lists are derived from the docs as they exist today (PR #190
 // shipped the prose), plus the README's "(routed)" annotations for
 // tools that are documented in a non-primary doc.
-// docOwnershipRule captures one docs/tools/<doc>.md file's catalog
+// docOwnershipRule captures one docs/reference/tools/<doc>.md file's catalog
 // ownership rules. Each doc may claim catalog groups (the README
 // "Meta-tool" column omits these when truncated with "etc." /
 // "various") and naming prefixes (tools belonging to this doc even
@@ -367,7 +367,7 @@ func computeExpectedByDoc(mapping *docMapping, catalog *catalogSnapshot) (out ma
 //   - parsePrefixAllowlists() for the prefix-wins tool routing
 //
 // Keys are doc basenames ("access.md") because both functions
-// re-key the result into the canonical "docs/tools/<name>.md" form
+// re-key the result into the canonical "docs/reference/tools/<name>.md" form
 // before returning.
 type docOwnershipRule struct {
 	Groups   []string
@@ -376,7 +376,7 @@ type docOwnershipRule struct {
 
 // groupExtensions projects docOwnershipRules into the group→doc map
 // used by the first-claimer lookup in computeExpectedByDoc. Keys are
-// the canonical "docs/tools/<name>.md" form so the per-doc lookup
+// the canonical "docs/reference/tools/<name>.md" form so the per-doc lookup
 // in buildReport matches the fileFinding entries directly. Docs
 // with no group claims are skipped (the first-claimer rule does not
 // claim them).
@@ -393,7 +393,7 @@ func groupExtensions(rules map[string]docOwnershipRule) map[string][]string {
 
 // parsePrefixAllowlists projects docOwnershipRules into the
 // canonical doc→prefixes map used by the prefix-wins routing in
-// assignTool. Keys are the canonical "docs/tools/<name>.md" form so
+// assignTool. Keys are the canonical "docs/reference/tools/<name>.md" form so
 // the longest-match-wins lookup finds the right doc; docs with no
 // prefix claims are skipped.
 func parsePrefixAllowlists(rules map[string]docOwnershipRule) map[string][]string {
@@ -408,7 +408,7 @@ func parsePrefixAllowlists(rules map[string]docOwnershipRule) map[string][]strin
 }
 
 // buildFirstClaimer returns a map from catalog group ToolName to
-// the canonical "docs/tools/<name>.md" path of the first README
+// the canonical "docs/reference/tools/<name>.md" path of the first README
 // row that claims it. groupExtensions patches in groups the README
 // truncated with "etc." or otherwise omitted (e.g. the
 // "gitlab_ci_variable" group claimed by ci-cd.md) so the
@@ -511,7 +511,7 @@ func assignTool(toolName string, info catalogTool, firstClaimer map[string]strin
 }
 
 // canonicalOverridePath converts a hardcoded override key (basename
-// like "branch-rules.md") to the canonical "docs/tools/<name>.md"
+// like "branch-rules.md") to the canonical "docs/reference/tools/<name>.md"
 // form so it matches relativeDocPath's output and the per-doc
 // lookup in buildReport can translate to the filesystem-discovered
 // path with a single basename map.

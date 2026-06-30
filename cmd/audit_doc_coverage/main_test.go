@@ -501,16 +501,16 @@ func TestCheck_FailsWhenFindingsPresent(t *testing.T) {
 }
 
 // TestRelativeDocPath verifies README link targets resolve to the
-// canonical docs/tools/<name>.md path used everywhere else.
+// canonical docs/reference/tools/<name>.md path used everywhere else.
 func TestRelative_DocPath(t *testing.T) {
 	tests := []struct {
 		link string
 		want string
 	}{
-		{"projects.md", "docs/tools/projects.md"},
-		{"branch-rules.md", "docs/tools/branch-rules.md"},
-		{"branches.md", "docs/tools/branches.md"},
-		{"", "docs/tools/"},
+		{"projects.md", "docs/reference/tools/projects.md"},
+		{"branch-rules.md", "docs/reference/tools/branch-rules.md"},
+		{"branches.md", "docs/reference/tools/branches.md"},
+		{"", "docs/reference/tools/"},
 	}
 	for _, tc := range tests {
 		got := relativeDocPath(tc.link)
@@ -616,7 +616,7 @@ func TestLoadOwnershipRules_ByFileState(t *testing.T) {
 }
 
 // TestBuildReport_LiveBaseline is the integration smoke test against
-// the real catalog and the real docs/tools tree. It runs the full
+// the real catalog and the real docs/reference/tools tree. It runs the full
 // pipeline and asserts the report shape, not the exact counts (which
 // drift as the catalog grows). The point of this test is to catch
 // regressions in the catalog walk, the README parser, and the doc
@@ -626,8 +626,8 @@ func TestBuildReport_LiveBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find repo root: %v", err)
 	}
-	readme := filepath.Join(repoRoot, "docs/tools/README.md")
-	docsRoot := filepath.Join(repoRoot, "docs/tools")
+	readme := filepath.Join(repoRoot, "docs/reference/tools/README.md")
+	docsRoot := filepath.Join(repoRoot, "docs/reference/tools")
 
 	catalog, err := loadCatalog(repoRoot)
 	if err != nil {
@@ -657,7 +657,7 @@ func TestBuildReport_LiveBaseline(t *testing.T) {
 	// it is allowed but only when there is actually something to
 	// assign.
 	for _, f := range rep.Files {
-		if strings.HasPrefix(f.DocPath, "docs/tools/") {
+		if strings.HasPrefix(f.DocPath, "docs/reference/tools/") {
 			continue
 		}
 		if f.DocPath == "(unassigned)" {
@@ -670,7 +670,7 @@ func TestBuildReport_LiveBaseline(t *testing.T) {
 	// so verify the branch-rules.md expected set is non-empty.
 	var branchRules *fileFinding
 	for i := range rep.Files {
-		if rep.Files[i].DocPath == "docs/tools/branch-rules.md" {
+		if rep.Files[i].DocPath == "docs/reference/tools/branch-rules.md" {
 			branchRules = &rep.Files[i]
 			break
 		}
