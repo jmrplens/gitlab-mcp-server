@@ -532,6 +532,24 @@ func TestSorted_Diff(t *testing.T) {
 	}
 }
 
+// TestResolveOutputPath verifies the -output resolution rules: relative paths
+// anchor to the repo root, while the "-" stdout sentinel and absolute paths are
+// passed through verbatim (the absolute-path case is the guard that stops an
+// absolute -output from being joined onto repoRoot and writing inside the repo).
+func TestResolveOutputPath(t *testing.T) {
+	root := filepath.Join("home", "user", "repo")
+	if got := resolveOutputPath(root, "plan/backlog.json"); got != filepath.Join(root, "plan/backlog.json") {
+		t.Errorf("relative path = %q, want repo-root-joined", got)
+	}
+	if got := resolveOutputPath(root, "-"); got != "-" {
+		t.Errorf(`"-" = %q, want "-" (stdout)`, got)
+	}
+	abs := filepath.Join(string(filepath.Separator)+"tmp", "out.json")
+	if got := resolveOutputPath(root, abs); got != abs {
+		t.Errorf("absolute path = %q, want %q (unchanged)", got, abs)
+	}
+}
+
 // TestLoadOwnershipRules verifies the doc-ownership.json loader:
 // it parses groups/prefixes, silently ignores the human-only "note"
 // field, treats a missing file as an empty (non-error) ruleset so the
