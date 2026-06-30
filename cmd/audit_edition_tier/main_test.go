@@ -1,10 +1,6 @@
 package main
 
-import (
-	"net/http"
-	"testing"
-	"time"
-)
+import "testing"
 
 // TestParseTierBadge_Values_MapToMinimumTier verifies that a doc `- Tier:`
 // badge value is reduced to the minimum required tier (the lowest listed tier),
@@ -116,56 +112,5 @@ func TestClassifyDomain_Buckets(t *testing.T) {
 		if gotClass != c.wantClass || gotWork != c.wantWork {
 			t.Errorf("%s: classifyDomain = (%q, %v); want (%q, %v)", c.name, gotClass, gotWork, c.wantClass, c.wantWork)
 		}
-	}
-}
-
-// TestParseRetryAfter covers the Retry-After header forms: delta-seconds,
-// HTTP-date in the future, and the unparsable/empty cases that fall back to 0
-// (exponential backoff).
-func TestParseRetryAfter(t *testing.T) {
-	if got := parseRetryAfter("5"); got != 5*time.Second {
-		t.Errorf("delta-seconds: got %v, want 5s", got)
-	}
-	if got := parseRetryAfter("  10 "); got != 10*time.Second {
-		t.Errorf("padded delta-seconds: got %v, want 10s", got)
-	}
-	if got := parseRetryAfter(""); got != 0 {
-		t.Errorf("empty: got %v, want 0", got)
-	}
-	if got := parseRetryAfter("0"); got != 0 {
-		t.Errorf("zero: got %v, want 0", got)
-	}
-	if got := parseRetryAfter("garbage"); got != 0 {
-		t.Errorf("garbage: got %v, want 0", got)
-	}
-	future := time.Now().Add(30 * time.Second).UTC().Format(http.TimeFormat)
-	if got := parseRetryAfter(future); got <= 0 || got > 31*time.Second {
-		t.Errorf("http-date: got %v, want ~30s", got)
-	}
-	past := time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat)
-	if got := parseRetryAfter(past); got != 0 {
-		t.Errorf("past http-date: got %v, want 0", got)
-	}
-}
-
-// TestBackoffDelay verifies Retry-After is honored (and capped) when present,
-// and that the exponential fallback grows with the attempt and stays within
-// [base, base*1.5) given full jitter on half the window.
-func TestBackoffDelay(t *testing.T) {
-	// Retry-After honored and capped at fetchMaxBackoff.
-	if got := backoffDelay(1, 3*time.Second); got < 3*time.Second || got > 3*time.Second+fetchBaseSpacing {
-		t.Errorf("retry-after honored: got %v, want ~3s", got)
-	}
-	if got := backoffDelay(1, 10*time.Minute); got > fetchMaxBackoff+fetchBaseSpacing {
-		t.Errorf("retry-after cap: got %v, want <= %v", got, fetchMaxBackoff+fetchBaseSpacing)
-	}
-	// Exponential fallback: attempt 1 -> base 1s, attempt 3 -> base 4s.
-	d1 := backoffDelay(1, 0)
-	if d1 < time.Second || d1 >= time.Second+time.Second/2 {
-		t.Errorf("attempt 1 backoff out of range: %v", d1)
-	}
-	d3 := backoffDelay(3, 0)
-	if d3 < 4*time.Second || d3 >= 6*time.Second {
-		t.Errorf("attempt 3 backoff out of range: %v", d3)
 	}
 }

@@ -43,30 +43,39 @@ go run ./cmd/audit_1to1/
 
 # Single-scope run, gaps only, to stdout
 go run ./cmd/audit_1to1/ -scope=structs -gaps-only -output=-
+
+# Validate that every doc/api citation behind the adjudication tables is still
+# fetchable (the official API doc is the 1:1 ground truth)
+go run ./cmd/audit_1to1/ -validate-docs
 ```
 
 #### Flags
 
-| Flag         | Type     | Default                    | Description                                                                          |
-| ------------ | -------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| `-gaps-only` | `bool`   | `false`                    | Only include entries with at least one finding                                       |
-| `-output`    | `string` | `-`                        | Path to write the JSON report, or `-` for stdout                                     |
-| `-scope`     | `string` | `structs,actions,metadata` | Comma-separated subset of `{structs,actions,metadata}`; default all (merged backlog) |
+| Flag             | Type       | Default                    | Description                                                                                                                                        |
+| ---------------- | ---------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-gaps-only`     | `bool`     | `false`                    | Only include entries with at least one finding                                                                                                     |
+| `-output`        | `string`   | `-`                        | Path to write the JSON report, or `-` for stdout                                                                                                   |
+| `-scope`         | `string`   | `structs,actions,metadata` | Comma-separated subset of `{structs,actions,metadata}`; default all (merged backlog)                                                               |
+| `-validate-docs` | `bool`     | `false`                    | Instead of the audit, verify every `doc/api/<area>.md` citation in the adjudication tables is still fetchable (exits non-zero on a stale citation) |
+| `-refresh`       | `bool`     | `false`                    | With `-validate-docs`, force re-fetch of cited docs even when cached and fresh                                                                     |
+| `-offline`       | `bool`     | `false`                    | With `-validate-docs`, use only cached docs; do not fetch                                                                                          |
+| `-max-age`       | `duration` | `168h`                     | With `-validate-docs`, re-download cached docs older than this (default 7 days)                                                                    |
 
 #### Output
 
-JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (9 counters), and a `packages[]` array.
+JSON. A single-scope run produces that auditor's native shape. An all-scopes run produces a merged backlog containing `schema_version`, a `summary` block (9 counters), and a `packages[]` array. `-validate-docs` emits `{schema_version, checked, ok, stale[]}`.
 
 #### Make targets
 
 - `make audit-1to1` — writes `plan/1to1-backlog.json`.
+- `make audit-1to1-validate-docs` — validates the doc/api citations (CI gate).
 - `make audit-struct-completeness` — legacy wrapper running `-scope=structs`.
 - `make audit-action-coverage` — legacy wrapper running `-scope=actions`.
 - `make audit-metadata-completeness` — legacy wrapper running `-scope=metadata`.
 
 #### Notes
 
-This single binary replaces four former binaries. The legacy Make targets remain as thin `-scope` wrappers for backward compatibility.
+This single binary replaces four former binaries. The legacy Make targets remain as thin `-scope` wrappers for backward compatibility. `-validate-docs` uses the shared `internal/apidocs` fetcher (cache in `.cache/gitlab-api-docs/`, 7-day TTL) — the same source-of-truth docs as `audit_edition_tier`.
 
 ## Catalog & metadata audits
 
@@ -217,11 +226,13 @@ go run ./cmd/audit_edition_tier/ -offline
 
 #### Flags
 
-| Flag         | Type     | Default | Description                                      |
-| ------------ | -------- | ------- | ------------------------------------------------ |
-| `-gaps-only` | `bool`   | `false` | Only include domains that need tier work         |
-| `-offline`   | `bool`   | `false` | Use only cached docs; do not fetch               |
-| `-output`    | `string` | `-`     | Path to write the JSON report, or `-` for stdout |
+| Flag         | Type       | Default | Description                                              |
+| ------------ | ---------- | ------- | -------------------------------------------------------- |
+| `-gaps-only` | `bool`     | `false` | Only include domains that need tier work                 |
+| `-offline`   | `bool`     | `false` | Use only cached docs; do not fetch                       |
+| `-refresh`   | `bool`     | `false` | Force re-fetch docs even when cached and fresh           |
+| `-max-age`   | `duration` | `168h`  | Re-download cached docs older than this (default 7 days) |
+| `-output`    | `string`   | `-`     | Path to write the JSON report, or `-` for stdout         |
 
 #### Output
 
@@ -233,7 +244,7 @@ A JSON report with per-action tier classification and doc-vs-binary discrepancie
 
 #### Notes
 
-Fetches remote docs from `gitlab.com` when not run with `-offline`. The working docs cache lives in `.tmp-tier-docs/`.
+Fetches the GitLab API reference docs from `gitlab.com` via the shared `internal/apidocs` fetcher. Docs are cached in `.cache/gitlab-api-docs/` (gitignored, shared with `audit_1to1 -validate-docs`) and reused while younger than the 7-day TTL; `-refresh` forces a re-download and `-offline` uses only the cache. The fetcher honors `Retry-After`, backs off with jitter, and spaces requests so a full sweep does not trip the raw rate limiter.
 
 ## Surface quality audits
 

@@ -25,11 +25,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/actions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/merge"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/metadata"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -37,7 +39,16 @@ func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include entries with at least one finding")
 	scope := flag.String("scope", "structs,actions,metadata", "comma-separated subset of {structs,actions,metadata}; default all (merged backlog)")
+	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
+	refresh := flag.Bool("refresh", false, "with -validate-docs, force re-fetch of cited docs even when cached and fresh")
+	offline := flag.Bool("offline", false, "with -validate-docs, use only cached docs; do not fetch")
+	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs, re-download cached docs older than this")
 	flag.Parse()
+
+	if *validateDocs {
+		runValidateDocsMode(*outputPath, *refresh, *offline, *maxAge)
+		return
+	}
 
 	scopes, err := parseScope(*scope)
 	if err != nil {
@@ -59,6 +70,27 @@ func main() {
 	}
 	if writeErr := writeOutput(*outputPath, content); writeErr != nil {
 		cmdutil.Fatalf("write output: %v", writeErr)
+	}
+}
+
+// runValidateDocsMode resolves the repo root, builds the shared API-doc fetcher,
+// validates the cited docs, writes the report, and exits non-zero when any
+// citation is stale so it can gate CI.
+func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.Duration) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		cmdutil.Fatalf("find repository root: %v", err)
+	}
+	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge})
+	content, ok, err := runValidateDocs(root, fetcher)
+	if err != nil {
+		cmdutil.Fatalf("%v", err)
+	}
+	if writeErr := writeOutput(outputPath, content); writeErr != nil {
+		cmdutil.Fatalf("write output: %v", writeErr)
+	}
+	if !ok {
+		cmdutil.Fatalf("audit_1to1: stale doc/api citations found (see report)")
 	}
 }
 

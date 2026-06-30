@@ -22,43 +22,21 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"math/rand/v2"
-	"net/http"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
-const (
-	schemaVersion = 1
-	docBaseURL    = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/"
-	cacheSubdir   = "cmd/audit_edition_tier/.doccache"
-
-	// Fetch tuning. GitLab's raw endpoint rate-limits bursts with HTTP 429
-	// (often carrying a Retry-After header). We retry with honored Retry-After
-	// first, exponential backoff + jitter as a fallback, and a polite delay
-	// between successful fetches so a -refresh of all docs does not get
-	// throttled mid-run.
-	fetchMaxAttempts = 6
-	fetchBaseSpacing = 500 * time.Millisecond
-	fetchMaxBackoff  = 60 * time.Second
-)
-
-// refreshDocs forces re-fetching docs from the remote even when cached.
-// Set by the -refresh flag.
-var refreshDocs bool
+const schemaVersion = 1
 
 // tier is the canonical 3-tier licensing level, mirroring internal/edition.Tier
 // but kept local so the auditor has no dependency on runtime config.
@@ -119,7 +97,8 @@ func main() {
 	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
 	gapsOnly := flag.Bool("gaps-only", false, "only include domains that need tier work")
 	offline := flag.Bool("offline", false, "use only cached docs; do not fetch")
-	flag.BoolVar(&refreshDocs, "refresh", false, "force re-fetch docs even when cached")
+	refresh := flag.Bool("refresh", false, "force re-fetch docs even when cached and fresh")
+	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "re-download cached docs older than this (default 7 days)")
 	flag.Parse()
 
 	root, err := cmdutil.RepositoryRoot(".")
@@ -127,7 +106,8 @@ func main() {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
 
-	rep, err := buildReport(root, *offline)
+	fetcher := apidocs.New(root, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge})
+	rep, err := buildReport(fetcher)
 	if err != nil {
 		cmdutil.Fatalf("build edition tier report: %v", err)
 	}
@@ -212,7 +192,7 @@ func expectedTierForAction(id string, pageTier tier) (expected tier, reason stri
 	return pageTier, ""
 }
 
-func buildReport(root string, offline bool) (*report, error) {
+func buildReport(fetcher *apidocs.Fetcher) (*report, error) {
 	// Mechanical current-state: diff the CE and EE catalogs to learn each
 	// action's current binary gate.
 	ceCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
@@ -259,9 +239,6 @@ func buildReport(root string, offline bool) (*report, error) {
 		})
 	}
 
-	cacheDir := filepath.Join(root, cacheSubdir)
-	_ = os.MkdirAll(cacheDir, 0o750)
-
 	rep := &report{
 		SchemaVersion: schemaVersion,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
@@ -275,7 +252,7 @@ func buildReport(root string, offline bool) (*report, error) {
 	sort.Strings(pkgNames)
 
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(pkg, domains[pkg].actions, cacheDir, offline)
+		dr := buildDomainReport(pkg, domains[pkg].actions, fetcher)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -301,7 +278,7 @@ func buildReport(root string, offline bool) (*report, error) {
 // buildDomainReport assembles the report for one owner package: it resolves the
 // doc area, fetches and parses the tier badges, tallies the current gating, and
 // classifies the domain for wave planning.
-func buildDomainReport(pkg string, actions []actionDetail, cacheDir string, offline bool) domainReport {
+func buildDomainReport(pkg string, actions []actionDetail, fetcher *apidocs.Fetcher) domainReport {
 	sort.Slice(actions, func(i, j int) bool { return actions[i].ID < actions[j].ID })
 
 	docArea, mapped := docAreaForPackage(pkg)
@@ -313,7 +290,7 @@ func buildDomainReport(pkg string, actions []actionDetail, cacheDir string, offl
 	case !mapped:
 		note = "no doc-area mapping"
 	default:
-		content, ferr := fetchDoc(cacheDir, docArea, offline)
+		content, ferr := fetcher.Fetch(docArea)
 		if ferr != nil {
 			note = "doc fetch failed: " + ferr.Error()
 		} else {
@@ -389,114 +366,6 @@ func classifyDomain(dr domainReport, overrides []tier, page tier, fetched bool) 
 	default:
 		return "mixed", true
 	}
-}
-
-// fetchDoc returns the raw markdown for a doc area, using an on-disk cache.
-func fetchDoc(cacheDir, area string, offline bool) (string, error) {
-	cachePath := filepath.Join(cacheDir, filepath.FromSlash(area)+".md")
-	_ = os.MkdirAll(filepath.Dir(cachePath), 0o750)
-	if !refreshDocs {
-		if data, err := os.ReadFile(cachePath); err == nil {
-			return string(data), nil
-		}
-	}
-	if offline && !refreshDocs {
-		return "", fmt.Errorf("not cached and offline: %s", area)
-	}
-	url := docBaseURL + area + ".md"
-	client := &http.Client{Timeout: 30 * time.Second}
-	fmt.Fprintf(os.Stderr, "  fetching %s\n", area)
-	var lastErr error
-	for attempt := 1; attempt <= fetchMaxAttempts; attempt++ {
-		body, status, retryAfter, err := fetchOnce(client, url)
-		switch {
-		case err != nil:
-			lastErr = err
-		case status == http.StatusTooManyRequests || status >= http.StatusInternalServerError:
-			lastErr = fmt.Errorf("HTTP %d for %s", status, url)
-		case status != http.StatusOK:
-			return "", fmt.Errorf("HTTP %d for %s", status, url)
-		default:
-			_ = os.WriteFile(cachePath, body, 0o600)
-			// Gentle inter-request spacing once a real fetch happened so a
-			// full -refresh sweep does not trip the rate limiter.
-			time.Sleep(fetchBaseSpacing)
-			return string(body), nil
-		}
-		if attempt == fetchMaxAttempts {
-			break
-		}
-		wait := backoffDelay(attempt, retryAfter)
-		fmt.Fprintf(os.Stderr, "  fetch %s: %v; retry %d/%d in %s\n", area, lastErr, attempt+1, fetchMaxAttempts, wait.Round(time.Millisecond))
-		time.Sleep(wait)
-	}
-	return "", fmt.Errorf("giving up on %s after %d attempts: %w", area, fetchMaxAttempts, lastErr)
-}
-
-// backoffDelay computes how long to wait before the next fetch attempt. A
-// server-provided Retry-After (HTTP 429) is honored first, capped at
-// fetchMaxBackoff; otherwise it falls back to exponential backoff
-// (1s, 2s, 4s, …) with full jitter to avoid synchronized retries.
-func backoffDelay(attempt int, retryAfter time.Duration) time.Duration {
-	if retryAfter > 0 {
-		return min(retryAfter, fetchMaxBackoff) + jitter(fetchBaseSpacing)
-	}
-	exp := time.Duration(1<<min(attempt-1, 5)) * time.Second // attempt 1 -> 1s … capped
-	exp = min(exp, fetchMaxBackoff)
-	return exp + jitter(exp/2)
-}
-
-// jitter returns a random duration in [0, span) (0 when span <= 0).
-func jitter(span time.Duration) time.Duration {
-	if span <= 0 {
-		return 0
-	}
-	return time.Duration(rand.Int64N(int64(span))) //#nosec G404 -- backoff jitter, not security-sensitive
-}
-
-// fetchOnce performs a single GET and returns the body, status code, and the
-// parsed Retry-After delay (0 when absent/unparsable).
-func fetchOnce(client *http.Client, url string) (body []byte, status int, retryAfter time.Duration, err error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-	defer resp.Body.Close()
-	retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
-	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, retryAfter, nil
-	}
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, retryAfter, err
-	}
-	return body, resp.StatusCode, retryAfter, nil
-}
-
-// parseRetryAfter interprets a Retry-After header value, which is either a
-// non-negative delta-seconds integer or an HTTP-date. Returns 0 when empty or
-// unparsable so the caller falls back to exponential backoff.
-func parseRetryAfter(v string) time.Duration {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return 0
-	}
-	if secs, convErr := strconv.Atoi(v); convErr == nil {
-		if secs <= 0 {
-			return 0
-		}
-		return time.Duration(secs) * time.Second
-	}
-	if t, parseErr := http.ParseTime(v); parseErr == nil {
-		if d := time.Until(t); d > 0 {
-			return d
-		}
-	}
-	return 0
 }
 
 // parseDocTiers extracts the page-level tier and the set of distinct
