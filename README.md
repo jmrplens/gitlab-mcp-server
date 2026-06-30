@@ -432,19 +432,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       949 |     191,946 |
-| Unit tests (`_test.go`)  |       518 |     292,456 |
+| Source (`.go`, non-test) |       950 |     191,901 |
+| Unit tests (`_test.go`)  |       519 |     292,495 |
 | End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,609** | **519,579** |
+| **Total**                | **1,611** | **519,573** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,322 |
-| — exported (public)             |  2,553 |
-| — unexported (private)          |  4,769 |
-| Unit test functions (`TestXxx`) | 11,314 |
+| Source functions                |  7,318 |
+| — exported (public)             |  2,555 |
+| — unexported (private)          |  4,763 |
+| Unit test functions (`TestXxx`) | 11,317 |
 | Subtests (`t.Run(...)`)         |  2,625 |
 | End-to-end test functions       |    286 |
 
@@ -454,15 +454,15 @@ Numbers nobody asked for, but here they are anyway.
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~564 lines |
-| Comment lines in source            |  20,478 (~10.7% of source) |
+| Average test file length           |                 ~563 lines |
+| Comment lines in source            |  20,479 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,559 |
+| `if err != nil` checks             | 6,557 |
 | `defer` statements                 |   703 |
 | `struct` types defined             | 2,707 |
 | `//nolint` suppressions            |   179 |
@@ -475,7 +475,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   224 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   242 |
+| Git commits                    |   245 |
 | Unique contributors            |     3 |
 
 ### Hall of fame

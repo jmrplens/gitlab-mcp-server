@@ -18,15 +18,15 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,584 |
-| Unit test functions                                   | 11,302 |
+| Total test functions                                  | 11,587 |
+| Unit test functions                                   | 11,305 |
 | E2E test functions                                    |    282 |
-| cmd test functions                                    |    881 |
-| Test files (internal/)                                |    454 |
-| Test files (cmd/)                                     |     64 |
+| cmd test functions                                    |    902 |
+| Test files (internal/)                                |    451 |
+| Test files (cmd/)                                     |     68 |
 | Test files (test/e2e/suite/)                          |    139 |
 | Tool sub-packages tested                              |    174 |
-| Core packages tested                                  |     18 |
+| Core packages tested                                  |     16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  90.9% |
 | Overall coverage (`go test ./internal/...`)           |  94.6% |
 | Average package coverage                              |  95.4% |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,318 | 89.1% |
+| `TestFunc_Scenario` (2-part)           | 10,321 | 89.1% |
 | `TestFunc` (no underscore)             |    939 |  8.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
@@ -45,36 +45,34 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,875 |         93 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,857 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (174) |          8,263 |        348 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            282 |        139 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            881 |         64 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,584** |    **657** |                                                                                                 |
+| cmd packages            |            902 |         68 | server entry point and developer command utilities                                              |
+| **Total**               |     **11,587** |    **658** |                                                                                                 |
 
 ### Core Packages
 
-| Package      |     Tests | Coverage | Description                                                                                                                                                                                                         |
-| ------------ | --------: | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| apidocs      |        10 |    92.3% | Package apidocs is a shared fetcher for the GitLab API reference docs (the doc/api/<area>.md files in the gitlab-org/gitlab monorepo) used as a source of truth alongside the client-go SDK by the audit utilities. |
-| auditclient  |         2 |   100.0% | Package auditclient creates GitLab clients for command-line audit tools.                                                                                                                                            |
-| autoupdate   |       122 |    94.7% | Package autoupdate provides self-update capability for the gitlab-mcp-server MCP server.                                                                                                                            |
-| cmdutil      |         5 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                           |
-| completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                            |
-| config       |        72 |    98.6% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                    |
-| docgen       |         8 |   100.0% | Package docgen contains helpers for generated project documentation.                                                                                                                                                |
-| edition      |         4 |    82.6% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                       |
-| elicitation  |        79 |    92.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                        |
-| gitlab       |        44 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                             |
-| oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                             |
-| progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                       |
-| prompts      |       207 |    96.2% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                          |
-| resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                 |
-| serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                     |
-| testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                       |
-| toolutil     |       630 |    97.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                       |
-| wizard       |       287 |    92.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server.   |
-| **Subtotal** | **1,875** |          |                                                                                                                                                                                                                     |
+| Package      |     Tests | Coverage | Description                                                                                                                                                                                                       |
+| ------------ | --------: | -------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| auditclient  |         2 |   100.0% | Package auditclient creates GitLab clients for command-line audit tools.                                                                                                                                          |
+| autoupdate   |       122 |    94.7% | Package autoupdate provides self-update capability for the gitlab-mcp-server MCP server.                                                                                                                          |
+| cmdutil      |         5 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
+| completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
+| config       |        72 |    98.6% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
+| edition      |         4 |    82.6% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
+| elicitation  |        79 |    92.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
+| gitlab       |        44 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
+| oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
+| progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
+| prompts      |       207 |    96.2% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
+| resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
+| serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
+| testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
+| toolutil     |       630 |    97.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| wizard       |       287 |    92.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
+| **Subtotal** | **1,857** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -298,10 +296,10 @@
 | Package                                        | Coverage |
 | ---------------------------------------------- | -------: |
 | cmd/audit_1to1                                 |    39.7% |
-| cmd/audit_1to1/internal/actions                |    86.9% |
+| cmd/audit_1to1/internal/actions                |    87.7% |
 | cmd/audit_1to1/internal/merge                  |    85.4% |
 | cmd/audit_1to1/internal/metadata               |    73.5% |
-| cmd/audit_1to1/internal/structs                |    94.4% |
+| cmd/audit_1to1/internal/structs                |    95.3% |
 | cmd/audit_catalog_first                        |    80.8% |
 | cmd/audit_discovery_completeness               |    78.0% |
 | cmd/audit_doc_coverage                         |    81.6% |
@@ -320,22 +318,22 @@
 | cmd/gen_action_catalog_manifest                |    58.3% |
 | cmd/gen_docker_tools                           |    83.3% |
 | cmd/gen_llms                                   |    27.3% |
-| cmd/gen_stats                                  |    52.0% |
+| cmd/gen_stats                                  |    51.3% |
 | cmd/gen_testing_docs                           |    27.4% |
 | cmd/godoc_tool                                 |    58.9% |
+| cmd/internal/apidocs                           |    94.4% |
+| cmd/internal/docgen                            |    99.5% |
 | cmd/server                                     |    78.6% |
 
 ### Core Packages
 
 | Package     | Coverage |
 | ----------- | -------: |
-| apidocs     |    92.3% |
 | auditclient |   100.0% |
 | autoupdate  |    94.7% |
 | cmdutil     |   100.0% |
 | completions |   100.0% |
 | config      |    98.6% |
-| docgen      |   100.0% |
 | edition     |    82.6% |
 | elicitation |    92.5% |
 | gitlab      |   100.0% |
@@ -537,7 +535,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_test_names** (48.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (48.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_stats** (52.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_stats** (51.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (54.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (58.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -552,7 +550,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **edition** (82.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/gen_docker_tools** (83.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/merge** (85.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_1to1/internal/actions** (86.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/actions** (87.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->

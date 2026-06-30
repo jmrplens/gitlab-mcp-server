@@ -4,7 +4,7 @@
 # GPG secret keys (NEVER commit private keys)
 keys/*.secret.asc
 
-# Shared GitLab API reference doc cache (regenerable; internal/apidocs)
+# Shared GitLab API reference doc cache (regenerable; cmd/internal/apidocs)
 # Consumed by audit_edition_tier and audit_1to1; 7-day TTL, re-downloaded on demand.
 .cache/
 
