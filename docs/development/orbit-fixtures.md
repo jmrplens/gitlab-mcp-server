@@ -1,5 +1,7 @@
 # Orbit live test fixtures
 
+> **Diátaxis type**: How-to · **Audience**: 🛠️ Contributors & maintainers
+
 The Orbit handler live tests in `test/e2e/orbit/live_test.go`
 exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints against
 the `plens1` group on gitlab.com. Those tests are gated behind the
