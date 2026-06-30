@@ -432,10 +432,10 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       950 |     191,901 |
-| Unit tests (`_test.go`)  |       519 |     292,495 |
+| Source (`.go`, non-test) |       950 |     191,930 |
+| Unit tests (`_test.go`)  |       519 |     292,516 |
 | End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,611** | **519,573** |
+| **Total**                | **1,611** | **519,623** |
 
 ### Functions
 
@@ -444,8 +444,8 @@ Numbers nobody asked for, but here they are anyway.
 | Source functions                |  7,318 |
 | — exported (public)             |  2,555 |
 | — unexported (private)          |  4,763 |
-| Unit test functions (`TestXxx`) | 11,317 |
-| Subtests (`t.Run(...)`)         |  2,625 |
+| Unit test functions (`TestXxx`) | 11,311 |
+| Subtests (`t.Run(...)`)         |  2,634 |
 | End-to-end test functions       |    286 |
 
 ### Ratios worth noting
@@ -455,15 +455,15 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~563 lines |
-| Comment lines in source            |  20,479 (~10.7% of source) |
+| Comment lines in source            |  20,484 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,557 |
-| `defer` statements                 |   703 |
+| `if err != nil` checks             | 6,552 |
+| `defer` statements                 |   706 |
 | `struct` types defined             | 2,707 |
 | `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
@@ -475,7 +475,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   224 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   245 |
+| Git commits                    |   247 |
 | Unique contributors            |     3 |
 
 ### Hall of fame
