@@ -1,6 +1,8 @@
 # gitlab-mcp-server documentation — robots.txt
 # All crawlers are welcome, including AI / generative-engine crawlers.
-# Structured context for LLMs is published at /llms.txt and /llms-full.txt.
+# Structured context for LLMs:
+#   https://jmrplens.github.io/gitlab-mcp-server/llms.txt
+#   https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt
 
 User-agent: *
 Allow: /

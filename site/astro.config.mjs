@@ -101,6 +101,13 @@ const jsonLd = JSON.stringify({
 			name: "José Manuel Requena Plens",
 			alternateName: "jmrplens",
 			url: authorUrl,
+			knowsAbout: [
+				"Model Context Protocol",
+				"GitLab",
+				"Go",
+				"DevOps",
+				"AI assistants",
+			],
 			sameAs: [
 				"https://github.com/jmrplens",
 				"https://linkedin.com/in/jmrplens",
@@ -146,6 +153,10 @@ const jsonLd = JSON.stringify({
 				priceCurrency: "USD",
 			},
 			author: { "@id": authorId },
+			sameAs: [
+				"https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server",
+				"https://cursor.directory/plugins/gitlab-mcp-server",
+			],
 		},
 		{
 			"@type": "SoftwareSourceCode",
@@ -183,6 +194,11 @@ export default defineConfig({
 				}),
 			],
 			description: siteDescription,
+			components: {
+				// Per-page structured data (TechArticle / BreadcrumbList / HowTo)
+				// and per-page Twitter card tags, layered on the default head.
+				Head: "./src/components/Head.astro",
+			},
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
 				light: "./src/assets/logo-light.svg",
@@ -328,6 +344,14 @@ export default defineConfig({
 					attrs: {
 						rel: "manifest",
 						href: `${basePath}/manifest.json`,
+					},
+				},
+				// Bing Webmaster Tools site verification
+				{
+					tag: "meta",
+					attrs: {
+						name: "msvalidate.01",
+						content: "7574EB3B44624C239F14920DBC34EE25",
 					},
 				},
 				// JSON-LD structured data
