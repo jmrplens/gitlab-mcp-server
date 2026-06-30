@@ -76,6 +76,9 @@ const (
 	actionCustomAttrList     = "admin.custom_attr_list"
 	actionCustomAttrGet      = "admin.custom_attr_get"
 	actionCustomAttrDel      = "admin.custom_attr_delete"
+	actionApplicationList    = "admin.application_list"
+	actionApplicationCreate  = "admin.application_create"
+	actionApplicationDelete  = "admin.application_delete"
 	actionClusterAgentTokRev = "admin.cluster_agent_token_revoke"
 	actionClusterAgentTokGet = "admin.cluster_agent_token_get"
 	actionClusterAgentList   = "admin.cluster_agent_list"
@@ -622,25 +625,25 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 	"gitlab_list_applications": {
 		usage:       "List instance-level OAuth applications registered for the GitLab instance (admin only).",
 		aliases:     []string{"list applications", "list oauth applications", "instance oauth apps"},
-		related:     []string{"admin.application_create", "admin.application_delete"},
+		related:     []string{actionApplicationCreate, actionApplicationDelete},
 		description: "List instance OAuth applications. Returns: an array of applications with id, application_id, name, redirect URIs, and scopes. See also: gitlab_create_application, gitlab_delete_application.",
 	},
 	"gitlab_create_application": {
 		usage:       "Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes; optionally mark it confidential or trusted.",
 		aliases:     []string{"create application", "register oauth application", "add instance oauth app"},
-		related:     []string{"admin.application_list", "admin.application_delete"},
+		related:     []string{actionApplicationList, actionApplicationDelete},
 		description: "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
 	},
 	"gitlab_renew_application_secret": {
 		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.",
 		aliases:     []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"},
-		related:     []string{"admin.application_list", "admin.application_create"},
+		related:     []string{actionApplicationList, actionApplicationCreate},
 		description: "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
 	},
 	"gitlab_delete_application": {
 		usage:       "Delete an instance-level OAuth application by id (admin only), revoking its credentials.",
 		aliases:     []string{"delete application", "remove oauth application", "revoke instance oauth app"},
-		related:     []string{"admin.application_list", "admin.application_create"},
+		related:     []string{actionApplicationList, actionApplicationCreate},
 		description: "Delete an instance OAuth application. Returns: a success status. See also: gitlab_list_applications, gitlab_create_application.",
 	},
 	"gitlab_list_custom_attributes": {
