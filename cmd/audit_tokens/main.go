@@ -1,7 +1,8 @@
 // Command audit_tokens measures the LLM context window overhead of all
 // registered MCP tool definitions. It creates in-memory MCP servers in both
 // individual and meta-tool modes, serializes tool definitions to JSON, and
-// estimates token counts using a byte-based heuristic (bytes / 4).
+// counts tokens with the cl100k_base tokenizer (see countTokens), falling back
+// to a bytes/4 heuristic only if the tokenizer is unavailable.
 //
 // Usage:
 //
@@ -48,8 +49,7 @@ const (
 //
 // Name is the MCP tool name. Domain is the GitLab API domain parsed from
 // the tool name (e.g. "project" for "gitlab_project_get"). Tokens is the
-// cl100k_base token count from [toolutil.CountTokens]. Bytes is the raw
-// JSON length.
+// cl100k_base token count from [countTokens]. Bytes is the raw JSON length.
 type toolTokenInfo struct {
 	Name   string
 	Domain string
@@ -151,11 +151,6 @@ func main() {
 	})
 	promptTokens := measurePrompts(client)
 
-	fmt.Println("=" + strings.Repeat("=", 69))
-	fmt.Println("  gitlab-mcp-server — Token Overhead Audit")
-	fmt.Println("=" + strings.Repeat("=", 69))
-	fmt.Println()
-
 	// Mode comparison
 	indTotal := totalTokens(individualInfo)
 	metaTotal := totalTokens(metaBaseInfo)
@@ -192,6 +187,11 @@ func main() {
 		}
 		return
 	}
+
+	fmt.Println("=" + strings.Repeat("=", 69))
+	fmt.Println("  gitlab-mcp-server — Token Overhead Audit")
+	fmt.Println("=" + strings.Repeat("=", 69))
+	fmt.Println()
 
 	fmt.Println("## Mode Comparison")
 	fmt.Println()
@@ -365,7 +365,7 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
 			os.Exit(1)
 		}
-		tokens := toolutil.CountTokens(b)
+		tokens := countTokens(b)
 		domain := extractDomain(t.Name)
 		infos = append(infos, toolTokenInfo{
 			Name:   t.Name,
@@ -444,7 +444,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		if mErr != nil {
 			fatalWithSession("marshal resource %s: %v\n", r.Name, mErr)
 		}
-		totalTokens += toolutil.CountTokens(b)
+		totalTokens += countTokens(b)
 	}
 
 	tpl, err := session.ListResourceTemplates(ctx, nil)
@@ -456,7 +456,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		if mErr != nil {
 			fatalWithSession("marshal template %s: %v\n", t.Name, mErr)
 		}
-		totalTokens += toolutil.CountTokens(b)
+		totalTokens += countTokens(b)
 	}
 
 	_ = session.Close()
@@ -507,7 +507,7 @@ func measurePrompts(client *gitlabclient.Client) int {
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
 				os.Exit(1)
 			}
-			totalTokens += toolutil.CountTokens(b)
+			totalTokens += countTokens(b)
 		}
 	}
 	_ = session.Close()
@@ -634,9 +634,11 @@ func runMetaSchemaSizing() error {
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, cerr := server.Connect(ctx, st, nil); cerr != nil {
+	serverSession, cerr := server.Connect(ctx, st, nil)
+	if cerr != nil {
 		return fmt.Errorf("server connect: %w", cerr)
 	}
+	defer serverSession.Close()
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "spike-cli", Version: "0"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -1026,7 +1028,7 @@ func measureTierFootprint(client *gitlabclient.Client, tier edition.Tier, tierLa
 // surface (dynamic) across all tiers, plus a link to the detailed doc.
 func renderReadmeFootprint(rows []tokenFootprintRow) string {
 	var b strings.Builder
-	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding) via `internal/toolutil.CountTokens`. For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
+	b.WriteString("Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).\n\n")
 	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
 
 	tableRows := make([][]string, 0, len(rows))
@@ -1164,7 +1166,7 @@ func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
 		}
-		totalTokens += toolutil.CountTokens(b)
+		totalTokens += countTokens(b)
 	}
 	return totalTokens, nil
 }
@@ -1218,7 +1220,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
 			}
-			totalTokens += toolutil.CountTokens(b)
+			totalTokens += countTokens(b)
 		}
 
 		tpl, err := session.ListResourceTemplates(ctx, nil)
@@ -1230,7 +1232,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
 			}
-			totalTokens += toolutil.CountTokens(b)
+			totalTokens += countTokens(b)
 		}
 		return totalTokens, nil
 	})
@@ -1253,7 +1255,7 @@ func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
 			}
-			totalTokens += toolutil.CountTokens(b)
+			totalTokens += countTokens(b)
 		}
 		return totalTokens, nil
 	})
