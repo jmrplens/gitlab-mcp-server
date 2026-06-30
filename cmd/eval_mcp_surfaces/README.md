@@ -16,9 +16,9 @@
 | `--edition` | `all` | Optional task edition filter: `all`, `ce`, or `enterprise`. Docker presets set this automatically unless explicitly overridden. |
 | `--coverage-report` | empty | Optional Markdown file listing uncovered high-risk routes for the selected run. |
 | `--compare` | empty | Repeatable report path for comparison mode. Accepts token reports from `cmd/audit_tokens` and evaluation reports from this command. |
-| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/testing/model-results.md`. |
+| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/development/testing/model-results.md`. |
 | `--publish-from` | empty | Repeatable reviewed `eval_mcp_surfaces` report path consumed by `--publish-docs` or `--check-docs`. |
-| `--publish-results-doc` | `docs/testing/model-results.md` | Results document updated by `--publish-docs`. |
+| `--publish-results-doc` | `docs/development/testing/model-results.md` | Results document updated by `--publish-docs`. |
 | `--publish-readme` | `README.md` | README file updated by `--publish-docs`. |
 | `--publish-label` | empty | Human-readable result label used in generated documentation. Defaults to the report date. |
 | `--publish-mode` | `replace-current` | Results block update mode: `replace-current` or `append`. README summary always reflects the current selected reports. |
@@ -274,6 +274,6 @@ It separates MCP implementation bugs, GitLab CE limitations, model route-selecti
 
 ## Related Documentation
 
-- [AI Model Evaluation](../../docs/testing/model-evaluation.md)
-- [AI Model Evaluation Developer Guide](../../docs/testing/model-evaluation-developer.md)
-- [AI Model Evaluation Results](../../docs/testing/model-results.md)
+- [AI Model Evaluation](../../docs/development/testing/model-evaluation.md)
+- [AI Model Evaluation Developer Guide](../../docs/development/testing/model-evaluation-developer.md)
+- [AI Model Evaluation Results](../../docs/development/testing/model-results.md)

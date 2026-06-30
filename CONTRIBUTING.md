@@ -21,7 +21,7 @@ For security issues, please follow the [Security Policy](SECURITY.md) instead of
 ## Getting Started
 
 1. Clone the repository
-2. Create a `.env` file with your GitLab credentials (see [Configuration](docs/configuration.md))
+2. Create a `.env` file with your GitLab credentials (see [Configuration](docs/reference/configuration.md))
 3. Run `make build` to verify the setup
 4. Run `make test` to ensure all tests pass
 
@@ -262,14 +262,14 @@ Then commit the updated golden files alongside your code changes. The CI will fa
 
 ### When to Update
 
-- Adding a new tool → update the relevant `docs/tools/<domain>.md` and `docs/tools/README.md`
-- Adding a new meta-tool action → update `docs/meta-tools.md`
-- Adding a new resource → update `docs/resources-reference.md`
-- Adding a new prompt → update `docs/prompts-reference.md`
-- Adding a new capability → update `docs/capabilities.md`
-- Changing configuration → update `docs/configuration.md`
-- Changing the setup wizard (new option, new client, new env var) → update `docs/configuration.md#setup-wizard-recommended` and `site/src/content/docs/setup-wizard.mdx` (EN+ES)
-- Adding or modifying tests → update `docs/testing/testing.md` with new test counts and coverage values
+- Adding a new tool → update the relevant `docs/tools/<domain>.md` and `docs/reference/tools/README.md`
+- Adding a new meta-tool action → update `docs/concepts/meta-tools.md`
+- Adding a new resource → update `docs/reference/resources.md`
+- Adding a new prompt → update `docs/reference/prompts.md`
+- Adding a new capability → update `docs/reference/capabilities/README.md`
+- Changing configuration → update `docs/reference/configuration.md`
+- Changing the setup wizard (new option, new client, new env var) → update `docs/reference/configuration.md#setup-wizard-recommended` and `site/src/content/docs/setup-wizard.mdx` (EN+ES)
+- Adding or modifying tests → update `docs/development/testing/testing.md` with new test counts and coverage values
 
 ### Language Policy
 

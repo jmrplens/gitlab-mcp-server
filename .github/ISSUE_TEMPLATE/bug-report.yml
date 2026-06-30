@@ -18,7 +18,7 @@ body:
       options:
         - label: I have searched [existing issues](https://github.com/jmrplens/gitlab-mcp-server/issues?q=is%3Aissue) and this bug has not been reported.
           required: true
-        - label: I have read the [README](https://github.com/jmrplens/gitlab-mcp-server#readme) and [troubleshooting guide](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/troubleshooting.md).
+        - label: I have read the [README](https://github.com/jmrplens/gitlab-mcp-server#readme) and [troubleshooting guide](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md).
           required: true
 
   - type: textarea

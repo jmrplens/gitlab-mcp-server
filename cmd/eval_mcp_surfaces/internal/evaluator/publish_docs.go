@@ -19,7 +19,7 @@ import (
 
 const (
 	// defaultPublishResultsDoc identifies the default publish results doc constant used by this package.
-	defaultPublishResultsDoc = "docs/testing/model-results.md"
+	defaultPublishResultsDoc = "docs/development/testing/model-results.md"
 	// defaultPublishReadme identifies the default publish readme constant used by this package.
 	defaultPublishReadme = "README.md"
 
@@ -1103,7 +1103,7 @@ func buildReadmeSummaryBlock(label string, reports []publishReport) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Current published result: **%s**.\n\n", label)
 	b.WriteString(renderReadmeSummaryTable(summaries))
-	fmt.Fprintf(&b, "\nThe published model-evaluation set covers %d task attempts and %d expected MCP operations. Across the selected reports, models emitted %d tool calls over %d model requests, with %s aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.\n",
+	fmt.Fprintf(&b, "\nThe published model-evaluation set covers %d task attempts and %d expected MCP operations. Across the selected reports, models emitted %d tool calls over %d model requests, with %s aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.\n",
 		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetric(aggregate.FinalSuccess))
 	return strings.TrimSpace(b.String()) + "\n"
 }

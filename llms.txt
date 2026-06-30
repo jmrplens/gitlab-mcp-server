@@ -175,23 +175,23 @@ Prompts:
 ## Documentation
 
 - [Getting started](docs/getting-started.md): Installation and first-run guide
-- [Configuration](docs/configuration.md): Full configuration reference
-- [Environment variables](docs/env-reference.md): Environment variable reference
-- [HTTP server mode](docs/http-server-mode.md): Remote MCP transport setup
-- [Security model](docs/security.md): Authentication, read-only mode, safe mode, and security controls
+- [Configuration](docs/reference/configuration.md): Full configuration reference
+- [Environment variables](docs/reference/env.md): Environment variable reference
+- [HTTP server mode](docs/guides/http-server-mode.md): Remote MCP transport setup
+- [Security model](docs/concepts/security.md): Authentication, read-only mode, safe mode, and security controls
 
 ## Tool References
 
-- [Dynamic tools](docs/dynamic-tools.md): Low-token find/execute mode and usage pattern
-- [Meta-tools](docs/meta-tools.md): Consolidated domain meta-tool action reference
-- [All tools](docs/tools/README.md): Complete per-domain tool reference
-- [Resources](docs/resources-reference.md): Read-only MCP resource reference
-- [Prompts](docs/prompts-reference.md): Reusable MCP prompt templates
+- [Dynamic tools](docs/concepts/dynamic-tools.md): Low-token find/execute mode and usage pattern
+- [Meta-tools](docs/concepts/meta-tools.md): Consolidated domain meta-tool action reference
+- [All tools](docs/reference/tools/README.md): Complete per-domain tool reference
+- [Resources](docs/reference/resources.md): Read-only MCP resource reference
+- [Prompts](docs/reference/prompts.md): Reusable MCP prompt templates
 
 ## Optional
 
 - [Full LLM reference](llms-full.txt): Generated companion reference with tool schemas, resource listings, and prompts
-- [Architecture](docs/architecture.md): Internal architecture and catalog-first runtime overview
-- [Output format](docs/output-format.md): Markdown and structured output conventions
-- [Troubleshooting](docs/troubleshooting.md): Common setup and runtime issues
-- [Evaluation results](docs/testing/model-results.md): Surface evaluation summaries for model behavior
+- [Architecture](docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
+- [Output format](docs/reference/output-format.md): Markdown and structured output conventions
+- [Troubleshooting](docs/guides/troubleshooting.md): Common setup and runtime issues
+- [Evaluation results](docs/development/testing/model-results.md): Surface evaluation summaries for model behavior

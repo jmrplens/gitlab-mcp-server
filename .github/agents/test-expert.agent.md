@@ -1,5 +1,5 @@
 ---
-description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/testing/testing.md with cmd/gen_testing_docs at phase completion. Uses Context7 for up-to-date Go testing docs."
+description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/development/testing/testing.md with cmd/gen_testing_docs at phase completion. Uses Context7 for up-to-date Go testing docs."
 name: "Test Expert"
 ---
 
@@ -196,7 +196,7 @@ After writing tests, perform a **mutation check**: mentally (or actually) change
     ```bash
     go run ./cmd/gen_testing_docs/
     go run ./cmd/gen_testing_docs/ --check
-    npx markdownlint-cli2 docs/testing/testing.md
+    npx markdownlint-cli2 docs/development/testing/testing.md
     ```
 
 ## Test Writing Rules
@@ -458,5 +458,5 @@ Before declaring any test work complete:
 - [ ] False-pass verification completed (checklist above)
 - [ ] Coverage target met for the package
 - [ ] `golangci-lint` passes on changed packages
-- [ ] `docs/testing/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` at the end of the test phase when tests or coverage changed
+- [ ] `docs/development/testing/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` at the end of the test phase when tests or coverage changed
 - [ ] `go run ./cmd/gen_testing_docs/ --check` passes

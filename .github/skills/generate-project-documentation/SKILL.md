@@ -62,20 +62,20 @@ The following documents must be generated or updated:
 | Document | Diátaxis Type | Path | Priority |
 |----------|---------------|------|----------|
 | Documentation Index | Navigation | `docs/README.md` | Critical |
-| Architecture Overview | Explanation | `docs/architecture.md` | Critical |
+| Architecture Overview | Explanation | `docs/concepts/architecture.md` | Critical |
 | Package Reference: config | Reference | `docs/packages/config.md` | High |
 | Package Reference: gitlab | Reference | `docs/packages/gitlab.md` | High |
 | Package Reference: tools | Reference | `docs/packages/tools.md` | High |
 | Package Reference: resources | Reference | `docs/packages/resources.md` | High |
 | Package Reference: prompts | Reference | `docs/packages/prompts.md` | High |
-| Tools Reference | Reference | `docs/tools/README.md` | Critical |
-| Resources Reference | Reference | `docs/resources-reference.md` | High |
-| Prompts Reference | Reference | `docs/prompts-reference.md` | High |
+| Tools Reference | Reference | `docs/reference/tools/README.md` | Critical |
+| Resources Reference | Reference | `docs/reference/resources.md` | High |
+| Prompts Reference | Reference | `docs/reference/prompts.md` | High |
 | Developer Onboarding Guide | Tutorial | `docs/onboarding.md` | High |
-| Configuration Guide | Reference | `docs/configuration.md` | High |
+| Configuration Guide | Reference | `docs/reference/configuration.md` | High |
 | Deployment Guide | How-to | `docs/deployment.md` | Medium |
 | Development Guide | How-to | `docs/development/development.md` | High |
-| Testing Guide | How-to | `docs/testing/testing.md` | Medium |
+| Testing Guide | How-to | `docs/development/testing/testing.md` | Medium |
 | Contributing Guide | How-to | `docs/contributing.md` | Medium |
 
 ## Document Templates
@@ -111,7 +111,7 @@ The following documents must be generated or updated:
 | [prompts](packages/prompts.md) | `internal/prompts` | MCP prompt handlers |
 ```
 
-### Architecture Overview (`docs/architecture.md`)
+### Architecture Overview (`docs/concepts/architecture.md`)
 
 ```markdown
 # Architecture Overview
@@ -150,7 +150,7 @@ MCP Client → MCP Server → Tool Handler → GitLab Client → GitLab API → 
 
 ## Key Design Decisions
 
-[Reference ADRs from docs/adr/ directory]
+[Reference ADRs from docs/development/adr directory]
 [Explain: why go-sdk, why single-package tools, why pagination pattern, etc.]
 ```
 

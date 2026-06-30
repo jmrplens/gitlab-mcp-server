@@ -73,15 +73,15 @@ These are checked by the elicitation subsystem. When the MCP client supports eli
 
 These variables configure the HTTP server pool when running in HTTP mode. In stdio mode, they are parsed but only used if the configuration is shared with HTTP mode logic.
 
-| Variable                      | Default  | Description                                                                                                                                                      |
-| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAX_HTTP_CLIENTS`            | `100`    | Maximum concurrent client sessions in the server pool. Upper bound: 10,000                                                                                       |
-| `SESSION_TIMEOUT`             | `30m`    | Idle MCP session timeout. Upper bound: 24h                                                                                                                       |
-| `SESSION_REVALIDATE_INTERVAL` | `15m`    | Token re-validation interval; `0` to disable. Upper bound: 24h                                                                                                   |
-| `AUTH_MODE`                   | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API)                                  |
-| `OAUTH_CACHE_TTL`             | `15m`    | TTL for verified OAuth token identity cache. Range: 1m–2h                                                                                                        |
+| Variable                      | Default  | Description                                                                                                                                                                  |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MAX_HTTP_CLIENTS`            | `100`    | Maximum concurrent client sessions in the server pool. Upper bound: 10,000                                                                                                   |
+| `SESSION_TIMEOUT`             | `30m`    | Idle MCP session timeout. Upper bound: 24h                                                                                                                                   |
+| `SESSION_REVALIDATE_INTERVAL` | `15m`    | Token re-validation interval; `0` to disable. Upper bound: 24h                                                                                                               |
+| `AUTH_MODE`                   | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API)                                              |
+| `OAUTH_CACHE_TTL`             | `15m`    | TTL for verified OAuth token identity cache. Range: 1m–2h                                                                                                                    |
 | `RATE_LIMIT_RPS`              | `0`      | Per-server `tools/call` rate limit in requests/second. `0` disables the limiter (default). See [Security — Rate Limiting Model](../concepts/security.md#rate-limiting-model) |
-| `RATE_LIMIT_BURST`            | `40`     | Token-bucket burst size when `RATE_LIMIT_RPS > 0`. Must be ≥ 1                                                                                                   |
+| `RATE_LIMIT_BURST`            | `40`     | Token-bucket burst size when `RATE_LIMIT_RPS > 0`. Must be ≥ 1                                                                                                               |
 
 ---
 

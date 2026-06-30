@@ -153,8 +153,8 @@ All prompt arguments support intelligent autocomplete via the completions handle
 
 ## Source Files
 
-| File                                                                         | Prompts                                         |
-| ---------------------------------------------------------------------------- | ----------------------------------------------- |
+| File                                                                            | Prompts                                         |
+| ------------------------------------------------------------------------------- | ----------------------------------------------- |
 | [`prompts.go`](../../internal/prompts/prompts.go)                               | 12 core prompts                                 |
 | [`prompt_cross_project.go`](../../internal/prompts/prompt_cross_project.go)     | 4 cross-project prompts                         |
 | [`prompt_team.go`](../../internal/prompts/prompt_team.go)                       | 4 team management prompts                       |

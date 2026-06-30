@@ -13,7 +13,7 @@
 | `.github/copilot-instructions.md`                   | Auto-loaded by VS Code Copilot; has the language policy, env var table, E2E recipes |
 | `.github/instructions/*.md`                         | Auto-applied coding standards (go, MCP, OWASP, comments, code review)               |
 | `docs/development/tool-surfaces-and-action-core.md` | Surface ownership and catalog projection rules                                      |
-| `docs/adr/`                                         | Architectural Decision Records (catalog-first is ADR-0004)                          |
+| `docs/development/adr`                                         | Architectural Decision Records (catalog-first is ADR-0004)                          |
 
 OpenCode-specific wiring (this file's agents, skills, paths) lives in
 `opencode.json` + `.opencode/agent/`. The canonical agents and skills also
@@ -115,7 +115,7 @@ For a full walkthrough use the `create-mcp-tool` skill
    `gen_testing_docs`, `gen_llms` (run `--check` on each before pushing).
 7. **Verify**: `make test-pkg PKG={domain}` and
    `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.
-8. **Document**: `docs/tools/{domain}.md` and `docs/tools/README.md`.
+8. **Document**: `docs/tools/{domain}.md` and `docs/reference/tools/README.md`.
 
 ## Error handling in tool handlers
 

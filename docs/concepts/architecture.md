@@ -572,18 +572,18 @@ sequenceDiagram
 
 ## Key Design Decisions
 
-| Decision                           | Rationale                                                                                                         | ADR                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                     | —                                                     |
-| Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                       | —                                                     |
+| Decision                           | Rationale                                                                                                         | ADR                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                     | —                                                                    |
+| Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                       | —                                                                    |
 | Modular tools sub-packages         | Domain isolation, independent testing, clean imports                                                              | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
 | Meta-tool consolidation (32/48/49) | Reduce tool count for LLM token efficiency; enterprise tier adds 16 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
-| Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                    | Go SDK convention                                     |
-| Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                 | See [Output Format](../reference/output-format.md)                 |
-| Content annotations                | Audience targeting + priority for display optimization                                                            | See [Output Format](../reference/output-format.md)                 |
-| `next_steps` JSON enrichment       | Hints in structuredContent for JSON-only clients                                                                  | See [Output Format](../reference/output-format.md)                 |
-| Tool annotations                   | readOnlyHint, destructiveHint for client safety hints                                                             | MCP spec compliance                                   |
-| YOLO_MODE for automation           | Skip confirmations in CI/scripted environments                                                                    | —                                                     |
+| Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                    | Go SDK convention                                                    |
+| Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                 | See [Output Format](../reference/output-format.md)                   |
+| Content annotations                | Audience targeting + priority for display optimization                                                            | See [Output Format](../reference/output-format.md)                   |
+| `next_steps` JSON enrichment       | Hints in structuredContent for JSON-only clients                                                                  | See [Output Format](../reference/output-format.md)                   |
+| Tool annotations                   | readOnlyHint, destructiveHint for client safety hints                                                             | MCP spec compliance                                                  |
+| YOLO_MODE for automation           | Skip confirmations in CI/scripted environments                                                                    | —                                                                    |
 
 ## Cross-Cutting Concerns
 

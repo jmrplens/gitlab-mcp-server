@@ -35,7 +35,7 @@ gitlab-mcp-server/
 │   ├── gen_docker_tools/   # Docker MCP Registry tools.json
 │   ├── gen_llms/           # llms.txt / llms-full.txt
 │   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
-│   ├── gen_testing_docs/   # docs/testing/testing.md test-metrics block
+│   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
 │   └── eval_mcp_surfaces/  # Model-behavior evaluation across MCP surfaces
 ├── internal/
 │   ├── config/             # Configuration loading (.env, flags)
@@ -106,7 +106,7 @@ gitlab-mcp-server/
 - Use `httptest` for mocking GitLab API responses in unit tests
 - Test naming: `TestToolName_Scenario_ExpectedResult`
 - Aim for >80% coverage on tool handlers
-- **After completing a test-focused phase or milestone, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
+- **After completing a test-focused phase or milestone, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 ### Verification After Changes
 

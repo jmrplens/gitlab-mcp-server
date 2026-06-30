@@ -105,7 +105,7 @@ You operate in different modes depending on the type of plan requested. Always i
 
 **Analysis workflow**:
 
-1. Read `docs/adr/` for existing architectural decisions
+1. Read `docs/development/adr` for existing architectural decisions
 2. Explore the current architecture via directory structure and imports
 3. Evaluate alternatives with explicit trade-offs
 4. Consider impact on: performance, testability, maintainability, cross-platform compatibility
@@ -170,10 +170,10 @@ You operate in different modes depending on the type of plan requested. Always i
 
 **Key questions to investigate**:
 
-- Are all individual tools, including GitLab.com-only Orbit tools, documented in `docs/tools/`?
-- Does `docs/configuration.md` match current environment variables?
-- Are new capabilities reflected in `docs/capabilities.md`?
-- Do examples in `docs/examples/` still work?
+- Are all individual tools, including GitLab.com-only Orbit tools, documented in `docs/reference/tools`?
+- Does `docs/reference/configuration.md` match current environment variables?
+- Are new capabilities reflected in `docs/reference/capabilities/README.md`?
+- Do examples in `docs/guides/examples` still work?
 
 ### Mode 7: Dependency Upgrade Plan
 
@@ -222,7 +222,7 @@ Before producing any plan, you MUST complete these steps:
 1. Run `golangci-lint` on affected packages (read existing errors)
 2. Check test coverage on affected packages
 3. Read existing plan/ files for prior work
-4. Read relevant docs/adr/ for architectural context
+4. Read relevant docs/development/adr for architectural context
 ```
 
 ## Plan Output Format
@@ -310,7 +310,7 @@ Include: file counts, coverage percentages, specific patterns found, existing is
 - [ ] `go test ./internal/tools/{domain}/ -count=1`
 - [ ] `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`
 - [ ] Coverage ≥ [target]%
-- [ ] Documentation updated in `docs/tools/`
+- [ ] Documentation updated in `docs/reference/tools`
 
 ## 10. Related
 
