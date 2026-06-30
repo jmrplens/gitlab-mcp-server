@@ -1,0 +1,3 @@
+# Published from repo-root by scripts/copy-llms.mjs (prebuild)
+public/llms.txt
+public/llms-full.txt

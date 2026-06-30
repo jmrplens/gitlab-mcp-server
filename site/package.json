@@ -20,7 +20,8 @@
     "format:check": "prettier --check .",
     "lint": "pnpm run check && pnpm run eslint && pnpm run format:check && pnpm run html-validate && pnpm run htmlhint",
     "test:a11y": "pnpm run pa11y",
-    "analyze": "pnpm run build && pnpm run lint"
+    "analyze": "pnpm run build && pnpm run lint",
+    "prebuild": "node scripts/copy-llms.mjs"
   },
   "type": "module",
   "dependencies": {

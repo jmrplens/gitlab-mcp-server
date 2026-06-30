@@ -1,4 +1,51 @@
+# gitlab-mcp-server documentation — robots.txt
+# All crawlers are welcome, including AI / generative-engine crawlers.
+# Structured context for LLMs is published at /llms.txt and /llms-full.txt.
+
 User-agent: *
+Allow: /
+
+# AI / generative-engine crawlers (explicitly welcomed for GEO).
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: Amazonbot
 Allow: /
 
 Sitemap: https://jmrplens.github.io/gitlab-mcp-server/sitemap-index.xml
