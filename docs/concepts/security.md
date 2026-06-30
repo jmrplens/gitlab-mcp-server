@@ -6,6 +6,8 @@ Security considerations for gitlab-mcp-server deployment and development.
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Familiarity with GitLab PATs and TLS configuration
 > 📖 **User documentation**: See the [Security](https://jmrplens.github.io/gitlab-mcp-server/operations/security/) on the documentation site for a user-friendly version.
+>
+> 🔧 **Looking for security *tools*?** This page explains the deployment security model. For the feature-flag, secure-file, error-tracking, and alerting tool schemas, see the [Security & Monitoring Tool Reference](../reference/tools/security.md).
 
 ---
 

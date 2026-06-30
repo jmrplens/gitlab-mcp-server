@@ -6,6 +6,8 @@ How to use gitlab-mcp-server in CI/CD pipelines for automated GitLab operations 
 > **Audience**: DevOps engineers, CI/CD maintainers
 > **Prerequisites**: [Getting Started](../getting-started.md), [Configuration](../reference/configuration.md)
 > 📖 **User documentation**: See the [CI/CD Usage](https://jmrplens.github.io/gitlab-mcp-server/operations/ci-cd/) on the documentation site for a user-friendly version.
+>
+> 🔧 **Looking for the CI/CD tool schemas?** This page is the operational *guide*. For the pipeline, job, variable, schedule, and trigger tool definitions, see the [CI/CD Tool Reference](../reference/tools/ci-cd.md).
 
 ---
 

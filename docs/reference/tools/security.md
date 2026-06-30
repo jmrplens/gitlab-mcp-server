@@ -6,6 +6,8 @@
 > **Meta-tools**: `gitlab_feature_flags`, `gitlab_admin`, `gitlab_user` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Feature Flags](https://docs.gitlab.com/ee/api/feature_flags.html) · [Feature Flag User Lists](https://docs.gitlab.com/ee/api/feature_flag_user_lists.html) · [Secure Files](https://docs.gitlab.com/ee/api/secure_files.html) · [Error Tracking](https://docs.gitlab.com/ee/api/error_tracking.html) · [Alert Management](https://docs.gitlab.com/ee/api/alert_management_alerts.html) · [Impersonation Tokens](https://docs.gitlab.com/ee/api/users.html#get-all-impersonation-tokens-of-a-user)
 > **Audience**: 👤 End users, AI assistant users
+>
+> 💡 **Looking for the deployment security model?** This page lists the *tool schemas*. For authentication, TLS, and transport-security guidance, see [Security](../../concepts/security.md).
 
 ---
 

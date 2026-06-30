@@ -6,6 +6,8 @@
 > **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable` (`TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix; resource group actions via `resource_group_*` prefix. The `gitlab_ci_variable` meta-tool also covers group and instance variables (action prefixes `group_variable_*` / `instance_variable_*`). CI lint tools (`gitlab_ci_lint`, `gitlab_ci_lint_project`) live under the `gitlab_template` meta-tool — see [templates.md](templates.md).
 > **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html) · [Group Variables API](https://docs.gitlab.com/ee/api/group_level_variables.html) · [Resource Groups API](https://docs.gitlab.com/ee/api/resource_groups.html)
 > **Audience**: 👤 End users, AI assistant users
+>
+> 📘 **Want to use CI/CD in a pipeline?** This page lists the *tool schemas*. For an operational walkthrough, see the [CI/CD Usage guide](../../guides/ci-cd.md).
 
 ---
 
