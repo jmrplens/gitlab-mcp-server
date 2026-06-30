@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint gen-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -698,6 +698,10 @@ update-all: gen-footprint gen-stats gen-llms gen-testing-docs gen-action-catalog
 ## gen-footprint: measure token footprint and write the README section + token-footprint.md.
 gen-footprint:
 	go run ./cmd/audit_tokens/ -footprint
+
+## check-footprint: verify the README token-footprint section and token-footprint.md are current.
+check-footprint:
+	go run ./cmd/audit_tokens/ -footprint -check
 
 ## gen-stats: regenerate the repository statistics section in README.md.
 gen-stats:

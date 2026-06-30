@@ -37,6 +37,44 @@ func TestRenderReadmeFootprint_DynamicOnlyWithTiers(t *testing.T) {
 	}
 }
 
+// TestFootprintStaleTargets verifies the drift detector backing
+// -footprint -check: it reports no stale targets when the README section and
+// detailed doc match the rendered content, and names exactly the target(s)
+// that diverge otherwise.
+func TestFootprintStaleTargets(t *testing.T) {
+	rows := []tokenFootprintRow{
+		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Ultimate", Configuration: "`individual` / `full`", VisibleTools: 1061, ToolSchemaTokens: 964044, SharedTokens: 31758},
+	}
+	// A README whose managed section already holds the rendered content.
+	readme := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
+	detailed := renderDetailedFootprint(rows)
+
+	stale, err := footprintStaleTargets(readme, detailed, rows)
+	if err != nil {
+		t.Fatalf("footprintStaleTargets(current) error: %v", err)
+	}
+	if len(stale) != 0 {
+		t.Fatalf("expected no stale targets, got %v", stale)
+	}
+
+	// Mutate the detailed doc only: it must be reported, the README must not.
+	stale, err = footprintStaleTargets(readme, detailed+"\nextra drift\n", rows)
+	if err != nil {
+		t.Fatalf("footprintStaleTargets(stale detailed) error: %v", err)
+	}
+	if len(stale) != 1 || !strings.Contains(stale[0], detailedFootprintPath) {
+		t.Fatalf("expected only %q stale, got %v", detailedFootprintPath, stale)
+	}
+
+	// Mutate the README section: it must be reported as stale.
+	stale, err = footprintStaleTargets("no markers here", detailed, rows)
+	if err == nil {
+		t.Fatal("expected error when README lacks the footprint markers")
+	}
+	_ = stale
+}
+
 // TestMeasureTokenFootprintRows_AllTiersAllModes verifies the full measurement
 // matrix: 3 tiers \u00d7 9 configurations, tier ordering, meta schema-mode token
 // scaling, and tier-based individual tool scaling.

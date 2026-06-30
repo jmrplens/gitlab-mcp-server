@@ -276,7 +276,7 @@ The shared `listTools` applies `LockdownInputSchemas`, so the audit reflects exa
 
 ### audit_tokens
 
-Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using a bytes/4 heuristic. With `--compare-schemas`, it runs a sizing spike comparing `META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc.
+Measures the LLM context-window overhead of every registered tool/resource/prompt definition across the individual, meta, and dynamic surfaces using the cl100k_base tokenizer (via `github.com/tiktoken-go/tokenizer`, with a bytes/4 fallback). With `--compare-schemas`, it runs a sizing spike comparing `META_PARAM_SCHEMA` modes. With `-footprint`, it measures every tier × surface × schema-mode combination and regenerates the README token-footprint section plus the standalone reference doc; add `-check` to verify those are current without writing (CI gate).
 
 #### Usage
 
@@ -289,17 +289,21 @@ go run ./cmd/audit_tokens/ -compare-schemas
 
 # Regenerate the README token-footprint section + docs/development/token-footprint.md
 go run ./cmd/audit_tokens/ -footprint
+
+# Verify the token-footprint section + doc are current without writing (CI gate)
+go run ./cmd/audit_tokens/ -footprint -check
 ```
 
 #### Flags
 
-| Flag               | Type   | Default | Description                                                                                                                                   |
-| ------------------ | ------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md` |
-| `-compare-schemas` | `bool` | `false` | Compare `META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                    |
-| `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                            |
-| `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                              |
-| `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                       |
+| Flag               | Type   | Default | Description                                                                                                                                                  |
+| ------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-footprint`       | `bool` | `false` | Measure all tiers × surfaces × `META_PARAM_SCHEMA` modes and write the README token-footprint section + `docs/development/token-footprint.md`                |
+| `-check`           | `bool` | `false` | With `-footprint`, verify the README token-footprint section and `docs/development/token-footprint.md` are current without writing (exits non-zero on drift) |
+| `-compare-schemas` | `bool` | `false` | Compare `META_PARAM_SCHEMA` modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit                                   |
+| `-json`            | `bool` | `false` | Emit a JSON summary instead of the Markdown report                                                                                                           |
+| `-top-tools`       | `int`  | `30`    | Number of individual tools to list by token cost                                                                                                             |
+| `-top-domains`     | `int`  | `20`    | Number of domains to list by token cost                                                                                                                      |
 
 #### Output
 
@@ -309,6 +313,7 @@ Default mode: a Markdown report to stdout with mode comparison, per-tool costs, 
 
 - `make audit-tokens`
 - `make gen-footprint` — runs `-footprint` mode.
+- `make check-footprint` — runs `-footprint -check` (CI gate; non-zero on drift).
 - `make gen-readme` — umbrella that also regenerates the stats section.
 
 #### Notes
@@ -442,7 +447,7 @@ This utility takes no flags; pass positional path arguments.
 
 | Argument        | Type       | Description   |
 | --------------- | ---------- | ------------- |
-| `<dir|file>...` | positional | Paths to scan |
+| `<dir&#124;file>...` | positional | Paths to scan |
 
 #### Output
 

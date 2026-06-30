@@ -38,17 +38,17 @@ import (
 // Token audit constants define the in-memory MCP session identity and the
 // byte-to-token conversion heuristic used by the report.
 const (
-	serverName  = "audit-tokens"
-	clientName  = "audit-tokens-client"
-	auditVer    = "0.0.1"
-	bytesPerTok = 4 // Approximate: 1 token ≈ 4 bytes for English text (cl100k_base average)
+	serverName = "audit-tokens"
+	clientName = "audit-tokens-client"
+	auditVer   = "0.0.1"
 )
 
 // toolTokenInfo stores the serialized size estimate for one MCP tool.
 //
 // Name is the MCP tool name. Domain is the GitLab API domain parsed from
 // the tool name (e.g. "project" for "gitlab_project_get"). Tokens is the
-// byte-length divided by [bytesPerTok]. Bytes is the raw JSON length.
+// cl100k_base token count from [toolutil.CountTokens]. Bytes is the raw
+// JSON length.
 type toolTokenInfo struct {
 	Name   string
 	Domain string
@@ -80,6 +80,7 @@ type resourceRegistrationOptions struct {
 // each META_PARAM_SCHEMA mode (opaque/full/compact).
 func main() {
 	footprint := flag.Bool("footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-footprint section + docs/development/token-footprint.md")
+	check := flag.Bool("check", false, "with -footprint, verify the README token-footprint section and docs/development/token-footprint.md are current without writing (exits non-zero on drift)")
 	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
 	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
@@ -87,7 +88,7 @@ func main() {
 	flag.Parse()
 
 	if *footprint {
-		if err := runFootprintMode(); err != nil {
+		if err := runFootprintMode(*check); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -810,13 +811,68 @@ func (r tokenFootprintRow) totalTokens() int {
 // runFootprintMode builds the mock-backed client and runs the full token
 // footprint measurement, mirroring the self-contained client pattern of
 // [runMetaSchemaSizing].
-func runFootprintMode() error {
+func runFootprintMode(check bool) error {
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		return fmt.Errorf("client: %w", err)
 	}
 	defer cleanup()
+	if check {
+		return runFootprintCheck(client)
+	}
 	return runFootprint(client)
+}
+
+// runFootprintCheck measures the token footprint and verifies that the README
+// managed section and the detailed reference doc already match the freshly
+// rendered content, without writing anything. It returns an error naming the
+// stale targets when either is out of date — the CI counterpart to runFootprint
+// and the gen_stats -check gate. This restores the README-token-footprint half
+// of the former gen_readme -check (the stats half lives in gen_stats -check).
+func runFootprintCheck(client *gitlabclient.Client) error {
+	rows, err := measureTokenFootprintRows(client)
+	if err != nil {
+		return fmt.Errorf("measuring token footprint: %w", err)
+	}
+
+	readmeData, err := os.ReadFile(readmePath) //#nosec G304 -- README path is a compile-time constant, not user input
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", readmePath, err)
+	}
+	detailedData, err := os.ReadFile(filepath.Clean(detailedFootprintPath)) //#nosec G304 -- generated doc path is a compile-time constant
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", detailedFootprintPath, err)
+	}
+
+	stale, err := footprintStaleTargets(string(readmeData), string(detailedData), rows)
+	if err != nil {
+		return err
+	}
+	if len(stale) > 0 {
+		return fmt.Errorf("token footprint is stale (%s); run: go run ./cmd/audit_tokens/ -footprint", strings.Join(stale, "; "))
+	}
+	fmt.Printf("Token footprint is current (%d rows across all tiers/surfaces/modes)\n", len(rows))
+	return nil
+}
+
+// footprintStaleTargets compares the live README text and detailed-doc text
+// against the freshly rendered footprint content and returns the human-readable
+// names of any targets that are out of date. An empty slice means both are
+// current. Kept pure (no I/O) so the drift logic is unit-testable.
+func footprintStaleTargets(readmeText, detailedText string, rows []tokenFootprintRow) ([]string, error) {
+	var stale []string
+
+	updated, err := computeReplacedText(readmeText, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
+	if err != nil {
+		return nil, err
+	}
+	if updated != readmeText {
+		stale = append(stale, readmePath+" token-footprint section")
+	}
+	if detailedText != renderDetailedFootprint(rows) {
+		stale = append(stale, detailedFootprintPath)
+	}
+	return stale, nil
 }
 
 // runFootprint measures the full tier \u00d7 surface \u00d7 mode matrix and writes the
@@ -1009,15 +1065,24 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) \u2014 a pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
 
 	b.WriteString("## What each column means\n\n")
-	b.WriteString("| Column | Description |\n| --- | --- |\n")
-	b.WriteString("| **Configuration** | The `TOOL_SURFACE` / `CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action. |\n")
-	b.WriteString("| **Tier** | The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions. |\n")
-	b.WriteString("| **Visible tools** | How many MCP tool definitions the client receives at startup. |\n")
-	b.WriteString("| **Reachable actions** | How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing). |\n")
-	b.WriteString("| **META_PARAM_SCHEMA** | How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions). |\n")
-	b.WriteString("| **Tool schema tokens** | Token cost of the visible tool definitions (InputSchema, annotations, description). |\n")
-	b.WriteString("| **Shared tokens** | Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing. |\n")
-	b.WriteString("| **Total tokens** | Tool schema tokens + shared tokens. This is the approximate startup context-window cost. |\n\n")
+	// Rendered through docgen (not hand-written) so the emitted table is already
+	// format_md_tables-canonical; this keeps -footprint output idempotent under
+	// `make update-all` and lets -footprint -check compare without false drift.
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Column", "Description"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
+		[][]string{
+			{"**Configuration**", "The `TOOL_SURFACE` / `CAPABILITY_SURFACE` combination. `dynamic` = find/execute (default); `meta` = domain-grouped dispatchers; `individual` = one tool per action."},
+			{"**Tier**", "The GitLab licensing tier: Free/CE, Premium, or Ultimate. Higher tiers expose more actions."},
+			{"**Visible tools**", "How many MCP tool definitions the client receives at startup."},
+			{"**Reachable actions**", "How many distinct GitLab API actions the client can drive (may exceed visible tools in meta/dynamic mode via action routing)."},
+			{"**META_PARAM_SCHEMA**", "How meta-tool input schemas are generated: `opaque` (action enum + params:any, default), `compact` (property names + types only), `full` (full per-action schema with descriptions)."},
+			{"**Tool schema tokens**", "Token cost of the visible tool definitions (InputSchema, annotations, description)."},
+			{"**Shared tokens**", "Token cost of MCP resources (`gitlab://tools`, templates, workflow guides) and prompt templates. `full` = all resources; `minimal` = only `gitlab://tools` for on-demand schema browsing."},
+			{"**Total tokens**", "Tool schema tokens + shared tokens. This is the approximate startup context-window cost."},
+		},
+	))
+	b.WriteString("\n")
 
 	b.WriteString("## Full matrix\n\n")
 	b.WriteString("All measurements are against the current source tree. The catalog is built in-memory with a mock GitLab client; no network calls are made.\n\n")
