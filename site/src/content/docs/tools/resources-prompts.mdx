@@ -3,13 +3,15 @@ title: Resources & Prompts
 description: MCP resources for read-only data and prompt templates
 ---
 
+import stats from "../../../data/stats.json";
+
 Beyond tools, GitLab MCP Server exposes **resources** and **prompts** — two additional MCP primitives that provide context and reusable templates to AI assistants.
 
 ## Resources
 
 MCP resources provide **read-only context data** that clients can request at any time without invoking a tool. Resources are useful for providing background information that helps the LLM make better decisions.
 
-The server exposes **45 resources** across several categories:
+The server exposes **{stats.resources} resources** across several categories:
 
 :::note
 MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 8 fixed URIs: current user, groups, the tool manifest, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
@@ -153,7 +155,7 @@ To inspect accepted call shapes, read the surface-aware tool manifest first and 
 
 MCP prompts are **reusable templates** that guide AI assistants through common workflows. The server collects relevant data from GitLab and returns structured context that the LLM uses to produce high-quality outputs.
 
-The server provides **37 prompt templates** organized into categories:
+The server provides **{stats.prompts} prompt templates** organized into categories:
 
 ### Core prompts (12)
 

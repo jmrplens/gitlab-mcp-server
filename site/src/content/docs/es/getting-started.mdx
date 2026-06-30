@@ -4,6 +4,7 @@ description: Instala y configura GitLab MCP Server con tu cliente de IA favorito
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+import stats from "../../../data/stats.json";
 
 :::note[Documentación para desarrolladores]
 Para la referencia técnica completa, consulta [`docs/getting-started.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md) en el repositorio.
@@ -493,7 +494,7 @@ Si obtienes errores de conexión, comprueba:
 
 ## Entendiendo las meta-herramientas
 
-Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **32 meta-herramientas por dominio** (48 en Enterprise/Premium autoalojado, 49 en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
+Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
 
 Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
 

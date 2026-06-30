@@ -4,6 +4,7 @@ description: Install and configure GitLab MCP Server with your favorite AI clien
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+import stats from "../../data/stats.json";
 
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/getting-started.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md) in the repository.
@@ -493,7 +494,7 @@ If you get connection errors, check:
 
 ## Understanding meta-tools
 
-By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **32 domain-level meta-tools** (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
+By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **{stats.meta.base} domain-level meta-tools** ({stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium, {stats.meta.gitlab_com} on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
 
 For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 

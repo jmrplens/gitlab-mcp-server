@@ -3,6 +3,8 @@ title: Visión general de herramientas
 description: Guía completa de las herramientas y meta-herramientas de GitLab MCP Server
 ---
 
+import stats from "../../../../data/stats.json";
+
 GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los asistentes de IA pueden invocar directamente. El servidor ofrece tres modos de operación para equilibrar capacidad con eficiencia de tokens.
 
 Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaquetado: el modo individual expone una herramienta MCP por operación, el modo meta-herramientas agrupa acciones por dominio, y el modo dinámico busca y ejecuta IDs canónicos `domain.action` desde el mismo catálogo de acciones.
@@ -11,11 +13,11 @@ Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaqueta
 
 ### Modo individual
 
-En modo individual, el servidor registra una herramienta por operación de GitLab: **866 herramientas** para CE, **1028 herramientas** para Enterprise/Premium autoalojado, o **1034 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
+En modo individual, el servidor registra una herramienta por operación de GitLab: **{stats.tools.free} herramientas** para CE, **{stats.tools.ultimate_self_managed} herramientas** para Enterprise/Premium autoalojado, o **{stats.tools.gitlab_com} herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
 ### Modo meta-herramientas
 
-En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **32 meta-herramientas base**, **48 en Enterprise/Premium autoalojado**, o **49 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
+En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **{stats.meta.base} meta-herramientas base**, **{stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado**, o **{stats.meta.gitlab_com} en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
 ```json
 {

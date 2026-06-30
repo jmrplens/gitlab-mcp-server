@@ -3,6 +3,8 @@ title: Autocompletado
 description: Autocompletado de argumentos para parámetros de herramientas
 ---
 
+import stats from "../../../../data/stats.json";
+
 El autocompletado proporciona sugerencias en tiempo real para los parámetros de las herramientas. En lugar de memorizar IDs de proyectos, nombres de ramas o nombres de usuario, escribes unos pocos caracteres y el servidor consulta GitLab para encontrar coincidencias.
 
 ## El problema
@@ -36,7 +38,7 @@ sequenceDiagram
 
 ## Tipos de argumentos soportados
 
-El servidor soporta **17 tipos de argumentos de autocompletado** organizados en completadores globales y por proyecto:
+El servidor soporta **{stats.completions} tipos de argumentos de autocompletado** organizados en completadores globales y por proyecto:
 
 ### Completadores globales
 

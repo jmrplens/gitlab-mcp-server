@@ -4,25 +4,26 @@ description: Platform, GitLab edition, and MCP client compatibility for GitLab M
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import stats from "../../data/stats.json";
 
 ## GitLab edition compatibility
 
 GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks 16 additional enterprise-only meta-tools: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat but are deprecated.
 
-| Feature                                 | Community (CE) | Enterprise (EE) |
-| --------------------------------------- | :------------: | :-------------: |
-| Projects, Issues, MRs, Pipelines, CI/CD |       ✅       |       ✅        |
-| Wikis, Labels, Milestones, Releases     |       ✅       |       ✅        |
-| Users, Groups, Members, Search          |       ✅       |       ✅        |
-| Deployments, Environments, Packages     |       ✅       |       ✅        |
-| 32 base meta-tools                      |       ✅       |       ✅        |
-| 45 resources, 37 prompts                |       ✅       |       ✅        |
-| Merge Trains                            |       ❌       |       ✅        |
-| DORA Metrics                            |       ❌       |       ✅        |
-| Vulnerability Management                |       ❌       |       ✅        |
-| Audit Events                            |       ❌       |       ✅        |
-| Compliance Policies                     |       ❌       |       ✅        |
-| +16 enterprise meta-tools               |       ❌       |       ✅        |
+| Feature                                              | Community (CE) | Enterprise (EE) |
+| ---------------------------------------------------- | :------------: | :-------------: |
+| Projects, Issues, MRs, Pipelines, CI/CD              |       ✅       |       ✅        |
+| Wikis, Labels, Milestones, Releases                  |       ✅       |       ✅        |
+| Users, Groups, Members, Search                       |       ✅       |       ✅        |
+| Deployments, Environments, Packages                  |       ✅       |       ✅        |
+| {stats.meta.base} base meta-tools                    |       ✅       |       ✅        |
+| {stats.resources} resources, {stats.prompts} prompts |       ✅       |       ✅        |
+| Merge Trains                                         |       ❌       |       ✅        |
+| DORA Metrics                                         |       ❌       |       ✅        |
+| Vulnerability Management                             |       ❌       |       ✅        |
+| Audit Events                                         |       ❌       |       ✅        |
+| Compliance Policies                                  |       ❌       |       ✅        |
+| +16 enterprise meta-tools                            |       ❌       |       ✅        |
 
 To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium`/`--tier=ultimate` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition. The legacy `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat.
 
@@ -57,13 +58,13 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 ## MCP protocol features
 
-| Capability  |                                                          Supported                                                          |
-| ----------- | :-------------------------------------------------------------------------------------------------------------------------: |
-| Tools       | ✅ (up to 1028 self-managed Enterprise / 1034 GitLab.com + Orbit individual / 32 base, 48 self-managed, 49 GitLab.com meta) |
-| Resources   |                                                           ✅ (46)                                                           |
-| Prompts     |                                                           ✅ (37)                                                           |
-| Completions |                                                   ✅ (17 argument types)                                                    |
-| Elicitation |                                                             ✅                                                              |
-| Progress    |                                                             ✅                                                              |
+| Capability  |                                                                                                                      Supported                                                                                                                       |
+| ----------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Tools       | ✅ (up to {stats.tools.ultimate_self_managed} self-managed Enterprise / {stats.tools.gitlab_com} GitLab.com + Orbit individual / {stats.meta.base} base, {stats.meta.self_managed_enterprise} self-managed, {stats.meta.gitlab_com} GitLab.com meta) |
+| Resources   |                                                                                                                ✅ ({stats.resources})                                                                                                                |
+| Prompts     |                                                                                                                 ✅ ({stats.prompts})                                                                                                                 |
+| Completions |                                                                                                       ✅ ({stats.completions} argument types)                                                                                                        |
+| Elicitation |                                                                                                                          ✅                                                                                                                          |
+| Progress    |                                                                                                                          ✅                                                                                                                          |
 
-The 1028 self-managed and 1034 GitLab.com figures are the expanded set of distinct tool instances. The 32 base, 48 self-managed, and 49 GitLab.com counts are meta-tool catalog sizes whose actions expand to that larger individual tool surface.
+The {stats.tools.ultimate_self_managed} self-managed and {stats.tools.gitlab_com} GitLab.com figures are the expanded set of distinct tool instances. The {stats.meta.base} base, {stats.meta.self_managed_enterprise} self-managed, and {stats.meta.gitlab_com} GitLab.com counts are meta-tool catalog sizes whose actions expand to that larger individual tool surface.

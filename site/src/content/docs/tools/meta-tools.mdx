@@ -3,6 +3,8 @@ title: Meta-tools
 description: Domain-level tools that consolidate related operations
 ---
 
+import stats from "../../../data/stats.json";
+
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) in the repository.
 :::
@@ -11,20 +13,20 @@ Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with `TO
 
 ## Why meta-tools?
 
-LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1034 on GitLab.com Enterprise/Premium with Orbit), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
+LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
-| Mode              | Tool Count        | Token Overhead | Functionality           |
-| ----------------- | ----------------- | -------------- | ----------------------- |
-| Individual        | 866 / 1028 / 1034 | Very high      | Full                    |
-| Meta (base)       | 33                | Low            | Full                    |
-| Meta (enterprise) | 49 / 50           | Low            | Full + Premium/Ultimate |
+| Mode              | Tool Count                                                                          | Token Overhead | Functionality           |
+| ----------------- | ----------------------------------------------------------------------------------- | -------------- | ----------------------- |
+| Individual        | {stats.tools.free} / {stats.tools.ultimate_self_managed} / {stats.tools.gitlab_com} | Very high      | Full                    |
+| Meta (base)       | {stats.meta.base}                                                                   | Low            | Full                    |
+| Meta (enterprise) | {stats.meta.self_managed_enterprise} / {stats.meta.gitlab_com}                      | Low            | Full + Premium/Ultimate |
 
 Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
-The `gitlab_server` update helper can appear separately for server maintenance actions and is not included in the 32/48/49 GitLab action catalog counts.
+The `gitlab_server` update helper can appear separately for server maintenance actions and is not included in the {stats.meta.base}/{stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} GitLab action catalog counts.
 
 :::note[Client compatibility]
-Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (32 base tools, 48 self-managed enterprise tools, or 49 GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
+Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode ({stats.meta.base} base tools, {stats.meta.self_managed_enterprise} self-managed enterprise tools, or {stats.meta.gitlab_com} GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
 :::
 
 ## How meta-tools work

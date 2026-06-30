@@ -3,6 +3,8 @@ title: Arquitectura
 description: Cómo las herramientas de IA se comunican con GitLab a través del servidor MCP
 ---
 
+import stats from "../../../data/stats.json";
+
 :::note[Documentación para desarrolladores]
 Para la referencia técnica completa, consulta [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) en el repositorio.
 :::
@@ -116,7 +118,7 @@ Como todas las superficies comparten la misma entrada del catálogo, los schemas
 
 ### Modo meta-herramientas
 
-Con `TOOL_SURFACE=meta`, el servidor expone una base de **32 meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden 16 herramientas Enterprise/Premium para un total de 49, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de 50. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. Los entornos Enterprise/Premium autoalojados añaden herramientas Enterprise/Premium para un total de {stats.meta.self_managed_enterprise}, y GitLab.com Enterprise/Premium con Orbit (la funcionalidad Knowledge Graph de GitLab.com) añade una herramienta más para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -148,7 +150,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): 1028 en Enterprise/Premium autoalojado, o 1034 en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ### Conjunto de herramientas dinámico
 
@@ -182,7 +184,7 @@ Requiere que el cliente de IA soporte la capacidad de MCP elicitation.
 
 ### Recursos
 
-45 recursos MCP de solo lectura que proporcionan datos contextuales:
+{stats.resources} recursos MCP de solo lectura que proporcionan datos contextuales:
 
 - Configuración y versión del servidor
 - Perfil del usuario actual
@@ -191,7 +193,7 @@ Requiere que el cliente de IA soporte la capacidad de MCP elicitation.
 
 ### Prompts
 
-37 plantillas de prompts predefinidas para flujos de trabajo comunes:
+{stats.prompts} plantillas de prompts predefinidas para flujos de trabajo comunes:
 
 - Informes de salud del proyecto
 - Análisis entre proyectos

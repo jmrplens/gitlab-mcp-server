@@ -3,13 +3,15 @@ title: Recursos y prompts
 description: Recursos MCP para datos de solo lectura y plantillas de prompts
 ---
 
+import stats from "../../../../data/stats.json";
+
 Más allá de las herramientas, GitLab MCP Server expone **recursos** y **prompts** — dos primitivas MCP adicionales que proporcionan contexto y plantillas reutilizables a los asistentes de IA.
 
 ## Recursos
 
 Los recursos MCP proporcionan **datos de contexto de solo lectura** que los clientes pueden solicitar en cualquier momento sin invocar una herramienta. Los recursos son útiles para proporcionar información de fondo que ayuda al LLM a tomar mejores decisiones.
 
-El servidor expone **45 recursos** en varias categorías:
+El servidor expone **{stats.resources} recursos** en varias categorías:
 
 :::note
 MCP lista por separado los recursos fijos y las plantillas de URI. En modo full, los clientes que solo inspeccionan `resources/list` ven 8 URIs fijas: usuario actual, grupos, el manifiesto de herramientas y 5 guías de flujo. Las 37 entradas restantes son plantillas de URI devueltas por `resources/templates/list` y se leen sustituyendo IDs de proyecto, grupo, issue, MR u otros valores en tiempo de ejecución.
@@ -153,7 +155,7 @@ Para inspeccionar las formas de llamada aceptadas, lee primero el manifiesto de 
 
 Los prompts MCP son **plantillas reutilizables** que guían a los asistentes de IA a través de flujos de trabajo comunes. El servidor recopila datos relevantes de GitLab y devuelve contexto estructurado que el LLM usa para producir salidas de alta calidad.
 
-El servidor proporciona **37 plantillas de prompts** organizadas en categorías:
+El servidor proporciona **{stats.prompts} plantillas de prompts** organizadas en categorías:
 
 ### Prompts principales (12)
 

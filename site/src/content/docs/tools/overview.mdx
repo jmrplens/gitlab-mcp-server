@@ -3,6 +3,8 @@ title: Tools Overview
 description: Complete guide to GitLab MCP Server tools and meta-tools
 ---
 
+import stats from "../../../data/stats.json";
+
 GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. The server offers three operating modes to balance capability with token efficiency.
 
 All modes cover the same GitLab API surface. They differ in packaging: individual mode exposes one MCP tool per operation, meta-tool mode groups actions by domain, and dynamic mode searches and executes canonical `domain.action` IDs from the same action catalog.
@@ -11,11 +13,11 @@ All modes cover the same GitLab API surface. They differ in packaging: individua
 
 ### Individual mode
 
-In individual mode, the server registers one tool per GitLab operation: **866 tools** for CE, **1028 tools** for self-managed Enterprise/Premium, or **1034 tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
+In individual mode, the server registers one tool per GitLab operation: **{stats.tools.free} tools** for CE, **{stats.tools.ultimate_self_managed} tools** for self-managed Enterprise/Premium, or **{stats.tools.gitlab_com} tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
 
 ### Meta-tool mode
 
-In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **32 base meta-tools**, **48 on self-managed Enterprise/Premium**, or **49 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
+In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **{stats.meta.base} base meta-tools**, **{stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium**, or **{stats.meta.gitlab_com} on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
 
 ```json
 {

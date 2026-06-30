@@ -3,6 +3,8 @@ title: Architecture
 description: How AI tools communicate with GitLab through the MCP server
 ---
 
+import stats from "../../data/stats.json";
+
 :::note[Developer Documentation]
 For the complete technical reference, see [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) in the repository.
 :::
@@ -129,7 +131,7 @@ Orbit is projected through the same catalog as every other domain: in meta mode 
 
 ### Meta-tool mode
 
-With `TOOL_SURFACE=meta`, the server exposes a baseline of **32 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 49 total. Each meta-tool groups related operations:
+With `TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add Enterprise/Premium tools for {stats.meta.self_managed_enterprise} total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -161,7 +163,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1028 on self-managed Enterprise/Premium, or 1034 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, or {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
 ### Dynamic toolset
 
@@ -195,7 +197,7 @@ Requires the AI client to support MCP elicitation capability.
 
 ### Resources
 
-45 read-only MCP resources that provide contextual data:
+{stats.resources} read-only MCP resources that provide contextual data:
 
 - Server configuration and version
 - Current user profile
@@ -204,7 +206,7 @@ Requires the AI client to support MCP elicitation capability.
 
 ### Prompts
 
-37 pre-built prompt templates for common workflows:
+{stats.prompts} pre-built prompt templates for common workflows:
 
 - Project health reports
 - Cross-project analysis

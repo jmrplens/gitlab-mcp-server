@@ -4,8 +4,9 @@ description: SVG icon gallery for all tools, resources, and prompts
 ---
 
 import { Badge } from "@astrojs/starlight/components";
+import stats from "../../../data/stats.json";
 
-GitLab MCP Server assigns **50 unique SVG icons** to all 1028 self-managed Enterprise/Premium tools (1034 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain.
+GitLab MCP Server assigns **50 unique SVG icons** to all {stats.tools.ultimate_self_managed} self-managed Enterprise/Premium tools ({stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), {stats.meta.base} base meta-tools ({stats.meta.self_managed_enterprise} self-managed Enterprise, {stats.meta.gitlab_com} GitLab.com Enterprise), {stats.resources} resources, and {stats.prompts} prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain.
 
 ## Design principles
 

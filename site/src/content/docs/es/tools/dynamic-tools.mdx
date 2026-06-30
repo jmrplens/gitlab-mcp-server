@@ -3,6 +3,8 @@ title: Conjunto de herramientas dinámico
 description: Modo de búsqueda y ejecución con bajo consumo de tokens para catálogos grandes de GitLab MCP
 ---
 
+import stats from "../../../../data/stats.json";
+
 :::note[Documentación para desarrolladores]
 Esta página es la guía de usuario. Para el contrato autoritativo a nivel de campos y las notas de implementación, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/dynamic-tools.md) en el repositorio.
 :::
@@ -18,7 +20,7 @@ El modo dinámico de find/execute es la superficie predeterminada. Las meta-herr
 
 ## Por qué existe el modo dinámico
 
-Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta 1034 operaciones individuales en GitLab.com Enterprise/Premium con Orbit, y el catálogo opcional de meta-herramientas anuncia entre 32 y 49 herramientas de dominio.
+Los servidores MCP grandes pueden gastar mucho contexto solo en descubrimiento de herramientas antes de que el usuario pida nada. GitLab MCP Server puede exponer hasta {stats.tools.gitlab_com} operaciones individuales en GitLab.com Enterprise/Premium con Orbit, y el catálogo opcional de meta-herramientas anuncia entre {stats.meta.base} y {stats.meta.gitlab_com} herramientas de dominio.
 
 El modo dinámico expone ese catálogo canónico mediante dos herramientas visibles. El modelo descubre solo lo que necesita para la tarea actual.
 
@@ -221,13 +223,13 @@ Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar accione
 
 ## Dinámico vs meta-herramientas
 
-| Pregunta                    | Meta-herramientas                              | Conjunto dinámico                                         |
-| --------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
-| Qué aparece en `tools/list` | 33 a 50 herramientas de dominio                | 2 herramientas públicas de descubrimiento y ejecución     |
-| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción | Encuentra una acción con schema y luego la ejecuta        |
-| Dónde están los schemas     | Schema de herramienta o `gitlab://tools/{id}`  | `gitlab_find_action` o `gitlab://tools/{id}`              |
-| Mejor uso actual            | Modo explícito de compatibilidad               | Descubrimiento de acciones predeterminado de bajo consumo |
-| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                        | Ruta predeterminada                                       |
+| Pregunta                    | Meta-herramientas                                                   | Conjunto dinámico                                         |
+| --------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| Qué aparece en `tools/list` | {stats.meta.base} a {stats.meta.gitlab_com} herramientas de dominio | 2 herramientas públicas de descubrimiento y ejecución     |
+| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción                      | Encuentra una acción con schema y luego la ejecuta        |
+| Dónde están los schemas     | Schema de herramienta o `gitlab://tools/{id}`                       | `gitlab_find_action` o `gitlab://tools/{id}`              |
+| Mejor uso actual            | Modo explícito de compatibilidad                                    | Descubrimiento de acciones predeterminado de bajo consumo |
+| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                                             | Ruta predeterminada                                       |
 
 ## Solución de problemas
 

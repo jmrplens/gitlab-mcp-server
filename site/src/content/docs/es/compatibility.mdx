@@ -4,25 +4,26 @@ description: Compatibilidad de plataforma, edición de GitLab y clientes MCP par
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import stats from "../../../data/stats.json";
 
 ## Compatibilidad con ediciones de GitLab
 
 GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea 16 meta-herramientas adicionales exclusivas de Enterprise: establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, usa `--tier=premium`/`--tier=ultimate` en modo HTTP, o confía en la autodetección desde `GET /license` (por defecto `free`). Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad, pero están deprecados.
 
-| Funcionalidad                            | Community (CE) | Enterprise (EE) |
-| ---------------------------------------- | :------------: | :-------------: |
-| Proyectos, Issues, MRs, Pipelines, CI/CD |       ✅       |       ✅        |
-| Wikis, Etiquetas, Hitos, Releases        |       ✅       |       ✅        |
-| Usuarios, Grupos, Miembros, Búsqueda     |       ✅       |       ✅        |
-| Despliegues, Entornos, Paquetes          |       ✅       |       ✅        |
-| 32 meta-herramientas base                |       ✅       |       ✅        |
-| 45 recursos, 37 prompts                  |       ✅       |       ✅        |
-| Merge Trains                             |       ❌       |       ✅        |
-| Métricas DORA                            |       ❌       |       ✅        |
-| Gestión de vulnerabilidades              |       ❌       |       ✅        |
-| Eventos de auditoría                     |       ❌       |       ✅        |
-| Políticas de cumplimiento                |       ❌       |       ✅        |
-| +16 meta-herramientas enterprise         |       ✖        |       ✅        |
+| Funcionalidad                                       | Community (CE) | Enterprise (EE) |
+| --------------------------------------------------- | :------------: | :-------------: |
+| Proyectos, Issues, MRs, Pipelines, CI/CD            |       ✅       |       ✅        |
+| Wikis, Etiquetas, Hitos, Releases                   |       ✅       |       ✅        |
+| Usuarios, Grupos, Miembros, Búsqueda                |       ✅       |       ✅        |
+| Despliegues, Entornos, Paquetes                     |       ✅       |       ✅        |
+| {stats.meta.base} meta-herramientas base            |       ✅       |       ✅        |
+| {stats.resources} recursos, {stats.prompts} prompts |       ✅       |       ✅        |
+| Merge Trains                                        |       ❌       |       ✅        |
+| Métricas DORA                                       |       ❌       |       ✅        |
+| Gestión de vulnerabilidades                         |       ❌       |       ✅        |
+| Eventos de auditoría                                |       ❌       |       ✅        |
+| Políticas de cumplimiento                           |       ❌       |       ✅        |
+| +16 meta-herramientas enterprise                    |       ✖        |       ✅        |
 
 Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad.
 
@@ -57,13 +58,13 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 
 ## Funcionalidades del protocolo MCP
 
-| Capacidad   |                                                           Soportada                                                           |
-| ----------- | :---------------------------------------------------------------------------------------------------------------------------: |
-| Tools       | ✅ (hasta 1028 autoalojadas Enterprise / 1034 GitLab.com + Orbit individuales / 32 base, 48 autoalojadas, 49 GitLab.com meta) |
-| Resources   |                                                            ✅ (46)                                                            |
-| Prompts     |                                                            ✅ (37)                                                            |
-| Completions |                                                  ✅ (17 tipos de argumento)                                                   |
-| Elicitation |                                                              ✅                                                               |
-| Progress    |                                                              ✅                                                               |
+| Capacidad   |                                                                                                                       Soportada                                                                                                                        |
+| ----------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Tools       | ✅ (hasta {stats.tools.ultimate_self_managed} autoalojadas Enterprise / {stats.tools.gitlab_com} GitLab.com + Orbit individuales / {stats.meta.base} base, {stats.meta.self_managed_enterprise} autoalojadas, {stats.meta.gitlab_com} GitLab.com meta) |
+| Resources   |                                                                                                                 ✅ ({stats.resources})                                                                                                                 |
+| Prompts     |                                                                                                                  ✅ ({stats.prompts})                                                                                                                  |
+| Completions |                                                                                                      ✅ ({stats.completions} tipos de argumento)                                                                                                       |
+| Elicitation |                                                                                                                           ✅                                                                                                                           |
+| Progress    |                                                                                                                           ✅                                                                                                                           |
 
-Las cifras de 1028 autoalojadas y 1034 en GitLab.com son el conjunto expandido de instancias de herramienta distintas. Los recuentos de 32 base, 48 autoalojadas y 49 en GitLab.com son tamaños del catálogo de meta-herramientas cuyas acciones se expanden a esa superficie individual mayor.
+Las cifras de {stats.tools.ultimate_self_managed} autoalojadas y {stats.tools.gitlab_com} en GitLab.com son el conjunto expandido de instancias de herramienta distintas. Los recuentos de {stats.meta.base} base, {stats.meta.self_managed_enterprise} autoalojadas y {stats.meta.gitlab_com} en GitLab.com son tamaños del catálogo de meta-herramientas cuyas acciones se expanden a esa superficie individual mayor.

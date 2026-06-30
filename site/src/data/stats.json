@@ -1,0 +1,29 @@
+{
+  "version": "2.3.0",
+  "tools": {
+    "free": 861,
+    "premium": 999,
+    "ultimate_self_managed": 1062,
+    "gitlab_com": 1068
+  },
+  "meta": {
+    "base": 32,
+    "self_managed_enterprise": 48,
+    "gitlab_com": 49
+  },
+  "dynamic": 2,
+  "catalog_actions": {
+    "free": 865,
+    "self_managed_enterprise": 1066,
+    "gitlab_com": 1072
+  },
+  "catalog_groups": {
+    "free": 28,
+    "premium": 34,
+    "ultimate": 44
+  },
+  "resources": 45,
+  "prompts": 37,
+  "completions": 17,
+  "tool_packages": 175
+}
