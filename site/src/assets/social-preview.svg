@@ -115,14 +115,14 @@
     <rect x="-92" y="0" width="184" height="30" rx="15" fill="#1a1145" stroke="#6D5DD3" stroke-width="0.7" opacity="0.92"/>
     <text x="0" y="21" text-anchor="middle" font-size="13" fill="#C4B5FD" font-weight="800" letter-spacing="1.25">DYNAMIC TOOLSET</text>
 
-    <text x="-176" y="58" text-anchor="end" font-size="43" fill="#FC6D26" font-weight="800">570K</text>
+    <text x="-176" y="58" text-anchor="end" font-size="43" fill="#FC6D26" font-weight="800">964K</text>
     <text x="-164" y="57" font-size="17" fill="#FDBA74" font-weight="650">tokens</text>
     <path d="M-48 39H42V31L72 45L42 59V51H-48Z" fill="url(#metric-line)" opacity="0.96"/>
     <text x="194" y="58" text-anchor="end" font-size="43" fill="#34D399" font-weight="800">2.2K</text>
     <text x="206" y="57" font-size="17" fill="#A7F3D0" font-weight="650">tokens</text>
 
     <text x="0" y="78" text-anchor="middle" font-size="16" fill="#C7D2FE" font-weight="650" letter-spacing="0.45">
-      2 visible tools · 867 / 1018 reachable actions
+      Full individual catalog vs dynamic find/execute · ~440× less startup context
     </text>
   </g>
 
