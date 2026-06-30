@@ -20,13 +20,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"golang.org/x/tools/go/packages"
 )
 
 const (
-	schemaVersion       = 1
-	clientGoPkgPath     = "gitlab.com/gitlab-org/api/client-go"
-	toolsPkgInfix       = "/internal/tools/"
 	requestOptionMarker = "RequestOptionFunc"
 
 	coveredRawGeneric     = "COVERED_RAW — generic slug-dispatched integration action (gitlab_set_integration / gitlab_*_group_integration)"
@@ -50,10 +48,10 @@ type serviceCoverage struct {
 }
 
 type report struct {
-	SchemaVersion   int               `json:"schema_version"`
-	ClientGoPath    string            `json:"client_go_path"`
-	Summary         reportSummary     `json:"summary"`
-	Services        []serviceCoverage `json:"services"`
+	SchemaVersion    int               `json:"schema_version"`
+	ClientGoPath     string            `json:"client_go_path"`
+	Summary          reportSummary     `json:"summary"`
+	Services         []serviceCoverage `json:"services"`
 	StaleAcceptances []string          `json:"stale_acceptances,omitempty"`
 }
 
@@ -120,8 +118,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	sort.Strings(staleAcceptances)
 
 	return report{
-		SchemaVersion:    schemaVersion,
-		ClientGoPath:     clientGoPkgPath,
+		SchemaVersion:    shared.SchemaVersion,
+		ClientGoPath:     shared.ClientGoPkgPath,
 		Summary:          summarize(services),
 		Services:         services,
 		StaleAcceptances: staleAcceptances,
@@ -144,7 +142,7 @@ func loadToolPackages(root string) ([]*packages.Package, error) {
 		for _, perr := range pkg.Errors {
 			fatal = append(fatal, perr.Error())
 		}
-		if !strings.Contains(pkg.PkgPath, toolsPkgInfix) || pkg.TypesInfo == nil {
+		if !strings.Contains(pkg.PkgPath, shared.ToolsPkgInfix) || pkg.TypesInfo == nil {
 			continue
 		}
 		out = append(out, pkg)
@@ -431,7 +429,7 @@ func signatureIsAPICall(sig *types.Signature) bool {
 	if !ok {
 		return false
 	}
-	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), clientGoPkgPath) {
+	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), shared.ClientGoPkgPath) {
 		return false
 	}
 	return strings.Contains(named.Obj().Name(), requestOptionMarker)
@@ -453,7 +451,7 @@ func clientGoServiceInterface(t types.Type) (*types.Named, bool) {
 	if _, isIface := named.Underlying().(*types.Interface); !isIface {
 		return nil, false
 	}
-	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), clientGoPkgPath) {
+	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), shared.ClientGoPkgPath) {
 		return nil, false
 	}
 	return named, true
@@ -482,7 +480,7 @@ func sortedSet(set map[string]struct{}) []string {
 }
 
 func shortPackage(pkgPath string) string {
-	_, after, ok := strings.Cut(pkgPath, toolsPkgInfix)
+	_, after, ok := strings.Cut(pkgPath, shared.ToolsPkgInfix)
 	if !ok {
 		if last := strings.LastIndex(pkgPath, "/"); last >= 0 {
 			return pkgPath[last+1:]

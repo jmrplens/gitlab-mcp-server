@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"os"
 	"sort"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 )
 
-const schemaVersion = 1
 
 const backlogNote = "Merged 1:1 audit backlog. Each stream is a candidate list; intentional renames (e.g. branch→branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package."
 
@@ -69,7 +70,7 @@ func mergeBacklog(structRep structReport, actionRep actionReport, metaRep metada
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Package < packages[j].Package })
 
 	return backlog{
-		SchemaVersion: schemaVersion,
+		SchemaVersion: shared.SchemaVersion,
 		Note:          backlogNote,
 		Summary:       summarizeBacklog(packages),
 		Packages:      packages,

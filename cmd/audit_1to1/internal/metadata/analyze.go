@@ -22,14 +22,13 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
-
-const schemaVersion = 1
 
 // genericUsageRe matches placeholder Usage sentences such as
 // "Use to execute branches domain action." or "Use to execute list action.".
@@ -114,7 +113,7 @@ func buildReport(gapsOnly bool) (report, error) {
 	}
 	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
 	return report{
-		SchemaVersion: schemaVersion,
+		SchemaVersion: shared.SchemaVersion,
 		Summary:       summarize(packagesOut),
 		Packages:      packagesOut,
 	}, nil

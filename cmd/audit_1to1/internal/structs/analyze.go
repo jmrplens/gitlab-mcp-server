@@ -29,14 +29,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"golang.org/x/tools/go/packages"
 )
 
 const (
-	schemaVersion   = 1
-	clientGoPkgPath = "gitlab.com/gitlab-org/api/client-go"
-	toolsPkgInfix   = "/internal/tools/"
-	optionsSuffix   = "Options"
+	optionsSuffix = "Options"
 	// responseStructName is the client-go pagination wrapper type. Converters that
 	// take it as their SDK arg are list wrappers (the MCP list-output holds a
 	// slice-of-element field plus pagination); they are validated through the
@@ -517,8 +515,8 @@ func buildReport(root string, gapsOnly bool) (report, error) {
 	}
 	sort.Slice(reports, func(i, j int) bool { return reports[i].Package < reports[j].Package })
 	return report{
-		SchemaVersion: schemaVersion,
-		ClientGoPath:  clientGoPkgPath,
+		SchemaVersion: shared.SchemaVersion,
+		ClientGoPath:  shared.ClientGoPkgPath,
 		Summary:       summarize(reports),
 		Packages:      reports,
 	}, nil
@@ -540,7 +538,7 @@ func loadToolPackages(root string) ([]*packages.Package, error) {
 		for _, perr := range pkg.Errors {
 			fatal = append(fatal, perr.Error())
 		}
-		if !strings.Contains(pkg.PkgPath, toolsPkgInfix) {
+		if !strings.Contains(pkg.PkgPath, shared.ToolsPkgInfix) {
 			continue
 		}
 		if pkg.Types == nil || pkg.TypesInfo == nil {
@@ -1193,7 +1191,7 @@ func clientGoNamedStruct(t types.Type) (*types.Named, *types.Struct, bool) {
 	if !ok {
 		return nil, nil, false
 	}
-	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), clientGoPkgPath) {
+	if named.Obj().Pkg() == nil || !strings.Contains(named.Obj().Pkg().Path(), shared.ClientGoPkgPath) {
 		return nil, nil, false
 	}
 	return named, st, true
@@ -1287,7 +1285,7 @@ func lastPathSegment(path string) string {
 }
 
 func shortPackage(pkgPath string) string {
-	_, after, ok := strings.Cut(pkgPath, toolsPkgInfix)
+	_, after, ok := strings.Cut(pkgPath, shared.ToolsPkgInfix)
 	if !ok {
 		return lastPathSegment(pkgPath)
 	}
