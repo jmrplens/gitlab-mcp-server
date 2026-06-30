@@ -1,35 +1,88 @@
 ---
 title: Meta-herramientas
-description: Herramientas a nivel de dominio que consolidan operaciones relacionadas
+description: Las meta-herramientas agrupan operaciones de GitLab en herramientas MCP por dominio que enrutan según un parámetro action, reduciendo el recuento más del 95%.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Qué son las meta-herramientas de GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Las meta-herramientas son un modo de operación explícito de GitLab MCP Server, habilitado con TOOL_SURFACE=meta. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, una meta-herramienta agrupa operaciones relacionadas bajo una única herramienta a nivel de dominio con un parámetro action que despacha al handler correcto. Por ejemplo, gitlab_issue gestiona list, get, create, update y delete a través de una sola herramienta. Cada operación de herramienta individual sigue disponible como una acción dentro de una de las meta-herramientas de dominio, así que la funcionalidad no cambia."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cuánto reducen las meta-herramientas el número de herramientas?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Las meta-herramientas reducen el recuento de herramientas registradas en más del 95% manteniendo el 100% de la funcionalidad. El modo individual puede registrar cientos de herramientas —hasta el total de GitLab.com Enterprise/Premium con Orbit—, mientras que el modo meta-herramientas expone un pequeño conjunto de herramientas de dominio base, más otras cuando se habilita el catálogo Enterprise. Cada operación individual sigue siendo accesible como una acción dentro de una meta-herramienta de dominio, así que no se pierde ninguna capacidad; solo cae drásticamente el overhead de tokens de la lista de herramientas."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo descubro los parámetros exactos de una acción de meta-herramienta?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Por defecto, META_PARAM_SCHEMA=opaque mantiene pequeño el schema de cada meta-herramienta: los clientes ven el enum válido de action, mientras params queda como un objeto específico de la acción. Para descubrir la forma exacta de una acción, lee el manifiesto de herramientas. gitlab://tools lista las herramientas visibles y entradas ejecutables de la superficie activa, y gitlab://tools/{id} devuelve la forma de llamada aceptada y el JSON Schema de una sola acción, como gitlab://tools/gitlab_merge_request.create. Estos recursos siguen disponibles incluso cuando CAPABILITY_SURFACE=minimal."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo habilito las meta-herramientas Enterprise?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "El catálogo Enterprise/Premium habilita 16 meta-herramientas adicionales para funciones de GitLab Premium y Ultimate. En modo stdio, establece GITLAB_TIER=premium o GITLAB_TIER=ultimate; en modo HTTP, usa --tier=premium o --tier=ultimate para forzar el catálogo, u omítelo para permitir autodetección CE/EE por entrada token+URL. Los flags heredados GITLAB_ENTERPRISE=true y --enterprise siguen respetándose como alternativa cuando el tier no está definido, pero están deprecados. Habilitar el tier también añade rutas de acción solo enterprise a meta-herramientas base existentes como gitlab_issue, gitlab_project y gitlab_group."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Por qué algunos clientes de IA necesitan el modo meta-herramientas?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Algunos clientes de IA imponen límites en el número de herramientas; por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas. El modo meta-herramientas mantiene la lista visible de herramientas dentro de esas restricciones porque consolida cientos de operaciones en un número reducido de herramientas a nivel de dominio. Si en su lugar seleccionas herramientas individuales con TOOL_SURFACE=individual, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales, ocultando algunas operaciones."
+            }
+          }
+        ]
+      }
 ---
 
+import stats from "../../../../data/stats.json";
+
 :::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/meta-tools.md) en el repositorio.
+Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md) en el repositorio.
 :::
 
-Las meta-herramientas son un modo de operación explícito de GitLab MCP Server, habilitado con `TOOL_SURFACE=meta`. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
+Las meta-herramientas son un modo de operación explícito de GitLab MCP Server, habilitado con `TOOL_SURFACE=meta`. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto. El resultado es una lista de herramientas pequeña y explorable —un puñado de herramientas a nivel de dominio como `gitlab_issue`, `gitlab_project` y `gitlab_pipeline`— que aun así alcanza cualquier operación de GitLab.
 
-## ¿Por qué meta-herramientas?
+## ¿Por qué usar meta-herramientas?
 
-Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1034 en GitLab.com Enterprise/Premium con Orbit), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
+Las meta-herramientas existen para encajar una superficie completa de la API de GitLab en una ventana de contexto LLM limitada. Cuando un servidor MCP registra cientos de herramientas individuales (hasta {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real. El modo meta-herramientas colapsa esas operaciones en herramientas a nivel de dominio, así que la lista de herramientas se mantiene pequeña mientras la funcionalidad sigue completa.
 
-| Modo              | Nº de herramientas | Overhead de tokens | Funcionalidad               |
-| ----------------- | ------------------ | ------------------ | --------------------------- |
-| Individual        | 866 / 1028 / 1034  | Muy alto           | Completa                    |
-| Meta (base)       | 33                 | Bajo               | Completa                    |
-| Meta (enterprise) | 49 / 50            | Bajo               | Completa + Premium/Ultimate |
+| Modo              | Nº de herramientas                                                                  | Overhead de tokens | Funcionalidad               |
+| ----------------- | ----------------------------------------------------------------------------------- | ------------------ | --------------------------- |
+| Individual        | {stats.tools.free} / {stats.tools.ultimate_self_managed} / {stats.tools.gitlab_com} | Muy alto           | Completa                    |
+| Meta (base)       | {stats.meta.base}                                                                   | Bajo               | Completa                    |
+| Meta (enterprise) | {stats.meta.self_managed_enterprise} / {stats.meta.gitlab_com}                      | Bajo               | Completa + Premium/Ultimate |
 
 Las meta-herramientas reducen el recuento de herramientas en **más del 95%** mientras preservan el 100% de la funcionalidad. Cada operación de herramienta individual está disponible como una acción dentro de una de las meta-herramientas de dominio.
 
-El helper de actualización `gitlab_server` puede aparecer por separado para acciones de mantenimiento del servidor y no está incluido en los conteos 32/48/49 del catálogo de acciones GitLab.
+El helper de actualización `gitlab_server` puede aparecer por separado para acciones de mantenimiento del servidor y no está incluido en los conteos {stats.meta.base}/{stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} del catálogo de acciones GitLab.
 
 :::note[Compatibilidad con clientes]
-Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas (32 herramientas base, 48 herramientas enterprise autoalojadas o 49 herramientas GitLab.com Enterprise con Orbit) funciona dentro de estas restricciones. Si seleccionas herramientas individuales con `TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales.
+Algunos clientes de IA imponen límites en el número de herramientas (por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas). El modo meta-herramientas ({stats.meta.base} herramientas base, {stats.meta.self_managed_enterprise} herramientas enterprise autoalojadas o {stats.meta.gitlab_com} herramientas GitLab.com Enterprise con Orbit) funciona dentro de estas restricciones. Si seleccionas herramientas individuales con `TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales.
 :::
 
-## Cómo funcionan las meta-herramientas
+## ¿Cómo funcionan las meta-herramientas?
 
-Cada meta-herramienta define un enum `action` que lista todas las operaciones disponibles. El servidor valida la acción y la despacha a la función handler correspondiente internamente.
+Cada meta-herramienta define un enum `action` que lista todas las operaciones que admite, luego valida la acción elegida y la despacha a la función handler correspondiente internamente. El parámetro `action` siempre es requerido y debe ser uno de los valores enumerados; los parámetros adicionales dependen de la acción elegida. Por eso una sola herramienta como `gitlab_issue` puede cubrir un dominio entero sin exponer una herramienta separada por operación.
 
 ```mermaid
 flowchart LR
@@ -47,9 +100,9 @@ flowchart LR
 
 El parámetro action siempre es requerido y debe ser uno de los valores enumerados. Los parámetros adicionales dependen de la acción elegida.
 
-## Descubrir parámetros por acción
+## ¿Cómo descubro los parámetros por acción?
 
-Las meta-herramientas usan un sobre común:
+Las meta-herramientas usan un sobre común, y la forma exacta de `params` para cualquier acción se descubre a través del manifiesto de herramientas en lugar de incluirse en cada schema de herramienta. Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de la herramienta: los clientes ven el enum válido de `action`, mientras `params` queda como un objeto específico de la acción.
 
 ```json
 {
@@ -60,7 +113,7 @@ Las meta-herramientas usan un sobre común:
 }
 ```
 
-Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de la herramienta: los clientes ven el enum válido de `action`, mientras `params` queda como un objeto específico de la acción. Para descubrir la forma exacta de una acción concreta, lee el manifiesto de herramientas:
+Para descubrir la forma exacta de una acción concreta, lee el manifiesto de herramientas:
 
 | Recurso               | Uso                                                                                             |
 | --------------------- | ----------------------------------------------------------------------------------------------- |
@@ -287,3 +340,29 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 | `META_PARAM_SCHEMA`  | `opaque`          | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.                  |
 | `GITLAB_TIER`        | _(autodetectado)_ | Selector de edición: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). Reemplaza al flag deprecado `GITLAB_ENTERPRISE`. |
 | `--tier`             | _(autodetectado)_ | Flag de edición en modo HTTP: `free`/`ce`, `premium` o `ultimate`. Reemplaza al flag deprecado `--enterprise`.                                                                            |
+
+## Metadatos de descubrimiento
+
+Cada acción de meta-herramienta lleva metadatos de descubrimiento (alias, uso, guía de parámetros, acciones relacionadas) que ayudan a los modelos a elegir la acción correcta y a dar forma a los parámetros. Ejecuta `go run ./cmd/audit_discovery_completeness/` para puntuar el catálogo; el auditor produce un backlog priorizado que usan los agentes de dominio para rellenar carencias siguiendo el estándar de oro link-create-batch.
+
+## Preguntas frecuentes
+
+### ¿Cuánto reducen las meta-herramientas el número de herramientas?
+
+Las meta-herramientas reducen el recuento de herramientas registradas en **más del 95%** manteniendo el 100% de la funcionalidad. El modo individual puede registrar cientos de herramientas —{stats.tools.free} en CE, hasta {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit—, mientras que el modo meta-herramientas expone {stats.meta.base} herramientas de dominio base (más con el catálogo Enterprise). Cada operación individual sigue siendo accesible como una acción dentro de una meta-herramienta de dominio, así que no se pierde ninguna capacidad; solo cae drásticamente el overhead de tokens de la lista de herramientas.
+
+### ¿Qué es el parámetro action?
+
+El parámetro `action` es el campo requerido en cada meta-herramienta. Cada meta-herramienta define un enum `action` que lista las operaciones que admite, y el servidor valida la acción elegida antes de despachar al handler correspondiente. Por ejemplo, `gitlab_issue` acepta `list`, `get`, `create`, `update`, `delete` y más. El `action` siempre es requerido y debe ser uno de los valores enumerados; el resto de parámetros van bajo `params` y dependen de la acción que elijas.
+
+### ¿Cómo encuentro los parámetros exactos de una acción?
+
+Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de cada meta-herramienta, así que la forma exacta de `params` se descubre a través del manifiesto de herramientas. Lee `gitlab://tools` para listar las herramientas visibles y entradas ejecutables de la superficie activa, y luego lee `gitlab://tools/{id}` —por ejemplo `gitlab://tools/gitlab_merge_request.create`— para obtener la forma de llamada aceptada y el JSON Schema de una acción. Estos recursos de manifiesto siguen disponibles incluso con `CAPABILITY_SURFACE=minimal`. Los despliegues dinámicos pueden usar en su lugar `gitlab_find_action` para schemas inline.
+
+### ¿Cómo habilito las meta-herramientas Enterprise?
+
+El catálogo Enterprise/Premium habilita 16 meta-herramientas adicionales para funciones de GitLab Premium y Ultimate. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP, usa `--tier=premium` (o `--tier=ultimate`) para forzar el catálogo, u omítelo para permitir autodetección CE/EE por entrada token+URL. Los flags heredados `GITLAB_ENTERPRISE=true` y `--enterprise` siguen respetándose como alternativa cuando el tier no está definido, pero están deprecados. Habilitar el tier también añade rutas solo enterprise (como iterations, project mirrors y SSH certificates) a las meta-herramientas base existentes.
+
+### ¿Por qué algunos clientes necesitan el modo meta-herramientas?
+
+Algunos clientes de IA imponen límites en el número de herramientas; por ejemplo, JetBrains AI Assistant limita los servidores MCP a 100 herramientas. El modo meta-herramientas mantiene la lista visible de herramientas dentro de esas restricciones porque consolida cientos de operaciones en {stats.meta.base} herramientas de dominio base (o {stats.meta.self_managed_enterprise}/{stats.meta.gitlab_com} con el catálogo Enterprise). Si en su lugar seleccionas herramientas individuales con `TOOL_SURFACE=individual`, los clientes con dichos límites solo verán un subconjunto del conjunto completo de herramientas individuales, ocultando algunas operaciones.

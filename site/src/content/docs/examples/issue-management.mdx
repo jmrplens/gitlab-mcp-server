@@ -1,6 +1,6 @@
 ---
 title: Issue Management Examples
-description: Issue triage, tracking, and project management examples using GitLab MCP Server
+description: "Issue management examples with GitLab MCP Server — triage, assign and label, link related issues, track milestones, discuss, and search."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Step-by-step examples for issue management and project triage workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
+These step-by-step workflows cover issue management end to end: triaging open issues, assigning and labeling them, linking related and blocking issues, tracking milestone progress, holding discussions, and searching across projects. Each example pairs the prompt you type with the exact meta-tool action the server runs, so you can reuse the call directly.
 
 ## Issue triage
+
+The triage loop moves an issue from intake to resolution: view open issues, assign and label them, link related issues, track them in a milestone, and either close them or keep the discussion going. The diagram shows that cycle and where it loops back.
 
 ```mermaid
 flowchart LR
@@ -87,9 +89,13 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## AI-powered issue analysis
 
+There is no dedicated "AI analysis" tool. AI-powered analysis happens when the assistant reads issues with `gitlab_issue → action: list` or `action: get`, reasons over their content, and then acts on the result — assigning, labeling, linking, or commenting with the actions below. For example, _"Find the open bugs in backend, group them by likely root cause, and label the duplicates"_ chains a read action with the triage actions in this guide, all within one conversation.
+
 ---
 
 ## Issue linking
+
+Model relationships between issues so dependencies are explicit. Mark issues as related, record blocking relationships, and review every link attached to an issue.
 
 ### Create related issues
 
@@ -123,6 +129,8 @@ Returns: linked issues with relationship types (relates_to, blocks, is_blocked_b
 
 ## Labels and milestones
 
+Organize and measure work with labels and milestones. Create scoped labels to categorize issues, and check a milestone's progress to see how close a sprint is to completion.
+
 ### Organize with labels
 
 **Prompt**: "Create a scoped label 'priority::critical' with red color in the backend project"
@@ -145,6 +153,8 @@ Returns: completion percentage, open/closed issue counts, start date, due date, 
 ---
 
 ## Issue discussions
+
+Keep the conversation on the issue itself. Add a quick comment, open a threaded discussion for a deeper topic, or react with award emoji to acknowledge updates without adding noise.
 
 ### Add a comment
 
@@ -176,6 +186,8 @@ gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
 ---
 
 ## Search across projects
+
+Find issues beyond a single project. Search globally by keyword across every project you can access, or scope the search to one group to surface issues by label.
 
 ### Find issues by keyword
 

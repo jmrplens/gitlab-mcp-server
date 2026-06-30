@@ -332,7 +332,7 @@ The file `repositories.go` contains **Projects** CRUD operations (uses `client.G
 
 ### Reference Documentation
 
-The **client-go API library** is the source of truth for domain structure and field definitions. Our source code implements a subset of it. `docs/tools/` is supplementary user-facing documentation, not the canonical field map.
+The **client-go API library** is the source of truth for domain structure and field definitions. Our source code implements a subset of it. `docs/reference/tools` is supplementary user-facing documentation, not the canonical field map.
 
 Before migrating each domain:
 

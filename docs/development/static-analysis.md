@@ -2,7 +2,7 @@
 
 This document describes the static analysis gates used in **gitlab-mcp-server**, their configuration, and how to run them.
 
-> **Diataxis type**: Reference
+> **Diátaxis type**: Reference
 > **Audience**: Developers, contributors
 > **Prerequisites**: Go toolchain installed, Make optional. Make targets export the project Go toolchain from `go.mod` by default.
 

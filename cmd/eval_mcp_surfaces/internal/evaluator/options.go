@@ -111,7 +111,7 @@ func parseFlags() options {
 	// --fixture-smoke exercises fixture preparation without model calls.
 	flag.BoolVar(&opts.FixtureSmoke, "fixture-smoke", false, "With --dry-run, exercise live per-task fixture preparation through MCP without calling model providers")
 	// --publish-docs publishes reviewed reports into README and docs.
-	flag.BoolVar(&opts.PublishDocs, "publish-docs", false, "Publish reviewed evaluation reports into README and docs/testing/model-results.md")
+	flag.BoolVar(&opts.PublishDocs, "publish-docs", false, "Publish reviewed evaluation reports into README and docs/development/testing/model-results.md")
 	// --check-docs verifies published docs without writing files.
 	flag.BoolVar(&opts.CheckDocs, "check-docs", false, "Verify published evaluation docs match the selected --publish-from reports without writing files")
 	// --publish-allow-harness-noise allows publishing reports with unresolved harness noise.

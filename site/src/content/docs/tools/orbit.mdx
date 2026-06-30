@@ -1,15 +1,68 @@
 ---
 title: Orbit
-description: GitLab.com Enterprise/Premium Knowledge Graph tools
+description: Six read-only MCP tools for GitLab.com's experimental Knowledge Graph API, available only on GitLab.com Ultimate.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Orbit in GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools: status, schema, tools, dsl, query, and graph_status. The tools let an AI assistant check service health, inspect the graph ontology, discover the live query manifest, retrieve the query DSL, run read-only Knowledge Graph queries, and check indexing status. Orbit performs no writes. It is registered only when the server connects to https://gitlab.com and the Enterprise/Premium catalog is enabled with Ultimate, and it appears either as the gitlab_orbit meta-tool with six actions or as six individual gitlab_orbit_* tools."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Orbit available on self-managed GitLab?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Orbit is available only when GitLab MCP Server connects to https://gitlab.com. Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled, because the underlying experimental Knowledge Graph API is hosted on GitLab.com."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What license does Orbit require?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Orbit requires GitLab Ultimate on a GitLab.com connection. Enable it with GITLAB_TIER=ultimate in stdio mode or --tier=ultimate in HTTP mode. The legacy GITLAB_ENTERPRISE=true and --enterprise flags still work but are deprecated. Self-managed instances never register Orbit regardless of tier."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Orbit read-only?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. All six Orbit tools are read-only. They inspect service health, the graph ontology, the query manifest, the query DSL, and indexing status, and they execute read-only Knowledge Graph queries. The query action runs query objects against an index and never mutates GitLab data."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the four Orbit query_type variants?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The query action accepts a JSON query object whose query_type selects one of four variants: traversal (walk nodes by entity, filters, or id range), aggregation (group and aggregate over nodes), neighbors (expand a bounded node's neighbors), and path_finding (find paths between two or more bounded nodes, max depth 1 to 3). All four share the single query_type discriminator and diverge only on their sibling keys."
+            }
+          }
+        ]
+      }
 ---
 
-Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools. It is available only when the server connects to `https://gitlab.com` and the Enterprise/Premium catalog is enabled with `GITLAB_TIER=ultimate` (or `--tier=ultimate` in HTTP mode). The legacy `GITLAB_ENTERPRISE=true`/`--enterprise` flags still work but are deprecated.
+Orbit exposes GitLab.com's experimental Knowledge Graph API through **six read-only MCP tools** — `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`. It is available **only** when the server connects to `https://gitlab.com` and the Enterprise/Premium catalog is enabled with Ultimate (`GITLAB_TIER=ultimate`, or `--tier=ultimate` in HTTP mode). The legacy `GITLAB_ENTERPRISE=true`/`--enterprise` flags still work but are deprecated. Orbit never writes: every tool inspects health, schema, or indexed data, or runs a read-only graph query.
 
 :::note[Technical reference]
-For the complete generated tool reference, see [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/tools/orbit.md) in the repository.
+For the complete generated tool reference, see [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/orbit.md) in the repository.
 :::
 
-## Availability
+## When is Orbit available?
+
+Orbit registers only on GitLab.com Ultimate connections. It requires the `https://gitlab.com` host **and** the Enterprise/Premium catalog enabled with Ultimate. In meta-tool mode it appears as the single `gitlab_orbit` tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools. Every Orbit tool is read-only.
 
 | Requirement     | Value                           |
 | --------------- | ------------------------------- |
@@ -32,7 +85,9 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 | `query`        | `gitlab_orbit_query`        | Execute a read-only Knowledge Graph query object                  |
 | `graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for a namespace, project, or full path    |
 
-## Typical flow
+## What is the typical flow?
+
+The typical Orbit flow discovers the live schema first, then runs a typed query — never the other way around, because the ontology and DSL served by GitLab.com can change. Confirm the service is up with `status`, inspect the graph with `schema`, fetch the live query manifest with `tools`, optionally retrieve the DSL grammar with `dsl`, then submit a query object to `query`.
 
 1. Call `gitlab_orbit` with `action: "status"` to confirm the service is available.
 2. Call `action: "schema"` to inspect graph domains, nodes, and relationships.
@@ -211,9 +266,9 @@ Returns graph indexing status for a namespace, project, or full path. Use to che
 
 **Example:** See above.
 
-## Schema discovery
+## How do I discover query schemas?
 
-In meta-tool mode, action parameter schemas are available through MCP resources:
+In meta-tool mode, action parameter schemas are available through MCP resources — read them to learn the exact `params` shape for each Orbit action without expanding every schema in `tools/list`. These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode.
 
 | Resource                                   | Purpose                                 |
 | ------------------------------------------ | --------------------------------------- |
@@ -224,9 +279,7 @@ In meta-tool mode, action parameter schemas are available through MCP resources:
 | `gitlab://tools/gitlab_orbit.query`        | Parameters for Knowledge Graph queries  |
 | `gitlab://tools/gitlab_orbit.graph_status` | Parameters for indexing status checks   |
 
-These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode.
-
-## Run the live tests
+## How do I run the live tests?
 
 Orbit ships with a build-tag-gated live test suite at `test/e2e/orbit/live_test.go` that exercises each handler against the real `https://gitlab.com/api/v4/orbit/*` endpoints. The suite has four entry points and 41 subtests covering all six handlers, the canonical Query DSL shapes, fixture-based smoke tests, and the full DSL feature surface. The orchestrator `make test-e2e-gitlab-com` provisions `kg-fixtures` and `security-fixtures` projects in your namespace (idempotent), waits for the Orbit indexer to catch up, then runs the tests:
 
@@ -243,3 +296,25 @@ GITLAB_COM_TOKEN=glpat-... \
 ```
 
 See [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) for the fixture layout, the `scripts/setup-orbit-fixtures.sh` reproducer, and the indexer caveat (transient `error` state is normal and the tests are informational, not strict equality).
+
+## Frequently asked questions
+
+### Is Orbit available on self-managed GitLab?
+
+No. Orbit is available **only** when GitLab MCP Server connects to `https://gitlab.com`. Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled, because the underlying experimental Knowledge Graph API is hosted on GitLab.com. There is no flag that adds Orbit to a self-managed connection.
+
+### What license and configuration does Orbit require?
+
+Orbit requires GitLab Ultimate on a GitLab.com connection. Enable it with `GITLAB_TIER=ultimate` in stdio mode or `--tier=ultimate` in HTTP mode. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags still work as a fallback but are deprecated. When these conditions are met, Orbit appears as the `gitlab_orbit` meta-tool (six actions) or six `gitlab_orbit_*` individual tools.
+
+### Is Orbit read-only?
+
+Yes. All six Orbit tools are read-only. `status`, `schema`, `tools`, `dsl`, and `graph_status` only inspect health, ontology, manifest, DSL, and indexing state, and `query` runs read-only Knowledge Graph query objects against the index. No Orbit action mutates GitLab data, so Orbit is safe to expose even in cautious deployments.
+
+### What are the four Orbit query_type variants?
+
+The `query` action accepts a JSON query object whose `query_type` selects one of four variants: **traversal** (walk nodes by entity, `node_ids`, `filters`, or `id_range`), **aggregation** (group and aggregate over nodes), **neighbors** (expand a bounded node's neighbors), and **path_finding** (find paths between two or more bounded nodes, `max_depth` 1 to 3). All four share the single `query_type` discriminator and diverge only on their sibling keys.
+
+### How do I learn the exact parameters for an Orbit action?
+
+In meta-tool mode, read the per-action MCP resource — for example `gitlab://tools/gitlab_orbit.query` returns the parameter schema for the `query` action. These resources stay available with `CAPABILITY_SURFACE=full` or `minimal` and in any `META_PARAM_SCHEMA` mode. You can also call `action: "tools"` to fetch the live query manifest served by GitLab.com before constructing a query.

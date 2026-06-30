@@ -15,7 +15,7 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 - A Personal Access Token with `api` scope ([how to create one](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html))
 - An MCP-compatible AI client (VS Code with GitHub Copilot, Claude Desktop, Cursor, etc.)
 
-> **Headless / CI usage?** See the [CI/CD Usage](ci-cd.md) guide for running in pipelines without an interactive client.
+> **Headless / CI usage?** See the [CI/CD Usage](guides/ci-cd.md) guide for running in pipelines without an interactive client.
 
 ---
 
@@ -83,7 +83,7 @@ chmod +x gitlab-mcp-server-linux-amd64
 
 The easiest way to configure everything is the built-in Setup Wizard. It configures your GitLab connection and writes the MCP client config files in one step.
 
-> **Stdio only**: The wizard configures the **stdio MCP server** only. For shared or remote HTTP deployments, use [HTTP Server Mode](http-server-mode.md) instead.
+> **Stdio only**: The wizard configures the **stdio MCP server** only. For shared or remote HTTP deployments, use [HTTP Server Mode](guides/http-server-mode.md) instead.
 
 ### Windows
 
@@ -204,7 +204,7 @@ TOOL_SURFACE=meta
 
 For the smallest startup surface with the default dynamic mode, also set `CAPABILITY_SURFACE=minimal`. This keeps the `gitlab://tools` manifest, and omits optional GitLab data resources, prompts, and workflow guides. Dynamic action find and execute remain available because dynamic discovery returns action schemas inline.
 
-See [Dynamic Tools](dynamic-tools.md) for the default find/execute workflow and [Meta-Tools](meta-tools.md) for the explicit meta-tool catalog reference.
+See [Dynamic Tools](concepts/dynamic-tools.md) for the default find/execute workflow and [Meta-Tools](concepts/meta-tools.md) for the explicit meta-tool catalog reference.
 
 ---
 
@@ -248,7 +248,7 @@ Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool 
 
 The Open Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 
-For detached HTTP deployments, do not use a stdio client entry. Run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](http-server-mode.md).
+For detached HTTP deployments, do not use a stdio client entry. Run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](guides/http-server-mode.md).
 
 ---
 
@@ -316,7 +316,7 @@ Add to `.cursor/mcp.json`:
 }
 ```
 
-> See [Configuration](configuration.md) for all supported clients and HTTP mode setup.
+> See [Configuration](reference/configuration.md) for all supported clients and HTTP mode setup.
 
 ---
 
@@ -379,16 +379,16 @@ The client discovers the GitLab authorization server via `/.well-known/oauth-pro
 
 > **Important**: Without `clientId`, clients fall back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail. Always configure `clientId` explicitly.
 >
-> **Prerequisite**: A GitLab OAuth Application must be created. See [OAuth App Setup](oauth-app-setup.md) for a step-by-step guide and [IDE Configuration](ide-configuration.md) for per-client examples.
+> **Prerequisite**: A GitLab OAuth Application must be created. See [OAuth App Setup](guides/oauth-app-setup.md) for a step-by-step guide and [IDE Configuration](guides/ide-configuration.md) for per-client examples.
 
-See [HTTP Server Mode](http-server-mode.md) for the full architecture and deployment details.
+See [HTTP Server Mode](guides/http-server-mode.md) for the full architecture and deployment details.
 
 ---
 
 ## Next Steps
 
-- [Configuration](configuration.md) — all environment variables and client setup options
-- [Meta-Tools](meta-tools.md) — domain meta-tool reference with action mappings
-- [Usage Examples](examples/usage-examples.md) — real-world scenarios
-- [Tools Reference](tools/README.md) — all individual tools, including GitLab.com-only Orbit
-- [Troubleshooting](troubleshooting.md) — common issues and solutions
+- [Configuration](reference/configuration.md) — all environment variables and client setup options
+- [Meta-Tools](concepts/meta-tools.md) — domain meta-tool reference with action mappings
+- [Usage Examples](guides/examples/usage-examples.md) — real-world scenarios
+- [Tools Reference](reference/tools/README.md) — all individual tools, including GitLab.com-only Orbit
+- [Troubleshooting](guides/troubleshooting.md) — common issues and solutions

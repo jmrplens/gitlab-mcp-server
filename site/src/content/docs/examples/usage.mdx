@@ -28,7 +28,7 @@ import {
 	/>
 </CardGrid>
 
-These examples show natural language prompts you can use with any AI assistant connected to GitLab MCP Server. The server translates these into GitLab API operations automatically.
+This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically — the tabs below show which meta-tool and `action` each prompt maps to, across project management, code review, CI/CD, releases, and search.
 
 <Tabs>
   <TabItem label="Project Management">
@@ -104,7 +104,7 @@ The server calls `gitlab_member` with `action: list`, returning team members wit
 
 ## Dynamic-first tool flow
 
-Dynamic mode is the default. For concrete tool calls, the assistant first discovers the action schema, then executes the selected action:
+Dynamic mode is the default, so the prompts above don't reach a named meta-tool directly. Instead the assistant first discovers the action and its schema with `gitlab_find_action`, then runs it with `gitlab_execute_action` using a canonical `domain.action` ID:
 
 ```text
 gitlab_find_action → query: "list open merge requests"

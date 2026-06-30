@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -454,6 +454,7 @@ audit-docs:
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_testing_docs/ --check
+	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
 	go run ./cmd/godoc_tool/ audit
 	go run ./cmd/audit_surface_quality/ -view=metadata
@@ -690,8 +691,8 @@ check-openplugin:
 gen-readme: gen-footprint gen-stats
 
 ## update-all: run every generator and doc updater in one pass.
-## Generates: token footprint, repo stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
-update-all: gen-footprint gen-stats gen-llms gen-testing-docs gen-action-catalog-manifest
+## Generates: token footprint, repo stats, site stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
+update-all: gen-footprint gen-stats gen-site-stats gen-llms gen-testing-docs gen-action-catalog-manifest
 	go run ./cmd/format_md_tables/
 	@echo "All generators and formatters complete."
 
@@ -710,6 +711,14 @@ gen-stats:
 ## check-stats: verify the README repository statistics section is current.
 check-stats:
 	go run ./cmd/gen_stats/ -check
+
+## gen-site-stats: regenerate the single-sourced site stats JSON (site/src/data/stats.json).
+gen-site-stats:
+	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json
+
+## check-site-stats: verify the committed site stats JSON is current.
+check-site-stats:
+	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 
 ## gen-testing-docs: regenerate testing.md counts and coverage tables.
 gen-testing-docs:

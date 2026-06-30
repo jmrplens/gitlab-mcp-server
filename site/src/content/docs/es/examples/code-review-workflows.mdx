@@ -1,6 +1,6 @@
 ---
 title: Ejemplos de revisión de código
-description: Ejemplos de revisión de merge requests y análisis de código con GitLab MCP Server
+description: "Ejemplos de revisión de merge requests con GitLab MCP Server — listar MRs, leer diffs, aprobaciones, notas y discusiones, fusionar y comparar ramas."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Ejemplos paso a paso para flujos de revisión de merge requests. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
+Estos flujos paso a paso cubren el ciclo completo de revisión de merge requests: encontrar los MRs que requieren tu atención, leer sus diffs, comprobar el estado de aprobación, dejar notas y discusiones en hilo y, finalmente, fusionar o rebasar. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que puedas reutilizar la llamada directamente.
 
 ## Flujo de revisión de MRs
+
+Este es el bucle central de revisión: lista los MRs abiertos asignados a ti, lee los cambios de archivos, publica comentarios de revisión y aprueba cuando el código esté correcto. El diagrama sigue un único MR (`!42`) a través de esa secuencia.
 
 ```mermaid
 sequenceDiagram
@@ -95,9 +97,13 @@ gitlab_merge_request → action: approve, project_id: "my-group/backend",
 
 ## Revisión de código con IA
 
+No existe una herramienta de "revisión con IA" separada. La revisión asistida por IA ocurre cuando el asistente lee el diff de un MR con `gitlab_merge_request → action: changes`, razona sobre el código y luego escribe sus hallazgos como notas o discusiones en hilo. Una petición típica —_"Lee los cambios del MR !42 y señala cualquier problema de manejo de errores o de seguridad"_— encadena la acción de lectura anterior con las acciones `note_create` y `discussion_create` siguientes, todo dentro de una misma conversación.
+
 ---
 
 ## Discusiones y notas de MR
+
+Comparte el feedback de revisión directamente en el MR. Publica un único comentario en línea, abre una discusión en hilo para un tema más amplio, encuentra los hilos que siguen sin resolver o prepara notas en borrador para publicar toda tu revisión a la vez.
 
 ### Añadir un comentario de revisión
 
@@ -143,6 +149,8 @@ Las notas borrador solo son visibles para ti hasta que las publiques todas a la 
 
 ## Ciclo de vida del MR
 
+Lleva un merge request por todo su ciclo de vida: ábrelo desde una rama de funcionalidad, rebásalo sobre la última versión del destino, fusiónalo (opcionalmente con squash) o ciérralo cuando un enfoque queda reemplazado.
+
 ### Crear un MR
 
 **Prompt**: "Crea un merge request de la rama feature/auth-refactor a main en el proyecto backend"
@@ -183,6 +191,8 @@ gitlab_merge_request → action: update, project_id: "my-group/backend",
 ---
 
 ## Comparar ramas
+
+Antes de abrir o fusionar un MR, compara dos ramas para ver exactamente qué cambiaría. La comparación devuelve los commits, los archivos modificados y las estadísticas del diff entre ambas.
 
 ### Diff entre ramas
 

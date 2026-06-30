@@ -1,5 +1,7 @@
 # Dynamic Search Ranker
 
+> **Diátaxis type**: Explanation · **Audience**: 🛠️ Contributors & maintainers
+
 This document describes the current dynamic action search ranker.
 
 ## Current Behavior

@@ -1,10 +1,55 @@
 ---
 title: Architecture
-description: How AI tools communicate with GitLab through the MCP server
+description: How GitLab MCP Server bridges AI assistants and GitLab — stdio and HTTP transports, a canonical action catalog, and a stateless security model.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What does GitLab MCP Server do?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server is a single static binary that sits between an AI client and a GitLab instance. It receives MCP tool calls, translates them into authenticated GitLab REST API v4 or GraphQL requests, executes them, and returns a dual-format response: structured JSON for the AI to reason about and formatted Markdown for the user. The server adds no GitLab features of its own — it exposes existing GitLab operations as MCP tools through the Model Context Protocol."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the difference between stdio and HTTP transport modes?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Stdio mode is the default for single-user setups: the AI client spawns the server as a child process and communicates over stdin/stdout using JSON-RPC, with the token supplied as an environment variable that never leaves the local machine. HTTP mode serves multiple users from one process, isolating each user's session by token and URL in an LRU pool with configurable session limits and timeouts. Both modes expose the same tools and call the same GitLab APIs; they differ only in how the AI client connects."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the canonical action catalog?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The canonical action catalog is the single internal definition of every ordinary GitLab operation. All three visible tool surfaces — meta-tools, individual tools, and the dynamic find/execute tools — are projections of this catalog, so they share identical schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, and Markdown formatting. Catalog entries are tier-aware: each action is tagged with the lowest GitLab edition (free, premium, or ultimate) that exposes it, and premium or ultimate-only actions are pruned when the resolved tier is lower."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does GitLab MCP Server keep my GitLab token secure?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GitLab MCP Server never stores tokens server-side. In stdio mode the token exists only in the process environment and never leaves the local machine. In HTTP mode each user's session is isolated in the server pool by token and URL. All GitLab API calls use HTTPS by default, with opt-in skipping for self-signed certificates, and the server is stateless — no data is persisted between requests. Read-only mode (GITLAB_READ_ONLY=true) disables every mutating operation."
+            }
+          }
+        ]
+      }
 ---
 
+import stats from "../../data/stats.json";
+
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/architecture.md) in the repository.
+For the complete technical reference, see [`docs/architecture.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md) in the repository.
 :::
 
 GitLab MCP Server sits between your AI client and your GitLab instance, translating natural language requests into GitLab API calls via the [Model Context Protocol](https://modelcontextprotocol.io/).
@@ -30,7 +75,7 @@ The server is a single static binary that:
 
 ## Transport modes
 
-The server supports two transport modes depending on your deployment needs.
+GitLab MCP Server supports two transport modes — stdio and HTTP — and you pick between them based on whether one user or many share the server. Stdio is the default for a single user on a local machine; HTTP serves a whole team from one process with per-user session isolation.
 
 ### Stdio mode (default)
 
@@ -104,6 +149,8 @@ See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for detailed 
 
 ## Tool architecture
 
+GitLab MCP Server defines every GitLab operation once and presents it through three interchangeable tool surfaces. A single canonical action catalog is the source of truth, and meta-tools, individual tools, and the dynamic find/execute tools are all projections of it — so behavior and safety stay identical no matter which surface a client uses.
+
 ### Canonical action catalog
 
 Every ordinary GitLab operation is defined once in the canonical action catalog. The visible tool surfaces are projections of that catalog:
@@ -129,7 +176,7 @@ Orbit is projected through the same catalog as every other domain: in meta mode 
 
 ### Meta-tool mode
 
-With `TOOL_SURFACE=meta`, the server exposes a baseline of **32 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 49 total. Each meta-tool groups related operations:
+With `TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add Enterprise/Premium tools for {stats.meta.self_managed_enterprise} total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -161,7 +208,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): 1028 on self-managed Enterprise/Premium, or 1034 on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_list_issues`, `gitlab_create_issue`): {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, or {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
 
 ### Dynamic toolset
 
@@ -195,7 +242,7 @@ Requires the AI client to support MCP elicitation capability.
 
 ### Resources
 
-45 read-only MCP resources that provide contextual data:
+{stats.resources} read-only MCP resources that provide contextual data:
 
 - Server configuration and version
 - Current user profile
@@ -204,7 +251,7 @@ Requires the AI client to support MCP elicitation capability.
 
 ### Prompts
 
-37 pre-built prompt templates for common workflows:
+{stats.prompts} pre-built prompt templates for common workflows:
 
 - Project health reports
 - Cross-project analysis
@@ -245,3 +292,21 @@ This dual format ensures the AI can make follow-up decisions while presenting cl
 - **Read-only mode** — Disable all writes with `GITLAB_READ_ONLY=true`
 - **TLS by default** — All GitLab API calls use HTTPS (with opt-in skip for self-signed certs)
 - **No data persistence** — The server is stateless; no data is stored between requests
+
+## Frequently asked questions
+
+### What does GitLab MCP Server do?
+
+GitLab MCP Server is a single static binary that sits between an AI client and a GitLab instance. It receives MCP tool calls, translates them into authenticated GitLab REST API v4 or GraphQL requests, executes them, and returns a dual-format response: structured JSON for the AI to reason about and formatted Markdown for the user. The server adds no GitLab features of its own — it exposes existing GitLab operations as MCP tools through the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+### What is the difference between stdio and HTTP transport modes?
+
+Stdio mode is the default for single-user setups: the AI client spawns the server as a child process and communicates over stdin/stdout using JSON-RPC, with the token supplied as an environment variable that never leaves the local machine. HTTP mode serves multiple users from one process, isolating each user's session by token and URL in an LRU pool with configurable session limits and timeouts. Both modes expose the same tools and call the same GitLab APIs; they differ only in how the AI client connects.
+
+### What is the canonical action catalog?
+
+The canonical action catalog is the single internal definition of every ordinary GitLab operation. All three visible tool surfaces — meta-tools, individual tools, and the dynamic find/execute tools — are projections of this catalog, so they share identical schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, and Markdown formatting. Catalog entries are tier-aware: each action is tagged with the lowest GitLab edition (`free`, `premium`, or `ultimate`) that exposes it, and premium or ultimate-only actions are pruned when the resolved tier is lower.
+
+### How does GitLab MCP Server keep my GitLab token secure?
+
+GitLab MCP Server never stores tokens server-side. In stdio mode the token exists only in the process environment and never leaves the local machine. In HTTP mode each user's session is isolated in the server pool by token and URL. All GitLab API calls use HTTPS by default, with opt-in skipping for self-signed certificates, and the server is stateless — no data is persisted between requests. Read-only mode (`GITLAB_READ_ONLY=true`) disables every mutating operation.

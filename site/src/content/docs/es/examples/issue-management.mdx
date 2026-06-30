@@ -1,6 +1,6 @@
 ---
 title: Ejemplos de gestión de issues
-description: Ejemplos de triaje de issues, seguimiento y gestión de proyectos con GitLab MCP Server
+description: "Ejemplos de gestión de issues con GitLab MCP Server — triar, asignar y etiquetar, vincular issues, seguir milestones, discutir y buscar."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Ejemplos paso a paso para flujos de gestión de issues y triaje de proyectos. Cada ejemplo muestra el prompt en lenguaje natural y las acciones de meta-tools que el servidor ejecuta.
+Estos flujos paso a paso cubren la gestión de issues de principio a fin: triar issues abiertos, asignarlos y etiquetarlos, vincular issues relacionados y bloqueantes, seguir el progreso de los milestones, mantener discusiones y buscar entre proyectos. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que puedas reutilizar la llamada directamente.
 
 ## Triaje de issues
+
+El bucle de triaje lleva un issue desde su entrada hasta su resolución: ver los issues abiertos, asignarlos y etiquetarlos, vincular los relacionados, seguirlos en un milestone y cerrarlos o mantener la discusión. El diagrama muestra ese ciclo y dónde vuelve a empezar.
 
 ```mermaid
 flowchart LR
@@ -87,9 +89,13 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## Análisis de issues con IA
 
+No existe una herramienta de "análisis con IA" dedicada. El análisis asistido por IA ocurre cuando el asistente lee los issues con `gitlab_issue → action: list` o `action: get`, razona sobre su contenido y luego actúa sobre el resultado — asignando, etiquetando, vinculando o comentando con las acciones siguientes. Por ejemplo, _"Encuentra los bugs abiertos en backend, agrúpalos por causa raíz probable y etiqueta los duplicados"_ encadena una acción de lectura con las acciones de triaje de esta guía, todo en una misma conversación.
+
 ---
 
 ## Vinculación de issues
+
+Modela las relaciones entre issues para que las dependencias sean explícitas. Marca issues como relacionados, registra relaciones de bloqueo y revisa todos los vínculos asociados a un issue.
 
 ### Crear issues relacionados
 
@@ -123,6 +129,8 @@ Devuelve: issues vinculados con tipos de relación (relates_to, blocks, is_block
 
 ## Etiquetas y milestones
 
+Organiza y mide el trabajo con etiquetas y milestones. Crea etiquetas con ámbito para categorizar issues y consulta el progreso de un milestone para ver cuánto le falta a un sprint para completarse.
+
 ### Organizar con etiquetas
 
 **Prompt**: "Crea una etiqueta con ámbito 'priority::critical' con color rojo en el proyecto backend"
@@ -145,6 +153,8 @@ Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de
 ---
 
 ## Discusiones de issues
+
+Mantén la conversación en el propio issue. Añade un comentario rápido, abre una discusión en hilo para un tema más profundo o reacciona con emojis para reconocer las novedades sin añadir ruido.
 
 ### Añadir un comentario
 
@@ -176,6 +186,8 @@ gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
 ---
 
 ## Búsqueda entre proyectos
+
+Encuentra issues más allá de un solo proyecto. Busca globalmente por palabra clave en todos los proyectos a los que tienes acceso, o limita la búsqueda a un grupo para localizar issues por etiqueta.
 
 ### Buscar issues por palabra clave
 

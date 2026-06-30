@@ -30,12 +30,12 @@ For each code change, identify which documentation files are affected:
 |-------------|----------------------|
 | New exported type/function | Package docs, possibly tools/resources reference |
 | Modified function signature | Package docs, tools reference, examples |
-| New MCP tool | `docs/tools/README.md`, package docs |
-| New MCP resource | `docs/resources-reference.md`, package docs |
-| New MCP prompt | `docs/prompts-reference.md`, package docs |
-| Configuration change | `docs/configuration.md` |
+| New MCP tool | `docs/reference/tools/README.md`, package docs |
+| New MCP resource | `docs/reference/resources.md`, package docs |
+| New MCP prompt | `docs/reference/prompts.md`, package docs |
+| Configuration change | `docs/reference/configuration.md` |
 | New package | `docs/README.md` index, new package doc |
-| Architecture change | `docs/architecture.md`, diagrams |
+| Architecture change | `docs/concepts/architecture.md`, diagrams |
 | Build/deploy change | `docs/development/development.md`, `docs/deployment.md` |
 | Removed API | All referencing documents |
 
@@ -127,7 +127,7 @@ After completing updates, provide a summary:
 ### Documents Updated
 | Document | Sections Changed | Change Type |
 |----------|-----------------|-------------|
-| `docs/tools/README.md` | Added `gitlab_new_tool` section | New API |
+| `docs/reference/tools/README.md` | Added `gitlab_new_tool` section | New API |
 | `docs/packages/tools.md` | Updated exported functions table | Modified API |
 
 ### Parity Status

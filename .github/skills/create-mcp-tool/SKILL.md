@@ -316,15 +316,15 @@ Test categories (all required):
 ## Step 7: Update Documentation
 
 1. Add or update `docs/tools/{domain}.md`
-2. Update `docs/tools/README.md` only when the domain index changes
-3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/testing/testing.md` with new test counts and coverage values
+2. Update `docs/reference/tools/README.md` only when the domain index changes
+3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing/testing.md` with new test counts and coverage values
 
 ## Step 8: Verify
 
 ```bash
 go test ./internal/tools/{domain}/ -count=1 -v
 go run ./cmd/gen_testing_docs/ --check
-npx markdownlint-cli2 docs/testing/testing.md
+npx markdownlint-cli2 docs/development/testing/testing.md
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 ```
 

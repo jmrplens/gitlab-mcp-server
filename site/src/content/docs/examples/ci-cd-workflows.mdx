@@ -1,6 +1,6 @@
 ---
 title: CI/CD Workflow Examples
-description: Practical CI/CD pipeline management examples using GitLab MCP Server
+description: "Step-by-step CI/CD examples with GitLab MCP Server: diagnose failed pipelines, manage variables, schedule builds, control environments, read DORA metrics."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -23,9 +23,11 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 	/>
 </CardGrid>
 
-Step-by-step examples for common CI/CD workflows. Each example shows the natural language prompt and the meta-tool actions the server performs.
+These step-by-step CI/CD workflows show how to diagnose pipeline failures, manage CI/CD variables, schedule builds, control environments, validate config, and read DORA metrics — all in natural language. Each example pairs the prompt you type with the exact meta-tool action the server runs, so you can see precisely what happens behind the scenes and reuse the call directly.
 
-## Monitor pipeline health
+## Diagnose a failing pipeline
+
+When a pipeline fails, this workflow takes you from the list of failed pipelines down to the specific job log that explains the failure — without leaving your assistant. List failed pipelines, drill into the failing jobs, then read the job log to find the root cause.
 
 ```mermaid
 sequenceDiagram
@@ -86,6 +88,8 @@ Returns: full job log output. Useful for diagnosing test failures without openin
 
 ## Manage CI/CD variables
 
+Configure the environment your pipelines run in by listing, creating, and scoping CI/CD variables. Use this to inspect what is already set, add secrets like deploy tokens with masking and protection, or restrict a variable to a single environment.
+
 ### List project variables
 
 **Prompt**: "What CI/CD variables are configured in the backend project?"
@@ -118,6 +122,8 @@ gitlab_ci_variable → action: project_update, project_id: "my-group/backend",
 
 ## Pipeline schedules
 
+Automate recurring pipelines with cron-based schedules — for example a nightly build — and review which schedules already exist and when they run next.
+
 ### Create a nightly build
 
 **Prompt**: "Create a pipeline schedule that runs every night at 2 AM UTC on the main branch"
@@ -140,6 +146,8 @@ Returns: schedule descriptions, cron expressions, next run times, and owner info
 ---
 
 ## Environment management
+
+Track and control where your code is deployed. List environments to see their state and URLs, review deployment history for production, and stop ephemeral review environments when they are no longer needed.
 
 ### List environments
 
@@ -171,6 +179,8 @@ gitlab_environment → action: stop, project_id: "my-group/backend", environment
 
 ## Validate CI configuration
 
+Catch `.gitlab-ci.yml` mistakes before they break a pipeline by linting the config. The server returns the validation status alongside the fully merged YAML, so you can confirm that includes and templates resolve as expected.
+
 ### Lint CI config
 
 **Prompt**: "Validate the .gitlab-ci.yml in my-group/backend for syntax errors"
@@ -184,6 +194,8 @@ Returns: validation status, merged YAML, warnings, and error details.
 ---
 
 ## DORA metrics
+
+Measure delivery performance with the four DORA metrics — deployment frequency, lead time for changes, time to restore service, and change failure rate — at either project or group scope. DORA metrics require a GitLab Premium or Ultimate license.
 
 ### Project performance
 
@@ -209,7 +221,7 @@ Returns: aggregated metrics for the entire group, useful for engineering leaders
 
 ## Dynamic-first CI/CD calls
 
-The default dynamic surface discovers exact CI/CD actions before execution:
+In the default dynamic surface, the assistant discovers the exact CI/CD action and its schema first, then executes it — so the prompts above resolve to canonical `domain.action` IDs rather than named meta-tools. The two-step pattern is find, then execute:
 
 ```text
 gitlab_find_action → query: "latest pipeline status for project"

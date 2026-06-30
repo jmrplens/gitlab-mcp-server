@@ -61,7 +61,7 @@ gitlab-mcp-server/
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
-│   └── gen_testing_docs/        # Generates docs/testing/testing.md
+│   └── gen_testing_docs/        # Generates docs/development/testing/testing.md
 ├── internal/
 │   ├── autoupdate/              # Self-update: background startup checks, rename trick, restart activation
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
@@ -163,10 +163,10 @@ gitlab-mcp-server/
 7. For list formatters: add `toolutil.HintPreserveLinks` as the first hint in `WriteHints()` to instruct the LLM to preserve clickable links
 8. Add clickable `[text](url)` links in Markdown table columns where applicable (MRs, issues, pipelines, etc.)
 9. Meta-tools automatically get `next_steps` in JSON via `enrichWithHints()` — no extra work needed
-10. Update `docs/tools/{domain}.md` and `docs/tools/README.md`
-11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
+10. Update `docs/tools/{domain}.md` and `docs/reference/tools/README.md`
+11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
-See `docs/output-format.md` for the complete response format specification.
+See `docs/reference/output-format.md` for the complete response format specification.
 
 ### Tool naming convention
 
@@ -182,7 +182,7 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 - `WrapErrWithStatusHint(op, err, code, hint)` — combines `IsHTTPStatus` check + `WrapErrWithHint` in a single call. Use when the hint applies only to a specific HTTP status code; returns `WrapErrWithMessage` for all other codes.
 - `NotFoundResult(resource, identifier, hints...)` — for get handlers when `IsHTTPStatus(err, 404)`. Returns an informational `CallToolResult` with `IsError: true` and domain-specific hints instead of a Go error. Logged at INFO level. Applied to 27 get handlers across 21 domains. Defined in `internal/toolutil/not_found.go`.
 
-Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/error-handling.md).
+Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
 ### Test infrastructure
 
@@ -247,8 +247,8 @@ go test ./internal/tools/branches/ -count=1    # tests on changed package
 golangci-lint run --build-tags e2e ./internal/tools/branches/ # lint changed package
 
 # Markdown files — run on specific changed files
-npx markdownlint-cli2 docs/auto-update.md README.md  # lint specific .md files
-npx markdownlint-cli2 --fix docs/auto-update.md      # auto-fix specific .md files
+npx markdownlint-cli2 docs/guides/auto-update.md README.md  # lint specific .md files
+npx markdownlint-cli2 --fix docs/guides/auto-update.md      # auto-fix specific .md files
 
 # README.md/docs tables — normalize pipe tables, or verify with --check
 go run ./cmd/format_md_tables/
@@ -367,7 +367,7 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 
 | Agent           | File                    | When to Use                                                                                                                                                                                              |
 | --------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing `docs/testing/testing.md` with `cmd/gen_testing_docs` at phase completion. Uses Context7 for up-to-date Go testing docs. |
+| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing `docs/development/testing/testing.md` with `cmd/gen_testing_docs` at phase completion. Uses Context7 for up-to-date Go testing docs. |
 
 #### Planning & Architecture
 
@@ -406,7 +406,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 | Skill                          | Directory                               | Purpose                                                                                                |
 | ------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | **Create Implementation Plan** | `create-implementation-plan/`           | Structured plan with phased tasks (TASK-001, etc.). Saves to `plan/`.                                  |
-| **Create ADR**                 | `create-architectural-decision-record/` | ADR with standardized format (POS-001, NEG-001, etc.). Saves to `docs/adr/`.                           |
+| **Create ADR**                 | `create-architectural-decision-record/` | ADR with standardized format (POS-001, NEG-001, etc.). Saves to `docs/development/adr`.                           |
 | **Create Specification**       | `create-specification/`                 | Formal spec with requirements (REQ-001), acceptance criteria (Given-When-Then). Saves to `docs/spec/`. |
 
 #### Quality & Testing Skills
@@ -455,7 +455,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 ### Increasing test coverage
 
-1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/testing/testing.md` with `go run ./cmd/gen_testing_docs/` at the end of the test phase
+1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/development/testing/testing.md` with `go run ./cmd/gen_testing_docs/` at the end of the test phase
 2. Or use `increase-test-coverage` skill for the same workflow invoked from any agent
 
 ### Reviewing code quality
@@ -482,7 +482,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 ## Architecture Decisions
 
-ADRs document key decisions in `docs/adr/`:
+ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
@@ -517,7 +517,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds find/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
-Find combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should use `gitlab_find_action` to retrieve exact schemas, then execute the canonical action ID returned by find. See `docs/dynamic-tools.md` and ADR-0011.
+Find combines canonical `domain.action` IDs, domain/action names, aliases, natural-language stopword filtering (removing frequent non-informative words), synonyms, fuzzy matching, and segmented matching for multi-intent prompts. Models should use `gitlab_find_action` to retrieve exact schemas, then execute the canonical action ID returned by find. See `docs/concepts/dynamic-tools.md` and ADR-0011.
 
 ### Enterprise tool gating
 

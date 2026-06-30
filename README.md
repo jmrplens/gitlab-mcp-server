@@ -135,11 +135,11 @@ Docker variant — replace `"command"`/`"args"` with:
 "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"]
 ```
 
-For a shared, long-running HTTP deployment instead of per-user stdio, see [HTTP Server Mode](docs/http-server-mode.md).
+For a shared, long-running HTTP deployment instead of per-user stdio, see [HTTP Server Mode](docs/guides/http-server-mode.md).
 
 </details>
 
-**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/examples/usage-examples.md).
+**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
 ---
 
@@ -173,7 +173,7 @@ The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The
 | **Meta-tools** (`meta`)       | 32 base / 48 Premium / 49 GitLab.com Enterprise   | Domain-grouped dispatchers with an `action` parameter.           |
 | **Individual** (`individual`) | ~862 Free/CE · ~999 Premium · 1062–1068 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
 
-Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/dynamic-tools.md) and [Meta-Tools Reference](docs/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
+Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
 
 ### Token Footprint
 
@@ -224,7 +224,7 @@ Current published result: **Docker CE dynamic 20260627-232303**.
 | OpenAI    | `gpt-5.4-nano`              | Review        |         99.3% | 84.6% (11/13) | 98.0% final across 555 ops  |
 | Qwen      | `qwen3.6-flash`             | OK            |        100.0% |  100.0% (5/5) | 100.0% final across 555 ops |
 
-The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2265 tool calls over 2265 model requests, with 99.5% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2265 tool calls over 2265 model requests, with 99.5% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <details>
@@ -240,7 +240,7 @@ Current published result: **Docker Enterprise meta 20260527**.
 | OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% | 100.0% (4/4) | 100.0% final across 84 ops |
 | Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
 
-The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 345 tool calls over 350 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 345 tool calls over 350 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
@@ -253,7 +253,7 @@ Current published result: **Docker Enterprise dynamic 20260628-015421**.
 | OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
 | Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
 
-The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 </details>
@@ -262,25 +262,25 @@ The published model-evaluation set covers 124 task attempts and 808 expected MCP
 
 Full documentation is at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map for the source-of-truth reference on a specific area:
 
-| Document                                             | Description                                                                            |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)           | Download, setup wizard, per-client configuration                                       |
-| [IDE Configuration](docs/ide-configuration.md)       | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
-| [Configuration](docs/configuration.md)               | Environment variables, transport modes, TLS                                            |
-| [Environment Variables](docs/env-reference.md)       | Exhaustive environment variable table with defaults and examples                       |
-| [CLI Reference](docs/cli-reference.md)               | All command-line flags, exit codes, and runtime examples                               |
-| [HTTP Server Mode](docs/http-server-mode.md)         | Shared HTTP deployments, authentication, server pool isolation                         |
-| [Tools Reference](docs/tools/README.md)              | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
-| [Meta-Tools](docs/meta-tools.md)                     | 32/48/49 domain meta-tools with action dispatching                                     |
-| [Dynamic Toolset](docs/dynamic-tools.md)             | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
-| [Resources](docs/resources-reference.md)             | All 45 resources with URI templates                                                    |
-| [Prompts](docs/prompts-reference.md)                 | All 37 prompts with arguments and output format                                        |
-| [Auto-Update](docs/auto-update.md)                   | Self-update mechanism, modes, and release format                                       |
-| [Testing](docs/testing/README.md)                    | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
-| [Security](docs/security.md)                         | Security model, token scopes, input validation                                         |
-| [Architecture](docs/architecture.md)                 | System architecture, component design, data flow                                       |
-| [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing                                                 |
-| [Troubleshooting](docs/troubleshooting.md)           | Common startup, token, TLS, transport, and tool-discovery issues                       |
+| Document                                              | Description                                                                            |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
+| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
+| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
+| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
+| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                               |
+| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                         |
+| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
+| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/48/49 domain meta-tools with action dispatching                                     |
+| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
+| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                    |
+| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                        |
+| [Auto-Update](docs/guides/auto-update.md)             | Self-update mechanism, modes, and release format                                       |
+| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
+| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                         |
+| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                       |
+| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                 |
+| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                       |
 
 ## FAQ
 

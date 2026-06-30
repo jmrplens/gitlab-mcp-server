@@ -52,6 +52,8 @@ var topDomains = 20
 func main() {
 	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
 	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
+	siteStatsPath := flag.String("site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
+	checkOnly := flag.Bool("check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
 	flag.Parse()
 	if topDomains < 0 {
 		cmdutil.Fatalf("-top-domains must be >= 0")
@@ -71,6 +73,13 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
 		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
+	}
+
+	if *siteStatsPath != "" {
+		if statsErr := writeOrCheckSiteStats(*siteStatsPath, generateSiteStats(client, gitLabComClient), *checkOnly); statsErr != nil {
+			cmdutil.Fatalf("%v", statsErr)
+		}
+		return
 	}
 
 	individualTools := listServerTools(client, false, false)

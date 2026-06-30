@@ -13,7 +13,7 @@ body:
             and this feature has not been requested.
           required: true
         - label: If this proposes a new MCP tool, I have checked the [tool
-            catalog](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/tools/README.md)
+            catalog](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md)
             and confirmed it does not exist.
           required: true
 

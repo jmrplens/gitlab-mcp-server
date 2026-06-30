@@ -27,7 +27,7 @@ gitlab-mcp-server/
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata)
 │   ├── audit_catalog_first/ # ActionSpec catalog coverage inventory
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
-│   ├── audit_doc_coverage/      # docs/tools/*.md vs catalog coverage gaps (DOC-002)
+│   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
 │   ├── audit_edition_tier/      # Doc-grounded Free/Premium/Ultimate tier audit
 │   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary
@@ -115,7 +115,7 @@ graph TD
 7. **Capabilities** provide completions, progress, and elicitation
 8. **Server** runs over stdio (default) or HTTP (`--http`)
 
-See [Architecture Overview](../architecture.md) for detailed diagrams and component descriptions.
+See [Architecture Overview](../concepts/architecture.md) for detailed diagrams and component descriptions.
 
 ## Version Management
 
@@ -271,7 +271,7 @@ make test-e2e-docker
 
 This single command handles the full lifecycle: start GitLab CE container, wait for readiness, create test user/token, register CI runner, run tests, and tear down.
 
-For manual step-by-step execution, see [E2E Docker Mode](../testing/testing.md#docker-mode) in the testing guide.
+For manual step-by-step execution, see [E2E Docker Mode](testing/testing.md#docker-mode) in the testing guide.
 
 #### E2E Prerequisites
 
@@ -292,7 +292,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 
 ## MCP Inspector
 
-The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) provides a web UI for interactively testing MCP tools, resources, and prompts against a running server.
+The [MCP Inspector](https://modelcontextprotocol.io/docs/reference/tools/inspector) provides a web UI for interactively testing MCP tools, resources, and prompts against a running server.
 
 ```bash
 make inspector       # Compile fresh binary to /tmp, launch Inspector via stdio
@@ -360,7 +360,7 @@ return Output{}, toolutil.WrapErrWithStatusHint("labelCreate", err, 409,
 - `ContainsAny(err, substrs...)` — checks if `err.Error()` contains any of the given substrings
 - `ExtractGitLabMessage(err)` — extracts the specific message from `gl.ErrorResponse.Message`
 
-See [Error Handling](../error-handling.md) for the full architecture.
+See [Error Handling](../concepts/error-handling.md) for the full architecture.
 
 ## Adding a New Tool
 
@@ -372,7 +372,7 @@ With the catalog-first modular sub-package architecture:
 4. **Create ActionSpecs**: define `ActionSpecs(client, ...)` or update the owning aggregation builder with typed `ActionRoute` constructors and individual projection metadata
 5. **Create markdown formatters**: register output formatters from the sub-package with `toolutil.RegisterMarkdown` or `toolutil.RegisterMarkdownResult`
 6. **Regenerate catalog manifest**: run `make gen-action-catalog-manifest` when the source-defined builder set changes, then run `make check-action-catalog-manifest`
-7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
+7. **Update documentation**: `docs/reference/tools/{domain}.md` and `docs/reference/tools/README.md`
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
 When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_find_action`, `gitlab_execute_action`, the `gitlab://tools` manifest, generated LLM files, and audit commands. Do not create package-local `RegisterTools` functions or dynamic-only copies of ordinary GitLab actions.

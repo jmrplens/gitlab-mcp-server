@@ -1,10 +1,53 @@
 ---
 title: Auto-update
-description: Configure GitLab MCP Server automatic binary updates from GitHub releases across stdio and HTTP deployments.
+description: Configure GitLab MCP Server automatic binary updates from GitHub releases across stdio and HTTP deployments, with check-only and rollback options.
+head:
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I disable automatic updates in GitLab MCP Server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Set AUTO_UPDATE=false in stdio mode or pass --auto-update=false in HTTP mode to skip all update checks. To be notified about new releases without installing them, use AUTO_UPDATE=check (or --auto-update=check), which detects updates and logs their availability but never replaces the binary. Accepted aliases are 1/yes for true and 0/no for false, and the value is case-insensitive."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does updating GitLab MCP Server interrupt the running server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. GitLab MCP Server applies updates with a rename trick: the running binary is renamed to .old and the new binary is written to the original path while the current process keeps serving MCP requests. The new version is only used after you restart the server. The startup check is non-blocking and non-fatal, so a network timeout or missing release is logged as a warning and never stops the server from starting."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does GitLab MCP Server auto-update use my GitLab token or instance?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Auto-update talks only to the GitHub Releases API and is completely independent of your GitLab configuration. The GITLAB_URL, GITLAB_TOKEN, and GITLAB_SKIP_TLS_VERIFY settings do not affect update checks or downloads. By default it pulls releases from jmrplens/gitlab-mcp-server, which you can override with AUTO_UPDATE_REPO=owner/repo."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I roll back GitLab MCP Server after a bad update?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The previous binary is preserved next to the current one as gitlab-mcp-server.old (or .exe.old on Windows). To roll back, stop the server and rename the .old file back to the original name. The leftover .old file is cleaned up automatically on the next successful startup, so a rollback is only possible until the next update runs."
+            }
+          }
+        ]
+      }
 ---
 
 :::note[Developer Documentation]
-For the complete technical reference, see [`docs/auto-update.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/auto-update.md) in the repository.
+For the complete technical reference, see [`docs/auto-update.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/auto-update.md) in the repository.
 :::
 
 GitLab MCP Server can automatically detect, download, and apply new releases from GitHub. Updates use a **rename trick** — the running binary is renamed to `.old` and the new binary is placed at the original path. The running MCP process keeps serving; restart it to use the new binary.
@@ -148,3 +191,21 @@ You can point auto-update at any GitHub repository that follows the expected rel
 :::caution
 Release asset names **must be exact filenames** (e.g., `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(Linux AMD64)` — the update library matches by exact name and will fail with decorated names.
 :::
+
+## Frequently asked questions
+
+### How do I disable automatic updates?
+
+Set `AUTO_UPDATE=false` in stdio mode or pass `--auto-update=false` in HTTP mode to skip all update checks. To be notified about new releases without installing them, use `AUTO_UPDATE=check` (or `--auto-update=check`), which detects updates and logs their availability but never replaces the binary. The accepted aliases are `1`/`yes` for `true` and `0`/`no` for `false`, and the value is case-insensitive.
+
+### Does updating interrupt the running server?
+
+No. GitLab MCP Server applies updates with a **rename trick**: the running binary is renamed to `.old` and the new binary is written to the original path while the current process keeps serving MCP requests. The new version is only used after you restart the server. The startup check is non-blocking and non-fatal, so a network timeout or missing release is logged as a warning and never stops the server from starting or accepting MCP requests.
+
+### Does auto-update use my GitLab token or instance?
+
+No. Auto-update talks only to the **GitHub Releases API** and is completely independent of your GitLab configuration. The `GITLAB_URL`, `GITLAB_TOKEN`, and `GITLAB_SKIP_TLS_VERIFY` settings do not affect update checks or downloads. By default it pulls releases from `jmrplens/gitlab-mcp-server`, which you can override with `AUTO_UPDATE_REPO=owner/repo` to track a custom fork.
+
+### How do I roll back after a bad update?
+
+The previous binary is preserved next to the current one as `gitlab-mcp-server.old` (or `.exe.old` on Windows). To roll back, stop the server and rename the `.old` file back to the original name. The leftover `.old` file is cleaned up automatically on the next successful startup, so a rollback is only possible until the next update runs.
