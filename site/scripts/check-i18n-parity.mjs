@@ -34,9 +34,13 @@ const orphanEs = esPages.filter((p) => !enSet.has(p)).sort();
 
 if (missingEs.length || orphanEs.length) {
 	console.error("i18n parity check FAILED:");
-	for (const p of missingEs) console.error(`  EN page missing ES translation: ${p}`);
-	for (const p of orphanEs) console.error(`  ES page with no EN original:    es/${p}`);
+	for (const p of missingEs)
+		console.error(`  EN page missing ES translation: ${p}`);
+	for (const p of orphanEs)
+		console.error(`  ES page with no EN original:    es/${p}`);
 	process.exit(1);
 }
 
-console.log(`i18n parity OK: ${enPages.length} EN pages each have an ES translation.`);
+console.log(
+	`i18n parity OK: ${enPages.length} EN pages each have an ES translation.`,
+);
