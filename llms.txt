@@ -16,7 +16,7 @@ Installing for an AI assistant (headless, no wizard):
 
 If you are an AI assistant setting this up for a user from just this repository URL, do NOT run the interactive `--setup` wizard (it needs a human). Instead write the MCP client configuration directly. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token with `api` scope in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `https://gitlab.com`).
 
-Canonical stdio configuration — works for Cursor, VS Code, Claude Desktop, GitHub Copilot, opencode, and any client that uses the `mcpServers` schema. Write it to that client's MCP config file (see the per-client paths below):
+The config schema differs by client: Cursor, Claude Desktop, and Claude Code use a `mcpServers` key; VS Code and GitHub Copilot use a `servers` key (each entry also sets `"type": "stdio"`). The `mcpServers` form with Docker:
 
 ```json
 {
@@ -24,7 +24,7 @@ Canonical stdio configuration — works for Cursor, VS Code, Claude Desktop, Git
     "gitlab": {
       "command": "docker",
       "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
-      "env": { "GITLAB_TOKEN": "<gitlab personal access token, api scope>" }
+      "env": { "GITLAB_TOKEN": "<GitLab personal access token, api scope>" }
     }
   }
 }
@@ -32,9 +32,9 @@ Canonical stdio configuration — works for Cursor, VS Code, Claude Desktop, Git
 
 Native binary instead of Docker: download the release asset for the user's OS and architecture from the Releases page, then use its path as `command` with no `args` and the same `env`.
 
-Claude Code (CLI) one-liners: `claude mcp add gitlab --env GITLAB_TOKEN=<token> --transport stdio -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false` (Docker), or `claude mcp add gitlab --env GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
+Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
 
-Per-client config file paths and the full client matrix (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth modes) are documented in docs/guides/ide-configuration.md.
+The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](docs/guides/ide-configuration.md).
 
 Setup wizard:
 
