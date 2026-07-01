@@ -23,6 +23,8 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 ---
 
+> 🤖 **Using an AI assistant?** Give it this repository URL and ask it to install the server for your client. Everything a model needs to do it headlessly — the declarative per-client config, `claude mcp add` one-liners, and defaults — is in [`llms.txt`](llms.txt) (no interactive wizard required).
+
 ## Install in 60 seconds
 
 Pick one. Each path ends with you typing a prompt to your assistant.
