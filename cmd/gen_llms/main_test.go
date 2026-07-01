@@ -173,6 +173,37 @@ func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
 	}
 }
 
+// TestValidateLLMSTxt_AcceptsPreambleCodeBlock verifies that a fenced code block
+// in the preamble (before the first H2) is accepted. The generated llms.txt uses
+// this for the headless AI-assistant install snippet (the mcpServers JSON), so a
+// stricter validator that rejected code fences would silently break that section.
+func TestValidateLLMSTxt_AcceptsPreambleCodeBlock(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example",
+		"",
+		"> Short project summary.",
+		"",
+		"Installing for an AI assistant (headless, no wizard):",
+		"",
+		"```json",
+		"{",
+		"  \"mcpServers\": {",
+		"    \"gitlab\": { \"command\": \"docker\" }",
+		"  }",
+		"}",
+		"```",
+		"",
+		"## Docs",
+		"",
+		"- [Guide](docs/guide.md): Short guide",
+		"",
+	}, "\n")
+
+	if err := validateLLMSTxt(content); err != nil {
+		t.Fatalf("validateLLMSTxt() rejected a preamble code block: %v", err)
+	}
+}
+
 // TestValidateLLMSTxt_RejectsNonLinkH2Content verifies llms.txt H2 sections must
 // contain file-list link entries rather than arbitrary prose.
 //
