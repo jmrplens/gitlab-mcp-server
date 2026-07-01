@@ -103,7 +103,7 @@ jobs:
             echo "sitemap fetch attempt ${attempt} failed; retrying in 10s…"
             sleep 10
           done
-          if [ -z "$idx" ]; then echo "Could not fetch sitemap after retries; aborting"; exit 1; fi
+          if [ -z "$idx" ]; then echo "::warning title=IndexNow::could not fetch sitemap after retries (non-fatal); skipping submission"; exit 0; fi
           # Collect sub-sitemap URLs, then each sitemap's <loc> entries. A while
           # loop over a here-string (not a pipe) keeps errors from being masked
           # under `set -o pipefail`; a transient sub-sitemap fetch can't abort all.
@@ -123,10 +123,12 @@ jobs:
             --arg keyLocation "$BASE/${INDEXNOW_KEY}.txt" \
             --argjson urlList "$url_json" \
             '{host:$host, key:$key, keyLocation:$keyLocation, urlList:$urlList}')
+          # `|| true` so a transport error (DNS/timeout) can't abort under set -e;
+          # curl writes 000 to the http_code on failure, handled by the case below.
           code=$(curl -sS -o /tmp/indexnow.out -w '%{http_code}' \
             -X POST "https://api.indexnow.org/IndexNow" \
             -H "Content-Type: application/json; charset=utf-8" \
-            --data "$payload")
+            --data "$payload" || true)
           echo "IndexNow responded HTTP $code"; cat /tmp/indexnow.out || true
           # IndexNow is a best-effort ping — never fail the deploy over it.
           # NOTE: host-level verification (host=$HOST) requires the key file at the
