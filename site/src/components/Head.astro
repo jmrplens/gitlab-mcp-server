@@ -13,6 +13,9 @@ const SITE = import.meta.env.SITE ?? "https://jmrplens.github.io";
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PERSON_ID = "https://jmrp.io/#person";
 const WEBSITE_ID = `${SITE}${BASE}/#website`;
+// Matches the SoftwareApplication @id in the site-wide @graph (astro.config.mjs),
+// which carries the Wikidata sameAs — so each page's TechArticle ties back to it.
+const SOFTWARE_ID = "https://github.com/jmrplens/gitlab-mcp-server#software";
 
 // Minimal typed view of the Starlight route data we consume.
 interface RouteData {
@@ -49,6 +52,7 @@ const techArticle = isHome
 			author: { "@id": PERSON_ID },
 			publisher: { "@id": PERSON_ID },
 			isPartOf: { "@id": WEBSITE_ID },
+			about: { "@id": SOFTWARE_ID },
 		};
 
 // BreadcrumbList for every non-home page, with locale-aware labels.
