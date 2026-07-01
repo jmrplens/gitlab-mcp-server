@@ -128,4 +128,14 @@ jobs:
             -H "Content-Type: application/json; charset=utf-8" \
             --data "$payload")
           echo "IndexNow responded HTTP $code"; cat /tmp/indexnow.out || true
-          case "$code" in 200|202) echo "OK" ;; *) echo "IndexNow submission failed"; exit 1 ;; esac
+          # IndexNow is a best-effort ping — never fail the deploy over it.
+          # NOTE: host-level verification (host=$HOST) requires the key file at the
+          # site host ROOT (https://$HOST/${INDEXNOW_KEY}.txt). A GitHub Pages
+          # PROJECT site can only publish the key under its project subpath, so
+          # Bing returns 403 "UserForbiddedToAccessSite". To make it succeed, host
+          # the key at the ${HOST} root (e.g. add ${INDEXNOW_KEY}.txt to the
+          # ${GITHUB_REPOSITORY_OWNER}.github.io repository).
+          case "$code" in
+            200|202) echo "IndexNow: submitted OK" ;;
+            *) echo "::warning title=IndexNow::submission returned HTTP $code (non-fatal); see the note in pages.yml about hosting the key at the domain root" ;;
+          esac
