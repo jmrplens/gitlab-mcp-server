@@ -101,7 +101,7 @@ const jsonLd = JSON.stringify({
 			name: "José Manuel Requena Plens",
 			alternateName: "jmrplens",
 			url: authorUrl,
-			image: socialImage,
+			image: "https://github.com/jmrplens.png",
 			knowsAbout: [
 				"Model Context Protocol",
 				"GitLab",

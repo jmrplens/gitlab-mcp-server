@@ -50,7 +50,7 @@ head:
 For the complete technical reference, see [`docs/security.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md) in the repository.
 :::
 
-**GitLab MCP Server never persists your GitLab token.** In stdio mode it reads the token from an environment variable at startup, holds it only in memory for the life of the process, and sends it only to your GitLab instance over TLS — never to any third party. Read-only mode and safe mode (dry-run previews) add optional guardrails, and every release ships with checksums and signatures for integrity verification. This page details that security model, credential handling, and best practices for safe deployment.
+**GitLab MCP Server never persists your GitLab token.** In stdio mode it reads the token from an environment variable at startup, holds it only in memory for the life of the process, and sends it only to your GitLab instance — over TLS when `GITLAB_URL` points at an `https://` endpoint (the default) — never to any third party. Read-only mode and safe mode (dry-run previews) add optional guardrails, and every release ships with checksums and signatures for integrity verification. This page details that security model, credential handling, and best practices for safe deployment.
 
 ## Security model overview
 
