@@ -123,5 +123,5 @@ jobs:
           # from the ${GITHUB_REPOSITORY_OWNER}.github.io user-site repository.
           case "$code" in
             200|202) echo "IndexNow: submitted OK" ;;
-            *) echo "::warning title=IndexNow::submission returned HTTP $code (non-fatal); ensure ${INDEXNOW_KEY}.txt is served at https://${HOST}/" ;;
+            *) echo "::warning title=IndexNow::submission returned HTTP $code (non-fatal); ensure the IndexNow key file is served at the domain root https://${HOST}/" ;;
           esac
