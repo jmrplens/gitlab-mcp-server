@@ -6,6 +6,8 @@
 
 User-agent: *
 Allow: /
+# Explicit opt-in for AI training, search indexing, and AI retrieval/citation.
+Content-Signal: ai-train=yes, search=yes, ai-retrieval=yes
 
 # AI / generative-engine crawlers (explicitly welcomed for GEO).
 User-agent: GPTBot

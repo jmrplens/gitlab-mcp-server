@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "postbuild": "node -e \"const fs=require('fs'),path=require('path');function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else if(e.isFile()&&e.name.endsWith('.html')){const c=fs.readFileSync(p,'utf8');const t=c.split('\\n').map(l=>l.replace(/[ \\t\\r]+$/,'')).join('\\n');if(t!==c)fs.writeFileSync(p,t);}}}walk('dist');\"",
+    "postbuild": "node -e \"const fs=require('fs'),path=require('path');function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else if(e.isFile()&&e.name.endsWith('.html')){const c=fs.readFileSync(p,'utf8');const t=c.split('\\n').map(l=>l.replace(/[ \\t\\r]+$/,'')).join('\\n');if(t!==c)fs.writeFileSync(p,t);}}}walk('dist');\" && node scripts/add-sitemap-lastmod.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "eslint": "eslint .",

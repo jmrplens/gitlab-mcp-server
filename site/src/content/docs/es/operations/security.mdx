@@ -352,3 +352,9 @@ El **modo solo lectura** (`GITLAB_READ_ONLY=true`) no registra ninguna herramien
 ### ¿Cómo verifico la integridad de un binario descargado?
 
 Cada GitHub Release incluye `checksums.txt` (hashes SHA-256) y `checksums.txt.sigstore.json` (un bundle de firma keyless Cosign/Sigstore con GitHub OIDC). La auto-actualización verifica los binarios contra `checksums.txt` automáticamente. Para instalaciones manuales, ejecuta `cosign verify-blob` con el bundle, anclando la identidad del certificado a este repositorio y el emisor OIDC a GitHub, y luego valida el hash del binario contra el checksum firmado. Si la verificación falla, **no ejecutes el binario**.
+
+## Referencias externas
+
+- [Scopes de tokens de acceso personal de GitLab](https://docs.gitlab.com/user/profile/personal_access_tokens/) — elegir scopes de mínimo privilegio
+- [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728) — el estándar detrás del modo OAuth por HTTP
+- [Documentación de Sigstore / Cosign](https://docs.sigstore.dev/) — verificación de firmas keyless de los binarios de release

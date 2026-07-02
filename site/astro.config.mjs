@@ -92,6 +92,27 @@ const socialImage = {
 	height: 630,
 };
 
+// Freshness signals for the SoftwareApplication node. `datePublished` is the
+// first public release (v1.0.0, 2026-04-21); `dateModified` tracks the current
+// build so AI engines reading the graph see an accurate last-changed date.
+const datePublished = "2026-04-21";
+const dateModified = new Date().toISOString().slice(0, 10);
+
+// Human-readable capability list and requirements — single-sourced from stats so
+// they never drift from the rest of the site. These feed AI "what can it do?" and
+// "what do I need?" queries directly from structured data.
+const featureList = [
+	`Exposes over 1,000 GitLab REST v4 and GraphQL operations as MCP tools (${stats.tools.free} on Community Edition, up to ${stats.tools.gitlab_com} on GitLab.com)`,
+	`Three tool surfaces: a 2-tool dynamic low-token mode, ${stats.meta.base} domain meta-tools, or one tool per operation`,
+	`${stats.resources} MCP resources and ${stats.prompts} prompt templates`,
+	"stdio and multi-user HTTP transport with per-token isolation",
+	"GitLab CE and EE support, including self-hosted instances",
+	"Single cross-platform Go binary (Linux, macOS, Windows; amd64 and arm64)",
+	"Read-only and safe-preview modes, plus built-in auto-update",
+];
+const softwareRequirements =
+	"A GitLab instance (GitLab.com or self-hosted, Community or Enterprise Edition) with REST v4/GraphQL API access and a personal access token.";
+
 const jsonLd = JSON.stringify({
 	"@context": "https://schema.org",
 	"@graph": [
@@ -100,6 +121,7 @@ const jsonLd = JSON.stringify({
 			"@id": authorId,
 			name: "José Manuel Requena Plens",
 			alternateName: "jmrplens",
+			jobTitle: ["R&D Engineer", "Firmware & Software Engineer"],
 			url: authorUrl,
 			image: "https://github.com/jmrplens.png",
 			knowsAbout: [
@@ -135,6 +157,7 @@ const jsonLd = JSON.stringify({
 			name: "GitLab MCP Server",
 			softwareVersion: stats.version,
 			applicationCategory: "DeveloperApplication",
+			applicationSubCategory: "Version Control",
 			operatingSystem: "Windows, Linux, macOS",
 			programmingLanguage: "Go",
 			url: repositoryUrl,
@@ -144,6 +167,10 @@ const jsonLd = JSON.stringify({
 			screenshot: socialImage,
 			license: "https://opensource.org/licenses/MIT",
 			isAccessibleForFree: true,
+			datePublished,
+			dateModified,
+			softwareRequirements,
+			featureList,
 			keywords:
 				"Model Context Protocol, MCP, GitLab, AI assistants, developer tools, Go",
 			description:
@@ -205,6 +232,9 @@ export default defineConfig({
 				// Per-page structured data (TechArticle / BreadcrumbList / HowTo)
 				// and per-page Twitter card tags, layered on the default head.
 				Head: "./src/components/Head.astro",
+				// Adds a human-visible maintainer block below the default footer,
+				// corroborating the Person node in the site-wide @graph.
+				Footer: "./src/components/Footer.astro",
 			},
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
@@ -359,6 +389,14 @@ export default defineConfig({
 					attrs: {
 						name: "msvalidate.01",
 						content: "7574EB3B44624C239F14920DBC34EE25",
+					},
+				},
+				// Google Search Console site verification
+				{
+					tag: "meta",
+					attrs: {
+						name: "google-site-verification",
+						content: "4Hx_PJ1seU_BgKfWpo_FA7_Hkh7GeYVNrvnvzqCjF0Q",
 					},
 				},
 				// JSON-LD structured data

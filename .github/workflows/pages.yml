@@ -27,6 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history so add-sitemap-lastmod.mjs can read per-file commit dates.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
         with:
