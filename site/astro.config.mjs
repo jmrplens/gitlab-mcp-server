@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
@@ -93,10 +94,22 @@ const socialImage = {
 };
 
 // Freshness signals for the SoftwareApplication node. `datePublished` is the
-// first public release (v1.0.0, 2026-04-21); `dateModified` tracks the current
-// build so AI engines reading the graph see an accurate last-changed date.
+// first public release (v1.0.0, 2026-04-21) and is intentionally fixed. To avoid
+// stamping a false "modified today" on every rebuild, `dateModified` tracks the
+// last repository change (HEAD commit date), falling back to build time only when
+// git history is unavailable.
 const datePublished = "2026-04-21";
-const dateModified = new Date().toISOString().slice(0, 10);
+const dateModified = (() => {
+	try {
+		return execFileSync("git", ["log", "-1", "--format=%cI"], {
+			encoding: "utf8",
+		})
+			.trim()
+			.slice(0, 10);
+	} catch {
+		return new Date().toISOString().slice(0, 10);
+	}
+})();
 
 // Human-readable capability list and requirements — single-sourced from stats so
 // they never drift from the rest of the site. These feed AI "what can it do?" and

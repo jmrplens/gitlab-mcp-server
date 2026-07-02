@@ -30,14 +30,17 @@ const SITE = "https://jmrplens.github.io";
 const BASE = "/gitlab-mcp-server";
 const buildDate = new Date().toISOString().slice(0, 10);
 
-// Map a sitemap URL to its source content file, or null if none is found.
+// Map a sitemap URL to its source content file, or null if none is found or the
+// URL is not on this site's origin (so unrelated URLs are never stamped).
 function sourceFileFor(url) {
-	let rel;
+	let parsed;
 	try {
-		rel = new URL(url).pathname;
+		parsed = new URL(url);
 	} catch {
 		return null;
 	}
+	if (parsed.origin !== SITE) return null;
+	let rel = parsed.pathname;
 	if (rel.startsWith(BASE)) rel = rel.slice(BASE.length);
 	rel = rel.replace(/^\/+|\/+$/g, ""); // trim slashes → "tools/overview" | "es" | ""
 	const base = rel === "" ? "index" : rel === "es" ? "es/index" : rel;
@@ -70,14 +73,18 @@ function lastmodFor(url) {
 	);
 }
 
-// Add <lastmod> after each <loc> that lacks one.
+// Add <lastmod> to each <url> that lacks one. Matching the whole <url>…</url>
+// block (not just <loc>) keeps this idempotent: if an entry already carries a
+// <lastmod>, it is left untouched rather than getting a duplicate.
 function stampSitemap(file) {
 	const xml = readFileSync(file, "utf8");
 	let changed = 0;
-	const out = xml.replace(/<url>\s*<loc>([^<]+)<\/loc>/g, (match, loc) => {
-		if (match.includes("<lastmod>")) return match;
-		changed++;
-		return `<url><loc>${loc}</loc><lastmod>${lastmodFor(loc)}</lastmod>`;
+	const out = xml.replace(/<url>[\s\S]*?<\/url>/g, (block) => {
+		if (block.includes("<lastmod>")) return block;
+		return block.replace(/<loc>([^<]+)<\/loc>/, (locMatch, loc) => {
+			changed++;
+			return `<loc>${loc}</loc><lastmod>${lastmodFor(loc)}</lastmod>`;
+		});
 	});
 	if (changed > 0) {
 		writeFileSync(file, out);
@@ -92,8 +99,9 @@ if (!existsSync(distDir)) {
 	process.exit(0);
 }
 
+// Match sitemap.xml and sitemap-<n>.xml, but never the sitemap index.
 const sitemaps = readdirSync(distDir).filter(
-	(f) => /^sitemap-\d+\.xml$/.test(f), // child sitemaps only, not sitemap-index.xml
+	(f) => /^sitemap(-\d+)?\.xml$/.test(f) && f !== "sitemap-index.xml",
 );
 if (sitemaps.length === 0) {
 	console.warn("[sitemap-lastmod] no child sitemap found — skipping");
