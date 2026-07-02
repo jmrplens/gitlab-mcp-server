@@ -51,18 +51,37 @@ function sourceFileFor(url) {
 	return null;
 }
 
-// Git commit date (YYYY-MM-DD) for a file, or null if unavailable.
-function gitDate(absPath) {
+// Absolute-path → last commit date (YYYY-MM-DD), built in a single `git log`
+// pass over the docs tree instead of one subprocess per URL. Output is
+// newest-first, so the first date seen for a file is its last-modified date.
+function buildGitDateMap() {
+	const map = new Map();
 	try {
 		const out = execFileSync(
 			"git",
-			["log", "-1", "--format=%cI", "--", absPath],
-			{ cwd: repoRoot, encoding: "utf8" },
-		).trim();
-		return out ? out.slice(0, 10) : null;
+			["log", "--format=%cI", "--name-only", "--", "site/src/content/docs"],
+			{ cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+		);
+		let current = null;
+		for (const line of out.split("\n")) {
+			if (line === "") continue;
+			if (/^\d{4}-\d{2}-\d{2}T/.test(line)) {
+				current = line.slice(0, 10);
+			} else {
+				const abs = join(repoRoot, line);
+				if (!map.has(abs)) map.set(abs, current);
+			}
+		}
 	} catch {
-		return null;
+		// Leave the map empty; callers fall back to file mtime / build date.
 	}
+	return map;
+}
+const gitDates = buildGitDateMap();
+
+// Last commit date (YYYY-MM-DD) for a file, or null if unavailable.
+function gitDate(absPath) {
+	return gitDates.get(absPath) ?? null;
 }
 
 function lastmodFor(url) {
