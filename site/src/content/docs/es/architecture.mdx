@@ -314,3 +314,9 @@ El catálogo de acciones canónico es la única definición interna de cada oper
 ### ¿Cómo mantiene GitLab MCP Server seguro mi token de GitLab?
 
 GitLab MCP Server nunca almacena tokens en el servidor. En modo stdio el token existe solo en el entorno del proceso y nunca sale de la máquina local. En modo HTTP la sesión de cada usuario está aislada en el pool del servidor por token y URL. Todas las llamadas a la API de GitLab usan HTTPS por defecto, con la opción de omitirlo para certificados autofirmados, y el servidor no tiene estado — no se almacenan datos entre peticiones. El modo solo lectura (`GITLAB_READ_ONLY=true`) desactiva toda operación de escritura.
+
+## Referencias externas
+
+- [Especificación del Model Context Protocol](https://modelcontextprotocol.io/) — el protocolo con el que el servidor habla con los clientes de IA
+- [Especificación JSON-RPC 2.0](https://www.jsonrpc.org/specification) — el formato de mensajes usado sobre stdio y HTTP
+- [API REST v4 de GitLab](https://docs.gitlab.com/api/rest/) y [API GraphQL](https://docs.gitlab.com/api/graphql/) — las superficies de GitLab a las que el servidor traduce las llamadas a herramientas

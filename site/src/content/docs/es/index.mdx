@@ -25,6 +25,10 @@ head:
       {
         "@context": "https://schema.org",
         "@type": "FAQPage",
+        "speakable": {
+          "@type": "SpeakableSpecification",
+          "cssSelector": ["h1", ".sl-markdown-content > p:first-of-type"]
+        },
         "mainEntity": [
           {
             "@type": "Question",

@@ -352,3 +352,9 @@ Use the **minimum scopes** for your workflow: `read_api` for read-only operation
 ### How do I verify the integrity of a downloaded binary?
 
 Every GitHub Release ships `checksums.txt` (SHA-256 hashes) and `checksums.txt.sigstore.json` (a keyless Cosign/Sigstore signature bundle using GitHub OIDC). Auto-update verifies binaries against `checksums.txt` automatically. For manual installs, run `cosign verify-blob` with the bundle, pinning the certificate identity to this repository and the OIDC issuer to GitHub, then validate the binary hash against the signed checksum. If verification fails, **do not run the binary**.
+
+## External references
+
+- [GitLab personal access token scopes](https://docs.gitlab.com/user/profile/personal_access_tokens/) — choosing least-privilege token scopes
+- [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728) — the standard behind HTTP OAuth mode
+- [Sigstore / Cosign documentation](https://docs.sigstore.dev/) — keyless signature verification for release binaries

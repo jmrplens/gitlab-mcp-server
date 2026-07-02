@@ -48,6 +48,11 @@ const techArticle = isHome
 			inLanguage: lang,
 			url: canonical,
 			mainEntityOfPage: canonical,
+			// Point voice/AI assistants at the page title and lead paragraph.
+			speakable: {
+				"@type": "SpeakableSpecification",
+				cssSelector: ["h1", ".sl-markdown-content > p:first-of-type"],
+			},
 			...(updated ? { datePublished: updated, dateModified: updated } : {}),
 			author: { "@id": PERSON_ID },
 			publisher: { "@id": PERSON_ID },

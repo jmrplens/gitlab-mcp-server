@@ -27,6 +27,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history so add-sitemap-lastmod.mjs can read per-file commit dates.
+          fetch-depth: 0
+          # The build runs third-party code (pnpm install); the sitemap script
+          # only reads local git history, so the remote token is not needed.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v6
         with:
