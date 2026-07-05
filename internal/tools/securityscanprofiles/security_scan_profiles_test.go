@@ -199,13 +199,15 @@ func TestDetach_RejectsScanTypeName(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	for _, id := range []string{"dependency_scanning", "gid://gitlab/Security::ScanProfile/dependency_scanning", "gid://"} {
-		_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: id, ProjectIDs: []int64{1}})
-		if err == nil {
-			t.Fatalf("Detach(%q) expected validation error, got nil", id)
-		}
-		if !strings.Contains(err.Error(), "numeric ID") {
-			t.Errorf("Detach(%q) error = %v, want persisted-numeric-ID hint", id, err)
-		}
+		t.Run(id, func(t *testing.T) {
+			_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: id, ProjectIDs: []int64{1}})
+			if err == nil {
+				t.Fatalf("Detach(%q) expected validation error, got nil", id)
+			}
+			if !strings.Contains(err.Error(), "numeric ID") {
+				t.Errorf("Detach(%q) error = %v, want persisted-numeric-ID hint", id, err)
+			}
+		})
 	}
 }
 

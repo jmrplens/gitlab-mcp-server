@@ -359,9 +359,9 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       955 |     192,645 |
-| Unit tests (`_test.go`)  |       521 |     293,144 |
+| Unit tests (`_test.go`)  |       521 |     293,146 |
 | End-to-end tests         |       143 |      35,337 |
-| **Total**                | **1,619** | **521,126** |
+| **Total**                | **1,619** | **521,128** |
 
 ### Functions
 
@@ -371,7 +371,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | — exported (public)             |  2,563 |
 | — unexported (private)          |  4,786 |
 | Unit test functions (`TestXxx`) | 11,336 |
-| Subtests (`t.Run(...)`)         |  2,638 |
+| Subtests (`t.Run(...)`)         |  2,639 |
 | End-to-end test functions       |    287 |
 
 ### Ratios worth noting
@@ -401,7 +401,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Go packages                    |   225 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   230 |
+| Git commits                    |   231 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
