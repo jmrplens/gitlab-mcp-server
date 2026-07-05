@@ -708,11 +708,20 @@ func writeLLMSFullIndividualTools(b *strings.Builder, catalog llmsCatalog) {
 	b.WriteString("Grouped by domain:\n\n")
 	for _, domain := range sortedDomains(catalog.Individual) {
 		domainTools := groupByDomain(catalog.Individual)[domain]
-		fmt.Fprintf(b, "### %s (%d tools)\n\n", domain, len(domainTools))
+		fmt.Fprintf(b, "### %s (%d %s)\n\n", domain, len(domainTools), pluralizeTools(len(domainTools)))
 		for _, tool := range domainTools {
 			writeLLMSFullIndividualTool(b, tool)
 		}
 	}
+}
+
+// pluralizeTools returns "tool" for a count of one and "tools" otherwise, so
+// domain headings read "(1 tool)" rather than "(1 tools)".
+func pluralizeTools(n int) string {
+	if n == 1 {
+		return "tool"
+	}
+	return "tools"
 }
 
 func sortedDomains(mcpTools []*mcp.Tool) []string {
