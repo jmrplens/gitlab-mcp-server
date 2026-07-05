@@ -95,6 +95,42 @@ func validateTargets(profileID string, projectIDs, groupIDs []int64) error {
 	return nil
 }
 
+// validateDetachIdentifier enforces the detach contract: unlike attach, which
+// find-or-creates a profile from a scan-type name, detach operates on an
+// already-persisted profile identified by its numeric database ID or a numeric
+// gid:// global ID (as returned by list_project_statuses). Rejecting a
+// scan-type name here turns an opaque GraphQL mutation failure into an
+// actionable validation error before the request is dispatched.
+func validateDetachIdentifier(identifier string) error {
+	tail := strings.TrimSpace(identifier)
+	if rest, ok := strings.CutPrefix(tail, gidPrefix); ok {
+		if i := strings.LastIndex(rest, "/"); i >= 0 {
+			tail = rest[i+1:]
+		} else {
+			tail = ""
+		}
+	}
+	if !isAllDigits(tail) {
+		return errors.New("detach requires the persisted profile's numeric ID " +
+			"(from gitlab_list_project_scan_profile_statuses), not a scan-type name")
+	}
+	return nil
+}
+
+// isAllDigits reports whether s is non-empty and consists solely of ASCII
+// digits.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // Attach attaches a security scan profile to the given projects and/or groups.
 func Attach(ctx context.Context, client *gitlabclient.Client, input AttachInput) (MutationOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -128,6 +164,9 @@ func Detach(ctx context.Context, client *gitlabclient.Client, input DetachInput)
 		return MutationOutput{}, err
 	}
 	if err := validateTargets(input.SecurityScanProfileID, input.ProjectIDs, input.GroupIDs); err != nil {
+		return MutationOutput{}, err
+	}
+	if err := validateDetachIdentifier(input.SecurityScanProfileID); err != nil {
 		return MutationOutput{}, err
 	}
 

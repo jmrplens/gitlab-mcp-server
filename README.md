@@ -358,19 +358,19 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       955 |     192,597 |
-| Unit tests (`_test.go`)  |       521 |     293,120 |
+| Source (`.go`, non-test) |       955 |     192,645 |
+| Unit tests (`_test.go`)  |       521 |     293,144 |
 | End-to-end tests         |       143 |      35,337 |
-| **Total**                | **1,619** | **521,054** |
+| **Total**                | **1,619** | **521,126** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,346 |
+| Source functions                |  7,349 |
 | — exported (public)             |  2,563 |
-| — unexported (private)          |  4,783 |
-| Unit test functions (`TestXxx`) | 11,335 |
+| — unexported (private)          |  4,786 |
+| Unit test functions (`TestXxx`) | 11,336 |
 | Subtests (`t.Run(...)`)         |  2,638 |
 | End-to-end test functions       |    287 |
 
@@ -381,7 +381,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~201 lines |
 | Average test file length           |                 ~562 lines |
-| Comment lines in source            |  20,604 (~10.7% of source) |
+| Comment lines in source            |  20,614 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -401,7 +401,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Go packages                    |   225 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   228 |
+| Git commits                    |   230 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
@@ -415,8 +415,8 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,501 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,456 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,502 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,457 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

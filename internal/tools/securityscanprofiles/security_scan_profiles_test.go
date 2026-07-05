@@ -18,17 +18,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// scanProfileInput parses the GraphQL input variables from r and fails the
-// calling test if the request does not contain the expected input object.
+// scanProfileInput parses the GraphQL input variables from r and records a test
+// failure if the request does not contain the expected input object. It runs
+// inside the httptest server goroutine, so it uses t.Errorf (not t.Fatal, which
+// must only be called from the test goroutine) and returns nil on failure.
 func scanProfileInput(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 	vars, err := testutil.ParseGraphQLVariables(r)
 	if err != nil {
-		t.Fatalf("ParseGraphQLVariables error: %v", err)
+		t.Errorf("ParseGraphQLVariables error: %v", err)
+		return nil
 	}
 	input, ok := vars["input"].(map[string]any)
 	if !ok {
-		t.Fatalf("GraphQL input = %#v, want map", vars["input"])
+		t.Errorf("GraphQL input = %#v, want map", vars["input"])
+		return nil
 	}
 	return input
 }
@@ -161,7 +165,7 @@ func TestDetach_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := Detach(context.Background(), client, DetachInput{
-		SecurityScanProfileID: "dependency_scanning",
+		SecurityScanProfileID: "gid://gitlab/Security::ScanProfile/5",
 		GroupIDs:              []int64{9},
 	})
 	if err != nil {
@@ -186,6 +190,25 @@ func TestDetach_Validation(t *testing.T) {
 	}
 }
 
+// TestDetach_RejectsScanTypeName verifies that detach fails fast with an
+// actionable error when given a scan-type name (or any non-numeric identifier)
+// instead of the persisted profile's numeric ID, without dispatching a request.
+func TestDetach_RejectsScanTypeName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("handler should not be called for a non-numeric detach identifier")
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, id := range []string{"dependency_scanning", "gid://gitlab/Security::ScanProfile/dependency_scanning", "gid://"} {
+		_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: id, ProjectIDs: []int64{1}})
+		if err == nil {
+			t.Fatalf("Detach(%q) expected validation error, got nil", id)
+		}
+		if !strings.Contains(err.Error(), "numeric ID") {
+			t.Errorf("Detach(%q) error = %v, want persisted-numeric-ID hint", id, err)
+		}
+	}
+}
+
 // TestDetach_MutationError verifies that GraphQL payload errors surface with an
 // actionable hint on the detach path.
 func TestDetach_MutationError(t *testing.T) {
@@ -196,7 +219,7 @@ func TestDetach_MutationError(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: "x", ProjectIDs: []int64{1}})
+	_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: "1", ProjectIDs: []int64{1}})
 	if err == nil {
 		t.Fatal("Detach() expected mutation error, got nil")
 	}
@@ -240,7 +263,8 @@ func TestListProjectStatuses_Success(t *testing.T) {
 		"scanProfileStatuses": func(w http.ResponseWriter, r *http.Request) {
 			vars, err := testutil.ParseGraphQLVariables(r)
 			if err != nil {
-				t.Fatalf("ParseGraphQLVariables error: %v", err)
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
 			}
 			if got := vars["fullPath"]; got != "group/project" {
 				t.Errorf("fullPath = %v, want group/project", got)

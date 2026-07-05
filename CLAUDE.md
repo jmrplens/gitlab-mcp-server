@@ -31,7 +31,7 @@
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
 | Source files (tools)      | 756 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 362 test files under `internal/tools/`                                                                       |
-| Go packages               | 222 total; 176 under `internal/tools/...`                                                                    |
+| Go packages               | 224 total; 176 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
