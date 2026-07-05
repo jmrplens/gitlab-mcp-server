@@ -662,3 +662,61 @@ func TestDocGroundedSuppression(t *testing.T) {
 		t.Error("name is documented and must not be treated as doc-omitted")
 	}
 }
+
+// TestBuildReport_AuditedPairFloors pins the number of SDK↔MCP struct pairs
+// the R-OUTPUT/R-INPUT resolver attributes, globally and for every package
+// whose output shapes are shared through internal/toolutil. The pairing is
+// converter-driven: each domain must keep a thin package-local converter
+// (possibly a one-line delegate to the toolutil constructor, returning the
+// local alias type) or its shapes silently fall out of 1:1 audit coverage —
+// exactly the regression this guard exists to catch (output pairs once
+// dropped 323→300 when the dedup pass deleted local converters in favor of
+// direct toolutil.New* calls, and no audit or test noticed).
+//
+// If a floor fails after adding or intentionally removing tools, first check
+// that every shared-shape package still declares its local converter
+// wrappers; only lower a floor when the pair genuinely no longer exists (a
+// removed action/shape), and raise it when new pairs are added so the guard
+// stays tight.
+func TestBuildReport_AuditedPairFloors(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	rep, err := buildReport(root, false)
+	if err != nil {
+		t.Fatalf("buildReport: %v", err)
+	}
+
+	const minInputPairs, minOutputPairs = 554, 324
+	if rep.Summary.InputPairs < minInputPairs {
+		t.Errorf("summary input_pairs = %d, want >= %d (resolver or handler-detection regression)", rep.Summary.InputPairs, minInputPairs)
+	}
+	if rep.Summary.OutputPairs < minOutputPairs {
+		t.Errorf("summary output_pairs = %d, want >= %d (converter-detection regression: a shared toolutil shape may have lost its package-local converter wrapper)", rep.Summary.OutputPairs, minOutputPairs)
+	}
+
+	// Output-pair floors for the packages whose shapes are toolutil-shared:
+	// these are the ones that go blind first when a local converter is removed.
+	outputFloors := map[string]int{
+		"boards":              8,
+		"branches":            4,
+		"commits":             6,
+		"enterpriseusers":     2,
+		"groupboards":         7,
+		"groupmembers":        6,
+		"groups":              11,
+		"impersonationtokens": 2,
+		"issuelinks":          14,
+		"members":             3,
+		"mergerequests":       5,
+		"resourceevents":      9,
+		"users":               5,
+	}
+	for name, floor := range outputFloors {
+		pr := findPackage(t, rep, name)
+		if pr.OutputPairs < floor {
+			t.Errorf("%s output_pairs = %d, want >= %d (lost audited pair; check the package-local converter wrappers for its toolutil-shared shapes)", name, pr.OutputPairs, floor)
+		}
+	}
+}
