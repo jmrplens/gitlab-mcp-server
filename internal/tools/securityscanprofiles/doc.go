@@ -2,8 +2,8 @@
 // profiles through the GraphQL API.
 //
 // Security scan profiles bundle a security scanning configuration (for example
-// dependency-scanning post-processing) that can be attached to, or detached
-// from, projects and groups. The package attaches and detaches profiles,
+// the built-in dependency_scanning profile) that can be attached to, or
+// detached from, projects and groups. The package attaches and detaches profiles,
 // lists the per-project scan profile statuses, and renders the results as
 // Markdown.
 //

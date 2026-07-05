@@ -30,7 +30,7 @@ type AttachInput struct {
 // DetachInput holds parameters for detaching a security scan profile from
 // projects and/or groups.
 type DetachInput struct {
-	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted,required"`
+	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Persisted scan profile identifier: the profile's numeric database ID (obtained from gitlab_list_project_scan_profile_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, …) is not accepted by detach,required"`
 	ProjectIDs            []int64 `json:"project_ids,omitempty" jsonschema:"Numeric IDs of the projects to detach the profile from"`
 	GroupIDs              []int64 `json:"group_ids,omitempty" jsonschema:"Numeric IDs of the groups to detach the profile from"`
 }

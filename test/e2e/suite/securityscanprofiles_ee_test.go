@@ -16,7 +16,8 @@
 //     security_scan_profiles_dependency_scanning feature flags must be
 //     enabled (setup-gitlab.sh enables them for EE runs).
 //
-// CANNOT parallelize: shares the meta session with the rest of the EE suite.
+// Like its EE meta-tool peers, the top-level test calls t.Parallel(); the
+// shared meta session is safe for concurrent tool calls.
 package suite
 
 import (
