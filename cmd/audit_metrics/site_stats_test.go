@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -18,18 +19,33 @@ import (
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
-// GitLab.com client, matching how main wires generateSiteStats.
+// GitLab.com client, matching how main wires generateSiteStats. The payload is
+// generated once and shared (generateSiteStats builds the full catalog for
+// every tier, ~12s); tests must treat it as read-only.
+var (
+	siteStatsOnce   sync.Once
+	siteStatsShared siteStats
+	siteStatsErr    error
+)
+
 func newSiteStats(t *testing.T) siteStats {
 	t.Helper()
-	client := newAuditMetricsClient(t)
-	gitLabComClient, err := gitlabclient.NewClient(&config.Config{
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "audit-token", //#nosec G101 -- audit-only dummy token, not a real credential
+	siteStatsOnce.Do(func() {
+		client := newAuditMetricsClient(t)
+		gitLabComClient, err := gitlabclient.NewClient(&config.Config{
+			GitLabURL:   config.DefaultGitLabURL,
+			GitLabToken: "audit-token", //#nosec G101 -- audit-only dummy token, not a real credential
+		})
+		if err != nil {
+			siteStatsErr = err
+			return
+		}
+		siteStatsShared = generateSiteStats(client, gitLabComClient)
 	})
-	if err != nil {
-		t.Fatalf("create gitlab.com client: %v", err)
+	if siteStatsErr != nil {
+		t.Fatalf("create gitlab.com client: %v", siteStatsErr)
 	}
-	return generateSiteStats(client, gitLabComClient)
+	return siteStatsShared
 }
 
 // TestSiteStatsTierOrdering verifies the derived counts respect the nested

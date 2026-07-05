@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -105,20 +106,51 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	return server
 }
 
-// newTestMCPServer creates an MCP server with the full individual tool catalog,
-// resources, and prompts registered. HTTP protocol tests use it as a stable
-// handler target for initialize and tools/list requests.
+// newTestMCPServer returns a shared MCP server with the full individual tool
+// catalog, resources, and prompts registered. HTTP protocol tests use it as a
+// stable handler target for initialize and tools/list requests; none of them
+// vary registration-time state, and the mock GitLab backend only answers
+// /api/v4/version, so one registration (which resolves ~1,000 tool schemas in
+// the MCP SDK) safely serves every caller. The backing httptest server lives
+// for the whole test binary.
+var (
+	testMCPServerOnce   sync.Once
+	testMCPServerShared *mcp.Server
+	errTestMCPServer    error
+)
+
 func newTestMCPServer(t *testing.T) *mcp.Server {
 	t.Helper()
-	client := newMockGitLabClient(t)
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    serverName,
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(server, client, edition.Ultimate)
-	resources.Register(server, client)
-	prompts.Register(server, client)
-	return server
+	testMCPServerOnce.Do(func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v4/version" {
+				w.Header().Set(hdrContentType, mimeJSON)
+				_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		client, err := gitlabclient.NewClient(&config.Config{
+			GitLabURL:   srv.URL,
+			GitLabToken: testToken,
+		})
+		if err != nil {
+			errTestMCPServer = err
+			return
+		}
+		server := mcp.NewServer(&mcp.Implementation{
+			Name:    serverName,
+			Version: "test",
+		}, nil)
+		tools.RegisterAll(server, client, edition.Ultimate)
+		resources.Register(server, client)
+		prompts.Register(server, client)
+		testMCPServerShared = server
+	})
+	if errTestMCPServer != nil {
+		t.Fatalf("failed to create mock gitlab client: %v", errTestMCPServer)
+	}
+	return testMCPServerShared
 }
 
 // newInMemorySession connects an in-memory MCP client to server and registers

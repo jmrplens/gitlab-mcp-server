@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -94,42 +95,185 @@ func readRegisterMetaSource(t *testing.T) string {
 	return builder.String()
 }
 
-// newMCPSession creates an MCP session with individual tools registered.
-// When enterprise is true, Enterprise/Premium tools are included.
+// sharedSessionSlot holds one fully registered individual-tools MCP session
+// per tier plus a swappable backend handler. Registering the individual
+// surface resolves and validates ~1,000 tool schemas in the MCP SDK (several
+// seconds), and that cost depends only on the tier — not on the HTTP mock a
+// test supplies — so the session is built once and each test swaps its own
+// handler in behind a delegating httptest server. The handler swap is
+// mutex-guarded; the tests using this fixture run serially.
+type sharedSessionSlot struct {
+	once    sync.Once
+	session *mcp.ClientSession
+	err     error
+
+	mu      sync.Mutex
+	handler http.Handler
+}
+
+// sharedIndividualSessions caches the CE (index 0) and enterprise (index 1)
+// individual-surface sessions for the lifetime of the test binary.
+var sharedIndividualSessions [2]sharedSessionSlot
+
+// newMCPSession returns the shared MCP session with individual tools
+// registered for the requested tier (enterprise by default), wiring the
+// given handler as the GitLab backend for the duration of the calling test.
 func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.ClientSession {
 	t.Helper()
-	client := newTestClient(t, handler)
 
 	ent := true
 	if len(enterprise) > 0 {
 		ent = enterprise[0]
 	}
+	idx := 0
+	if ent {
+		idx = 1
+	}
+	slot := &sharedIndividualSessions[idx]
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
-	RegisterAll(server, client, edition.TierForEnterprise(ent))
-	toolutil.LockdownInputSchemas(server)
+	slot.once.Do(func() {
+		delegate := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			slot.mu.Lock()
+			current := slot.handler
+			slot.mu.Unlock()
+			if current == nil {
+				http.NotFound(w, r)
+				return
+			}
+			current.ServeHTTP(w, r)
+		})
+		// The backing httptest server and session live for the whole test
+		// binary; process teardown reclaims them.
+		srv := httptest.NewServer(delegate)
+		client, err := gitlabclient.NewClient(&config.Config{
+			GitLabURL:     srv.URL,
+			GitLabToken:   "test-token",
+			SkipTLSVerify: false,
+		})
+		if err != nil {
+			slot.err = fmt.Errorf("create test gitlab client: %w", err)
+			return
+		}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+		RegisterAll(server, client, edition.TierForEnterprise(ent))
+		toolutil.LockdownInputSchemas(server)
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+		st, ct := mcp.NewInMemoryTransports()
+		ctx := context.Background()
+
+		if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
+			slot.err = fmt.Errorf("server connect: %w", connectErr)
+			return
+		}
+
+		mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+		session, connectErr := mcpClient.Connect(ctx, ct, nil)
+		if connectErr != nil {
+			slot.err = fmt.Errorf("client connect: %w", connectErr)
+			return
+		}
+		slot.session = session
+	})
+	if slot.err != nil {
+		t.Fatalf("shared MCP session (enterprise=%v): %v", ent, slot.err)
 	}
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return session
+	slot.mu.Lock()
+	slot.handler = handler
+	slot.mu.Unlock()
+	t.Cleanup(func() {
+		slot.mu.Lock()
+		slot.handler = nil
+		slot.mu.Unlock()
+	})
+	return slot.session
 }
 
-// newMetaMCPSession creates an MCP session with meta-tools registered.
-// When enterprise is true, Enterprise/Premium meta-tools are included.
-// It uses in-memory transports and auto-closes the session via t.Cleanup.
+// sharedMetaSessions caches the CE (index 0) and enterprise (index 1)
+// meta-tools sessions, mirroring sharedIndividualSessions: RegisterAllMeta
+// builds the full action catalog per call, and that cost depends only on the
+// tier, not on the per-test HTTP mock. Tests using this fixture must not run
+// with t.Parallel (concurrent handler swaps would cross-wire backends).
+var sharedMetaSessions [2]sharedSessionSlot
+
+// newMetaMCPSession returns the shared MCP session with meta-tools registered
+// for the requested tier, wiring the given handler as the GitLab backend for
+// the duration of the calling test.
 func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp.ClientSession {
+	t.Helper()
+
+	idx := 0
+	if enterprise {
+		idx = 1
+	}
+	slot := &sharedMetaSessions[idx]
+
+	slot.once.Do(func() {
+		delegate := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			slot.mu.Lock()
+			current := slot.handler
+			slot.mu.Unlock()
+			if current == nil {
+				http.NotFound(w, r)
+				return
+			}
+			current.ServeHTTP(w, r)
+		})
+		srv := httptest.NewServer(delegate)
+		client, err := gitlabclient.NewClient(&config.Config{
+			GitLabURL:     srv.URL,
+			GitLabToken:   "test-token",
+			SkipTLSVerify: false,
+		})
+		if err != nil {
+			slot.err = fmt.Errorf("create test gitlab client: %w", err)
+			return
+		}
+
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+		if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); registerErr != nil {
+			slot.err = fmt.Errorf("RegisterAllMeta() error = %w", registerErr)
+			return
+		}
+		toolutil.LockdownInputSchemas(server)
+
+		st, ct := mcp.NewInMemoryTransports()
+		ctx := context.Background()
+
+		if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
+			slot.err = fmt.Errorf("server connect: %w", connectErr)
+			return
+		}
+
+		mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+		session, connectErr := mcpClient.Connect(ctx, ct, nil)
+		if connectErr != nil {
+			slot.err = fmt.Errorf("client connect: %w", connectErr)
+			return
+		}
+		slot.session = session
+	})
+	if slot.err != nil {
+		t.Fatalf("shared meta MCP session (enterprise=%v): %v", enterprise, slot.err)
+	}
+
+	slot.mu.Lock()
+	slot.handler = handler
+	slot.mu.Unlock()
+	t.Cleanup(func() {
+		slot.mu.Lock()
+		slot.handler = nil
+		slot.mu.Unlock()
+	})
+	return slot.session
+}
+
+// newIsolatedMetaMCPSession creates a FRESH meta-tools MCP session (no shared
+// cache). Use it only for tests that vary registration-time state (e.g. the
+// META_PARAM_SCHEMA mode), where the shared per-tier session would leak one
+// configuration's schemas into another's assertions.
+func newIsolatedMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp.ClientSession {
 	t.Helper()
 	client := newTestClient(t, handler)
 
@@ -142,8 +286,7 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
-	_, err := server.Connect(ctx, st, nil)
-	if err != nil {
+	if _, err := server.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 
@@ -4173,7 +4316,8 @@ func TestCommitToOutput_NilDate(t *testing.T) {
 // closure in registerGroupSCIMMeta propagates errors from groupscim.Update
 // back to the caller as an MCP error result.
 func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
-	t.Parallel()
+	// No t.Parallel: the shared meta MCP session swaps its backend handler
+	// per test, so concurrent tests would cross-wire their HTTP mocks.
 
 	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
 
@@ -4225,7 +4369,8 @@ func TestGroupSCIMMeta_UpdateAction_ErrorPath(t *testing.T) {
 // closure in registerGroupSCIMMeta returns the expected UpdateOutput on
 // a successful GitLab SCIM PATCH response.
 func TestGroupSCIMMeta_UpdateAction_SuccessPath(t *testing.T) {
-	t.Parallel()
+	// No t.Parallel: the shared meta MCP session swaps its backend handler
+	// per test, so concurrent tests would cross-wire their HTTP mocks.
 
 	const scimUpdatePath = "/api/v4/groups/mygroup/scim/uid-123"
 
