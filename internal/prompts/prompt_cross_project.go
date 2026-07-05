@@ -260,21 +260,9 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 
 	days := parseDays(args[argDays], 7)
 	since := sinceDate(days)
-	sinceISO := gl.ISOTime(since)
 
 	// Fetch contribution events
-	eventOpts := &gl.ListContributionEventsOptions{
-		After: &sinceISO,
-	}
-	var events []*gl.ContributionEvent
-	if isCurrentUser {
-		events, _, err = client.GL().Events.ListCurrentUserContributionEvents(eventOpts, gl.WithContext(ctx))
-	} else {
-		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		slog.Warn("failed to fetch contribution events", "error", err)
-	}
+	events := fetchContributionEvents(ctx, client, userID, isCurrentUser, since)
 
 	// Merged MRs in period
 	mergedMRs, _, errMerged := client.GL().MergeRequests.ListMergeRequests(

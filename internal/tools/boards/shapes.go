@@ -91,119 +91,26 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 // The board's `assignee` object surfaces only the fields the documented
 // update-board response lists (id, name, username, state, avatar_url, web_url);
 // gl.BasicUser's created_at is not part of the documented board assignee shape.
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url"`
-	WebURL    string `json:"web_url"`
-}
-
-func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	return &BasicUserOutput{
-		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
-	}
-}
+// Canonical shape shared via toolutil.
+type BasicUserOutput = toolutil.BoardUserOutput
 
 // BoardListAssigneeOutput is a documented reference subset per
 // doc/api/boards.md. A board list's `assignee` object (Premium/Ultimate
 // assignee list type) is surfaced with id, name, and username, matching the
-// compact gl.BoardListAssignee struct. The documented response examples cover
-// only label lists, so this premium list-type sub-object has no fuller
-// documented shape to trim against.
-type BoardListAssigneeOutput struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
-}
-
-func boardListAssigneeOutput(a *gl.BoardListAssignee) *BoardListAssigneeOutput {
-	if a == nil {
-		return nil
-	}
-	return &BoardListAssigneeOutput{ID: a.ID, Name: a.Name, Username: a.Username}
-}
+// compact gl.BoardListAssignee struct. Canonical shape shared via toolutil.
+type BoardListAssigneeOutput = toolutil.BoardListAssigneeOutput
 
 // LabelOutput is a documented reference subset per doc/api/boards.md.
 // Every documented board-list response shows the list's `label` object with
-// only name, color, and description; gl.Label's id, text_color, counts,
-// subscribed, priority, is_project_label, and archived fields are not part of
-// the documented board-list label shape.
-type LabelOutput struct {
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	Description string `json:"description"`
-}
-
-func labelOutput(l *gl.Label) *LabelOutput {
-	if l == nil {
-		return nil
-	}
-	return &LabelOutput{
-		Name: l.Name, Color: l.Color, Description: l.Description,
-	}
-}
+// only name, color, and description. Canonical shape shared via toolutil.
+type LabelOutput = toolutil.BoardLabelOutput
 
 // LabelDetailsOutput is a documented reference subset per doc/api/boards.md.
 // The board's `labels[]` entries in the documented update-board response show
-// only id, name, color, and description; gl.LabelDetails's description_html and
-// text_color are not part of the documented board labels shape.
-type LabelDetailsOutput struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	Description string `json:"description"`
-}
-
-func labelDetailsOutputs(details []*gl.LabelDetails) []*LabelDetailsOutput {
-	if len(details) == 0 {
-		return nil
-	}
-	out := make([]*LabelDetailsOutput, 0, len(details))
-	for _, d := range details {
-		if d == nil {
-			continue
-		}
-		out = append(out, &LabelDetailsOutput{
-			ID: d.ID, Name: d.Name, Color: d.Color, Description: d.Description,
-		})
-	}
-	return out
-}
+// only id, name, color, and description. Canonical shape shared via toolutil.
+type LabelDetailsOutput = toolutil.BoardLabelDetailsOutput
 
 // IterationOutput is a documented reference subset per doc/api/boards.md.
 // A board list's `iteration` object (Premium/Ultimate iteration list type)
-// mirrors gl.ProjectIteration. The documented response examples cover only
-// label lists, so this premium list-type sub-object has no fuller documented
-// shape to trim against.
-type IterationOutput struct {
-	ID          int64  `json:"id"`
-	IID         int64  `json:"iid"`
-	Sequence    int64  `json:"sequence"`
-	GroupID     int64  `json:"group_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	State       int64  `json:"state"`
-	WebURL      string `json:"web_url"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	StartDate   string `json:"start_date,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
-}
-
-func iterationOutput(it *gl.ProjectIteration) *IterationOutput {
-	if it == nil {
-		return nil
-	}
-	return &IterationOutput{
-		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
-		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
-		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
-	}
-}
+// mirrors gl.ProjectIteration. Canonical shape shared via toolutil.
+type IterationOutput = toolutil.IterationOutput

@@ -1074,14 +1074,14 @@ func TestShapeConverters_NilInputs(t *testing.T) {
 	if milestoneOutput(nil) != nil {
 		t.Error("milestoneOutput(nil) != nil")
 	}
-	if labelOutput(nil) != nil {
-		t.Error("labelOutput(nil) != nil")
+	if toolutil.NewBoardLabelOutput(nil) != nil {
+		t.Error("toolutil.NewBoardLabelOutput(nil) != nil")
 	}
-	if boardListAssigneeOutput(nil) != nil {
-		t.Error("boardListAssigneeOutput(nil) != nil")
+	if toolutil.NewBoardListAssigneeOutput(nil) != nil {
+		t.Error("toolutil.NewBoardListAssigneeOutput(nil) != nil")
 	}
-	if iterationOutput(nil) != nil {
-		t.Error("iterationOutput(nil) != nil")
+	if toolutil.NewIterationOutputFromProjectIteration(nil) != nil {
+		t.Error("toolutil.NewIterationOutputFromProjectIteration(nil) != nil")
 	}
 	if groupLabelOutputs(nil) != nil {
 		t.Error("groupLabelOutputs(nil) != nil")
@@ -1220,7 +1220,7 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 // TestBasicUserOutput_Nil verifies the assignee converter returns nil for a nil
 // input (the Free-tier / no-assignee case).
 func TestBasicUserOutput_Nil(t *testing.T) {
-	if got := basicUserOutput(nil); got != nil {
-		t.Errorf("basicUserOutput(nil) = %+v, want nil", got)
+	if got := toolutil.NewBoardUserOutput(nil); got != nil {
+		t.Errorf("toolutil.NewBoardUserOutput(nil) = %+v, want nil", got)
 	}
 }

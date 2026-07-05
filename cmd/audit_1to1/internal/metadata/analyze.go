@@ -13,26 +13,17 @@
 package metadata
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
-
-// genericUsageRe matches placeholder Usage sentences such as
-// "Use to execute branches domain action." or "Use to execute list action.".
-var genericUsageRe = regexp.MustCompile(`(?i)^use to execute\b.*\baction\.?\s*$`)
 
 // actionFinding records the R-META flags raised for one action.
 type actionFinding struct {
@@ -86,7 +77,7 @@ func buildReport(gapsOnly bool) (report, error) {
 	}
 	defer cleanup()
 
-	projected, err := projectIndividualDescriptions(client)
+	projected, err := auditshared.ProjectIndividualDescriptions(client)
 	if err != nil {
 		return report{}, err
 	}
@@ -94,7 +85,7 @@ func buildReport(gapsOnly bool) (report, error) {
 	byPackage := map[string]*packageReport{}
 	for _, group := range tools.CollectActionSpecs(client, true) {
 		for _, spec := range group.Actions {
-			owner := ownerPackage(group, spec)
+			owner := auditshared.OwnerPackage(group, spec)
 			pr := packageFor(byPackage, owner)
 			pr.Actions++
 			if finding, ok := analyzeSpec(spec, projected, gapsOnly); ok {
@@ -123,7 +114,7 @@ func buildReport(gapsOnly bool) (report, error) {
 // the action raises no flags (used to skip clean actions in gaps-only mode).
 func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, gapsOnly bool) (actionFinding, bool) {
 	var flags []string
-	if isGenericUsage(spec.Usage) {
+	if auditshared.IsGenericUsage(spec.Usage) {
 		flags = append(flags, "generic_usage")
 	}
 	if aliasesOnlyToolname(spec) {
@@ -132,7 +123,7 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, gapsOnly
 	if len(spec.RelatedActions) == 0 {
 		flags = append(flags, "empty_related")
 	}
-	if weakIndividualDescription(spec, projected) {
+	if auditshared.WeakIndividualDescription(spec, projected) {
 		flags = append(flags, "weak_individual_description")
 	}
 	if len(flags) == 0 && gapsOnly {
@@ -144,60 +135,6 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, gapsOnly
 		Usage:  strings.TrimSpace(spec.Usage),
 		Flags:  flags,
 	}, len(flags) > 0
-}
-
-// weakIndividualDescription reports whether the effective individual-tool
-// description the model sees lacks the norm's "Returns: … See also: …" form.
-// The effective description is the projected mcp.Tool.Description (which already
-// resolves the curated-description fallback chain), so this avoids false
-// positives from specs that omit IndividualTool.Description yet still project a
-// good curated one.
-func weakIndividualDescription(spec toolutil.ActionSpec, projected map[string]string) bool {
-	tool := strings.TrimSpace(spec.IndividualTool.Name)
-	if tool == "" {
-		return false
-	}
-	description, ok := projected[tool]
-	if !ok {
-		return false
-	}
-	return !strings.Contains(description, "Returns:") || !strings.Contains(description, "See also:")
-}
-
-// projectIndividualDescriptions registers the individual-tool surface on an
-// in-memory MCP server and returns the projected description per tool name —
-// the exact text the model consumes.
-func projectIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
-	tools.RegisterAll(server, client, edition.Ultimate)
-	toolutil.LockdownInputSchemas(server)
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
-		return nil, fmt.Errorf("connect server: %w", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		return nil, fmt.Errorf("connect client: %w", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list tools: %w", err)
-	}
-	descriptions := make(map[string]string, len(result.Tools))
-	for _, tool := range result.Tools {
-		descriptions[tool.Name] = tool.Description
-	}
-	return descriptions, nil
-}
-
-func isGenericUsage(usage string) bool {
-	trimmed := strings.TrimSpace(usage)
-	return trimmed == "" || genericUsageRe.MatchString(trimmed)
 }
 
 // aliasesOnlyToolname reports whether the action has no natural-language alias
@@ -213,16 +150,6 @@ func aliasesOnlyToolname(spec toolutil.ActionSpec) bool {
 		return false
 	}
 	return true
-}
-
-func ownerPackage(group tools.ActionSpecGroup, spec toolutil.ActionSpec) string {
-	if owner := strings.TrimSpace(spec.OwnerPackage); owner != "" {
-		return owner
-	}
-	if owner := strings.TrimSpace(group.OwnerPackage); owner != "" {
-		return owner
-	}
-	return strings.TrimSpace(group.BaseDomain)
 }
 
 func packageFor(byPackage map[string]*packageReport, owner string) *packageReport {

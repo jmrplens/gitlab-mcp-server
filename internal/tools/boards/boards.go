@@ -134,9 +134,9 @@ func convertBoard(b *gl.IssueBoard) BoardOutput {
 		Name:            b.Name,
 		Project:         projectOutput(b.Project),
 		Milestone:       milestoneOutput(b.Milestone),
-		Assignee:        basicUserOutput(b.Assignee),
+		Assignee:        toolutil.NewBoardUserOutput(b.Assignee),
 		Weight:          b.Weight,
-		Labels:          labelDetailsOutputs(b.Labels),
+		Labels:          toolutil.NewBoardLabelDetailsOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
 	}
@@ -154,9 +154,9 @@ func convertBoardAPI(b *issueBoardAPI) BoardOutput {
 		Name:            b.Name,
 		Project:         projectOutput(b.Project),
 		Milestone:       milestoneOutput(b.Milestone),
-		Assignee:        basicUserOutput(b.Assignee),
+		Assignee:        toolutil.NewBoardUserOutput(b.Assignee),
 		Weight:          b.Weight,
-		Labels:          labelDetailsOutputs(b.Labels),
+		Labels:          toolutil.NewBoardLabelDetailsOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
 	}
@@ -171,10 +171,10 @@ func convertBoardAPI(b *issueBoardAPI) BoardOutput {
 func convertBoardList(l *gl.BoardList) BoardListOutput {
 	return BoardListOutput{
 		ID:             l.ID,
-		Label:          labelOutput(l.Label),
-		Assignee:       boardListAssigneeOutput(l.Assignee),
+		Label:          toolutil.NewBoardLabelOutput(l.Label),
+		Assignee:       toolutil.NewBoardListAssigneeOutput(l.Assignee),
 		Milestone:      milestoneOutput(l.Milestone),
-		Iteration:      iterationOutput(l.Iteration),
+		Iteration:      toolutil.NewIterationOutputFromProjectIteration(l.Iteration),
 		Position:       l.Position,
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,

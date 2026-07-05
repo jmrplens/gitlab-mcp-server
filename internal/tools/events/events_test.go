@@ -827,7 +827,7 @@ func TestResolveProjectWebURLs_SkipsZeroID(t *testing.T) {
 		apiCalled = true
 		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"web_url":"https://example.com/p"}`)
 	}))
-	urls := resolveProjectWebURLs(t.Context(), client, []int64{0})
+	urls := toolutil.ResolveProjectWebURLs(t.Context(), client.GL().Projects, []int64{0})
 	if apiCalled {
 		t.Error("API should not be called for project ID 0")
 	}
@@ -845,7 +845,7 @@ func TestResolveProjectWebURLs_DeduplicatesIDs(t *testing.T) {
 		callCount++
 		testutil.RespondJSON(w, http.StatusOK, `{"id":5,"web_url":"https://example.com/p/5"}`)
 	}))
-	urls := resolveProjectWebURLs(t.Context(), client, []int64{5, 5, 5})
+	urls := toolutil.ResolveProjectWebURLs(t.Context(), client.GL().Projects, []int64{5, 5, 5})
 	if callCount != 1 {
 		t.Errorf("expected 1 API call, got %d", callCount)
 	}

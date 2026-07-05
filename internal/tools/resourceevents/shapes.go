@@ -93,32 +93,11 @@ func milestoneOutput(m *gl.Milestone) *MilestoneOutput {
 }
 
 // IterationOutput mirrors gl.Iteration (the iteration object on a resource
-// iteration event).
-type IterationOutput struct {
-	ID          int64  `json:"id"`
-	IID         int64  `json:"iid"`
-	Sequence    int64  `json:"sequence"`
-	GroupID     int64  `json:"group_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	State       int64  `json:"state"`
-	WebURL      string `json:"web_url"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	StartDate   string `json:"start_date,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
-}
+// iteration event). Canonical shape shared via toolutil.
+type IterationOutput = toolutil.IterationOutput
 
 // iterationOutput converts *gl.Iteration to its output shape, returning nil
 // when the SDK value is nil.
 func iterationOutput(it *gl.Iteration) *IterationOutput {
-	if it == nil {
-		return nil
-	}
-	return &IterationOutput{
-		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
-		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
-		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
-	}
+	return toolutil.NewIterationOutput(it)
 }

@@ -152,23 +152,6 @@ type gqlNotesResponse struct {
 	} `json:"data"`
 }
 
-// gqlCreateNotePayload is the response payload for creating a note.
-type gqlCreateNotePayload struct {
-	Note   *gqlNoteNode `json:"note"`
-	Errors []string     `json:"errors"`
-}
-
-// gqlUpdateNotePayload is the response payload for updating a note.
-type gqlUpdateNotePayload struct {
-	Note   *gqlNoteNode `json:"note"`
-	Errors []string     `json:"errors"`
-}
-
-// gqlDestroyNotePayload is the response payload for deleting a note.
-type gqlDestroyNotePayload struct {
-	Errors []string `json:"errors"`
-}
-
 // nodeToOutput converts a GraphQL note node to the MCP output format. Per the
 // locked canonical-key convention it surfaces the full author object on the
 // canonical `author` key.
@@ -376,33 +359,21 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
 	}
 
-	body := toolutil.NormalizeText(input.Body)
-	var resp struct {
-		Data struct {
-			CreateNote gqlCreateNotePayload `json:"createNote"`
-		} `json:"data"`
-	}
-
-	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: mutationCreateNote,
+	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+		Op:         "epicNoteCreate",
+		Hint:       "body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if work item is locked or confidential",
+		PayloadKey: "createNote",
+		Query:      mutationCreateNote,
 		Variables: map[string]any{
 			"noteableId": workItemGID,
-			"body":       body,
+			"body":       toolutil.NormalizeText(input.Body),
 		},
-	}, &resp, gl.WithContext(ctx))
+	})
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicNoteCreate", err,
-			"body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if work item is locked or confidential")
+		return Output{}, err
 	}
 
-	if len(resp.Data.CreateNote.Errors) > 0 {
-		return Output{}, fmt.Errorf("epicNoteCreate: %s", resp.Data.CreateNote.Errors[0])
-	}
-	if resp.Data.CreateNote.Note == nil {
-		return Output{}, errors.New("epicNoteCreate: no note returned")
-	}
-
-	return nodeToOutput(*resp.Data.CreateNote.Note), nil
+	return nodeToOutput(*note), nil
 }
 
 // Update modifies the body of an existing epic note via the updateNote
@@ -424,35 +395,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("epicNoteUpdate: body is required")
 	}
 
-	body := toolutil.NormalizeText(input.Body)
-	noteGID := toolutil.FormatGID("Note", input.NoteID)
-
-	var resp struct {
-		Data struct {
-			UpdateNote gqlUpdateNotePayload `json:"updateNote"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: mutationUpdateNote,
+	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+		Op:         "epicNoteUpdate",
+		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_epic_note_list; body is GFM with 1MB max; system notes cannot be edited",
+		PayloadKey: "updateNote",
+		Query:      mutationUpdateNote,
 		Variables: map[string]any{
-			"id":   noteGID,
-			"body": body,
+			"id":   toolutil.FormatGID("Note", input.NoteID),
+			"body": toolutil.NormalizeText(input.Body),
 		},
-	}, &resp, gl.WithContext(ctx))
+	})
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithHint("epicNoteUpdate", err,
-			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_epic_note_list; body is GFM with 1MB max; system notes cannot be edited")
+		return Output{}, err
 	}
 
-	if len(resp.Data.UpdateNote.Errors) > 0 {
-		return Output{}, fmt.Errorf("epicNoteUpdate: %s", resp.Data.UpdateNote.Errors[0])
-	}
-	if resp.Data.UpdateNote.Note == nil {
-		return Output{}, errors.New("epicNoteUpdate: no note returned")
-	}
-
-	return nodeToOutput(*resp.Data.UpdateNote.Note), nil
+	return nodeToOutput(*note), nil
 }
 
 // Delete removes a note from an epic via the destroyNote GraphQL mutation.
@@ -470,28 +427,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return toolutil.ErrRequiredInt64("epicNoteDelete", "note_id")
 	}
 
-	noteGID := toolutil.FormatGID("Note", input.NoteID)
-
-	var resp struct {
-		Data struct {
-			DestroyNote gqlDestroyNotePayload `json:"destroyNote"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: mutationDestroyNote,
-		Variables: map[string]any{
-			"id": noteGID,
-		},
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return toolutil.WrapErrWithHint("epicNoteDelete", err,
-			"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_epic_note_list; deletion is irreversible \u2014 system-generated notes cannot be removed")
-	}
-
-	if len(resp.Data.DestroyNote.Errors) > 0 {
-		return fmt.Errorf("epicNoteDelete: %s", resp.Data.DestroyNote.Errors[0])
-	}
-
-	return nil
+	return toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicNoteDelete",
+		"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_epic_note_list; deletion is irreversible \u2014 system-generated notes cannot be removed",
+		mutationDestroyNote, toolutil.FormatGID("Note", input.NoteID))
 }

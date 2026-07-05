@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -75,16 +74,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	since := sinceDate(days)
 
 	// Contribution events
-	eventOpts := &gl.ListContributionEventsOptions{After: new(gl.ISOTime(since))}
-	var events []*gl.ContributionEvent
-	if isSelf {
-		events, _, err = client.GL().Events.ListCurrentUserContributionEvents(eventOpts, gl.WithContext(ctx))
-	} else {
-		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		slog.Warn("failed to fetch events", "error", err)
-	}
+	events := fetchContributionEvents(ctx, client, userID, isSelf, since)
 
 	// Merged MRs in period
 	mergedMRs, _, _ := client.GL().MergeRequests.ListMergeRequests(&gl.ListMergeRequestsOptions{

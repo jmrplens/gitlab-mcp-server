@@ -1551,7 +1551,7 @@ func TestResolveProjectWebURLs_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	urls := resolveProjectWebURLs(context.Background(), client, []int64{10})
+	urls := toolutil.ResolveProjectWebURLs(context.Background(), client.GL().Projects, []int64{10})
 	if got := urls[10]; got != "https://gitlab.example.com/group/project" {
 		t.Errorf("urls[10] = %q, want %q", got, "https://gitlab.example.com/group/project")
 	}

@@ -18,16 +18,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,607 |
-| Unit test functions                                   | 11,324 |
+| Total test functions                                  | 11,625 |
+| Unit test functions                                   | 11,342 |
 | E2E test functions                                    |    283 |
 | cmd test functions                                    |    900 |
-| Test files (internal/)                                |    452 |
+| Test files (internal/)                                |    457 |
 | Test files (cmd/)                                     |     69 |
 | Test files (test/e2e/suite/)                          |    140 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.8% |
 | Overall coverage (`go test ./internal/...`)           |  94.6% |
 | Average package coverage                              |  95.4% |
 
@@ -35,8 +35,8 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,335 | 89.0% |
-| `TestFunc` (no underscore)             |    945 |  8.1% |
+| `TestFunc_Scenario` (2-part)           | 10,339 | 88.9% |
+| `TestFunc` (no underscore)             |    959 |  8.2% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
 ## Test Distribution
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,857 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,875 |         95 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,284 |        349 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            283 |        140 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            900 |         69 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,607** |    **661** |                                                                                                 |
+| **Total**               |     **11,625** |    **666** |                                                                                                 |
 
 ### Core Packages
 
@@ -66,13 +66,13 @@
 | gitlab       |        44 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
 | oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
-| prompts      |       207 |    96.2% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
+| prompts      |       207 |    96.5% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
 | resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil     |       630 |    97.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil     |       648 |    97.0% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       287 |    92.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,857** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,875** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -125,7 +125,7 @@
 | avatar                  |         9 |          1 |   100.0% |         1 |
 | awardemoji              |       113 |          1 |   100.0% |        24 |
 | badges                  |        56 |          1 |   100.0% |        12 |
-| boards                  |        73 |          2 |    99.3% |        10 |
+| boards                  |        73 |          2 |    99.2% |        10 |
 | branches                |        95 |          1 |   100.0% |        10 |
 | branchrules             |        16 |          1 |   100.0% |         1 |
 | broadcastmessages       |        30 |          2 |   100.0% |         5 |
@@ -170,7 +170,7 @@
 | geo                     |        54 |          2 |   100.0% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |    98.6% |        10 |
+| groupboards             |        65 |          2 |    98.5% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.3% |         2 |
 | groupimportexport       |        29 |          1 |   100.0% |         3 |
@@ -299,10 +299,10 @@
 | cmd/audit_1to1                                 |    39.0% |
 | cmd/audit_1to1/internal/actions                |    87.7% |
 | cmd/audit_1to1/internal/merge                  |    85.4% |
-| cmd/audit_1to1/internal/metadata               |    73.5% |
+| cmd/audit_1to1/internal/metadata               |    69.1% |
 | cmd/audit_1to1/internal/structs                |    95.3% |
 | cmd/audit_catalog_first                        |    80.8% |
-| cmd/audit_discovery_completeness               |    78.0% |
+| cmd/audit_discovery_completeness               |    77.9% |
 | cmd/audit_doc_coverage                         |    81.6% |
 | cmd/audit_dynamic_aliases                      |    48.4% |
 | cmd/audit_edition_tier                         |    26.0% |
@@ -340,7 +340,7 @@
 | gitlab      |   100.0% |
 | oauth       |    98.6% |
 | progress    |   100.0% |
-| prompts     |    96.2% |
+| prompts     |    96.5% |
 | resources   |   100.0% |
 | serverpool  |    99.6% |
 | testutil    |    95.9% |
@@ -366,7 +366,7 @@
 | avatar                  |   100.0% |
 | awardemoji              |   100.0% |
 | badges                  |   100.0% |
-| boards                  |    99.3% |
+| boards                  |    99.2% |
 | branches                |   100.0% |
 | branchrules             |   100.0% |
 | broadcastmessages       |   100.0% |
@@ -411,7 +411,7 @@
 | geo                     |   100.0% |
 | gitignoretemplates      |   100.0% |
 | groupanalytics          |   100.0% |
-| groupboards             |    98.6% |
+| groupboards             |    98.5% |
 | groupcredentials        |   100.0% |
 | groupepicboards         |    98.3% |
 | groupimportexport       |   100.0% |
@@ -542,10 +542,10 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (58.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/godoc_tool** (58.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/metadata** (69.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evaluator** (69.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_surface_quality** (71.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_1to1/internal/metadata** (73.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_discovery_completeness** (78.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_discovery_completeness** (77.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_catalog_first** (80.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_doc_coverage** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

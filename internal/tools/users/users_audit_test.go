@@ -126,13 +126,13 @@ func TestToOutput_NilAndEmptySubObjects(t *testing.T) {
 	if got := toIdentityOutputs([]*gl.UserIdentity{nil}); got != nil {
 		t.Errorf("toIdentityOutputs([nil]) = %+v, want nil", got)
 	}
-	if got := toCustomAttributeOutputs([]*gl.CustomAttribute{}); got != nil {
+	if got := toolutil.NewCustomAttributeOutputs([]*gl.CustomAttribute{}); got != nil {
 		t.Errorf("toCustomAttributeOutputs(empty) = %+v, want nil", got)
 	}
-	if got := toCustomAttributeOutputs([]*gl.CustomAttribute{nil}); got != nil {
+	if got := toolutil.NewCustomAttributeOutputs([]*gl.CustomAttribute{nil}); got != nil {
 		t.Errorf("toCustomAttributeOutputs([nil]) = %+v, want nil", got)
 	}
-	if got := toBasicUserOutput(nil); got != nil {
+	if got := toolutil.NewUserRefOutput(nil); got != nil {
 		t.Errorf("toBasicUserOutput(nil) = %+v, want nil", got)
 	}
 }
