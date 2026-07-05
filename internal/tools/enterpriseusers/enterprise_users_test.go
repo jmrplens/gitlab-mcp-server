@@ -407,13 +407,13 @@ func TestToOutput_NestedConvertersSkipNilAndEmpty(t *testing.T) {
 	if got := toSCIMIdentityOutputs([]*gl.SCIMIdentity{nil}); got != nil {
 		t.Errorf("toSCIMIdentityOutputs([nil]) = %v, want nil", got)
 	}
-	if got := toolutil.NewCustomAttributeOutputs([]*gl.CustomAttribute{nil}); got != nil {
+	if got := toCustomAttributeOutputs([]*gl.CustomAttribute{nil}); got != nil {
 		t.Errorf("toCustomAttributeOutputs([nil]) = %v, want nil", got)
 	}
-	if got := toolutil.NewUserRefOutput(nil); got != nil {
+	if got := toBasicUserOutput(nil); got != nil {
 		t.Errorf("toBasicUserOutput(nil) = %v, want nil", got)
 	}
-	if got := toolutil.NewUserRefOutput(&gl.BasicUser{ID: 5}); got == nil || got.CreatedAt != "" {
+	if got := toBasicUserOutput(&gl.BasicUser{ID: 5}); got == nil || got.CreatedAt != "" {
 		t.Errorf("toBasicUserOutput with nil created_at = %+v, want non-nil with empty created_at", got)
 	}
 }

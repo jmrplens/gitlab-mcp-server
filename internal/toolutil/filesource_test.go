@@ -98,3 +98,27 @@ func TestReadFileOrBase64(t *testing.T) {
 		t.Errorf("invalid base64 err = %v, want base64 message", err)
 	}
 }
+
+// TestFileOrBase64_Base64SizeLimit verifies the content_base64 branch honors
+// the configured MaxFileSize, so inline payloads cannot bypass the limit that
+// OpenAndValidateFile enforces on file_path sources.
+func TestFileOrBase64_Base64SizeLimit(t *testing.T) {
+	original := GetUploadConfig()
+	SetUploadConfig(4)
+	t.Cleanup(func() { SetUploadConfig(original.MaxFileSize) })
+
+	oversized := base64.StdEncoding.EncodeToString([]byte("12345"))
+	if _, _, _, err := OpenFileOrBase64Source("op", "", oversized); err == nil ||
+		!strings.Contains(err.Error(), "exceeds maximum allowed size") {
+		t.Errorf("OpenFileOrBase64Source oversized err = %v, want size-limit error", err)
+	}
+	if _, err := ReadFileOrBase64("op", "", oversized); err == nil ||
+		!strings.Contains(err.Error(), "exceeds maximum allowed size") {
+		t.Errorf("ReadFileOrBase64 oversized err = %v, want size-limit error", err)
+	}
+
+	within := base64.StdEncoding.EncodeToString([]byte("1234"))
+	if _, _, _, err := OpenFileOrBase64Source("op", "", within); err != nil {
+		t.Errorf("OpenFileOrBase64Source within-limit err = %v, want nil", err)
+	}
+}

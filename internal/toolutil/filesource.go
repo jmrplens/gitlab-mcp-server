@@ -39,11 +39,26 @@ func OpenFileOrBase64Source(op, filePath, contentBase64 string) (reader io.Reade
 		}
 		return f, info.Size(), func() { _ = f.Close() }, nil
 	}
-	decoded, decodeErr := base64.StdEncoding.DecodeString(contentBase64)
+	decoded, decodeErr := decodeBase64Content(op, contentBase64)
 	if decodeErr != nil {
-		return nil, 0, nil, fmt.Errorf("%s: invalid base64 content: %w", op, decodeErr)
+		return nil, 0, nil, decodeErr
 	}
 	return bytes.NewReader(decoded), int64(len(decoded)), func() {}, nil
+}
+
+// decodeBase64Content decodes an inline content_base64 payload and enforces
+// the same configured upload size limit that OpenAndValidateFile applies to
+// file_path sources, so neither input branch can bypass MaxFileSize.
+func decodeBase64Content(op, contentBase64 string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.DecodeString(contentBase64)
+	if err != nil {
+		return nil, fmt.Errorf("%s: invalid base64 content: %w", op, err)
+	}
+	if maxSize := GetUploadConfig().MaxFileSize; maxSize > 0 && int64(len(decoded)) > maxSize {
+		return nil, fmt.Errorf("%s: decoded content is %d bytes, exceeds maximum allowed size of %d bytes",
+			op, len(decoded), maxSize)
+	}
+	return decoded, nil
 }
 
 // ReadFileOrBase64 resolves the mutually-exclusive file_path / content_base64
@@ -67,9 +82,9 @@ func ReadFileOrBase64(op, filePath, contentBase64 string) (*bytes.Reader, error)
 		}
 		return bytes.NewReader(data), nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(contentBase64)
+	decoded, err := decodeBase64Content(op, contentBase64)
 	if err != nil {
-		return nil, fmt.Errorf("%s: invalid base64 content: %w", op, err)
+		return nil, err
 	}
 	return bytes.NewReader(decoded), nil
 }

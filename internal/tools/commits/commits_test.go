@@ -2728,7 +2728,7 @@ func TestAuthorToOutput(t *testing.T) {
 // TestPipelineInfoToOutput_Nil verifies pipelineInfoToOutput returns nil when
 // the commit has no associated pipeline.
 func TestPipelineInfoToOutput_Nil(t *testing.T) {
-	if got := toolutil.NewLastPipelineOutput(nil); got != nil {
+	if got := pipelineInfoToOutput(nil); got != nil {
 		t.Errorf("pipelineInfoToOutput(nil) = %+v, want nil", got)
 	}
 }

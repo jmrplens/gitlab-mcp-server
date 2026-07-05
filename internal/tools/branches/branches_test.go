@@ -2068,7 +2068,7 @@ func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
 // TestShapeConverters_NilAndEmpty exercises nil/empty fast paths of the shape
 // converters that the request flows do not otherwise reach.
 func TestShapeConverters_NilAndEmpty(t *testing.T) {
-	if toolutil.NewLastPipelineOutput(nil) != nil {
+	if pipelineInfoToOutput(nil) != nil {
 		t.Error("pipelineInfoToOutput(nil) should be nil")
 	}
 	if commitToOutput(nil) != nil {
