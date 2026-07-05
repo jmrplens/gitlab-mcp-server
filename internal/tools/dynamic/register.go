@@ -701,6 +701,8 @@ func buildSearchDocument(id, tool, domain, action string, aliases, tags []string
 		SchemaDescTerms:  schemaPropertyDescriptions(schema),
 	}
 
+	wordizeSearchDocument(&document)
+
 	parts := []string{
 		document.Backend,
 		document.Capability,
@@ -728,6 +730,38 @@ func buildSearchDocument(id, tool, domain, action string, aliases, tags []string
 	parts = append(parts, document.SchemaDescTerms...)
 	document.FlatText = strings.ToLower(strings.Join(parts, " "))
 	return document
+}
+
+// wordizeSearchDocument precomputes the space-joined word form of every value
+// the query-time matcher inspects, so matchedSearchValue never re-normalizes
+// candidate text per comparison (that per-call Replacer/Fields/dedupe work
+// used to account for ~40% of Search CPU on long multi-intent queries).
+func wordizeSearchDocument(document *searchDocument) {
+	fields := [][]string{
+		document.DomainWords,
+		document.ActionWords,
+		document.RequiredParams,
+		document.OptionalParams,
+		document.SchemaProperties,
+		document.SchemaEnums,
+		document.SchemaDescTerms,
+	}
+	total := 0
+	for _, values := range fields {
+		total += len(values)
+	}
+	if total == 0 {
+		return
+	}
+	wordized := make(map[string]string, total)
+	for _, values := range fields {
+		for _, value := range values {
+			if _, ok := wordized[value]; !ok {
+				wordized[value] = strings.Join(splitSearchFieldWords(value), " ")
+			}
+		}
+	}
+	document.WordizedValues = wordized
 }
 
 func inferCapability(domain, action string) string {
@@ -769,8 +803,13 @@ func inferActionScope(domain string, schema map[string]any) string {
 	}
 }
 
+// searchWordReplacer maps the canonical identifier separators to spaces. It is
+// built once: constructing a strings.Replacer per call used to dominate Search
+// CPU when the matcher re-normalized candidate text per comparison.
+var searchWordReplacer = strings.NewReplacer(".", " ", "_", " ", "-", " ")
+
 func splitSearchFieldWords(value string) []string {
-	fields := strings.Fields(strings.ToLower(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(value)))
+	fields := strings.Fields(strings.ToLower(searchWordReplacer.Replace(value)))
 	return dedupeStrings(fields)
 }
 
@@ -871,7 +910,7 @@ type searchTerm struct {
 }
 
 func normalizeSearchTerms(query string) []searchTerm {
-	fields := strings.Fields(strings.ToLower(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(query)))
+	fields := strings.Fields(strings.ToLower(searchWordReplacer.Replace(query)))
 	terms := make([]searchTerm, 0, len(fields))
 	for _, field := range fields {
 		if _, stop := searchStopWords()[field]; stop {
@@ -2541,11 +2580,11 @@ func scoreRequiredParamSignalValue(entry actionEntry, terms []searchTerm) int {
 	total := 0
 	for _, term := range terms {
 		for _, alternative := range term.Alternatives {
-			if matchedSearchValue(document.RequiredParams, alternative) != "" {
+			if matchedSearchValue(document.WordizedValues, document.RequiredParams, alternative) != "" {
 				total += scoreRequiredParamBoost
 				break
 			}
-			if matchedSearchValue(document.OptionalParams, alternative) != "" {
+			if matchedSearchValue(document.WordizedValues, document.OptionalParams, alternative) != "" {
 				total += scoreRequiredParamBoost / 2
 				break
 			}
@@ -2559,11 +2598,11 @@ func scoreRequiredParamSignals(entry actionEntry, terms []searchTerm) (int, []Ma
 	reasons := make([]MatchReason, 0)
 	for _, term := range terms {
 		for _, alternative := range term.Alternatives {
-			matched := matchedSearchValue(document.RequiredParams, alternative)
+			matched := matchedSearchValue(document.WordizedValues, document.RequiredParams, alternative)
 			field := searchFieldRequiredParam
 			boost := scoreRequiredParamBoost
 			if matched == "" {
-				matched = matchedSearchValue(document.OptionalParams, alternative)
+				matched = matchedSearchValue(document.WordizedValues, document.OptionalParams, alternative)
 				field = searchFieldOptionalParam
 				boost = scoreRequiredParamBoost / 2
 			}
@@ -3113,19 +3152,19 @@ func scoreSearchAlternative(entry actionEntry, raw, alternative string) int {
 		return scoreDomainActionWord
 	case strings.Contains(document.CanonicalID, alternative):
 		return scoreIDContains
-	case containsAnySearchValue(document.DomainWords, alternative) || containsAnySearchValue(document.ActionWords, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.DomainWords, alternative) || containsAnySearchValue(document.WordizedValues, document.ActionWords, alternative):
 		return scoreDomainActionContains
 	case strings.Contains(document.Tool, alternative):
 		return scoreFieldContainsFor(raw, alternative)
-	case containsAnySearchValue(document.RequiredParams, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.RequiredParams, alternative):
 		return scoreParamContainsFor(raw, alternative, scoreRequiredParamMatch)
-	case containsAnySearchValue(document.OptionalParams, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.OptionalParams, alternative):
 		return scoreParamContainsFor(raw, alternative, scoreOptionalParamMatch)
-	case containsAnySearchValue(document.SchemaEnums, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.SchemaEnums, alternative):
 		return scoreParamContainsFor(raw, alternative, scoreSchemaEnumMatch)
-	case containsAnySearchValue(document.SchemaDescTerms, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.SchemaDescTerms, alternative):
 		return scoreParamContainsFor(raw, alternative, scoreSchemaDescMatch)
-	case containsAnySearchValue(document.SchemaProperties, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.SchemaProperties, alternative):
 		return scoreFieldContainsFor(raw, alternative)
 	case strings.Contains(document.FlatText, alternative):
 		if raw == alternative {
@@ -3158,22 +3197,22 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 	switch {
 	case strings.Contains(document.CanonicalID, alternative):
 		return reason(searchFieldIDContains, document.CanonicalID, scoreIDContains)
-	case containsAnySearchValue(document.DomainWords, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.DomainWords, alternative):
 		return reason(searchFieldDomainContains, document.Domain, scoreDomainActionContains)
-	case containsAnySearchValue(document.ActionWords, alternative):
+	case containsAnySearchValue(document.WordizedValues, document.ActionWords, alternative):
 		return reason(searchFieldActionContains, document.Action, scoreDomainActionContains)
 	case strings.Contains(document.Tool, alternative):
 		return reason(searchFieldTool, document.Tool, scoreFieldContainsFor(raw, alternative))
-	case containsAnySearchValue(document.RequiredParams, alternative):
-		return reason(searchFieldRequiredParam, matchedSearchValue(document.RequiredParams, alternative), scoreParamContainsFor(raw, alternative, scoreRequiredParamMatch))
-	case containsAnySearchValue(document.OptionalParams, alternative):
-		return reason(searchFieldOptionalParam, matchedSearchValue(document.OptionalParams, alternative), scoreParamContainsFor(raw, alternative, scoreOptionalParamMatch))
-	case containsAnySearchValue(document.SchemaEnums, alternative):
-		return reason(searchFieldSchemaEnum, matchedSearchValue(document.SchemaEnums, alternative), scoreParamContainsFor(raw, alternative, scoreSchemaEnumMatch))
-	case containsAnySearchValue(document.SchemaDescTerms, alternative):
-		return reason(searchFieldSchemaDesc, matchedSearchValue(document.SchemaDescTerms, alternative), scoreParamContainsFor(raw, alternative, scoreSchemaDescMatch))
-	case containsAnySearchValue(document.SchemaProperties, alternative):
-		return reason(searchFieldSchemaProperty, matchedSearchValue(document.SchemaProperties, alternative), scoreFieldContainsFor(raw, alternative))
+	case containsAnySearchValue(document.WordizedValues, document.RequiredParams, alternative):
+		return reason(searchFieldRequiredParam, matchedSearchValue(document.WordizedValues, document.RequiredParams, alternative), scoreParamContainsFor(raw, alternative, scoreRequiredParamMatch))
+	case containsAnySearchValue(document.WordizedValues, document.OptionalParams, alternative):
+		return reason(searchFieldOptionalParam, matchedSearchValue(document.WordizedValues, document.OptionalParams, alternative), scoreParamContainsFor(raw, alternative, scoreOptionalParamMatch))
+	case containsAnySearchValue(document.WordizedValues, document.SchemaEnums, alternative):
+		return reason(searchFieldSchemaEnum, matchedSearchValue(document.WordizedValues, document.SchemaEnums, alternative), scoreParamContainsFor(raw, alternative, scoreSchemaEnumMatch))
+	case containsAnySearchValue(document.WordizedValues, document.SchemaDescTerms, alternative):
+		return reason(searchFieldSchemaDesc, matchedSearchValue(document.WordizedValues, document.SchemaDescTerms, alternative), scoreParamContainsFor(raw, alternative, scoreSchemaDescMatch))
+	case containsAnySearchValue(document.WordizedValues, document.SchemaProperties, alternative):
+		return reason(searchFieldSchemaProperty, matchedSearchValue(document.WordizedValues, document.SchemaProperties, alternative), scoreFieldContainsFor(raw, alternative))
 	case strings.Contains(document.FlatText, alternative):
 		if raw == alternative {
 			return reason(searchFieldFlatText, alternative, scoreFieldContains)
@@ -3216,7 +3255,7 @@ func documentForEntry(entry actionEntry) searchDocument {
 	if entry.Document.CanonicalID != "" || entry.Document.FlatText != "" {
 		return entry.Document
 	}
-	return searchDocument{
+	document := searchDocument{
 		CanonicalID:      strings.ToLower(strings.TrimSpace(entry.ID)),
 		IDWords:          splitSearchFieldWords(entry.ID),
 		Tool:             strings.ToLower(strings.TrimSpace(entry.Tool)),
@@ -3233,19 +3272,31 @@ func documentForEntry(entry actionEntry) searchDocument {
 		SchemaDescTerms:  nil,
 		FlatText:         strings.ToLower(entry.SearchText),
 	}
+	wordizeSearchDocument(&document)
+	return document
 }
 
-func containsAnySearchValue(values []string, alternative string) bool {
-	return matchedSearchValue(values, alternative) != ""
+func containsAnySearchValue(wordized map[string]string, values []string, alternative string) bool {
+	return matchedSearchValue(wordized, values, alternative) != ""
 }
 
-func matchedSearchValue(values []string, alternative string) string {
+func matchedSearchValue(wordized map[string]string, values []string, alternative string) string {
 	for _, value := range values {
-		if value == alternative || strings.Contains(value, alternative) || strings.Contains(strings.Join(splitSearchFieldWords(value), " "), alternative) {
+		if value == alternative || strings.Contains(value, alternative) || strings.Contains(wordizedSearchValue(wordized, value), alternative) {
 			return value
 		}
 	}
 	return ""
+}
+
+// wordizedSearchValue returns the precomputed word form of value, falling back
+// to on-the-fly normalization for values that were not registered at document
+// build time (hand-built test entries), preserving the original semantics.
+func wordizedSearchValue(wordized map[string]string, value string) string {
+	if words, ok := wordized[value]; ok {
+		return words
+	}
+	return strings.Join(splitSearchFieldWords(value), " ")
 }
 
 func scoreFieldContainsFor(raw, alternative string) int {

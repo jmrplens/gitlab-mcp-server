@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,22 +133,57 @@ var formatTimePtrFuncDef = regexp.MustCompile(`^func\s+formatTimePtr\b`)
 // formatISOTimePtr (with any return type). Used by the uniqueness guardrail.
 var formatISOTimePtrFuncDef = regexp.MustCompile(`^func\s+formatISOTimePtr\b`)
 
-// findDuplicateTimeHelper walks the repository looking for top-level Go function
-// definitions matching re, excluding the canonical home (this package's source
-// directory) and the test runtime cache. Returns the list of offending
-// "path:lineno" locations.
+// timeHelperScan holds the result of the single shared repository sweep the
+// two DEDUP-003 guardrail tests consume: offending "path:lineno" locations
+// per helper regex. The sweep is repo-wide but runs once (sync.Once) and
+// prunes non-source trees (.git, node_modules, dist, the Astro site), which
+// previously dominated the walk with tens of thousands of irrelevant entries.
+type timeHelperScan struct {
+	formatTimePtr    []string
+	formatISOTimePtr []string
+	err              error
+}
+
+var (
+	timeHelperScanOnce   sync.Once
+	timeHelperScanResult timeHelperScan
+)
+
+// findDuplicateTimeHelper returns the duplicate-definition hits for re,
+// excluding the canonical home (this package's source directory). Both
+// guardrail regexes are matched in one shared walk.
 func findDuplicateTimeHelper(t *testing.T, re *regexp.Regexp, skipDir string) []string {
 	t.Helper()
+	timeHelperScanOnce.Do(func() { timeHelperScanResult = scanRepoForTimeHelpers(t, skipDir) })
+	if timeHelperScanResult.err != nil {
+		t.Fatalf("walk repo: %v", timeHelperScanResult.err)
+	}
+	if re == formatISOTimePtrFuncDef {
+		return timeHelperScanResult.formatISOTimePtr
+	}
+	return timeHelperScanResult.formatTimePtr
+}
+
+// scanRepoForTimeHelpers performs the single repository sweep, collecting the
+// hits for both helper regexes at once.
+func scanRepoForTimeHelpers(t *testing.T, skipDir string) timeHelperScan {
+	t.Helper()
 	repoRoot := findRepoRoot(t)
-	var hits []string
-	err := filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	prunedDirs := map[string]struct{}{
+		".git": {}, "node_modules": {}, "dist": {}, "site": {},
+	}
+	var scan timeHelperScan
+	scan.err = filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") {
+		if info.IsDir() {
+			if _, pruned := prunedDirs[info.Name()]; pruned {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if strings.HasSuffix(path, "_test.go") {
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		if filepath.Dir(path) == skipDir {
@@ -162,17 +198,19 @@ func findDuplicateTimeHelper(t *testing.T, re *regexp.Regexp, skipDir string) []
 		lineNo := 0
 		for scanner.Scan() {
 			lineNo++
-			if re.MatchString(scanner.Text()) {
+			line := scanner.Text()
+			if formatTimePtrFuncDef.MatchString(line) {
 				rel, _ := filepath.Rel(repoRoot, path)
-				hits = append(hits, rel+":"+itoa(lineNo))
+				scan.formatTimePtr = append(scan.formatTimePtr, rel+":"+itoa(lineNo))
+			}
+			if formatISOTimePtrFuncDef.MatchString(line) {
+				rel, _ := filepath.Rel(repoRoot, path)
+				scan.formatISOTimePtr = append(scan.formatISOTimePtr, rel+":"+itoa(lineNo))
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("walk repo: %v", err)
-	}
-	return hits
+	return scan
 }
 
 // findRepoRoot returns the absolute path to the repository root (the directory
