@@ -51,6 +51,16 @@ type CreatedByOutput = toolutil.MemberUserOutput
 // 1:1 SDK fidelity. Canonical shape shared via toolutil.
 type MemberRoleOutput = toolutil.MemberRoleOutput
 
+// createdByOutput converts [gl.MemberCreatedBy] into the shared mirror, or nil.
+func createdByOutput(c *gl.MemberCreatedBy) *CreatedByOutput {
+	return toolutil.NewMemberUserOutput(c)
+}
+
+// memberRoleOutput converts [gl.MemberRole] into the shared mirror, or nil.
+func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
+	return toolutil.NewMemberRoleOutput(r)
+}
+
 // ListOutput holds a paginated list of members.
 type ListOutput struct {
 	toolutil.HintableOutput
@@ -80,8 +90,8 @@ func ToOutput(m *gl.ProjectMember) Output {
 		AccessLevel: int(m.AccessLevel),
 		WebURL:      m.WebURL,
 		Email:       m.Email,
-		CreatedBy:   toolutil.NewMemberUserOutput(m.CreatedBy),
-		MemberRole:  toolutil.NewMemberRoleOutput(m.MemberRole),
+		CreatedBy:   createdByOutput(m.CreatedBy),
+		MemberRole:  memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)

@@ -76,7 +76,7 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 		ProjectID:        c.ProjectID,
 		Trailers:         c.Trailers,
 		ExtendedTrailers: c.ExtendedTrailers,
-		LastPipeline:     toolutil.NewLastPipelineOutput(c.LastPipeline),
+		LastPipeline:     pipelineInfoToOutput(c.LastPipeline),
 	}
 	if c.AuthoredDate != nil {
 		out.AuthoredDate = c.AuthoredDate.String()
@@ -170,4 +170,10 @@ func branchPermissionOptions(in []BranchPermissionInput) *[]*gl.BranchPermission
 		out = append(out, opt)
 	}
 	return &out
+}
+
+// pipelineInfoToOutput maps gl.PipelineInfo to *LastPipelineOutput, or nil when
+// the commit has no associated pipeline.
+func pipelineInfoToOutput(p *gl.PipelineInfo) *LastPipelineOutput {
+	return toolutil.NewLastPipelineOutput(p)
 }

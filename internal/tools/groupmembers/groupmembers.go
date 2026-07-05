@@ -556,9 +556,9 @@ func convertMember(m *gl.GroupMember) Output {
 		AccessLevel:       int(m.AccessLevel),
 		Email:             m.Email,
 		PublicEmail:       m.PublicEmail,
-		CreatedBy:         toolutil.NewMemberUserOutput(m.CreatedBy),
-		GroupSAMLIdentity: toolutil.NewSAMLIdentityOutput(m.GroupSAMLIdentity),
-		MemberRole:        toolutil.NewMemberRoleOutput(m.MemberRole),
+		CreatedBy:         memberUserOutput(m.CreatedBy),
+		GroupSAMLIdentity: samlIdentityOutput(m.GroupSAMLIdentity),
+		MemberRole:        memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)
@@ -568,6 +568,22 @@ func convertMember(m *gl.GroupMember) Output {
 	}
 	out.IsUsingSeat = m.IsUsingSeat
 	return out
+}
+
+// memberUserOutput mirrors a gl.MemberCreatedBy into the shared output shape.
+func memberUserOutput(u *gl.MemberCreatedBy) *MemberUserOutput {
+	return toolutil.NewMemberUserOutput(u)
+}
+
+// samlIdentityOutput mirrors a gl.GroupMemberSAMLIdentity into the shared
+// output shape.
+func samlIdentityOutput(s *gl.GroupMemberSAMLIdentity) *SAMLIdentityOutput {
+	return toolutil.NewSAMLIdentityOutput(s)
+}
+
+// memberRoleOutput mirrors a gl.MemberRole into the shared output shape.
+func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
+	return toolutil.NewMemberRoleOutput(r)
 }
 
 // convertBillableMember maps a gl.BillableGroupMember into the MCP output

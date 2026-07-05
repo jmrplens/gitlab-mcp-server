@@ -176,7 +176,7 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 		return CurrentUserPATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token_for_current_user", err, http.StatusBadRequest,
 			"name is required; scopes must include valid PAT scopes (e.g. api, read_user, read_repository, write_repository); expires_at format YYYY-MM-DD")
 	}
-	return toolutil.NewPersonalTokenOutput(token), nil
+	return toCurrentUserPATOutput(token), nil
 }
 
 // --- Markdown formatters ---.
@@ -230,4 +230,10 @@ func FormatCurrentUserPATMarkdownString(out CurrentUserPATOutput) string {
 		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
 	}
 	return sb.String()
+}
+
+// toCurrentUserPATOutput converts a gl.PersonalAccessToken into the shared
+// output shape.
+func toCurrentUserPATOutput(t *gl.PersonalAccessToken) CurrentUserPATOutput {
+	return toolutil.NewPersonalTokenOutput(t)
 }

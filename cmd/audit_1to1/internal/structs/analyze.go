@@ -1135,7 +1135,15 @@ func localOrAliasNamedStruct(pkg *packages.Package, resultExpr ast.Expr, resultT
 	}
 	// Go materializes type aliases as *types.Alias; unwrap to the target named
 	// struct (e.g. Output -> toolutil.MergeRequestOutput) before reading fields.
-	_, st, ok := derefNamedStruct(types.Unalias(resultType))
+	// types.Unalias only unwraps a top-level alias, so a *Alias pointer result
+	// (the thin-wrapper converter shape, e.g. *MemberUserOutput) must be
+	// dereferenced first or the alias inside the pointer stays opaque and the
+	// pair silently falls out of audit coverage.
+	target := resultType
+	if ptr, isPtr := target.(*types.Pointer); isPtr {
+		target = ptr.Elem()
+	}
+	_, st, ok := derefNamedStruct(types.Unalias(target))
 	if !ok {
 		return nil, "", false
 	}

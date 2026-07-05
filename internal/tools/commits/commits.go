@@ -216,7 +216,7 @@ func commitToFields(c *gl.Commit) commitFields {
 		projectID:        c.ProjectID,
 		trailers:         c.Trailers,
 		extendedTrailers: c.ExtendedTrailers,
-		lastPipeline:     toolutil.NewLastPipelineOutput(c.LastPipeline),
+		lastPipeline:     pipelineInfoToOutput(c.LastPipeline),
 	}
 	if c.CommittedDate != nil {
 		f.committedDate = c.CommittedDate.String()
@@ -1108,4 +1108,10 @@ func GetGPGSignature(ctx context.Context, client *gitlabclient.Client, input GPG
 		Key:                sig.Key,
 		X509Certificate:    sig.X509Certificate,
 	}, nil
+}
+
+// pipelineInfoToOutput maps gl.PipelineInfo to *LastPipelineOutput, or nil when
+// the commit has no associated pipeline.
+func pipelineInfoToOutput(p *gl.PipelineInfo) *LastPipelineOutput {
+	return toolutil.NewLastPipelineOutput(p)
 }

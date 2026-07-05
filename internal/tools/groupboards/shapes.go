@@ -114,3 +114,27 @@ type LabelOutput = toolutil.BoardLabelOutput
 // A board list's `iteration` object (Premium/Ultimate iteration list type)
 // mirrors gl.ProjectIteration. Canonical shape shared via toolutil.
 type IterationOutput = toolutil.IterationOutput
+
+// basicUserOutput converts a gl.BasicUser into the documented board assignee
+// subset, or nil.
+func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	return toolutil.NewBoardUserOutput(u)
+}
+
+// boardListAssigneeOutput converts a gl.BoardListAssignee into the shared
+// output shape, or nil.
+func boardListAssigneeOutput(a *gl.BoardListAssignee) *BoardListAssigneeOutput {
+	return toolutil.NewBoardListAssigneeOutput(a)
+}
+
+// labelOutput converts a gl.Label into the documented board-list label
+// subset, or nil.
+func labelOutput(l *gl.Label) *LabelOutput {
+	return toolutil.NewBoardLabelOutput(l)
+}
+
+// iterationOutput converts a gl.ProjectIteration into the canonical iteration
+// object, or nil.
+func iterationOutput(it *gl.ProjectIteration) *IterationOutput {
+	return toolutil.NewIterationOutputFromProjectIteration(it)
+}

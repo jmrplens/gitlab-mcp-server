@@ -178,8 +178,8 @@ func toOutput(u *gl.User) Output {
 		Locked:                         u.Locked,
 		Identities:                     toIdentityOutputs(u.Identities),
 		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
-		CustomAttributes:               toolutil.NewCustomAttributeOutputs(u.CustomAttributes),
-		CreatedBy:                      toolutil.NewUserRefOutput(u.CreatedBy),
+		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
+		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
 	}
 	if u.CreatedAt != nil {
 		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
@@ -237,6 +237,18 @@ func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
 		return nil
 	}
 	return out
+}
+
+// toCustomAttributeOutputs converts a []*gl.CustomAttribute slice into the
+// shared output shape.
+func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
+	return toolutil.NewCustomAttributeOutputs(attrs)
+}
+
+// toBasicUserOutput converts a *gl.BasicUser into the shared user-reference
+// shape, or nil.
+func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	return toolutil.NewUserRefOutput(u)
 }
 
 // List returns all enterprise users for a group.

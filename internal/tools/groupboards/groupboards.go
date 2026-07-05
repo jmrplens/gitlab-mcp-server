@@ -159,7 +159,7 @@ func convertGroupBoardAPI(b *groupIssueBoardAPI) GroupBoardOutput {
 		Name:            b.Name,
 		Group:           groupRefOutput(b.Group),
 		Milestone:       milestoneOutput(b.Milestone),
-		Assignee:        toolutil.NewBoardUserOutput(b.Assignee),
+		Assignee:        basicUserOutput(b.Assignee),
 		Weight:          b.Weight,
 		Labels:          groupLabelOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
@@ -175,9 +175,9 @@ func convertGroupBoardAPI(b *groupIssueBoardAPI) GroupBoardOutput {
 func convertBoardList(l *gl.BoardList) BoardListOutput {
 	return BoardListOutput{
 		ID:             l.ID,
-		Assignee:       toolutil.NewBoardListAssigneeOutput(l.Assignee),
-		Iteration:      toolutil.NewIterationOutputFromProjectIteration(l.Iteration),
-		Label:          toolutil.NewBoardLabelOutput(l.Label),
+		Assignee:       boardListAssigneeOutput(l.Assignee),
+		Iteration:      iterationOutput(l.Iteration),
+		Label:          labelOutput(l.Label),
 		MaxIssueCount:  l.MaxIssueCount,
 		MaxIssueWeight: l.MaxIssueWeight,
 		Milestone:      milestoneOutput(l.Milestone),
