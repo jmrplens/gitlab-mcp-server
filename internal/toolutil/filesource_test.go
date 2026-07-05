@@ -86,8 +86,8 @@ func TestReadFileOrBase64(t *testing.T) {
 		t.Errorf("file branch = len %v err %v, want len 3 nil", r, err)
 	}
 
-	if _, err = ReadFileOrBase64("op", "/nonexistent/file", ""); err == nil {
-		t.Error("missing file err = nil, want op-prefixed error")
+	if _, err = ReadFileOrBase64("op", "/nonexistent/file", ""); err == nil || !strings.HasPrefix(err.Error(), "op: ") {
+		t.Errorf("missing file err = %v, want op-prefixed error", err)
 	}
 
 	r, err = ReadFileOrBase64("op", "", base64.StdEncoding.EncodeToString([]byte("zz")))

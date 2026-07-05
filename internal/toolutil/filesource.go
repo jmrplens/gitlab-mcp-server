@@ -43,18 +43,25 @@ func OpenFileOrBase64Source(op, filePath, contentBase64 string) (reader io.Reade
 	if decodeErr != nil {
 		return nil, 0, nil, decodeErr
 	}
-	return bytes.NewReader(decoded), int64(len(decoded)), func() {}, nil
+	return bytes.NewReader(decoded), int64(len(decoded)), func() { /* in-memory reader; nothing to release */ }, nil
 }
 
 // decodeBase64Content decodes an inline content_base64 payload and enforces
 // the same configured upload size limit that OpenAndValidateFile applies to
-// file_path sources, so neither input branch can bypass MaxFileSize.
+// file_path sources, so neither input branch can bypass MaxFileSize. The
+// limit is checked against base64.DecodedLen before decoding, so an
+// oversized payload is rejected without allocating its decoded form; the
+// exact post-decode check covers the padding slack DecodedLen overestimates.
 func decodeBase64Content(op, contentBase64 string) ([]byte, error) {
+	maxSize := GetUploadConfig().MaxFileSize
+	if maxSize > 0 && int64(base64.StdEncoding.DecodedLen(len(contentBase64))) > maxSize+2 {
+		return nil, fmt.Errorf("%s: decoded content would exceed maximum allowed size of %d bytes", op, maxSize)
+	}
 	decoded, err := base64.StdEncoding.DecodeString(contentBase64)
 	if err != nil {
 		return nil, fmt.Errorf("%s: invalid base64 content: %w", op, err)
 	}
-	if maxSize := GetUploadConfig().MaxFileSize; maxSize > 0 && int64(len(decoded)) > maxSize {
+	if maxSize > 0 && int64(len(decoded)) > maxSize {
 		return nil, fmt.Errorf("%s: decoded content is %d bytes, exceeds maximum allowed size of %d bytes",
 			op, len(decoded), maxSize)
 	}

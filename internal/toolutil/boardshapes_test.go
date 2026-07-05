@@ -64,6 +64,9 @@ func TestNewBoardLabelDetailsOutputs(t *testing.T) {
 	if got := NewBoardLabelDetailsOutputs([]*gl.LabelDetails{}); got != nil {
 		t.Fatalf("NewBoardLabelDetailsOutputs(empty) = %+v, want nil", got)
 	}
+	if got := NewBoardLabelDetailsOutputs([]*gl.LabelDetails{nil, nil}); got != nil {
+		t.Fatalf("NewBoardLabelDetailsOutputs(all nil) = %+v, want nil", got)
+	}
 
 	in := []*gl.LabelDetails{
 		{ID: 1, Name: "bug", Color: "#f00", Description: "defects"},
@@ -94,13 +97,12 @@ func TestNewIterationOutputFromProjectIteration(t *testing.T) {
 		Title: "Sprint 1", Description: "first", State: 1, WebURL: "https://example.com/it/3",
 		CreatedAt: &created, StartDate: &start,
 	})
-	if got == nil {
-		t.Fatal("NewIterationOutputFromProjectIteration returned nil for non-nil input")
+	want := &IterationOutput{
+		ID: 3, IID: 1, Sequence: 2, GroupID: 42,
+		Title: "Sprint 1", Description: "first", State: 1, WebURL: "https://example.com/it/3",
+		CreatedAt: FormatTimePtr(&created), StartDate: FormatISOTimePtr(&start),
 	}
-	if got.ID != 3 || got.GroupID != 42 || got.Title != "Sprint 1" || got.State != 1 {
-		t.Errorf("NewIterationOutputFromProjectIteration identity fields = %+v", got)
-	}
-	if got.CreatedAt == "" || got.StartDate == "" {
-		t.Errorf("NewIterationOutputFromProjectIteration dates not mapped: %+v", got)
+	if got == nil || *got != *want {
+		t.Errorf("NewIterationOutputFromProjectIteration = %+v, want %+v", got, want)
 	}
 }

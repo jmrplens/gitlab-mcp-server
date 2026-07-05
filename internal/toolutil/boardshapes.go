@@ -80,8 +80,9 @@ type BoardLabelDetailsOutput struct {
 }
 
 // NewBoardLabelDetailsOutputs converts a slice of gl.LabelDetails into the
-// documented board label subset, skipping nil elements and returning nil for
-// an empty input.
+// documented board label subset, skipping nil elements and returning nil
+// when no labels remain (consistent with NewCustomAttributeOutputs, so
+// callers never serialize an empty array for an effectively-empty input).
 func NewBoardLabelDetailsOutputs(details []*gl.LabelDetails) []*BoardLabelDetailsOutput {
 	if len(details) == 0 {
 		return nil
@@ -94,6 +95,9 @@ func NewBoardLabelDetailsOutputs(details []*gl.LabelDetails) []*BoardLabelDetail
 		out = append(out, &BoardLabelDetailsOutput{
 			ID: d.ID, Name: d.Name, Color: d.Color, Description: d.Description,
 		})
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

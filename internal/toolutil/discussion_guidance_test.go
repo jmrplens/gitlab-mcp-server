@@ -17,7 +17,8 @@ func TestDiscussionIDParamGuidance(t *testing.T) {
 	if got.ExampleBinding != `params.discussion_id:"6a9c1750b37d513a43987b574953fceb50b03ce7"` {
 		t.Errorf("ExampleBinding = %q", got.ExampleBinding)
 	}
-	if len(got.CommonConfusions) != 1 || got.CommonConfusions[0] == "" {
+	if len(got.CommonConfusions) != 1 ||
+		got.CommonConfusions[0] != "The discussion_id is the thread hash, not a note id; pass note_id separately for note actions." {
 		t.Errorf("CommonConfusions = %v, want the fixed thread-vs-note note", got.CommonConfusions)
 	}
 }
@@ -37,7 +38,8 @@ func TestDiscussionNoteIDParamGuidance(t *testing.T) {
 	if got.ExampleBinding != "params.note_id:300" {
 		t.Errorf("ExampleBinding = %q, want params.note_id:300", got.ExampleBinding)
 	}
-	if len(got.CommonConfusions) != 1 || got.CommonConfusions[0] == "" {
+	if len(got.CommonConfusions) != 1 ||
+		got.CommonConfusions[0] != "note_id is the numeric id of a single note; discussion_id is the thread hash." {
 		t.Errorf("CommonConfusions = %v, want the fixed note-vs-thread note", got.CommonConfusions)
 	}
 }
