@@ -28,16 +28,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
@@ -82,21 +79,11 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{ //#nosec G101 -- dummy token, no real credential
-		GitLabURL:   srv.URL,
-		GitLabToken: "gen-docker-tools-token",
-	}
-	client, err := gitlabclient.NewClient(cfg)
+	client, closeStub, err := auditshared.NewStubGitLabClient("gen-docker-tools-token") //#nosec G101 -- dummy token, no real credential
 	if err != nil {
 		return fmt.Errorf("client: %w", err)
 	}
+	defer closeStub()
 
 	opts := &mcp.ServerOptions{PageSize: 2000}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-docker-tools", Version: "0.0.1"}, opts)

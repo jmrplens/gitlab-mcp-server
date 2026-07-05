@@ -7,11 +7,14 @@ package auditshared
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -88,4 +91,27 @@ func OwnerPackage(group tools.ActionSpecGroup, spec toolutil.ActionSpec) string 
 		return owner
 	}
 	return strings.TrimSpace(group.BaseDomain)
+}
+
+// NewStubGitLabClient builds a GitLab client pointed at an in-process HTTP
+// stub that answers every request with a fixed version payload. Generators
+// and auditors use it to register the tool catalog offline. The returned
+// cleanup func shuts the stub server down.
+func NewStubGitLabClient(token string) (*gitlabclient.Client, func(), error) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"version":"17.0.0"}`)
+	}))
+
+	cfg := &config.Config{
+		GitLabURL:   srv.URL,
+		GitLabToken: token,
+	}
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		srv.Close()
+		return nil, nil, fmt.Errorf("create stub gitlab client: %w", err)
+	}
+	return client, srv.Close, nil
 }

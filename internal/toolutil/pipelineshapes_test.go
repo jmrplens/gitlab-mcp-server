@@ -147,3 +147,28 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		}
 	}
 }
+
+// TestNewLastPipelineOutput pins the commit last_pipeline conversion:
+// nil-on-nil, full field mirror, and String()-formatted timestamps only when
+// present (preserving the historical commit-payload format).
+func TestNewLastPipelineOutput(t *testing.T) {
+	if got := NewLastPipelineOutput(nil); got != nil {
+		t.Fatalf("NewLastPipelineOutput(nil) = %+v, want nil", got)
+	}
+
+	created := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
+	got := NewLastPipelineOutput(&gl.PipelineInfo{
+		ID: 12, IID: 3, ProjectID: 9, Status: "success", Source: "push",
+		Ref: "main", SHA: "abc123", Name: "build", WebURL: "https://example.com/p/12",
+		CreatedAt: &created,
+	})
+	if got == nil || got.ID != 12 || got.Status != "success" || got.Ref != "main" || got.WebURL != "https://example.com/p/12" {
+		t.Errorf("NewLastPipelineOutput = %+v, want full mirror", got)
+	}
+	if got.CreatedAt != created.String() {
+		t.Errorf("CreatedAt = %q, want %q", got.CreatedAt, created.String())
+	}
+	if got.UpdatedAt != "" {
+		t.Errorf("UpdatedAt = %q, want empty for nil source", got.UpdatedAt)
+	}
+}

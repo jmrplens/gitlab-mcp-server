@@ -1,12 +1,8 @@
 package wikis
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -243,30 +239,6 @@ type AttachmentOutput struct {
 	Markdown string `json:"markdown"`
 }
 
-// resolveAttachmentReader builds a bytes.Reader from either a file path or base64 content.
-func resolveAttachmentReader(filePath, contentBase64 string) (*bytes.Reader, error) {
-	if filePath != "" {
-		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(filePath, cfg.MaxFileSize)
-		if err != nil {
-			return nil, fmt.Errorf("upload_wiki_attachment: %w", err)
-		}
-		defer f.Close()
-
-		data := make([]byte, info.Size())
-		if _, err = io.ReadFull(f, data); err != nil {
-			return nil, fmt.Errorf("upload_wiki_attachment: reading file: %w", err)
-		}
-		return bytes.NewReader(data), nil
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(contentBase64)
-	if err != nil {
-		return nil, fmt.Errorf("upload_wiki_attachment: invalid base64 content: %w", err)
-	}
-	return bytes.NewReader(decoded), nil
-}
-
 // UploadAttachment uploads a file attachment to a project wiki.
 func UploadAttachment(ctx context.Context, client *gitlabclient.Client, input UploadAttachmentInput) (AttachmentOutput, error) {
 	if input.ProjectID == "" {
@@ -276,17 +248,7 @@ func UploadAttachment(ctx context.Context, client *gitlabclient.Client, input Up
 		return AttachmentOutput{}, errors.New("upload_wiki_attachment: filename is required")
 	}
 
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return AttachmentOutput{}, errors.New("upload_wiki_attachment: provide either file_path or content_base64, not both")
-	}
-	if !hasFilePath && !hasBase64 {
-		return AttachmentOutput{}, errors.New("upload_wiki_attachment: either file_path or content_base64 is required")
-	}
-
-	reader, err := resolveAttachmentReader(input.FilePath, input.ContentBase64)
+	reader, err := toolutil.ReadFileOrBase64("upload_wiki_attachment", input.FilePath, input.ContentBase64)
 	if err != nil {
 		return AttachmentOutput{}, err
 	}

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 )
 
 // TestDiscoverActionSpecGroupBuilders_SortsBuilders verifies DiscoverActionSpecGroupBuilders sorts builders.
@@ -23,9 +25,9 @@ func helper() {}
 func buildAccessActionSpecs() {}
 `)
 
-	builders, err := discoverActionSpecGroupBuilders(sourceDir)
+	builders, err := auditshared.DiscoverActionSpecGroupBuilders(sourceDir)
 	if err != nil {
-		t.Fatalf("discoverActionSpecGroupBuilders() error = %v", err)
+		t.Fatalf("auditshared.DiscoverActionSpecGroupBuilders() error = %v", err)
 	}
 	want := []string{"buildAccessActionSpecs", "buildWikiActionSpecs"}
 	if strings.Join(builders, ",") != strings.Join(want, ",") {

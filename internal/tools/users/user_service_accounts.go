@@ -43,20 +43,9 @@ type ListServiceAccountsInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// CurrentUserPATOutput represents a personal access token.
-type CurrentUserPATOutput struct {
-	ID          int64    `json:"id"`
-	Name        string   `json:"name"`
-	Active      bool     `json:"active"`
-	Token       string   `json:"token,omitempty"`
-	Scopes      []string `json:"scopes"`
-	Revoked     bool     `json:"revoked"`
-	Description string   `json:"description,omitempty"`
-	UserID      int64    `json:"user_id"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	LastUsedAt  string   `json:"last_used_at,omitempty"`
-}
+// CurrentUserPATOutput mirrors gl.PersonalAccessToken for the current-user
+// PAT tools. Canonical shape shared via toolutil.
+type CurrentUserPATOutput = toolutil.PersonalTokenOutput
 
 // CreateCurrentUserPATInput holds parameters for creating a PAT for the current user.
 type CreateCurrentUserPATInput struct {
@@ -187,30 +176,7 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 		return CurrentUserPATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token_for_current_user", err, http.StatusBadRequest,
 			"name is required; scopes must include valid PAT scopes (e.g. api, read_user, read_repository, write_repository); expires_at format YYYY-MM-DD")
 	}
-	return toCurrentUserPATOutput(token), nil
-}
-
-func toCurrentUserPATOutput(t *gl.PersonalAccessToken) CurrentUserPATOutput {
-	o := CurrentUserPATOutput{
-		ID:          t.ID,
-		Name:        t.Name,
-		Active:      t.Active,
-		Token:       t.Token,
-		Scopes:      t.Scopes,
-		Revoked:     t.Revoked,
-		Description: t.Description,
-		UserID:      t.UserID,
-	}
-	if t.CreatedAt != nil {
-		o.CreatedAt = t.CreatedAt.Format(time.RFC3339)
-	}
-	if t.ExpiresAt != nil {
-		o.ExpiresAt = time.Time(*t.ExpiresAt).Format(toolutil.DateFormatISO)
-	}
-	if t.LastUsedAt != nil {
-		o.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
-	}
-	return o
+	return toolutil.NewPersonalTokenOutput(token), nil
 }
 
 // --- Markdown formatters ---.

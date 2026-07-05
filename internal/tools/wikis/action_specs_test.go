@@ -98,9 +98,9 @@ func TestWikiCreate_BadRequest(t *testing.T) {
 }
 
 // TestResolveAttachmentReader_InvalidBase64 covers the base64 decode error
-// branch in resolveAttachmentReader.
+// branch of the shared toolutil.ReadFileOrBase64 helper as used by the wiki attachment upload.
 func TestResolveAttachmentReader_InvalidBase64(t *testing.T) {
-	_, err := resolveAttachmentReader("", "!!!not-base64!!!")
+	_, err := toolutil.ReadFileOrBase64("upload_wiki_attachment", "", "!!!not-base64!!!")
 	if err == nil {
 		t.Fatal("expected error for invalid base64, got nil")
 	}
@@ -110,9 +110,9 @@ func TestResolveAttachmentReader_InvalidBase64(t *testing.T) {
 }
 
 // TestResolveAttachmentReader_InvalidFilePath covers the file open error
-// branch in resolveAttachmentReader when the file does not exist.
+// branch of the shared toolutil.ReadFileOrBase64 helper as used by the wiki attachment upload when the file does not exist.
 func TestResolveAttachmentReader_InvalidFilePath(t *testing.T) {
-	_, err := resolveAttachmentReader("/nonexistent/path/to/file.txt", "")
+	_, err := toolutil.ReadFileOrBase64("upload_wiki_attachment", "/nonexistent/path/to/file.txt", "")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file, got nil")
 	}
@@ -126,7 +126,7 @@ func TestResolveAttachmentReader_ValidFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r, err := resolveAttachmentReader(path, "")
+	r, err := toolutil.ReadFileOrBase64("upload_wiki_attachment", path, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -39,17 +39,7 @@ type ListOutput struct {
 // PATOutput represents a personal access token.
 type PATOutput struct {
 	toolutil.HintableOutput
-	ID          int64    `json:"id"`
-	Name        string   `json:"name"`
-	Active      bool     `json:"active"`
-	Token       string   `json:"token,omitempty"`
-	Scopes      []string `json:"scopes"`
-	Revoked     bool     `json:"revoked"`
-	Description string   `json:"description,omitempty"`
-	UserID      int64    `json:"user_id"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	LastUsedAt  string   `json:"last_used_at,omitempty"`
+	toolutil.PersonalTokenOutput
 }
 
 // RevokeOutput confirms a token revocation.
@@ -127,26 +117,7 @@ func toOutput(t *gl.ImpersonationToken) Output {
 }
 
 func toPATOutput(t *gl.PersonalAccessToken) PATOutput {
-	o := PATOutput{
-		ID:          t.ID,
-		Name:        t.Name,
-		Active:      t.Active,
-		Token:       t.Token,
-		Scopes:      t.Scopes,
-		Revoked:     t.Revoked,
-		Description: t.Description,
-		UserID:      t.UserID,
-	}
-	if t.CreatedAt != nil {
-		o.CreatedAt = t.CreatedAt.Format(time.RFC3339)
-	}
-	if t.ExpiresAt != nil {
-		o.ExpiresAt = time.Time(*t.ExpiresAt).Format(toolutil.DateFormatISO)
-	}
-	if t.LastUsedAt != nil {
-		o.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
-	}
-	return o
+	return PATOutput{PersonalTokenOutput: toolutil.NewPersonalTokenOutput(t)}
 }
 
 // --- Handlers ---.

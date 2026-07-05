@@ -90,3 +90,29 @@ func TestResolveProjectWebURLs(t *testing.T) {
 		t.Errorf("API calls = %d, want 2 (duplicate ID fetched once)", calls)
 	}
 }
+
+// TestNewPersonalTokenOutput pins the personal-access-token conversion:
+// identity fields mirror the SDK struct, created/last-used format as RFC3339,
+// expiry as an ISO date, and absent timestamps stay empty.
+func TestNewPersonalTokenOutput(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	expires := gl.ISOTime(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	got := NewPersonalTokenOutput(&gl.PersonalAccessToken{
+		ID: 7, Name: "ci-token", Active: true, Token: "glpat-x",
+		Scopes: []string{"api"}, Revoked: false, Description: "ci", UserID: 42,
+		CreatedAt: &created, ExpiresAt: &expires,
+	})
+	if got.ID != 7 || got.Name != "ci-token" || !got.Active || got.Token != "glpat-x" ||
+		len(got.Scopes) != 1 || got.UserID != 42 {
+		t.Errorf("NewPersonalTokenOutput identity fields = %+v, want mirror", got)
+	}
+	if got.CreatedAt != created.Format(time.RFC3339) {
+		t.Errorf("CreatedAt = %q, want RFC3339", got.CreatedAt)
+	}
+	if got.ExpiresAt != "2026-12-01" {
+		t.Errorf("ExpiresAt = %q, want 2026-12-01", got.ExpiresAt)
+	}
+	if got.LastUsedAt != "" {
+		t.Errorf("LastUsedAt = %q, want empty for nil source", got.LastUsedAt)
+	}
+}

@@ -75,20 +75,8 @@ type CommitStatsOutput struct {
 }
 
 // LastPipelineOutput mirrors gl.PipelineInfo, the pipeline summary embedded in
-// a commit payload as last_pipeline.
-type LastPipelineOutput struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid,omitempty"`
-	ProjectID int64  `json:"project_id,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Source    string `json:"source,omitempty"`
-	Ref       string `json:"ref,omitempty"`
-	SHA       string `json:"sha,omitempty"`
-	Name      string `json:"name,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-}
+// a commit payload as last_pipeline. Canonical shape shared via toolutil.
+type LastPipelineOutput = toolutil.LastPipelineOutput
 
 // BasicUserOutput mirrors gl.Author, the user object returned on commit
 // comments and commit statuses.
@@ -100,32 +88,6 @@ type BasicUserOutput struct {
 	State     string `json:"state,omitempty"`
 	Blocked   bool   `json:"blocked,omitempty"`
 	CreatedAt string `json:"created_at,omitempty"`
-}
-
-// pipelineInfoToOutput maps gl.PipelineInfo to LastPipelineOutput, or nil when
-// the commit has no associated pipeline.
-func pipelineInfoToOutput(p *gl.PipelineInfo) *LastPipelineOutput {
-	if p == nil {
-		return nil
-	}
-	out := &LastPipelineOutput{
-		ID:        p.ID,
-		IID:       p.IID,
-		ProjectID: p.ProjectID,
-		Status:    p.Status,
-		Source:    p.Source,
-		Ref:       p.Ref,
-		SHA:       p.SHA,
-		Name:      p.Name,
-		WebURL:    p.WebURL,
-	}
-	if p.CreatedAt != nil {
-		out.CreatedAt = p.CreatedAt.String()
-	}
-	if p.UpdatedAt != nil {
-		out.UpdatedAt = p.UpdatedAt.String()
-	}
-	return out
 }
 
 // authorToOutput maps gl.Author to *BasicUserOutput, or nil when the author is
@@ -254,7 +216,7 @@ func commitToFields(c *gl.Commit) commitFields {
 		projectID:        c.ProjectID,
 		trailers:         c.Trailers,
 		extendedTrailers: c.ExtendedTrailers,
-		lastPipeline:     pipelineInfoToOutput(c.LastPipeline),
+		lastPipeline:     toolutil.NewLastPipelineOutput(c.LastPipeline),
 	}
 	if c.CommittedDate != nil {
 		f.committedDate = c.CommittedDate.String()

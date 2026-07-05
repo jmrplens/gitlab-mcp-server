@@ -9,7 +9,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -23,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -631,7 +631,7 @@ func assertActionCatalogHasNoLegacyReferences(path string) error {
 }
 
 func assertActionSpecManifestCurrent(root string) error {
-	sourceBuilders, err := discoverActionSpecGroupBuilderNames(filepath.Join(root, "internal", "tools"))
+	sourceBuilders, err := auditshared.DiscoverActionSpecGroupBuilders(filepath.Join(root, "internal", "tools"))
 	if err != nil {
 		return err
 	}
@@ -643,53 +643,6 @@ func assertActionSpecManifestCurrent(root string) error {
 		return fmt.Errorf("action spec manifest is stale: source builders %v, manifest builders %v; run go run ./cmd/gen_action_catalog_manifest/", sourceBuilders, manifestBuilders)
 	}
 	return nil
-}
-
-func discoverActionSpecGroupBuilderNames(toolsDir string) ([]string, error) {
-	fileSet := token.NewFileSet()
-	builders := make(map[string]string)
-	err := filepath.WalkDir(toolsDir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if path != toolsDir {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, testGoSuffix) || strings.HasSuffix(name, "_gen.go") {
-			return nil
-		}
-		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
-		if parseErr != nil {
-			return fmt.Errorf(parsePathError, path, parseErr)
-		}
-		for _, declaration := range file.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok || function.Recv != nil || !isActionSpecGroupBuilderName(function.Name.Name) {
-				continue
-			}
-			if previousPath, exists := builders[function.Name.Name]; exists {
-				return fmt.Errorf("duplicate action spec group builder %s in %s and %s", function.Name.Name, previousPath, path)
-			}
-			builders[function.Name.Name] = path
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(builders) == 0 {
-		return nil, errors.New("no action spec group builders found")
-	}
-	names := make([]string, 0, len(builders))
-	for name := range builders {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names, nil
 }
 
 func readManifestActionSpecGroupBuilders(path string) ([]string, error) {
@@ -728,10 +681,6 @@ func manifestBuilderNames(function *ast.FuncDecl) []string {
 		return false
 	})
 	return names
-}
-
-func isActionSpecGroupBuilderName(name string) bool {
-	return strings.HasPrefix(name, "build") && strings.HasSuffix(name, "ActionSpecs") && len(name) > len("buildActionSpecs")
 }
 
 func discoverDomainSources(root string) ([]domainSource, error) {

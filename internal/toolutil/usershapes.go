@@ -84,3 +84,47 @@ func ResolveProjectWebURLs(ctx context.Context, projects gl.ProjectsServiceInter
 	}
 	return seen
 }
+
+// PersonalTokenOutput mirrors gl.PersonalAccessToken as surfaced by the
+// impersonation-token and current-user PAT tools: identity, scopes, and
+// RFC3339/ISO-date lifecycle timestamps. The token value is only present on
+// creation responses.
+type PersonalTokenOutput struct {
+	ID          int64    `json:"id"`
+	Name        string   `json:"name"`
+	Active      bool     `json:"active"`
+	Token       string   `json:"token,omitempty"`
+	Scopes      []string `json:"scopes"`
+	Revoked     bool     `json:"revoked"`
+	Description string   `json:"description,omitempty"`
+	UserID      int64    `json:"user_id"`
+	CreatedAt   string   `json:"created_at,omitempty"`
+	ExpiresAt   string   `json:"expires_at,omitempty"`
+	LastUsedAt  string   `json:"last_used_at,omitempty"`
+}
+
+// NewPersonalTokenOutput converts a gl.PersonalAccessToken into the shared
+// output shape, formatting created/last-used as RFC3339 and expiry as an ISO
+// date.
+func NewPersonalTokenOutput(t *gl.PersonalAccessToken) PersonalTokenOutput {
+	o := PersonalTokenOutput{
+		ID:          t.ID,
+		Name:        t.Name,
+		Active:      t.Active,
+		Token:       t.Token,
+		Scopes:      t.Scopes,
+		Revoked:     t.Revoked,
+		Description: t.Description,
+		UserID:      t.UserID,
+	}
+	if t.CreatedAt != nil {
+		o.CreatedAt = t.CreatedAt.Format(time.RFC3339)
+	}
+	if t.ExpiresAt != nil {
+		o.ExpiresAt = time.Time(*t.ExpiresAt).Format(DateFormatISO)
+	}
+	if t.LastUsedAt != nil {
+		o.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
+	}
+	return o
+}

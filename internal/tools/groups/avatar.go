@@ -1,12 +1,8 @@
 package groups
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -45,33 +41,11 @@ func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input Upload
 		return Output{}, errors.New("groupUploadAvatar: filename is required")
 	}
 
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return Output{}, errors.New("groupUploadAvatar: provide either file_path or content_base64, not both")
+	reader, _, cleanup, err := toolutil.OpenFileOrBase64Source("groupUploadAvatar", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return Output{}, err
 	}
-	if !hasFilePath && !hasBase64 {
-		return Output{}, errors.New("groupUploadAvatar: either file_path or content_base64 is required")
-	}
-
-	var reader io.Reader
-
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, _, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupUploadAvatar: %w", err)
-		}
-		defer f.Close()
-		reader = f
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return Output{}, fmt.Errorf("groupUploadAvatar: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
-	}
+	defer cleanup()
 
 	g, _, err := client.GL().Groups.UploadAvatar(string(input.GroupID), reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {

@@ -331,7 +331,7 @@ func TestFormatMarkdownString(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString(t *testing.T) {
-	md := FormatPATMarkdownString(PATOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42})
+	md := FormatPATMarkdownString(PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42}})
 	if md == "" {
 		t.Fatal("expected non-empty markdown")
 	}
@@ -697,13 +697,13 @@ func TestFormatMarkdownString_MinimalFields(t *testing.T) {
 // TestFormatPATMarkdownString_AllOptionalFields verifies that FormatPATMarkdownString
 // renders Description, ExpiresAt, and Token fields when present.
 func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
-	out := PATOutput{
+	out := PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{
 		ID: 10, Name: "full-pat", Active: true,
 		Scopes: []string{"api"}, UserID: 42,
 		Description: "My important PAT",
 		ExpiresAt:   "2026-12-01",
 		Token:       "glpat-fullpat",
-	}
+	}}
 	md := FormatPATMarkdownString(out)
 
 	checks := []string{
@@ -725,7 +725,7 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
-	out := PATOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}
+	out := PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}}
 	md := FormatPATMarkdownString(out)
 
 	if strings.Contains(md, "**Description**") {

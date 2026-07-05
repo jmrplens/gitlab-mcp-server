@@ -1,12 +1,7 @@
 package securefiles
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -166,37 +161,9 @@ type CreateInput struct {
 
 // Create uploads a new secure file.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (SecureFileItem, error) {
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return SecureFileItem{}, errors.New("gitlab_create_secure_file: provide either file_path or content_base64, not both")
-	}
-	if !hasFilePath && !hasBase64 {
-		return SecureFileItem{}, errors.New("gitlab_create_secure_file: either file_path or content_base64 is required")
-	}
-
-	var reader *bytes.Reader
-
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return SecureFileItem{}, fmt.Errorf("gitlab_create_secure_file: %w", err)
-		}
-		defer f.Close()
-
-		data := make([]byte, info.Size())
-		if _, err = io.ReadFull(f, data); err != nil {
-			return SecureFileItem{}, fmt.Errorf("gitlab_create_secure_file: reading file: %w", err)
-		}
-		reader = bytes.NewReader(data)
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return SecureFileItem{}, fmt.Errorf("gitlab_create_secure_file: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
+	reader, err := toolutil.ReadFileOrBase64("gitlab_create_secure_file", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return SecureFileItem{}, err
 	}
 
 	opts := &gl.CreateSecureFileOptions{

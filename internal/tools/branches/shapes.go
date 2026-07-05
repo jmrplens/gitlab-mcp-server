@@ -2,6 +2,8 @@ package branches
 
 import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Canonical output/input shapes mirrored from client-go sub-objects. Per the
@@ -27,20 +29,8 @@ type CommitStatsOutput struct {
 }
 
 // LastPipelineOutput mirrors gl.PipelineInfo, the pipeline summary embedded in a
-// commit payload as last_pipeline.
-type LastPipelineOutput struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid,omitempty"`
-	ProjectID int64  `json:"project_id,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Source    string `json:"source,omitempty"`
-	Ref       string `json:"ref,omitempty"`
-	SHA       string `json:"sha,omitempty"`
-	Name      string `json:"name,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-}
+// commit payload as last_pipeline. Canonical shape shared via toolutil.
+type LastPipelineOutput = toolutil.LastPipelineOutput
 
 // CommitOutput mirrors gl.Commit, the full commit object embedded on a branch
 // payload as commit.
@@ -66,32 +56,6 @@ type CommitOutput struct {
 	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
 }
 
-// pipelineInfoToOutput maps gl.PipelineInfo to *LastPipelineOutput, or nil when
-// the commit has no associated pipeline.
-func pipelineInfoToOutput(p *gl.PipelineInfo) *LastPipelineOutput {
-	if p == nil {
-		return nil
-	}
-	out := &LastPipelineOutput{
-		ID:        p.ID,
-		IID:       p.IID,
-		ProjectID: p.ProjectID,
-		Status:    p.Status,
-		Source:    p.Source,
-		Ref:       p.Ref,
-		SHA:       p.SHA,
-		Name:      p.Name,
-		WebURL:    p.WebURL,
-	}
-	if p.CreatedAt != nil {
-		out.CreatedAt = p.CreatedAt.String()
-	}
-	if p.UpdatedAt != nil {
-		out.UpdatedAt = p.UpdatedAt.String()
-	}
-	return out
-}
-
 // commitToOutput maps gl.Commit to *CommitOutput, or nil when the branch has no
 // embedded commit.
 func commitToOutput(c *gl.Commit) *CommitOutput {
@@ -112,7 +76,7 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 		ProjectID:        c.ProjectID,
 		Trailers:         c.Trailers,
 		ExtendedTrailers: c.ExtendedTrailers,
-		LastPipeline:     pipelineInfoToOutput(c.LastPipeline),
+		LastPipeline:     toolutil.NewLastPipelineOutput(c.LastPipeline),
 	}
 	if c.AuthoredDate != nil {
 		out.AuthoredDate = c.AuthoredDate.String()

@@ -1,12 +1,9 @@
 package users
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -52,32 +49,11 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 		return Output{}, errors.New("upload_user_avatar: filename is required")
 	}
 
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return Output{}, errors.New("upload_user_avatar: provide either file_path or content_base64, not both")
+	reader, _, cleanup, err := toolutil.OpenFileOrBase64Source("upload_user_avatar", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return Output{}, err
 	}
-	if !hasFilePath && !hasBase64 {
-		return Output{}, errors.New("upload_user_avatar: either file_path or content_base64 is required")
-	}
-
-	var reader io.Reader
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, _, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return Output{}, fmt.Errorf("upload_user_avatar: %w", err)
-		}
-		defer f.Close()
-		reader = f
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return Output{}, fmt.Errorf("upload_user_avatar: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
-	}
+	defer cleanup()
 
 	u, _, err := client.GL().Users.UploadAvatar(reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {

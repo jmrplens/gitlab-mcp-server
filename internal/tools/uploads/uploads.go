@@ -1,12 +1,9 @@
 package uploads
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -56,37 +53,9 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 		return UploadOutput{}, errors.New("projectUpload: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return UploadOutput{}, errors.New("projectUpload: provide either file_path or content_base64, not both")
-	}
-	if !hasFilePath && !hasBase64 {
-		return UploadOutput{}, errors.New("projectUpload: either file_path or content_base64 is required")
-	}
-
-	var reader *bytes.Reader
-
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return UploadOutput{}, fmt.Errorf("projectUpload: %w", err)
-		}
-		defer f.Close()
-
-		data := make([]byte, info.Size())
-		if _, err = io.ReadFull(f, data); err != nil {
-			return UploadOutput{}, fmt.Errorf("projectUpload: reading file: %w", err)
-		}
-		reader = bytes.NewReader(data)
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return UploadOutput{}, fmt.Errorf("invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
+	reader, err := toolutil.ReadFileOrBase64("projectUpload", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return UploadOutput{}, err
 	}
 
 	tracker := progress.FromRequest(req)
