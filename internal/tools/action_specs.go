@@ -131,6 +131,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityattributes"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityfindings"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityscanprofiles"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetnotes"
@@ -553,6 +554,18 @@ func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, _ bool) []Act
 // Enterprise catalog group.
 func buildSecurityFindingActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_security_finding", editionTaggedSpecs(securityfindings.ActionSpecs(client), editionUltimate))
+}
+
+// buildSecurityScanProfileActionSpecs contributes the
+// gitlab_security_scan_profile Enterprise catalog group. The custom group
+// description documents the supported actions in human-readable form for the
+// schema resource.
+func buildSecurityScanProfileActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
+	groups := actionSpecGroup("gitlab_security_scan_profile", editionTaggedSpecs(securityscanprofiles.ActionSpecs(client), editionUltimate))
+	if len(groups) > 0 {
+		groups[0].Description = "Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.\nReturns: JSON with attach/detach confirmations and resolved targets, or per-scan-type profile statuses. Detach is destructive and requires confirmation.\n\nParam conventions: for attach, security_scan_profile_id is a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning) that creates the default profile on the fly; for detach, it is the persisted profile's numeric ID (from list_project_statuses). Targets must belong to a group namespace, not a personal namespace, and share one root namespace. project/group IDs are numeric; project_full_path is namespace/project.\n\n- attach: security_scan_profile_id*, project_ids or group_ids*\n- detach: security_scan_profile_id*, project_ids or group_ids*\n- list_project_statuses: project_full_path*\n\nSee also: gitlab_vulnerability, gitlab_project, gitlab_group"
+	}
+	return groups
 }
 
 // buildSnippetActionSpecs contributes the gitlab_snippet catalog group by

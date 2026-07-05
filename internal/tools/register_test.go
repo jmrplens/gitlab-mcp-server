@@ -169,7 +169,9 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1062
+		// 1065 = 1062 + 3 security scan profile actions (attach/detach/
+		// list_project_statuses, Ultimate, client-go v2.45.0).
+		const expectedTools = 1065
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -237,8 +239,8 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 }
 
 // TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 33 base, 49 with enterprise.
-// Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
+// the expected number of meta-tools: 32 base, 49 with enterprise.
+// Base count is 28 meta-tools + 4 standalone gitlab_interactive_* elicitation
 // tools that cannot be folded into action+params meta-tools (they require
 // multi-round MCP elicitation/create exchanges with the client).
 func TestRegisterAllMeta_ToolCount(t *testing.T) {
@@ -267,7 +269,8 @@ func TestRegisterAllMeta_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 48
+		// 49 = 48 + gitlab_security_scan_profile meta-tool (Ultimate, client-go v2.45.0).
+		const expectedTools = 49
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -445,6 +448,7 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		"gitlab_security_attribute":    true,
 		"gitlab_security_category":     true,
 		"gitlab_security_finding":      true,
+		"gitlab_security_scan_profile": true,
 		"gitlab_snippet":               true,
 		"gitlab_storage_move":          true,
 		"gitlab_tag":                   true,
@@ -899,7 +903,7 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"group_member_unshare": {}, "unshare_from_group": {},
 	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
-	"transfer": {},
+	"transfer": {}, "detach": {},
 }
 
 var knownRouteDestructiveExceptions = map[string]struct{}{

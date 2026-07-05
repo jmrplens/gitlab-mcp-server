@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.3.0 | up to 1068 tools | 32 base meta-tools; 48 self-managed enterprise meta-tools; 49 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.3.0 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -11934,7 +11934,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 17 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 18 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
@@ -12992,6 +12992,56 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 </details>
 
+### gitlab_security_scan_profile
+
+**Security Scan Profile**
+
+Use {"action":"attach","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://tools/gitlab_security_scan_profile.<action>.
+Action guidance:
+- attach: Attach a security scan profile to one or more projects and/or groups. Supply security_scan_profile_id (a built-in scan type — dependency_scanning, sast, secret_detection, or container_scanning — which creates the namespace's default profile on the fly) and at least one of project_ids or group_ids. Targets must belong to a group namespace (not a personal namespace) and share one root namespace. Requires Maintainer or Owner on the targets.
+- detach: Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from gitlab_list_project_scan_profile_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach.
+- list_project_statuses: List the security scan profile statuses for a project by full path (namespace/project). Use this to check which scan profiles are active, pending, failing, or not configured before attaching or detaching.
+
+Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.
+Returns: JSON with attach/detach confirmations and resolved targets, or per-scan-type profile statuses. Detach is destructive and requires confirmation.
+
+Param conventions: for attach, security_scan_profile_id is a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning) that creates the default profile on the fly; for detach, it is the persisted profile's numeric ID (from list_project_statuses). Targets must belong to a group namespace, not a personal namespace, and share one root namespace. project/group IDs are numeric; project_full_path is namespace/project.
+
+- attach: security_scan_profile_id*, project_ids or group_ids*
+- detach: security_scan_profile_id*, project_ids or group_ids*
+- list_project_statuses: project_full_path*
+
+See also: gitlab_vulnerability, gitlab_project, gitlab_group
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>attach</summary>
+
+```json
+{"additionalProperties":false,"properties":{"group_ids":{"items":{"type":"integer"},"type":["null","array"]},"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_ids":{"items":{"type":"integer"},"type":["null","array"]},"security_scan_profile_id":{"type":"string"},"status":{"type":"string"}},"required":["status","message","security_scan_profile_id"],"type":"object"}
+```
+
+</details>
+
+<details><summary>detach</summary>
+
+```json
+{"additionalProperties":false,"properties":{"group_ids":{"items":{"type":"integer"},"type":["null","array"]},"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_ids":{"items":{"type":"integer"},"type":["null","array"]},"security_scan_profile_id":{"type":"string"},"status":{"type":"string"}},"required":["status","message","security_scan_profile_id"],"type":"object"}
+```
+
+</details>
+
+<details><summary>list_project_statuses</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_full_path":{"type":"string"},"statuses":{"items":{"additionalProperties":false,"properties":{"scan_profile":{"additionalProperties":false,"properties":{"id":{"type":"string"},"name":{"type":"string"},"scan_type":{"type":"string"}},"required":["id","name","scan_type"],"type":"object"},"status":{"type":"string"}},"required":["status","scan_profile"],"type":"object"},"type":["null","array"]}},"required":["project_full_path","statuses"],"type":"object"}
+```
+
+</details>
+
 ### gitlab_vulnerability
 
 **Vulnerability**
@@ -13091,7 +13141,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1068 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1062.
+When `TOOL_SURFACE=individual`, up to 1071 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1065.
 Grouped by domain:
 
 ### access (8 tools)
@@ -13458,6 +13508,20 @@ Approve a pending user sign-up. Returns: confirmation with the user ID and actio
 - `user_id` (integer) (required): The ID of the user
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+### attach (1 tools)
+
+#### gitlab_attach_security_scan_profile
+
+Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach
+
+**Parameters:**
+
+- `group_ids` (array of integers): Numeric IDs of the groups to attach the profile to
+- `project_ids` (array of integers): Numeric IDs of the projects to attach the profile to
+- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ### ban (1 tools)
 
@@ -15533,6 +15597,21 @@ Update a deployment's status by deployment_id within a project. Returns: the upd
 - `status` (string) (required): New deployment status: created or running or success or failed or canceled
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+### detach (1 tools)
+
+#### gitlab_detach_security_scan_profile
+
+Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `group_ids` (array of integers): Numeric IDs of the groups to detach the profile from
+- `project_ids` (array of integers): Numeric IDs of the projects to detach the profile from
+- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 ### disable (2 tools)
 
@@ -20460,7 +20539,7 @@ Update an existing project label (new_name, color, description, priority, archiv
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (84 tools)
+### list (85 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -21427,6 +21506,16 @@ List the external status checks for a merge request and their status. Returns: e
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_list_project_scan_profile_statuses
+
+List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: gitlab_attach_security_scan_profile, gitlab_detach_security_scan_profile, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses
+
+**Parameters:**
+
+- `project_full_path` (string) (required): Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_list_project_status_checks
 
 List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.
@@ -21900,6 +21989,7 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 **Parameters:**
 
 - `admin` (boolean): Grant or revoke admin privileges
+- `auditor` (boolean): Grant or revoke auditor privileges (Premium/Ultimate)
 - `bio` (string): New bio text
 - `can_create_group` (boolean): Allow user to create groups
 - `commit_email` (string): Email used for commits

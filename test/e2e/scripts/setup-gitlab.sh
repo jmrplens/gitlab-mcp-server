@@ -386,6 +386,22 @@ if [ "$ENTERPRISE_MODE" = "true" ]; then
     else
         echo "    WARN: could not enable iterations feature flags (exit $ff_status, output: ${ff_output:-unknown})" >&2
     fi
+
+    # Enable security scan profile feature flags (Ultimate, client-go v2.45.0).
+    # These are enabled by default on GitLab 19.0+, but the attach path for the
+    # dependency_scanning default profile is guarded by
+    # :security_scan_profiles_dependency_scanning, so enable both explicitly to
+    # keep the securityscanprofiles_ee tests deterministic across image bumps.
+    set +e
+    sp_output=$(docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
+        "Feature.enable(:security_scan_profiles_feature); Feature.enable(:security_scan_profiles_dependency_scanning); puts 'OK'" 2>&1)
+    sp_status=$?
+    set -e
+    if [ "$sp_status" -eq 0 ]; then
+        echo "    Security scan profile feature flags enabled"
+    else
+        echo "    WARN: could not enable security scan profile feature flags (exit $sp_status, output: ${sp_output:-unknown})" >&2
+    fi
 fi
 
 # 1d. Optionally configure LDAP against the e2e-ldap container. GitLab

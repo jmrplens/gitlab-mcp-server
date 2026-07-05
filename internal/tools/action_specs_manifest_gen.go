@@ -41,6 +41,7 @@ func actionSpecGroupBuilders() []actionSpecGroupBuilder {
 		buildSecurityAttributeActionSpecs,
 		buildSecurityCategoryActionSpecs,
 		buildSecurityFindingActionSpecs,
+		buildSecurityScanProfileActionSpecs,
 		buildSnippetActionSpecs,
 		buildStorageMoveActionSpecs,
 		buildTagActionSpecs,

@@ -2798,6 +2798,102 @@
     }
   },
   {
+    "name": "gitlab_attach_security_scan_profile",
+    "description": "Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach",
+    "inputSchema": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "project_ids"
+          ]
+        },
+        {
+          "required": [
+            "group_ids"
+          ]
+        }
+      ],
+      "properties": {
+        "group_ids": {
+          "description": "Numeric IDs of the groups to attach the profile to",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "project_ids": {
+          "description": "Numeric IDs of the projects to attach the profile to",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "security_scan_profile_id": {
+          "description": "Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted",
+          "type": "string"
+        }
+      },
+      "required": [
+        "security_scan_profile_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "security_scan_profile_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "security_scan_profile_id"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_ban_user",
     "description": "Ban a user. Returns: confirmation with the user ID and action. Reversible via gitlab_unban_user. See also: gitlab_unban_user, gitlab_block_user, gitlab_get_user.",
     "inputSchema": {
@@ -22067,6 +22163,108 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_detach_security_scan_profile",
+    "description": "Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach",
+    "inputSchema": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "project_ids"
+          ]
+        },
+        {
+          "required": [
+            "group_ids"
+          ]
+        }
+      ],
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_ids": {
+          "description": "Numeric IDs of the groups to detach the profile from",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "project_ids": {
+          "description": "Numeric IDs of the projects to detach the profile from",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "security_scan_profile_id": {
+          "description": "Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted",
+          "type": "string"
+        }
+      },
+      "required": [
+        "security_scan_profile_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "security_scan_profile_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message",
+        "security_scan_profile_id"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true
     }
@@ -103606,6 +103804,90 @@
     }
   },
   {
+    "name": "gitlab_list_project_scan_profile_statuses",
+    "description": "List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: gitlab_attach_security_scan_profile, gitlab_detach_security_scan_profile, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project_full_path": {
+          "description": "Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_full_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project_full_path": {
+          "type": "string"
+        },
+        "statuses": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "scan_profile": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "scan_type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "scan_type"
+                ],
+                "type": "object"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "scan_profile"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "project_full_path",
+        "statuses"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_list_project_status_checks",
     "description": "List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
     "inputSchema": {
@@ -108974,6 +109256,13 @@
       "properties": {
         "admin": {
           "description": "Grant or revoke admin privileges",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "auditor": {
+          "description": "Grant or revoke auditor privileges (Premium/Ultimate)",
           "type": [
             "null",
             "boolean"

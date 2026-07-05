@@ -231,7 +231,7 @@ func TestModify_AllOptionalFields(t *testing.T) {
 	bt := true
 	n := int64(4)
 	_, err := Modify(context.Background(), client, ModifyInput{
-		UserID: 42, ViewDiffsFileByFile: &bt, CommitEmail: "c@x.test", PublicEmail: "p@x.test",
+		UserID: 42, Auditor: &bt, ViewDiffsFileByFile: &bt, CommitEmail: "c@x.test", PublicEmail: "p@x.test",
 		WebsiteURL: "https://x.test", Linkedin: "li", Twitter: "tw", Skype: "sk",
 		Provider: "ldap", ExternUID: "uid", ThemeID: &n,
 	})
@@ -239,7 +239,7 @@ func TestModify_AllOptionalFields(t *testing.T) {
 		t.Fatalf("Modify() unexpected error: %v", err)
 	}
 	for _, key := range []string{
-		"view_diffs_file_by_file", "commit_email", "public_email", "website_url",
+		"auditor", "view_diffs_file_by_file", "commit_email", "public_email", "website_url",
 		"linkedin", "twitter", "skype", "provider", "extern_uid", "theme_id",
 	} {
 		if _, ok := body[key]; !ok {

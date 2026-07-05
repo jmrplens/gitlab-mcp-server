@@ -18,14 +18,14 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,589 |
-| Unit test functions                                   | 11,307 |
-| E2E test functions                                    |    282 |
+| Total test functions                                  | 11,606 |
+| Unit test functions                                   | 11,323 |
+| E2E test functions                                    |    283 |
 | cmd test functions                                    |    900 |
-| Test files (internal/)                                |    451 |
+| Test files (internal/)                                |    452 |
 | Test files (cmd/)                                     |     69 |
-| Test files (test/e2e/suite/)                          |    139 |
-| Tool sub-packages tested                              |    174 |
+| Test files (test/e2e/suite/)                          |    140 |
+| Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     16 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  90.9% |
 | Overall coverage (`go test ./internal/...`)           |  94.6% |
@@ -35,8 +35,8 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,319 | 89.0% |
-| `TestFunc` (no underscore)             |    943 |  8.1% |
+| `TestFunc_Scenario` (2-part)           | 10,334 | 89.0% |
+| `TestFunc` (no underscore)             |    945 |  8.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |    327 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,857 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (174) |          8,267 |        348 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            282 |        139 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          8,283 |        349 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            283 |        140 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            900 |         69 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,589** |    **659** |                                                                                                 |
+| **Total**               |     **11,606** |    **661** |                                                                                                 |
 
 ### Core Packages
 
@@ -107,7 +107,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 174 tested sub-packages (click to expand)</summary>
+<summary>All 175 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
@@ -262,6 +262,7 @@
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
 | securityfindings        |        20 |          1 |   100.0% |         1 |
+| securityscanprofiles    |        16 |          1 |   100.0% |         3 |
 | securitysettings        |        32 |          3 |   100.0% |         3 |
 | serverupdate            |        25 |          1 |    98.8% |         2 |
 | settings                |        17 |          1 |    93.8% |         2 |
@@ -285,7 +286,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |    99.4% |         6 |
 | workitems               |        80 |          2 |   100.0% |         6 |
-| **Total**               | **8,267** |    **348** |          | **1,166** |
+| **Total**               | **8,283** |    **349** |          | **1,169** |
 
 </details>
 
@@ -502,6 +503,7 @@
 | securityattributes      |   100.0% |
 | securitycategories      |   100.0% |
 | securityfindings        |   100.0% |
+| securityscanprofiles    |   100.0% |
 | securitysettings        |   100.0% |
 | serverupdate            |    98.8% |
 | settings                |    93.8% |
