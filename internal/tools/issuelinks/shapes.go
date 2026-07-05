@@ -223,34 +223,13 @@ func labelDetailsOutputs(details []*gitlab.LabelDetails) []*LabelDetailsOutput {
 }
 
 // IterationOutput mirrors gitlab.GroupIteration (the iteration assigned to an
-// issue, EE only).
-type IterationOutput struct {
-	ID          int64  `json:"id"`
-	IID         int64  `json:"iid"`
-	Sequence    int64  `json:"sequence"`
-	GroupID     int64  `json:"group_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	State       int64  `json:"state"`
-	WebURL      string `json:"web_url"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	StartDate   string `json:"start_date,omitempty"`
-	DueDate     string `json:"due_date,omitempty"`
-}
+// issue, EE only). Canonical shape shared via toolutil.
+type IterationOutput = toolutil.IterationOutput
 
 // iterationOutput converts a *gitlab.GroupIteration to a *IterationOutput, or
 // nil when the SDK value is nil.
 func iterationOutput(it *gitlab.GroupIteration) *IterationOutput {
-	if it == nil {
-		return nil
-	}
-	return &IterationOutput{
-		ID: it.ID, IID: it.IID, Sequence: it.Sequence, GroupID: it.GroupID,
-		Title: it.Title, Description: it.Description, State: it.State, WebURL: it.WebURL,
-		CreatedAt: toolutil.FormatTimePtr(it.CreatedAt), UpdatedAt: toolutil.FormatTimePtr(it.UpdatedAt),
-		StartDate: toolutil.FormatISOTimePtr(it.StartDate), DueDate: toolutil.FormatISOTimePtr(it.DueDate),
-	}
+	return toolutil.NewIterationOutputFromGroupIteration(it)
 }
 
 // EpicOutput mirrors gitlab.Epic (the epic associated with an issue, EE only).

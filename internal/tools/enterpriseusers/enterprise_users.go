@@ -121,23 +121,12 @@ type SCIMIdentityOutput struct {
 }
 
 // CustomAttributeOutput mirrors gl.CustomAttribute, a key/value custom
-// attribute attached to a user.
-type CustomAttributeOutput struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
+// attribute attached to a user. Canonical shape shared via toolutil.
+type CustomAttributeOutput = toolutil.CustomAttributeOutput
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object referenced by
-// gl.User.CreatedBy.
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
+// gl.User.CreatedBy. Canonical shape shared via toolutil.
+type BasicUserOutput = toolutil.UserRefOutput
 
 // ListOutput holds the list response.
 type ListOutput struct {
@@ -250,39 +239,16 @@ func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
 	return out
 }
 
+// toCustomAttributeOutputs converts a []*gl.CustomAttribute slice into the
+// shared output shape.
 func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
-	if len(attrs) == 0 {
-		return nil
-	}
-	out := make([]CustomAttributeOutput, 0, len(attrs))
-	for _, a := range attrs {
-		if a == nil {
-			continue
-		}
-		out = append(out, CustomAttributeOutput{Key: a.Key, Value: a.Value})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return toolutil.NewCustomAttributeOutputs(attrs)
 }
 
+// toBasicUserOutput converts a *gl.BasicUser into the shared user-reference
+// shape, or nil.
 func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	o := &BasicUserOutput{
-		ID:        u.ID,
-		Username:  u.Username,
-		Name:      u.Name,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
-	}
-	if u.CreatedAt != nil {
-		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
-	}
-	return o
+	return toolutil.NewUserRefOutput(u)
 }
 
 // List returns all enterprise users for a group.

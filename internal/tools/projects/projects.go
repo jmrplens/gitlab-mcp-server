@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -3641,33 +3640,11 @@ func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input Upload
 		return Output{}, errors.New("projectUploadAvatar: filename is required")
 	}
 
-	hasFilePath := input.FilePath != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return Output{}, errors.New("projectUploadAvatar: provide either file_path or content_base64, not both")
+	reader, _, cleanup, err := toolutil.OpenFileOrBase64Source("projectUploadAvatar", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return Output{}, err
 	}
-	if !hasFilePath && !hasBase64 {
-		return Output{}, errors.New("projectUploadAvatar: either file_path or content_base64 is required")
-	}
-
-	var reader io.Reader
-
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, _, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return Output{}, fmt.Errorf("projectUploadAvatar: %w", err)
-		}
-		defer f.Close()
-		reader = f
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return Output{}, fmt.Errorf("projectUploadAvatar: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
-	}
+	defer cleanup()
 
 	p, _, err := client.GL().Projects.UploadAvatar(string(input.ProjectID), reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {

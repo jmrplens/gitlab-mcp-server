@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -19,7 +20,7 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"use to execute markdown_render action",
 	}
 	for _, usage := range generic {
-		if !isGenericUsage(usage) {
+		if !auditshared.IsGenericUsage(usage) {
 			t.Errorf("isGenericUsage(%q) = false, want true", usage)
 		}
 	}
@@ -28,7 +29,7 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"Create a new branch from a ref. Returns the created branch.",
 	}
 	for _, usage := range specific {
-		if isGenericUsage(usage) {
+		if auditshared.IsGenericUsage(usage) {
 			t.Errorf("isGenericUsage(%q) = true, want false", usage)
 		}
 	}
@@ -62,20 +63,20 @@ func TestAliasesOnlyToolname(t *testing.T) {
 func TestWeakIndividualDescription(t *testing.T) {
 	spec := toolutil.ActionSpec{IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_branch_get"}}
 	good := map[string]string{"gitlab_branch_get": "Fetch a branch. Returns: branch fields. See also: gitlab_branch_list."}
-	if weakIndividualDescription(spec, good) {
+	if auditshared.WeakIndividualDescription(spec, good) {
 		t.Error("structured description should not be flagged")
 	}
 	weak := map[string]string{"gitlab_branch_get": "Fetch a branch."}
-	if !weakIndividualDescription(spec, weak) {
+	if !auditshared.WeakIndividualDescription(spec, weak) {
 		t.Error("unstructured description should be flagged")
 	}
 	// Meta-only action (no individual tool) is never flagged.
 	metaOnly := toolutil.ActionSpec{Name: "server.health_check"}
-	if weakIndividualDescription(metaOnly, weak) {
+	if auditshared.WeakIndividualDescription(metaOnly, weak) {
 		t.Error("meta-only action should not be flagged")
 	}
 	// Unknown tool name (not projected) is not flagged.
-	if weakIndividualDescription(spec, map[string]string{}) {
+	if auditshared.WeakIndividualDescription(spec, map[string]string{}) {
 		t.Error("unprojected tool should not be flagged")
 	}
 }

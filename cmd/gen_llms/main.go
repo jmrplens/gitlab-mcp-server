@@ -17,8 +17,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,6 +26,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -93,21 +92,11 @@ func run(checkOnly bool) error {
 		return err
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   srv.URL,
-		GitLabToken: "gen-llms-token",
-	}
-	client, err := gitlabclient.NewClient(cfg)
+	client, closeStub, err := auditshared.NewStubGitLabClient("gen-llms-token") //#nosec G101 -- not a real credential, test-only dummy token
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
 	}
+	defer closeStub()
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "gen-llms-token",

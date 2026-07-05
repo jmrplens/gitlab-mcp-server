@@ -95,23 +95,13 @@ func projectScopeGuidance() map[string]toolutil.ParameterGuidance {
 // discussionIDGuidance returns the parameter guidance for the discussion_id
 // parameter used by discussion-scoped actions.
 func discussionIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.ParameterGuidance{
-		SemanticRole:     "discussion_id",
-		ValueSource:      "Discussion thread id from a prior gitlab_list_issue_discussions response.",
-		ExampleBinding:   `params.discussion_id:"6a9c1750b37d513a43987b574953fceb50b03ce7"`,
-		CommonConfusions: []string{"The discussion_id is the thread hash, not a note id; pass note_id separately for note actions."},
-	}
+	return toolutil.DiscussionIDParamGuidance("Discussion thread id from a prior gitlab_list_issue_discussions response.")
 }
 
 // noteIDGuidance returns the parameter guidance for the note_id parameter used
 // by note update/delete actions.
 func noteIDGuidance() toolutil.ParameterGuidance {
-	return toolutil.ParameterGuidance{
-		SemanticRole:     "note_id",
-		ValueSource:      "Numeric note id within the discussion thread, from a prior discussion response.",
-		ExampleBinding:   "params.note_id:300",
-		CommonConfusions: []string{"note_id is the numeric id of a single note; discussion_id is the thread hash."},
-	}
+	return toolutil.DiscussionNoteIDParamGuidance("Numeric note id within the discussion thread, from a prior discussion response.")
 }
 
 // decorateIssueDiscussionMeta fills in action-specific discovery metadata for

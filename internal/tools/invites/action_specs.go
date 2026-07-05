@@ -71,6 +71,40 @@ type inviteActionMetaEntry struct {
 	guidance    map[string]toolutil.ParameterGuidance
 }
 
+// inviteGuidance builds the guidance map for an invite action: the
+// scope-specific entry (project_id or group_id) plus the email, user_id,
+// access_level, and expires_at entries that are identical for the project
+// and group invite surfaces.
+func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {
+	return map[string]toolutil.ParameterGuidance{
+		scopeParam: scope,
+		"email": {
+			SemanticRole:     "invite_email",
+			ValueSource:      "Email address of the person to invite when they may not have an account yet.",
+			ExampleBinding:   `params.email:"newhire@example.com"`,
+			CommonConfusions: []string{"Provide either email or user_id; supply email for people who are not yet GitLab users."},
+		},
+		"user_id": {
+			SemanticRole:     "user_id",
+			ValueSource:      "Numeric user ID when inviting an existing GitLab user.",
+			ExampleBinding:   "params.user_id:42",
+			CommonConfusions: []string{"Use user_id for existing accounts and email otherwise; do not pass a username here."},
+		},
+		"access_level": {
+			SemanticRole:     "access_level",
+			ValueSource:      "Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.",
+			ExampleBinding:   "params.access_level:30",
+			CommonConfusions: []string{"Pass the numeric access level, not a role name like 'developer'."},
+		},
+		"expires_at": {
+			SemanticRole:     "calendar_date",
+			ValueSource:      "Date the invitation should expire, when the user requests one.",
+			ExampleBinding:   `params.expires_at:"2026-12-31"`,
+			CommonConfusions: []string{"Use YYYY-MM-DD date only; this invitation field is not an RFC3339 timestamp."},
+		},
+	}
+}
+
 // inviteActionMeta maps each individual invite tool to its discovery metadata.
 var inviteActionMeta = map[string]inviteActionMetaEntry{
 	"gitlab_project_invite": {
@@ -79,38 +113,12 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		related: []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
 		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
 			"See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.",
-		guidance: map[string]toolutil.ParameterGuidance{
-			"project_id": {
-				SemanticRole:     "scope_project",
-				ValueSource:      "Project ID or full namespace path the user is being invited to.",
-				ExampleBinding:   `params.project_id:"group/project"`,
-				CommonConfusions: []string{"Use the target project here; use group_id only with group.invite_group."},
-			},
-			"email": {
-				SemanticRole:     "invite_email",
-				ValueSource:      "Email address of the person to invite when they may not have an account yet.",
-				ExampleBinding:   `params.email:"newhire@example.com"`,
-				CommonConfusions: []string{"Provide either email or user_id; supply email for people who are not yet GitLab users."},
-			},
-			"user_id": {
-				SemanticRole:     "user_id",
-				ValueSource:      "Numeric user ID when inviting an existing GitLab user.",
-				ExampleBinding:   "params.user_id:42",
-				CommonConfusions: []string{"Use user_id for existing accounts and email otherwise; do not pass a username here."},
-			},
-			"access_level": {
-				SemanticRole:     "access_level",
-				ValueSource:      "Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.",
-				ExampleBinding:   "params.access_level:30",
-				CommonConfusions: []string{"Pass the numeric access level, not a role name like 'developer'."},
-			},
-			"expires_at": {
-				SemanticRole:     "calendar_date",
-				ValueSource:      "Date the invitation should expire, when the user requests one.",
-				ExampleBinding:   `params.expires_at:"2026-12-31"`,
-				CommonConfusions: []string{"Use YYYY-MM-DD date only; this invitation field is not an RFC3339 timestamp."},
-			},
-		},
+		guidance: inviteGuidance("project_id", toolutil.ParameterGuidance{
+			SemanticRole:     "scope_project",
+			ValueSource:      "Project ID or full namespace path the user is being invited to.",
+			ExampleBinding:   `params.project_id:"group/project"`,
+			CommonConfusions: []string{"Use the target project here; use group_id only with group.invite_group."},
+		}),
 	},
 	"gitlab_group_invite": {
 		usage:   "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email; for users who already have an account prefer group.group_member_add.",
@@ -118,38 +126,12 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		related: []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
 		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
 			"See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.",
-		guidance: map[string]toolutil.ParameterGuidance{
-			"group_id": {
-				SemanticRole:     "scope_group",
-				ValueSource:      "Group ID or full group path the user is being invited to.",
-				ExampleBinding:   `params.group_id:"platform/backend"`,
-				CommonConfusions: []string{"Use group_id for the group scope; use project_id only with project.invite_project."},
-			},
-			"email": {
-				SemanticRole:     "invite_email",
-				ValueSource:      "Email address of the person to invite when they may not have an account yet.",
-				ExampleBinding:   `params.email:"newhire@example.com"`,
-				CommonConfusions: []string{"Provide either email or user_id; supply email for people who are not yet GitLab users."},
-			},
-			"user_id": {
-				SemanticRole:     "user_id",
-				ValueSource:      "Numeric user ID when inviting an existing GitLab user.",
-				ExampleBinding:   "params.user_id:42",
-				CommonConfusions: []string{"Use user_id for existing accounts and email otherwise; do not pass a username here."},
-			},
-			"access_level": {
-				SemanticRole:     "access_level",
-				ValueSource:      "Role to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.",
-				ExampleBinding:   "params.access_level:30",
-				CommonConfusions: []string{"Pass the numeric access level, not a role name like 'developer'."},
-			},
-			"expires_at": {
-				SemanticRole:     "calendar_date",
-				ValueSource:      "Date the invitation should expire, when the user requests one.",
-				ExampleBinding:   `params.expires_at:"2026-12-31"`,
-				CommonConfusions: []string{"Use YYYY-MM-DD date only; this invitation field is not an RFC3339 timestamp."},
-			},
-		},
+		guidance: inviteGuidance("group_id", toolutil.ParameterGuidance{
+			SemanticRole:     "scope_group",
+			ValueSource:      "Group ID or full group path the user is being invited to.",
+			ExampleBinding:   `params.group_id:"platform/backend"`,
+			CommonConfusions: []string{"Use group_id for the group scope; use project_id only with project.invite_project."},
+		}),
 	},
 	"gitlab_project_invite_list_pending": {
 		usage:   "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them; this lists invitations, not current members.",

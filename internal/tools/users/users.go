@@ -84,23 +84,12 @@ type SCIMIdentityOutput struct {
 }
 
 // CustomAttributeOutput mirrors gl.CustomAttribute, a key/value custom
-// attribute attached to a user.
-type CustomAttributeOutput struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
+// attribute attached to a user. Canonical shape shared via toolutil.
+type CustomAttributeOutput = toolutil.CustomAttributeOutput
 
 // BasicUserOutput mirrors gl.BasicUser, the compact user object referenced by
-// gl.User.CreatedBy.
-type BasicUserOutput struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
+// gl.User.CreatedBy. Canonical shape shared via toolutil.
+type BasicUserOutput = toolutil.UserRefOutput
 
 // CurrentInput is an empty struct for the current user tool (no parameters needed).
 type CurrentInput struct{}
@@ -547,37 +536,31 @@ func GetAssociationsCount(ctx context.Context, client *gitlabclient.Client, inpu
 	}, nil
 }
 
-// resolveProjectWebURLs fetches the web URL for each unique project ID.
-// Failures are silently ignored — missing URLs simply produce no links.
-func resolveProjectWebURLs(ctx context.Context, client *gitlabclient.Client, projectIDs []int64) map[int64]string {
-	seen := make(map[int64]string, len(projectIDs))
-	for _, id := range projectIDs {
-		if _, ok := seen[id]; ok || id == 0 {
-			continue
-		}
-		proj, _, err := client.GL().Projects.GetProject(id, &gl.GetProjectOptions{}, gl.WithContext(ctx))
-		if err != nil || proj == nil {
-			seen[id] = ""
-			continue
-		}
-		seen[id] = proj.WebURL
-	}
-	return seen
-}
-
 // enrichContributionEventURLs resolves project web URLs and sets TargetURL on each event.
 func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
 	ids := make([]int64, 0, len(events))
 	for i := range events {
 		ids = append(ids, events[i].ProjectID)
 	}
-	urls := resolveProjectWebURLs(ctx, client, ids)
+	urls := toolutil.ResolveProjectWebURLs(ctx, client.GL().Projects, ids)
 	for i := range events {
 		events[i].TargetURL = toolutil.BuildTargetURL(urls[events[i].ProjectID], events[i].TargetType, events[i].TargetIID)
 	}
 }
 
 // Conversion helpers.
+
+// toCustomAttributeOutputs converts a []*gl.CustomAttribute slice into the
+// shared output shape.
+func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
+	return toolutil.NewCustomAttributeOutputs(attrs)
+}
+
+// toBasicUserOutput converts a *gl.BasicUser into the shared user-reference
+// shape, or nil.
+func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
+	return toolutil.NewUserRefOutput(u)
+}
 
 // toOutput converts a GitLab User to our Output type.
 func toOutput(u *gl.User) Output {
@@ -665,41 +648,6 @@ func toIdentityOutputs(identities []*gl.UserIdentity) []IdentityOutput {
 		return nil
 	}
 	return out
-}
-
-func toCustomAttributeOutputs(attrs []*gl.CustomAttribute) []CustomAttributeOutput {
-	if len(attrs) == 0 {
-		return nil
-	}
-	out := make([]CustomAttributeOutput, 0, len(attrs))
-	for _, a := range attrs {
-		if a == nil {
-			continue
-		}
-		out = append(out, CustomAttributeOutput{Key: a.Key, Value: a.Value})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
-	if u == nil {
-		return nil
-	}
-	o := &BasicUserOutput{
-		ID:        u.ID,
-		Username:  u.Username,
-		Name:      u.Name,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
-	}
-	if u.CreatedAt != nil {
-		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
-	}
-	return o
 }
 
 func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {

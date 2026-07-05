@@ -730,31 +730,13 @@ func formatAuthor(username string) string {
 	return "@" + username
 }
 
-// resolveProjectWebURLs fetches the web URL for each unique project ID.
-// Failures are silently ignored — missing URLs simply produce no links.
-func resolveProjectWebURLs(ctx context.Context, client *gitlabclient.Client, projectIDs []int64) map[int64]string {
-	seen := make(map[int64]string, len(projectIDs))
-	for _, id := range projectIDs {
-		if _, ok := seen[id]; ok || id == 0 {
-			continue
-		}
-		proj, _, err := client.GL().Projects.GetProject(id, &gl.GetProjectOptions{}, gl.WithContext(ctx))
-		if err != nil || proj == nil {
-			seen[id] = ""
-			continue
-		}
-		seen[id] = proj.WebURL
-	}
-	return seen
-}
-
 // enrichContributionEventURLs resolves project web URLs and sets TargetURL on each event.
 func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
 	ids := make([]int64, 0, len(events))
 	for i := range events {
 		ids = append(ids, events[i].ProjectID)
 	}
-	urls := resolveProjectWebURLs(ctx, client, ids)
+	urls := toolutil.ResolveProjectWebURLs(ctx, client.GL().Projects, ids)
 	for i := range events {
 		events[i].TargetURL = toolutil.BuildTargetURL(urls[events[i].ProjectID], events[i].TargetType, events[i].TargetIID)
 	}
@@ -766,7 +748,7 @@ func enrichProjectEventURLs(ctx context.Context, client *gitlabclient.Client, ev
 	for i := range events {
 		ids = append(ids, events[i].ProjectID)
 	}
-	urls := resolveProjectWebURLs(ctx, client, ids)
+	urls := toolutil.ResolveProjectWebURLs(ctx, client.GL().Projects, ids)
 	for i := range events {
 		events[i].TargetURL = toolutil.BuildTargetURL(urls[events[i].ProjectID], events[i].TargetType, events[i].TargetIID)
 	}

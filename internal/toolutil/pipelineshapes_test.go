@@ -147,3 +147,33 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		}
 	}
 }
+
+// TestNewLastPipelineOutput pins the commit last_pipeline conversion:
+// nil-on-nil, full field mirror, and String()-formatted timestamps only when
+// present (preserving the historical commit-payload format).
+func TestNewLastPipelineOutput(t *testing.T) {
+	if got := NewLastPipelineOutput(nil); got != nil {
+		t.Fatalf("NewLastPipelineOutput(nil) = %+v, want nil", got)
+	}
+
+	created := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
+	updated := time.Date(2026, 5, 7, 1, 2, 3, 0, time.UTC)
+	got := NewLastPipelineOutput(&gl.PipelineInfo{
+		ID: 12, IID: 3, ProjectID: 9, Status: "success", Source: "push",
+		Ref: "main", SHA: "abc123", Name: "build", WebURL: "https://example.com/p/12",
+		CreatedAt: &created, UpdatedAt: &updated,
+	})
+	want := &LastPipelineOutput{
+		ID: 12, IID: 3, ProjectID: 9, Status: "success", Source: "push",
+		Ref: "main", SHA: "abc123", Name: "build", WebURL: "https://example.com/p/12",
+		CreatedAt: created.String(), UpdatedAt: updated.String(),
+	}
+	if got == nil || *got != *want {
+		t.Errorf("NewLastPipelineOutput = %+v, want %+v", got, want)
+	}
+
+	noDates := NewLastPipelineOutput(&gl.PipelineInfo{ID: 13})
+	if noDates == nil || noDates.CreatedAt != "" || noDates.UpdatedAt != "" {
+		t.Errorf("NewLastPipelineOutput without timestamps = %+v, want empty created/updated", noDates)
+	}
+}

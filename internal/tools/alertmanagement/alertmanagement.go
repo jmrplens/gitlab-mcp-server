@@ -1,12 +1,7 @@
 package alertmanagement
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -137,37 +132,9 @@ func UploadMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 		return MetricImageItem{}, toolutil.ErrRequiredInt64("gitlab_upload_alert_metric_image", "alert_iid")
 	}
 
-	hasFilePath := input.FilePathLocal != ""
-	hasBase64 := input.ContentBase64 != ""
-
-	if hasFilePath && hasBase64 {
-		return MetricImageItem{}, errors.New("gitlab_upload_alert_metric_image: provide either file_path or content_base64, not both")
-	}
-	if !hasFilePath && !hasBase64 {
-		return MetricImageItem{}, errors.New("gitlab_upload_alert_metric_image: either file_path or content_base64 is required")
-	}
-
-	var reader *bytes.Reader
-
-	if hasFilePath {
-		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(input.FilePathLocal, cfg.MaxFileSize)
-		if err != nil {
-			return MetricImageItem{}, fmt.Errorf("gitlab_upload_alert_metric_image: %w", err)
-		}
-		defer f.Close()
-
-		data := make([]byte, info.Size())
-		if _, err = io.ReadFull(f, data); err != nil {
-			return MetricImageItem{}, fmt.Errorf("gitlab_upload_alert_metric_image: reading file: %w", err)
-		}
-		reader = bytes.NewReader(data)
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return MetricImageItem{}, fmt.Errorf("gitlab_upload_alert_metric_image: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
+	reader, err := toolutil.ReadFileOrBase64("gitlab_upload_alert_metric_image", input.FilePathLocal, input.ContentBase64)
+	if err != nil {
+		return MetricImageItem{}, err
 	}
 
 	uploadOpts := &gl.UploadMetricImageOptions{}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releaselinks"
@@ -30,7 +31,7 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"use to execute markdown_render action",
 	}
 	for _, usage := range generic {
-		if !isGenericUsage(usage) {
+		if !auditshared.IsGenericUsage(usage) {
 			t.Errorf("isGenericUsage(%q) = false, want true", usage)
 		}
 	}
@@ -39,7 +40,7 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"Create MULTIPLE release asset links in one call. Use this instead of repeated link_create.",
 	}
 	for _, usage := range specific {
-		if isGenericUsage(usage) {
+		if auditshared.IsGenericUsage(usage) {
 			t.Errorf("isGenericUsage(%q) = true, want false", usage)
 		}
 	}
@@ -360,14 +361,16 @@ func TestSeverityFor_OnlyEscalatesInNonCRUDClusters(t *testing.T) {
 	}
 	var cases []scenario
 	for _, f := range escalating {
-		cases = append(cases,
+		cases = append(
+			cases,
 			scenario{"pure CRUD cluster stays warning/" + f, f, true, pureCRUD, "warning"},
 			scenario{"base-vs-variant cluster escalates to error/" + f, f, true, withBatch, "error"},
 			scenario{"out-of-cluster stays warning/" + f, f, false, nil, "warning"},
 		)
 	}
 	// Flags that are always error regardless of cluster.
-	cases = append(cases,
+	cases = append(
+		cases,
 		scenario{"generic_usage always error", "generic_usage", false, nil, "error"},
 		scenario{"missing_disambiguation always error", "missing_disambiguation", false, nil, "error"},
 	)

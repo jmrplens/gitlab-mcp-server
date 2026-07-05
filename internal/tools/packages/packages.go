@@ -1,12 +1,9 @@
 package packages
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -91,27 +88,11 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 		return PublishOutput{}, err
 	}
 
-	var reader io.Reader
-	var fileSize int64
-
-	if input.FilePath != "" {
-		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
-		if err != nil {
-			return PublishOutput{}, fmt.Errorf(fmtPkgPublish, err)
-		}
-		fileSize = info.Size()
-
-		defer f.Close()
-		reader = f
-	} else {
-		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
-		if err != nil {
-			return PublishOutput{}, fmt.Errorf("packagePublish: invalid base64 content: %w", err)
-		}
-		reader = bytes.NewReader(decoded)
-		fileSize = int64(len(decoded))
+	reader, fileSize, cleanup, err := toolutil.OpenFileOrBase64Source("packagePublish", input.FilePath, input.ContentBase64)
+	if err != nil {
+		return PublishOutput{}, err
 	}
+	defer cleanup()
 
 	tracker := progress.FromRequest(req)
 	if tracker.IsActive() {

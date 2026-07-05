@@ -161,24 +161,55 @@ func registerReviewMRPrompt(server *mcp.Server, client *gitlabclient.Client) {
 	})
 }
 
-// handleReviewMR generates a structured code review with files categorized by
-// risk level and full diffs included.
-func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+// fetchMRWithDiffs validates the project_id/mr_iid prompt arguments and
+// fetches the merge request plus its diffs — the shared prologue of the
+// MR-centric prompt handlers.
+func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (string, *gl.MergeRequest, []*gl.MergeRequestDiff, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	mrIID := req.Params.Arguments[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
+		return "", nil, nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
 	}
 
 	iid := parseIID(mrIID)
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRFailed, err)
+		return "", nil, nil, fmt.Errorf(fmtGetMRFailed, err)
 	}
 
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
+		return "", nil, nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
+	}
+	return projectID, mr, diffs, nil
+}
+
+// fetchContributionEvents returns the user's contribution events since the
+// given time, using the current-user endpoint when possible. Failures are
+// logged and yield an empty slice so the prompt can still render.
+func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, userID int64, isCurrentUser bool, since time.Time) []*gl.ContributionEvent {
+	eventOpts := &gl.ListContributionEventsOptions{
+		After: new(gl.ISOTime(since)),
+	}
+	var events []*gl.ContributionEvent
+	var err error
+	if isCurrentUser {
+		events, _, err = client.GL().Events.ListCurrentUserContributionEvents(eventOpts, gl.WithContext(ctx))
+	} else {
+		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
+	}
+	if err != nil {
+		slog.Warn("failed to fetch contribution events", "error", err)
+	}
+	return events
+}
+
+// handleReviewMR generates a structured code review with files categorized by
+// risk level and full diffs included.
+func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	_, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
+	if err != nil {
+		return nil, err
 	}
 
 	// Categorize files by risk/type
@@ -322,21 +353,9 @@ func registerSuggestMRReviewersPrompt(server *mcp.Server, client *gitlabclient.C
 // handleSuggestMRReviewers identifies potential reviewers based on blame data
 // for files changed in a merge request.
 func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	projectID := req.Params.Arguments[argProjectID]
-	mrIID := req.Params.Arguments[argMRIID]
-	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
-	}
-
-	iid := parseIID(mrIID)
-	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
+	projectID, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRFailed, err)
-	}
-
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
+		return nil, err
 	}
 
 	members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{}, gl.WithContext(ctx))
@@ -962,18 +981,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 	since := time.Now().AddDate(0, 0, -days)
 
 	// Contribution events over the period
-	eventOpts := &gl.ListContributionEventsOptions{
-		After: new(gl.ISOTime(since)),
-	}
-	var events []*gl.ContributionEvent
-	if isCurrentUser {
-		events, _, err = client.GL().Events.ListCurrentUserContributionEvents(eventOpts, gl.WithContext(ctx))
-	} else {
-		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		slog.Warn("failed to fetch contribution events", "error", err)
-	}
+	events := fetchContributionEvents(ctx, client, userID, isCurrentUser, since)
 
 	// Authored MRs (open)
 	openAuthoredMRs, _, errOpenAuthored := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -1114,18 +1122,7 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	since := time.Now().AddDate(0, 0, -days)
 
 	// Contribution events
-	eventOpts := &gl.ListContributionEventsOptions{
-		After: new(gl.ISOTime(since)),
-	}
-	var events []*gl.ContributionEvent
-	if isCurrentUser {
-		events, _, err = client.GL().Events.ListCurrentUserContributionEvents(eventOpts, gl.WithContext(ctx))
-	} else {
-		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		slog.Warn("failed to fetch contribution events", "error", err)
-	}
+	events := fetchContributionEvents(ctx, client, userID, isCurrentUser, since)
 
 	// MR stats: open, merged, closed
 	openMRs, _, errOpenMRs := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -1326,21 +1323,9 @@ func registerMRRiskAssessmentPrompt(server *mcp.Server, client *gitlabclient.Cli
 // handleMRRiskAssessment computes diff metrics and identifies sensitive files
 // to produce a merge request risk assessment.
 func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	projectID := req.Params.Arguments[argProjectID]
-	mrIID := req.Params.Arguments[argMRIID]
-	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
-	}
-
-	iid := parseIID(mrIID)
-	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
+	_, mr, diffs, err := fetchMRWithDiffs(ctx, client, req)
 	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRFailed, err)
-	}
-
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
+		return nil, err
 	}
 
 	m := computeDiffMetrics(diffs)
