@@ -38,6 +38,9 @@ func RegisterSurfaceToolFromSpec(server *mcp.Server, spec ActionSpec, opts Surfa
 	if formatResult == nil {
 		formatResult = MarkdownForResult
 	}
+	// Standalone utility schemas are static per tool name (no tier pruning
+	// at this layer), so the compiled form is safely shared across servers.
+	CompileToolSchemas(tool, "standalone|"+tool.Name)
 	mcp.AddTool[map[string]any, any](server, tool, surfaceToolHandler(tool.Name, spec.Route, formatResult))
 }
 

@@ -30,8 +30,13 @@ import (
 func EnrichPaginationConstraints(server *mcp.Server) {
 	onFirstToolsList(server, func(mcpTools []*mcp.Tool) {
 		for _, t := range mcpTools {
-			if schema, isMap := t.InputSchema.(map[string]any); isMap {
+			// schemaMap also converts compiled *jsonschema.Schema inputs to a
+			// fresh map, so the enrichment works regardless of whether the
+			// lockdown middleware already ran and never mutates a schema
+			// object shared across servers.
+			if schema := schemaMap(t.InputSchema); schema != nil {
 				enrichPaginationNode(schema)
+				t.InputSchema = schema
 			}
 		}
 	})

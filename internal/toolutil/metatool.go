@@ -2184,6 +2184,23 @@ func DestructiveVoidActionWithRequest[T any](client *gitlabclient.Client, fn fun
 	}
 }
 
+// metaSchemaCompileKey returns a stable content key for compiling and
+// caching a meta dispatcher's schemas across registrations, or "" (caching
+// disabled) outside the default opaque mode: compact/full schemas embed
+// tier-pruned per-action payloads with no cheap stable identity, while the
+// opaque envelope depends only on the sorted action-name enum.
+func metaSchemaCompileKey(name string, routes ActionMap) string {
+	if currentMetaParamSchemaMode() != MetaParamSchemaOpaque {
+		return ""
+	}
+	actions := make([]string, 0, len(routes))
+	for actionName := range routes {
+		actions = append(actions, actionName)
+	}
+	sort.Strings(actions)
+	return "meta|opaque|" + name + "|" + strings.Join(actions, ",")
+}
+
 // FormatResultFunc converts an action result into an MCP call tool result.
 type FormatResultFunc func(any) *mcp.CallToolResult
 
@@ -2194,7 +2211,7 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 	if server == nil {
 		return
 	}
-	mcp.AddTool(server, &mcp.Tool{
+	tool := &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
 		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
@@ -2202,7 +2219,9 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 		Icons:        icons,
 		InputSchema:  MetaToolSchema(routes),
 		OutputSchema: MetaToolOutputSchema(),
-	}, MakeMetaHandler(name, routes, formatResult))
+	}
+	CompileToolSchemas(tool, metaSchemaCompileKey(name, routes))
+	mcp.AddTool(server, tool, MakeMetaHandler(name, routes, formatResult))
 }
 
 // AddReadOnlyMetaTool registers an action-dispatched meta-tool whose actions
@@ -2211,7 +2230,7 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 	if server == nil {
 		return
 	}
-	mcp.AddTool(server, &mcp.Tool{
+	tool := &mcp.Tool{
 		Name:         name,
 		Title:        TitleFromName(name),
 		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
@@ -2219,7 +2238,9 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 		Icons:        icons,
 		InputSchema:  MetaToolSchema(routes),
 		OutputSchema: MetaToolOutputSchema(),
-	}, MakeMetaHandler(name, routes, formatResult))
+	}
+	CompileToolSchemas(tool, metaSchemaCompileKey(name, routes))
+	mcp.AddTool(server, tool, MakeMetaHandler(name, routes, formatResult))
 }
 
 // MakeMetaHandler creates a generic MCP tool handler that dispatches to action routes.
