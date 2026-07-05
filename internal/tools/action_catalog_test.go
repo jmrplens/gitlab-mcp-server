@@ -538,9 +538,11 @@ const (
 	// Premium (burndown_events endpoint is Premium/Ultimate). See cmd/audit_edition_tier.
 	expectedBaseDynamicCatalogActions = 865
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1066
+	// 1069 = 1066 + 3 security scan profile actions (attach/detach/list_project_statuses, Ultimate, client-go v2.45.0).
+	expectedEnterpriseDynamicCatalogActions = 1069
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1072
+	// 1075 = 1072 + 3 security scan profile actions (Ultimate, client-go v2.45.0).
+	expectedGitLabComEnterpriseCatalogActions = 1075
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

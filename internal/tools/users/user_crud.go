@@ -89,6 +89,7 @@ type ModifyInput struct {
 	Username            string `json:"username,omitempty" jsonschema:"New username"`
 	Password            string `json:"password,omitempty" jsonschema:"New password"`
 	Admin               *bool  `json:"admin,omitempty" jsonschema:"Grant or revoke admin privileges"`
+	Auditor             *bool  `json:"auditor,omitempty" tier:"premium" jsonschema:"Grant or revoke auditor privileges (Premium/Ultimate)"`
 	External            *bool  `json:"external,omitempty" jsonschema:"Mark or unmark as external"`
 	SkipReconfirmation  *bool  `json:"skip_reconfirmation,omitempty" jsonschema:"Skip reconfirmation on email change"`
 	Bio                 string `json:"bio,omitempty" jsonschema:"New bio text"`
@@ -231,6 +232,7 @@ func buildModifyUserOptions(input ModifyInput) *gl.ModifyUserOptions {
 		Username:            strPtr(input.Username),
 		Password:            strPtr(input.Password),
 		Admin:               input.Admin,
+		Auditor:             input.Auditor,
 		External:            input.External,
 		SkipReconfirmation:  input.SkipReconfirmation,
 		Bio:                 strPtr(input.Bio),

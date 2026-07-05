@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.3.0 | up to 1068 tools | 32 base meta-tools; 48 self-managed enterprise meta-tools; 49 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.3.0 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -11934,7 +11934,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Enterprise-Only Meta-Tools
 
-These 17 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
+These 18 tools require GITLAB_TIER=premium or GITLAB_TIER=ultimate (or a detected Premium/Ultimate license). GitLab.com-only tools, including Orbit, also require GITLAB_URL=https://gitlab.com.
 
 ### gitlab_attestation
 
@@ -12992,6 +12992,56 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 </details>
 
+### gitlab_security_scan_profile
+
+**Security Scan Profile**
+
+Use {"action":"attach","params":{...}}; only top-level keys are action and params.
+Action params schema: gitlab://tools/gitlab_security_scan_profile.<action>.
+Action guidance:
+- attach: Attach a security scan profile to one or more projects and/or groups. Supply security_scan_profile_id (a built-in scan type — dependency_scanning, sast, secret_detection, or container_scanning — which creates the namespace's default profile on the fly) and at least one of project_ids or group_ids. Targets must belong to a group namespace (not a personal namespace) and share one root namespace. Requires Maintainer or Owner on the targets.
+- detach: Detach a security scan profile from one or more projects and/or groups, disabling that scanning configuration on the targets. Supply security_scan_profile_id (the persisted profile's numeric ID from gitlab_list_project_scan_profile_statuses, not a scan-type name) and at least one of project_ids or group_ids. This is reversible with attach.
+- list_project_statuses: List the security scan profile statuses for a project by full path (namespace/project). Use this to check which scan profiles are active, pending, failing, or not configured before attaching or detaching.
+
+Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.
+Returns: JSON with attach/detach confirmations and resolved targets, or per-scan-type profile statuses. Detach is destructive and requires confirmation.
+
+Param conventions: for attach, security_scan_profile_id is a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning) that creates the default profile on the fly; for detach, it is the persisted profile's numeric ID (from list_project_statuses). Targets must belong to a group namespace, not a personal namespace, and share one root namespace. project/group IDs are numeric; project_full_path is namespace/project.
+
+- attach: security_scan_profile_id*, project_ids or group_ids*
+- detach: security_scan_profile_id*, project_ids or group_ids*
+- list_project_statuses: project_full_path*
+
+See also: gitlab_vulnerability, gitlab_project, gitlab_group
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+**Action Output Schemas:**
+
+<details><summary>attach</summary>
+
+```json
+{"additionalProperties":false,"properties":{"group_ids":{"items":{"type":"integer"},"type":["null","array"]},"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_ids":{"items":{"type":"integer"},"type":["null","array"]},"security_scan_profile_id":{"type":"string"},"status":{"type":"string"}},"required":["status","message","security_scan_profile_id"],"type":"object"}
+```
+
+</details>
+
+<details><summary>detach</summary>
+
+```json
+{"additionalProperties":false,"properties":{"group_ids":{"items":{"type":"integer"},"type":["null","array"]},"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_ids":{"items":{"type":"integer"},"type":["null","array"]},"security_scan_profile_id":{"type":"string"},"status":{"type":"string"}},"required":["status","message","security_scan_profile_id"],"type":"object"}
+```
+
+</details>
+
+<details><summary>list_project_statuses</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_full_path":{"type":"string"},"statuses":{"items":{"additionalProperties":false,"properties":{"scan_profile":{"additionalProperties":false,"properties":{"id":{"type":"string"},"name":{"type":"string"},"scan_type":{"type":"string"}},"required":["id","name","scan_type"],"type":"object"},"status":{"type":"string"}},"required":["status","scan_profile"],"type":"object"},"type":["null","array"]}},"required":["project_full_path","statuses"],"type":"object"}
+```
+
+</details>
+
 ### gitlab_vulnerability
 
 **Vulnerability**
@@ -13091,7 +13141,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1068 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1062.
+When `TOOL_SURFACE=individual`, up to 1071 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1065.
 Grouped by domain:
 
 ### access (8 tools)
@@ -13196,7 +13246,7 @@ Request access to a project as the authenticated user. Returns: the created acce
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### activate (1 tools)
+### activate (1 tool)
 
 #### gitlab_activate_user
 
@@ -13447,7 +13497,7 @@ Add an instance system hook. Returns: the created system hook with id, url, and 
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### approve (1 tools)
+### approve (1 tool)
 
 #### gitlab_approve_user
 
@@ -13459,7 +13509,21 @@ Approve a pending user sign-up. Returns: confirmation with the user ID and actio
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### ban (1 tools)
+### attach (1 tool)
+
+#### gitlab_attach_security_scan_profile
+
+Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach
+
+**Parameters:**
+
+- `group_ids` (array of integers): Numeric IDs of the groups to attach the profile to
+- `project_ids` (array of integers): Numeric IDs of the projects to attach the profile to
+- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+### ban (1 tool)
 
 #### gitlab_ban_user
 
@@ -13472,7 +13536,7 @@ Ban a user. Returns: confirmation with the user ID and action. Reversible via gi
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### block (1 tools)
+### block (1 tool)
 
 #### gitlab_block_user
 
@@ -13722,7 +13786,7 @@ Remove protection from a branch (idempotent). Returns: a status and message conf
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### bulk (1 tools)
+### bulk (1 tool)
 
 #### gitlab_bulk_update_security_attributes
 
@@ -13760,7 +13824,7 @@ Cancel a GitHub import. Returns: the project with its updated import status. See
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### change (1 tools)
+### change (1 tool)
 
 #### gitlab_change_plan_limits
 
@@ -14108,7 +14172,7 @@ List the statuses of a commit (CI jobs and external integrations), filtered by r
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### confirm (1 tools)
+### confirm (1 tool)
 
 #### gitlab_confirm_vulnerability
 
@@ -14604,7 +14668,7 @@ Create a new work item under a namespace. Returns: the created work item with id
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### current (1 tools)
+### current (1 tool)
 
 #### gitlab_current_user_status
 
@@ -14612,7 +14676,7 @@ Get the current user's status. Returns: emoji, message, availability, and clear-
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### deactivate (1 tools)
+### deactivate (1 tool)
 
 #### gitlab_deactivate_user
 
@@ -15534,6 +15598,21 @@ Update a deployment's status by deployment_id within a project. Returns: the upd
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
+### detach (1 tool)
+
+#### gitlab_detach_security_scan_profile
+
+Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `group_ids` (array of integers): Numeric IDs of the groups to detach the profile from
+- `project_ids` (array of integers): Numeric IDs of the projects to detach the profile from
+- `security_scan_profile_id` (string) (required): Persisted scan profile identifier: the profile's numeric database ID (obtained from gitlab_list_project_scan_profile_statuses) or a full gid:// global ID. A scan-type name (dependency_scanning, sast, …) is not accepted by detach
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
 ### disable (2 tools)
 
 #### gitlab_disable_2fa_enterprise_user
@@ -15559,7 +15638,7 @@ Disable 2FA for a user. Returns: confirmation with the user ID and action. See a
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### discover (1 tools)
+### discover (1 tool)
 
 #### gitlab_discover_project
 
@@ -15571,7 +15650,7 @@ Resolve a full git remote URL to a GitLab project and return its project_id and 
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### dismiss (1 tools)
+### dismiss (1 tool)
 
 #### gitlab_dismiss_vulnerability
 
@@ -15744,7 +15823,7 @@ Edit an instance system hook, including event triggers, SSL verification, and UR
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### enable (1 tools)
+### enable (1 tool)
 
 #### gitlab_enable_disable_error_tracking
 
@@ -16347,7 +16426,7 @@ Update an existing file in a repository in a single commit. Returns: file_path, 
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### force (1 tools)
+### force (1 tool)
 
 #### gitlab_force_push_mirror_update
 
@@ -20460,7 +20539,7 @@ Update an existing project label (new_name, color, description, priority, archiv
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (84 tools)
+### list (85 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -21427,6 +21506,16 @@ List the external status checks for a merge request and their status. Returns: e
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
+#### gitlab_list_project_scan_profile_statuses
+
+List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: gitlab_attach_security_scan_profile, gitlab_detach_security_scan_profile, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses
+
+**Parameters:**
+
+- `project_full_path` (string) (required): Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
 #### gitlab_list_project_status_checks
 
 List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.
@@ -21753,7 +21842,7 @@ List work items in a project or group namespace with filtering and cursor pagina
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### lock (1 tools)
+### lock (1 tool)
 
 #### gitlab_lock_terraform_state
 
@@ -21766,7 +21855,7 @@ Lock a Terraform state. Returns: the state with its lock acquired. See also: git
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### mark (1 tools)
+### mark (1 tool)
 
 #### gitlab_mark_migration
 
@@ -21891,7 +21980,7 @@ Update an existing milestone's title, description, start/due dates, or state (st
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### modify (1 tools)
+### modify (1 tool)
 
 #### gitlab_modify_user
 
@@ -21900,6 +21989,7 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 **Parameters:**
 
 - `admin` (boolean): Grant or revoke admin privileges
+- `auditor` (boolean): Grant or revoke auditor privileges (Premium/Ultimate)
 - `bio` (string): New bio text
 - `can_create_group` (boolean): Allow user to create groups
 - `commit_email` (string): Email used for commits
@@ -23531,7 +23621,7 @@ Update the Pages settings for a project. Returns: the updated Pages settings wit
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### patch (1 tools)
+### patch (1 tool)
 
 #### gitlab_patch_job_token_access_settings
 
@@ -25881,7 +25971,7 @@ Update a protected environment's deploy access levels and approval rules (use _d
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### purge (1 tools)
+### purge (1 tool)
 
 #### gitlab_purge_dependency_proxy
 
@@ -25894,7 +25984,7 @@ Purge a group's dependency proxy cache. Returns: a success status. See also: git
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### read (1 tools)
+### read (1 tool)
 
 #### gitlab_read_repository_submodule_file
 
@@ -25909,7 +25999,7 @@ Read a file from inside a submodule at the parent-pinned commit. Returns: file_n
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### register (1 tools)
+### register (1 tool)
 
 #### gitlab_register_cluster_agent
 
@@ -26139,7 +26229,7 @@ Update a container registry tag protection rule. Returns: the updated rule. See 
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### reject (1 tools)
+### reject (1 tool)
 
 #### gitlab_reject_user
 
@@ -26374,7 +26464,7 @@ Remove a secure file. Returns: a success status. See also: gitlab_list_secure_fi
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### render (1 tools)
+### render (1 tool)
 
 #### gitlab_render_markdown
 
@@ -26388,7 +26478,7 @@ Render arbitrary Markdown text to HTML using the GitLab Markdown API. Optionally
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### renew (1 tools)
+### renew (1 tool)
 
 #### gitlab_renew_application_secret
 
@@ -26400,7 +26490,7 @@ Renew an instance OAuth application secret. Returns: the application with its fr
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### repair (1 tools)
+### repair (1 tool)
 
 #### gitlab_repair_geo_site
 
@@ -26545,7 +26635,7 @@ List repository tree items. Returns: paths, object IDs, entry types (blob/tree),
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### resolve (1 tools)
+### resolve (1 tool)
 
 #### gitlab_resolve_vulnerability
 
@@ -26652,7 +26742,7 @@ List repository storage moves for one snippet with ordering and pagination. Retu
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### retry (1 tools)
+### retry (1 tool)
 
 #### gitlab_retry_failed_external_status_check_for_project_mr
 
@@ -26666,7 +26756,7 @@ Retry a failed external status check for a merge request. Returns: a success con
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### revert (1 tools)
+### revert (1 tool)
 
 #### gitlab_revert_vulnerability
 
@@ -27403,7 +27493,7 @@ Search wiki blobs across global, group, or project scope. Returns: matching wiki
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### server (1 tools)
+### server (1 tool)
 
 #### gitlab_server_status
 
@@ -27561,7 +27651,7 @@ Set the current user's status. Returns: the updated emoji, message, availability
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### show (1 tools)
+### show (1 tool)
 
 #### gitlab_show_secure_file
 
@@ -27878,7 +27968,7 @@ Update a personal snippet. Returns: the updated snippet with metadata, files, an
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### start (1 tools)
+### start (1 tool)
 
 #### gitlab_start_bulk_import
 
@@ -27891,7 +27981,7 @@ Start a bulk import (direct transfer). Returns: the created bulk import with id 
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### subgroups (1 tools)
+### subgroups (1 tool)
 
 #### gitlab_subgroups_list
 
@@ -28040,7 +28130,7 @@ Remove protection from a tag or wildcard pattern. Returns: a success confirmatio
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
-### test (1 tools)
+### test (1 tool)
 
 #### gitlab_test_system_hook
 
@@ -28117,7 +28207,7 @@ Track multiple usage events. Returns: a success status. See also: gitlab_track_e
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
-### unban (1 tools)
+### unban (1 tool)
 
 #### gitlab_unban_user
 
@@ -28129,7 +28219,7 @@ Unban a previously banned user. Returns: confirmation with the user ID and actio
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### unblock (1 tools)
+### unblock (1 tool)
 
 #### gitlab_unblock_user
 
@@ -28141,7 +28231,7 @@ Unblock a previously blocked user. Returns: confirmation with the user ID and ac
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### unlock (1 tools)
+### unlock (1 tool)
 
 #### gitlab_unlock_terraform_state
 
@@ -28569,7 +28659,7 @@ Get the current authenticated user. Returns: account ID, username, name, state, 
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### vulnerability (1 tools)
+### vulnerability (1 tool)
 
 #### gitlab_vulnerability_severity_count
 

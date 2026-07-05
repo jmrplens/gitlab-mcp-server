@@ -172,8 +172,8 @@ The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The
 | Surface                       | Visible tools                                     | Best for                                                         |
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
-| **Meta-tools** (`meta`)       | 32 base / 48 Premium / 49 GitLab.com Enterprise   | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~862 Free/CE · ~999 Premium · 1062–1068 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
+| **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
+| **Individual** (`individual`) | ~862 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
 
@@ -191,8 +191,8 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 | `dynamic` / `minimal`                                 | Free/CE  |             2 |               865 | n/a                 |              2,180 |         1,088 |        3,268 |
 | `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              2,180 |        31,758 |       33,938 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              2,180 |         1,088 |        3,268 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,066 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,066 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              2,180 |         1,088 |        3,268 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -202,7 +202,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 | MCP Capability  | Support                            |
 | --------------- | ---------------------------------- |
-| **Tools**       | Up to 1068 individual / 32–49 meta |
+| **Tools**       | Up to 1071 individual / 32–50 meta |
 | **Resources**   | 45 (static + templates)            |
 | **Prompts**     | 37 templates                       |
 | **Completions** | Project, user, group, branch, tag  |
@@ -358,39 +358,39 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       950 |     192,000 |
-| Unit tests (`_test.go`)  |       519 |     292,607 |
-| End-to-end tests         |       142 |      35,177 |
-| **Total**                | **1,611** | **519,784** |
+| Source (`.go`, non-test) |       955 |     192,645 |
+| Unit tests (`_test.go`)  |       521 |     293,146 |
+| End-to-end tests         |       143 |      35,337 |
+| **Total**                | **1,619** | **521,128** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,321 |
-| — exported (public)             |  2,557 |
-| — unexported (private)          |  4,764 |
-| Unit test functions (`TestXxx`) | 11,315 |
-| Subtests (`t.Run(...)`)         |  2,634 |
-| End-to-end test functions       |    286 |
+| Source functions                |  7,349 |
+| — exported (public)             |  2,563 |
+| — unexported (private)          |  4,786 |
+| Unit test functions (`TestXxx`) | 11,336 |
+| Subtests (`t.Run(...)`)         |  2,639 |
+| End-to-end test functions       |    287 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.52× more tests than code |
-| Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~563 lines |
-| Comment lines in source            |  20,494 (~10.7% of source) |
+| Average source file length         |                 ~201 lines |
+| Average test file length           |                 ~562 lines |
+| Comment lines in source            |  20,614 (~10.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,554 |
+| `if err != nil` checks             | 6,569 |
 | `defer` statements                 |   706 |
-| `struct` types defined             | 2,709 |
+| `struct` types defined             | 2,721 |
 | `//nolint` suppressions            |   179 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -398,10 +398,10 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   224 |
+| Go packages                    |   225 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   217 |
+| Git commits                    |   231 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
@@ -415,8 +415,8 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,490 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,399 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,502 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,457 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

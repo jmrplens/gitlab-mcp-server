@@ -34,14 +34,17 @@ func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
 	individual, err := sess.individual.ListTools(ctx, nil)
 	requireNoError(t, err, "list individual tools")
 	individualForbidden := map[string]bool{
-		"gitlab_bulk_update_security_attributes":   true,
-		"gitlab_create_security_attribute":         true,
-		"gitlab_create_security_category":          true,
-		"gitlab_delete_security_attribute":         true,
-		"gitlab_delete_security_category":          true,
-		"gitlab_project_update_security_attribute": true,
-		"gitlab_update_security_attribute":         true,
-		"gitlab_update_security_category":          true,
+		"gitlab_bulk_update_security_attributes":    true,
+		"gitlab_create_security_attribute":          true,
+		"gitlab_create_security_category":           true,
+		"gitlab_delete_security_attribute":          true,
+		"gitlab_delete_security_category":           true,
+		"gitlab_project_update_security_attribute":  true,
+		"gitlab_update_security_attribute":          true,
+		"gitlab_update_security_category":           true,
+		"gitlab_attach_security_scan_profile":       true,
+		"gitlab_detach_security_scan_profile":       true,
+		"gitlab_list_project_scan_profile_statuses": true,
 	}
 	for _, tool := range individual.Tools {
 		if individualForbidden[tool.Name] {
@@ -52,8 +55,9 @@ func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
 	meta, err := sess.meta.ListTools(ctx, nil)
 	requireNoError(t, err, "list meta-tools")
 	metaForbidden := map[string]bool{
-		"gitlab_security_attribute": true,
-		"gitlab_security_category":  true,
+		"gitlab_security_attribute":    true,
+		"gitlab_security_category":     true,
+		"gitlab_security_scan_profile": true,
 	}
 	for _, tool := range meta.Tools {
 		if metaForbidden[tool.Name] {
