@@ -328,7 +328,7 @@ func TestMeta_GroupEpicLabelEvents(t *testing.T) {
 	epicIID := createEpicInGroup(ctx, t, e2e, grp.Path, "ge-epiclabel-epic")
 
 	// Add then remove the label so at least two label events exist.
-	_, updErr := callToolOn[map[string]any](ctx, sess.meta, "gitlab_epic", map[string]any{
+	_, updErr := callToolOn[map[string]any](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "epic_update",
 		"params": map[string]any{
 			"full_path":     grp.Path,
@@ -337,7 +337,7 @@ func TestMeta_GroupEpicLabelEvents(t *testing.T) {
 		},
 	})
 	requireNoError(t, updErr, "add label to epic")
-	_, updErr = callToolOn[map[string]any](ctx, sess.meta, "gitlab_epic", map[string]any{
+	_, updErr = callToolOn[map[string]any](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "epic_update",
 		"params": map[string]any{
 			"full_path":        grp.Path,

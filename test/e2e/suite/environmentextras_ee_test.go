@@ -151,6 +151,9 @@ func TestMeta_DeploymentApproveOrReject(t *testing.T) {
 
 	commit := commitFileMeta(ctx, t, sess.meta, proj, defaultBranch, "deploy-approval.txt", "deployment approval fixture", "deployment approval fixture")
 
+	// GitLab 19 requires the tag flag and rejects "created" as an API
+	// deployment status; "running" yields the blocked/approvable state on a
+	// protected environment.
 	deployOut, deployErr := callToolOn[deployments.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 		"action": "deployment_create",
 		"params": map[string]any{
@@ -158,7 +161,8 @@ func TestMeta_DeploymentApproveOrReject(t *testing.T) {
 			"environment": envName,
 			"ref":         defaultBranch,
 			"sha":         commit.SHA,
-			"status":      "created",
+			"tag":         false,
+			"status":      "running",
 		},
 	})
 	requireNoError(t, deployErr, "create deployment on protected environment")
