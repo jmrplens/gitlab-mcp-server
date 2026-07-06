@@ -1,0 +1,68 @@
+# Temporary operational workflow to diagnose and repair the failed v2.4.0
+# Fly.io deploy (machines start but the app process never listens; the
+# suspected cause is a corrupt cached image from the first interrupted
+# deploy). Remove this file once production is healthy again.
+name: Fly Debug
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "diagnose | redeploy-nocache"
+        required: true
+        default: "diagnose"
+        type: choice
+        options:
+          - diagnose
+          - redeploy-nocache
+
+permissions:
+  contents: read
+
+jobs:
+  fly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install flyctl
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Diagnose
+        if: inputs.action == 'diagnose'
+        run: |
+          echo "=== fly status ==="
+          fly status --config fly.toml || true
+          echo "=== fly machine list ==="
+          fly machine list --config fly.toml || true
+          echo "=== fly releases ==="
+          fly releases --config fly.toml || true
+          echo "=== fly logs (recent, no tail) ==="
+          fly logs --config fly.toml --no-tail || true
+
+      - name: Redeploy without cache
+        if: inputs.action == 'redeploy-nocache'
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          fly deploy --remote-only --no-cache \
+            --config fly.toml \
+            --build-arg VERSION="$VERSION" \
+            --build-arg COMMIT="$(git rev-parse HEAD)" \
+            --image-label "v$VERSION-r$(date +%s)" \
+            --strategy rolling
+
+      - name: Verify health
+        if: inputs.action == 'redeploy-nocache'
+        run: |
+          for i in $(seq 1 6); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://gitlab-mcp-server.fly.dev/health || true)
+            echo "probe $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          exit 1
