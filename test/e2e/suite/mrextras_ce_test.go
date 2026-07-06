@@ -164,15 +164,21 @@ func TestIndividual_MRExtras(t *testing.T) {
 	})
 
 	t.Run("CreatePipeline", func(t *testing.T) {
-		commitFileCreateOrUpdate(ctx, t, sess.individual, proj, branch, ".gitlab-ci.yml", mrExtrasCIYAML, "ci: add MR pipeline configuration")
+		// Committing the CI config to an existing MR's branch races GitLab's
+		// asynchronous merge-request ref refresh, which under full-suite load
+		// stays stale for minutes. Give the pipeline its own MR instead: the
+		// CI file lands on the branch before the MR exists, so the MR is
+		// born with a visible configuration.
+		pipeBranch := createBranch(ctx, t, sess.individual, proj, "mrx-pipeline")
+		commitFileCreateOrUpdate(ctx, t, sess.individual, proj, pipeBranch.Name, ".gitlab-ci.yml", mrExtrasCIYAML, "ci: add MR pipeline configuration")
+		pipeMR := createMR(ctx, t, sess.individual, proj, pipeBranch.Name, defaultBranch, "MR extras pipeline fixture")
 
-		// GitLab reports 400 ("The pipeline did not run") until the fresh CI
-		// configuration propagates to the merge request ref, which can take
-		// well over ten seconds under suite parallelism — poll patiently.
-		out, pErr := retryWithBackoffInterval(ctx, t, "create MR pipeline", 10, 5*time.Second, func(int) (pipelines.Output, bool, string, error) {
+		// A short retry still absorbs momentary Sidekiq lag right after MR
+		// creation.
+		out, pErr := retryWithBackoffInterval(ctx, t, "create MR pipeline", 6, 5*time.Second, func(int) (pipelines.Output, bool, string, error) {
 			out, callErr := callToolOn[pipelines.Output](ctx, sess.individual, "gitlab_mr_create_pipeline", mergerequests.CreatePipelineInput{
 				ProjectID: proj.pidOf(),
-				MRIID:     mr.IID,
+				MRIID:     pipeMR.IID,
 			})
 			if callErr == nil {
 				return out, false, "", nil
