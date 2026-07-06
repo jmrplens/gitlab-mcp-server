@@ -63,6 +63,9 @@ kill_timeout = 10
   timeout = "5s"
   path = "/health"
 
+# 512mb: v2.4.0 startup RSS is ~160 MiB (865-action catalog + compiled
+# schema cache); on a 256mb machine the kernel+init overhead left too
+# little headroom and the process was OOM-killed before serving /health.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"

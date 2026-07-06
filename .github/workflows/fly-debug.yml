@@ -50,7 +50,7 @@ jobs:
         if: inputs.action == 'redeploy-nocache'
         run: |
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          fly deploy --remote-only --no-cache \
+          fly deploy --remote-only \
             --config fly.toml \
             --build-arg VERSION="$VERSION" \
             --build-arg COMMIT="$(git rev-parse HEAD)" \
