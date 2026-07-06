@@ -50,10 +50,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("listRepositorySubmodules: project_id is required")
 	}
 
-	fileOpts := &gl.GetFileOptions{}
-	if input.Ref != "" {
-		fileOpts.Ref = new(input.Ref)
+	// The repository files API rejects requests without a ref, so honor the
+	// documented "defaults to default branch" contract with the HEAD alias.
+	ref := input.Ref
+	if ref == "" {
+		ref = "HEAD"
 	}
+	fileOpts := &gl.GetFileOptions{Ref: &ref}
 
 	f, _, err := client.GL().RepositoryFiles.GetFile(string(input.ProjectID), ".gitmodules", fileOpts, gl.WithContext(ctx))
 	if err != nil {
@@ -75,7 +78,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{Submodules: []SubmoduleEntry{}, Count: 0}, nil
 	}
 
-	enrichSubmoduleCommitSHAs(ctx, client, string(input.ProjectID), input.Ref, entries)
+	enrichSubmoduleCommitSHAs(ctx, client, string(input.ProjectID), ref, entries)
 
 	return ListOutput{Submodules: entries, Count: len(entries)}, nil
 }

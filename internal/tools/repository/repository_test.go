@@ -1517,3 +1517,30 @@ func repositorySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string
 	}
 	return byTool
 }
+
+// TestRepositoryBlob_DecodesBase64Envelope verifies Blob unwraps the JSON
+// envelope returned by GET /repository/blobs/:sha and exposes the decoded
+// blob bytes instead of the transport wrapper.
+func TestRepositoryBlob_DecodesBase64Envelope(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/blobs/abc123" {
+			testutil.RespondJSON(w, http.StatusOK, `{"size":14,"encoding":"base64","content":"RTJFIGJsb2IgdGV4dAo=","sha":"abc123"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Blob(context.Background(), client, BlobInput{ProjectID: "42", SHA: "abc123"})
+	if err != nil {
+		t.Fatalf("Blob() unexpected error: %v", err)
+	}
+	if out.Content != "E2E blob text\n" {
+		t.Errorf("Blob Content = %q, want decoded blob text", out.Content)
+	}
+	if out.Size != 14 {
+		t.Errorf("Blob Size = %d, want 14 (decoded length)", out.Size)
+	}
+	if out.ContentCategory != "text" {
+		t.Errorf("Blob ContentCategory = %q, want text", out.ContentCategory)
+	}
+}

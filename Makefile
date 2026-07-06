@@ -8,7 +8,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check \
+	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -822,6 +822,10 @@ audit-doc-coverage-check:
 ## audit-dynamic-aliases: audit Dynamic search aliases and canonical action reachability.
 audit-dynamic-aliases:
 	go run ./cmd/audit_dynamic_aliases/
+
+## audit-e2e-gaps: report catalog actions not exercised by the e2e suite (CE+EE).
+audit-e2e-gaps:
+	go run ./cmd/audit_e2e_gaps/
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

@@ -480,3 +480,26 @@ func TestEnrichSubmoduleCommitSHAs_CancelledContext(t *testing.T) {
 		}
 	}
 }
+
+// TestList_DefaultsRefToHEAD verifies List sends the HEAD ref alias when the
+// input omits ref, honoring the documented default-branch fallback that the
+// repository files API cannot resolve on its own.
+func TestList_DefaultsRefToHEAD(t *testing.T) {
+	var capturedRef string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			capturedRef = r.URL.Query().Get("ref")
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name": ".gitmodules", "encoding": "text", "content": ""}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	if _, err := List(t.Context(), client, ListInput{ProjectID: "42"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedRef != "HEAD" {
+		t.Errorf("GetFile ref = %q, want HEAD", capturedRef)
+	}
+}

@@ -365,8 +365,11 @@ curl -sf "${GITLAB_URL}/api/v4/application/settings" \
     -d "throttle_authenticated_files_api_enabled=false" \
     -d "throttle_unauthenticated_files_api_enabled=false" \
     -d "throttle_authenticated_deprecated_api_enabled=false" \
-    -d "throttle_unauthenticated_deprecated_api_enabled=false" > /dev/null 2>&1
+    -d "throttle_unauthenticated_deprecated_api_enabled=false" \
+    -d "custom_http_clone_url_root=http://gitlab-e2e" \
+    -d "bulk_import_enabled=true" > /dev/null 2>&1
 echo "    Default branch protection disabled, local outbound requests enabled, deletion_adjourned_period=1, rate limiting disabled"
+echo "    Clone URL root set to http://gitlab-e2e (CI jobs clone via the compose network, not localhost:8929); bulk_import (direct transfer) enabled"
 
 # 1c. Enable iterations feature flags for EE (Premium/Ultimate).
 # Feature.enable(:iterations) and Feature.enable(:iteration_license) are required
