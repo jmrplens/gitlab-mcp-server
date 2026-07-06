@@ -1,7 +1,10 @@
-# Temporary operational workflow to diagnose and repair the failed v2.4.0
-# Fly.io deploy (machines start but the app process never listens; the
-# suspected cause is a corrupt cached image from the first interrupted
-# deploy). Remove this file once production is healthy again.
+# Manual operational workflow for the Fly.io production app. Provides
+# flyctl diagnostics (status, machines, releases, logs) and an on-demand
+# redeploy from main without requiring local flyctl authentication —
+# FLY_API_TOKEN lives only in the `release` GitHub environment.
+#
+# Added while diagnosing the v2.4.0 outage (startup RSS OOM-killed on the
+# 256mb VM; fixed by raising fly.toml [[vm]] memory to 512mb).
 name: Fly Debug
 
 on:
