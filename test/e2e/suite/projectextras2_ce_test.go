@@ -74,6 +74,7 @@ func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 	proj := CreateProjectMeta(ctx, e2e, sess.meta)
 
 	var archiveBase64 string
+	exportFinished := false
 
 	t.Run("ScheduleAndAwaitExport", func(t *testing.T) {
 		_, err := callToolOn[projectimportexport.ScheduleExportOutput](ctx, sess.meta, "gitlab_project", map[string]any{
@@ -85,7 +86,8 @@ func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 		// Export generation is asynchronous and can take minutes under Docker
 		// load; poll generously and skip (not fail) when it never finishes.
 		lastStatus := "unknown"
-		maxWait := e2eTimeout(180*time.Second, 300*time.Second)
+		// Full-suite parallelism keeps Sidekiq busy; exports observed >180s.
+		maxWait := e2eTimeout(300*time.Second, 300*time.Second)
 		pollErr := Poll(ctx, 2*time.Second, maxWait, func() (bool, string, error) {
 			out, statusErr := callToolOn[projectimportexport.ExportStatusOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 				"action": "export_status",
@@ -100,10 +102,14 @@ func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 		if pollErr != nil {
 			t.Skipf("project export did not reach 'finished' within %s (last status %q); export_download needs a completed export", maxWait, lastStatus)
 		}
+		exportFinished = true
 		t.Logf("Export finished (last status %q)", lastStatus)
 	})
 
 	t.Run("ExportDownload", func(t *testing.T) {
+		if !exportFinished {
+			t.Skip("export never finished; nothing to download")
+		}
 		out, err := callToolOn[projectimportexport.ExportDownloadOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "export_download",
 			"params": map[string]any{"project_id": proj.pidStr()},
@@ -115,7 +121,9 @@ func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 	})
 
 	t.Run("ImportFromFile", func(t *testing.T) {
-		requireTruef(t, archiveBase64 != "", "export archive not downloaded")
+		if archiveBase64 == "" {
+			t.Skip("no export archive available; nothing to import")
+		}
 		// POST /projects/import requires the gitlab_project import source,
 		// which fresh instances leave disabled; enable it on the disposable
 		// Docker instance and restore the original set afterwards.

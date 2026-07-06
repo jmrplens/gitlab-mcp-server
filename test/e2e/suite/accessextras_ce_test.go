@@ -320,8 +320,9 @@ func TestIndividual_ProjectAccessTokenRotateSelf(t *testing.T) {
 
 	selfSession := accessExtrasStartSession(t, "prjtok-self", created.Token)
 	// A token created moments ago can transiently 404 on its own self-rotate
-	// endpoint under suite parallelism, so retry briefly before asserting.
-	out, err := retryWithBackoff(ctx, t, "self-rotate project access token", 4, func(int) (accesstokens.Output, bool, string, error) {
+	// endpoint; under full-suite load the window exceeds 20 seconds, so poll
+	// patiently before asserting.
+	out, err := retryWithBackoffInterval(ctx, t, "self-rotate project access token", 8, 5*time.Second, func(int) (accesstokens.Output, bool, string, error) {
 		rotated, rotateErr := callToolOn[accesstokens.Output](ctx, selfSession, "gitlab_project_access_token_rotate_self", accesstokens.ProjectRotateSelfInput{
 			ProjectID: proj.pidOf(),
 		})
