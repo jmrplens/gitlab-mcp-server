@@ -438,10 +438,13 @@ func groupExtrasAddHook(ctx context.Context, t *testing.T, grp GroupFixture) int
 		},
 	})
 	// Group webhooks are a Premium feature: on a Free-tier catalog the
-	// gitlab_group dispatcher does not expose the hook_* routes at all
-	// (unknown action), and an ungated server against live CE gets 404 from
-	// the API. Either way every sub-operation must skip with it.
-	if err != nil && (isHTTPStatus(err, 404) || strings.Contains(err.Error(), "unknown action")) {
+	// gitlab_group dispatcher drops the hook_* routes from its action enum,
+	// so the call dies in schema validation ("does not equal any of"); older
+	// dispatch paths said "unknown action", and an ungated server against
+	// live CE gets 404 from the API. Any of those means skip everything.
+	if err != nil && (isHTTPStatus(err, 404) ||
+		strings.Contains(err.Error(), "unknown action") ||
+		strings.Contains(err.Error(), "does not equal any of")) {
 		t.Skipf("group webhooks require GitLab Premium (tier-gated or 404 on CE): %v", err)
 	}
 	requireNoError(t, err, "group hook_add")
