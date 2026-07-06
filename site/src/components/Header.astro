@@ -1,0 +1,48 @@
+---
+// Custom Starlight <Header> override.
+// Renders Starlight's default header, then a compact LanguageSelect that is
+// shown only below the `md` (50rem) breakpoint. Starlight hides the whole
+// header right-group (social icons + theme select + language select) on
+// narrow viewports, leaving the language switcher reachable only at the
+// bottom of the hamburger drawer — below the fold on most phones. This keeps
+// EN/ES switching one tap away in the header at every viewport width, in both
+// locales and both themes, without touching the desktop layout (where the
+// default right-group already includes the switcher).
+import Default from "@astrojs/starlight/components/Header.astro";
+import LanguageSelect from "@astrojs/starlight/components/LanguageSelect.astro";
+---
+
+<div class="gmcp-header">
+	<div class="gmcp-default-header"><Default><slot /></Default></div>
+	<div class="gmcp-mobile-lang"><LanguageSelect /></div>
+</div>
+
+<style>
+	.gmcp-header {
+		display: flex;
+		gap: var(--sl-nav-gap);
+		align-items: center;
+		height: 100%;
+	}
+	.gmcp-default-header {
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+	}
+	.gmcp-mobile-lang {
+		display: flex;
+		align-items: center;
+	}
+	/* Desktop (≥ md): the default header right-group already renders the
+	   language select, so hide the mobile duplicate. */
+	@media (min-width: 50rem) {
+		.gmcp-mobile-lang {
+			display: none;
+		}
+	}
+	@media print {
+		.gmcp-mobile-lang {
+			display: none;
+		}
+	}
+</style>

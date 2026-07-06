@@ -248,6 +248,9 @@ export default defineConfig({
 				// Adds a human-visible maintainer block below the default footer,
 				// corroborating the Person node in the site-wide @graph.
 				Footer: "./src/components/Footer.astro",
+				// Keeps the EN/ES language select visible in the header below the
+				// `md` breakpoint, where Starlight hides the header right-group.
+				Header: "./src/components/Header.astro",
 			},
 			logo: {
 				dark: "./src/assets/logo-dark.svg",
