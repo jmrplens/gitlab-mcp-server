@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -286,6 +288,29 @@ type BlobOutput struct {
 	ImageMIMEType string `json:"-"`
 }
 
+// blobEnvelope mirrors the JSON body of GET /repository/blobs/:sha, whose
+// content field carries the blob bytes base64-encoded.
+type blobEnvelope struct {
+	Content  string `json:"content"`
+	Encoding string `json:"encoding"`
+}
+
+// decodeBlobEnvelope unwraps the JSON envelope the blobs endpoint returns so
+// Blob classifies and exposes the actual blob bytes instead of the transport
+// wrapper. Bodies that do not parse as a base64 envelope pass through
+// unchanged, keeping older or proxied response shapes working.
+func decodeBlobEnvelope(data []byte) []byte {
+	var envelope blobEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil || envelope.Encoding != "base64" {
+		return data
+	}
+	decoded, err := base64.StdEncoding.DecodeString(envelope.Content)
+	if err != nil {
+		return data
+	}
+	return decoded
+}
+
 // Blob retrieves a git blob by SHA. For text content, returns decoded text.
 // For images, returns ImageContent (visible to multimodal LLMs).
 // For other binary formats, returns metadata only (no content).
@@ -301,6 +326,7 @@ func Blob(ctx context.Context, client *gitlabclient.Client, input BlobInput) (Bl
 		return BlobOutput{}, toolutil.WrapErrWithStatusHint("repositoryBlob", err, http.StatusNotFound,
 			"verify the blob SHA with gitlab_repository_tree; SHAs must be full 40-character commit/blob hashes")
 	}
+	data = decodeBlobEnvelope(data)
 
 	mime := http.DetectContentType(data)
 	category, content, imageData, imageMIME := classifyBlobContent(data, mime)

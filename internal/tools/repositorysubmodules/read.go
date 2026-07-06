@@ -57,7 +57,12 @@ func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (Re
 	}
 
 	projectID := string(input.ProjectID)
+	// The repository files API rejects requests without a ref, so honor the
+	// documented "defaults to default branch" contract with the HEAD alias.
 	ref := input.Ref
+	if ref == "" {
+		ref = "HEAD"
+	}
 
 	// Step 1: Parse .gitmodules to find the submodule's remote URL
 	resolvedProject, err := resolveSubmoduleProject(ctx, client, projectID, ref, input.SubmodulePath)

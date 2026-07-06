@@ -174,7 +174,7 @@ func scanSuite(suiteDir string, catalogIDs map[string]struct{}) (suiteIndex, err
 		return index, fmt.Errorf("no *_test.go files under %s", suiteDir)
 	}
 	for _, path := range paths {
-		data, readErr := os.ReadFile(path) //nolint:gosec // audit tool reads repo-local test sources by design.
+		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return index, fmt.Errorf("read %s: %w", path, readErr)
 		}

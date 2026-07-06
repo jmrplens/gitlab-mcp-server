@@ -702,3 +702,23 @@ func TestActionSpecs_ReadRoute(t *testing.T) {
 		t.Fatal("Route.Handler returned nil")
 	}
 }
+
+// TestRead_DefaultsRefToHEAD verifies Read resolves .gitmodules with the HEAD
+// ref alias when the input omits ref, mirroring the documented default.
+func TestRead_DefaultsRefToHEAD(t *testing.T) {
+	var capturedRef string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			capturedRef = r.URL.Query().Get("ref")
+		}
+		http.NotFound(w, r)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	if _, err := Read(t.Context(), client, ReadInput{ProjectID: "42", SubmodulePath: "libs/dep", FilePath: "main.c"}); err == nil {
+		t.Fatal("expected error from missing .gitmodules")
+	}
+	if capturedRef != "HEAD" {
+		t.Errorf("GetFile ref = %q, want HEAD", capturedRef)
+	}
+}

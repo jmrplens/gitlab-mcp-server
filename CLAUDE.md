@@ -137,7 +137,7 @@ gitlab-mcp-server/
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
-│   └── suite/                   # Go test package (137 test files)
+│   └── suite/                   # Go test package (162 test files)
 │       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
 │       └── fixture_ce_test.go   # Self-contained GitLab resource builders (CE runtime)
 │       └── fixture_ee_test.go   # Self-contained GitLab resource builders (EE runtime)
