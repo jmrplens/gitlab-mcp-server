@@ -334,3 +334,54 @@ func TestSharing_CanceledContext(t *testing.T) {
 		t.Error("TransferSubGroup: expected context error")
 	}
 }
+
+// TestShareGroupWithGroup_MemberRoleAndErrorFallthrough verifies the
+// member_role_id option is forwarded when set and that non-422/400 API
+// failures take the NotFound-hint fallthrough branch.
+func TestShareGroupWithGroup_MemberRoleAndErrorFallthrough(t *testing.T) {
+	roleID := int64(9)
+
+	okClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "member_role_id") {
+			t.Errorf("request body missing member_role_id: %s", body)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id": 42}`)
+	}))
+	if _, err := ShareGroupWithGroup(t.Context(), okClient, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30, MemberRoleID: &roleID}); err != nil {
+		t.Fatalf("ShareGroupWithGroup with member role error = %v", err)
+	}
+
+	failClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	_, err := ShareGroupWithGroup(t.Context(), failClient, ShareGroupInput{GroupID: "42", SharedGroupID: 7, GroupAccess: 30})
+	if err == nil || !strings.Contains(err.Error(), "groupShareWithGroup") {
+		t.Errorf("fallthrough err = %v, want groupShareWithGroup-wrapped error", err)
+	}
+}
+
+// TestTransferSubGroup_BadRequestHint verifies an HTTP 400 transfer failure
+// surfaces the invalid-destination hint branch instead of the generic
+// not-found wrap.
+func TestTransferSubGroup_BadRequestHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	parentID := int64(7)
+	_, err := TransferSubGroup(t.Context(), client, TransferSubGroupInput{GroupID: "42", ParentID: &parentID})
+	if err == nil || !strings.Contains(err.Error(), "gitlab_group_transfer_locations") {
+		t.Errorf("TransferSubGroup 400 err = %v, want invalid-destination hint", err)
+	}
+}
+
+// TestFormatSharedProjectsListMarkdown_ArchivedRow verifies the shared
+// projects table marks archived projects with "Yes" in the Archived column.
+func TestFormatSharedProjectsListMarkdown_ArchivedRow(t *testing.T) {
+	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{Projects: []ProjectItem{
+		{ID: 1, Name: "arch", Archived: true},
+	}})
+	if !strings.Contains(md, "| Yes |") {
+		t.Errorf("markdown missing archived Yes cell:\n%s", md)
+	}
+}

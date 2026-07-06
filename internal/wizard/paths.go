@@ -18,22 +18,33 @@ const (
 //   - Windows: %LOCALAPPDATA%\gitlab-mcp-server
 //   - macOS/Linux: ~/.local/bin
 func DefaultInstallDir() string {
-	switch runtime.GOOS {
+	home, _ := os.UserHomeDir()
+	return defaultInstallDirFor(runtime.GOOS, os.Getenv, home)
+}
+
+// defaultInstallDirFor is the platform-parameterized implementation of
+// DefaultInstallDir, extracted so every GOOS branch is testable on any host.
+func defaultInstallDirFor(goos string, getenv func(string) string, home string) string {
+	switch goos {
 	case "windows":
-		if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
+		if dir := getenv("LOCALAPPDATA"); dir != "" {
 			return filepath.Join(dir, appName)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "AppData", "Local", appName)
 	default:
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, ".local", "bin")
 	}
 }
 
 // DefaultBinaryName returns the binary name for the current platform.
 func DefaultBinaryName() string {
-	if runtime.GOOS == "windows" {
+	return defaultBinaryNameFor(runtime.GOOS)
+}
+
+// defaultBinaryNameFor is the platform-parameterized implementation of
+// DefaultBinaryName, extracted so both GOOS branches are testable on any host.
+func defaultBinaryNameFor(goos string) string {
+	if goos == "windows" {
 		return appName + ".exe"
 	}
 	return appName
@@ -45,29 +56,40 @@ func ExpandPath(path string) (string, error) {
 		return path, nil
 	}
 	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+	return expandPathWithHome(path, home, err)
+}
+
+// expandPathWithHome joins a ~-prefixed path with the resolved home directory,
+// propagating any home-resolution error. Extracted so the error branch is
+// testable without depending on the host environment.
+func expandPathWithHome(path, home string, homeErr error) (string, error) {
+	if homeErr != nil {
+		return "", homeErr
 	}
 	return filepath.Join(home, path[1:]), nil
 }
 
 // configDir returns the platform-specific user config directory for a given app.
 func configDir(app string) string {
-	switch runtime.GOOS {
+	home, _ := os.UserHomeDir()
+	return configDirFor(runtime.GOOS, os.Getenv, home, app)
+}
+
+// configDirFor is the platform-parameterized implementation of configDir,
+// extracted so every GOOS branch is testable on any host.
+func configDirFor(goos string, getenv func(string) string, home, app string) string {
+	switch goos {
 	case "windows":
-		if dir := os.Getenv("APPDATA"); dir != "" {
+		if dir := getenv("APPDATA"); dir != "" {
 			return filepath.Join(dir, app)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "AppData", "Roaming", app)
 	case "darwin":
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "Library", "Application Support", app)
 	default:
-		if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		if dir := getenv("XDG_CONFIG_HOME"); dir != "" {
 			return filepath.Join(dir, app)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, configDirXDG, app)
 	}
 }
@@ -113,15 +135,21 @@ func openCodeConfigPath() string {
 
 // crushConfigPath returns the path to Crush (Charm) global config.
 func crushConfigPath() string {
-	switch runtime.GOOS {
+	home, _ := os.UserHomeDir()
+	return crushConfigPathFor(runtime.GOOS, os.Getenv, home)
+}
+
+// crushConfigPathFor is the platform-parameterized implementation of
+// crushConfigPath, extracted so every GOOS branch is testable on any host.
+func crushConfigPathFor(goos string, getenv func(string) string, home string) string {
+	switch goos {
 	case "windows":
-		if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
+		if dir := getenv("LOCALAPPDATA"); dir != "" {
 			return filepath.Join(dir, "crush", crushFile)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "AppData", "Local", "crush", crushFile)
 	default:
-		return filepath.Join(configDir("crush"), crushFile)
+		return filepath.Join(configDirFor(goos, getenv, home, "crush"), crushFile)
 	}
 }
 
@@ -136,21 +164,25 @@ func EnvFilePath() string {
 
 // zedConfigPath returns the path to Zed's settings file.
 func zedConfigPath() string {
-	switch runtime.GOOS {
+	home, _ := os.UserHomeDir()
+	return zedConfigPathFor(runtime.GOOS, os.Getenv, home)
+}
+
+// zedConfigPathFor is the platform-parameterized implementation of
+// zedConfigPath, extracted so every GOOS branch is testable on any host.
+func zedConfigPathFor(goos string, getenv func(string) string, home string) string {
+	switch goos {
 	case "darwin":
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, configDirXDG, "zed", settingsFile)
 	case "windows":
-		if dir := os.Getenv("APPDATA"); dir != "" {
+		if dir := getenv("APPDATA"); dir != "" {
 			return filepath.Join(dir, "Zed", settingsFile)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "AppData", "Roaming", "Zed", settingsFile)
 	default:
-		if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		if dir := getenv("XDG_CONFIG_HOME"); dir != "" {
 			return filepath.Join(dir, "zed", settingsFile)
 		}
-		home, _ := os.UserHomeDir()
 		return filepath.Join(home, configDirXDG, "zed", settingsFile)
 	}
 }

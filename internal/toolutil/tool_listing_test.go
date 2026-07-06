@@ -50,3 +50,27 @@ func TestListRegisteredTools_DefaultClientName(t *testing.T) {
 		t.Fatalf("ListRegisteredTools() = %+v, want gitlab_x", tools)
 	}
 }
+
+// TestListRegisteredTools_NilServerAndCancelledContext verifies the nil-server
+// guard, the default client-name fallback on the happy path, and the connect
+// error branch under an already-cancelled context.
+func TestListRegisteredTools_NilServerAndCancelledContext(t *testing.T) {
+	if _, err := ListRegisteredTools(context.Background(), nil, ""); err == nil {
+		t.Error("nil server: expected error, got nil")
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil)
+	tools, err := ListRegisteredTools(context.Background(), server, "")
+	if err != nil {
+		t.Fatalf("default client name: error = %v", err)
+	}
+	if tools == nil {
+		t.Log("empty server returned no tools (expected)")
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ListRegisteredTools(cancelled, mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), "x"); err == nil {
+		t.Error("cancelled context: expected connect/list error, got nil")
+	}
+}

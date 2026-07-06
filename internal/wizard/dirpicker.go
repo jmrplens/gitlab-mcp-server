@@ -23,53 +23,22 @@ var pickDirectoryFn = pickDirectory
 // pickDirectory opens a native OS directory picker dialog and returns the selected path.
 // Uses PowerShell FolderBrowserDialog on Windows, osascript on macOS, zenity/kdialog on Linux.
 func pickDirectory(startDir string) (string, error) {
+	return pickDirectoryOn(runtime.GOOS, startDir)
+}
+
+// pickDirectoryOn is the GOOS-parameterized implementation of pickDirectory,
+// extracted so the per-platform dispatch and dialog output handling are
+// testable on any host.
+func pickDirectoryOn(goos, startDir string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	var err error
-
-	switch runtime.GOOS {
-	case "windows":
-		// PowerShell script to open native Windows FolderBrowserDialog.
-		// -STA is required for WinForms dialogs; a hidden topmost form ensures
-		// the dialog appears in front of the browser window.
-		escaped := strings.ReplaceAll(startDir, "'", "''")
-		ps := fmt.Sprintf(
-			`Add-Type -AssemblyName System.Windows.Forms; `+
-				`$f = New-Object System.Windows.Forms.Form; `+
-				`$f.TopMost = $true; `+
-				`$f.WindowState = 'Minimized'; `+
-				`$f.ShowInTaskbar = $false; `+
-				`$d = New-Object System.Windows.Forms.FolderBrowserDialog; `+
-				`$d.Description = 'Select installation directory'; `+
-				`$d.ShowNewFolderButton = $true; `+
-				`if ('%s' -ne '') { $d.SelectedPath = '%s' }; `+
-				`if ($d.ShowDialog($f) -eq 'OK') { $d.SelectedPath }; `+
-				`$f.Dispose()`,
-			escaped, escaped,
-		)
-		cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-STA", "-Command", ps) // #nosec G204 -- trusted internal command with escaped directory path
-
-	case "darwin":
-		script := `POSIX path of (choose folder with prompt "Select installation directory")`
-		if startDir != "" {
-			script = fmt.Sprintf( //nolint:gocritic // AppleScript requires literal double quotes, %q would break syntax
-				`POSIX path of (choose folder with prompt "Select installation directory" default location POSIX file "%s")`,
-				strings.ReplaceAll(startDir, `"`, `\"`),
-			)
-		}
-		cmd = exec.CommandContext(ctx, "osascript", "-e", script) // #nosec G204 -- trusted internal command with escaped directory path
-
-	default: // Linux / FreeBSD
-		cmd, err = linuxDirectoryPickerCommand(ctx, startDir)
-		if err != nil {
-			return "", errors.New("no dialog tool available (install zenity or kdialog)")
-		}
+	cmd, err := directoryPickerCommand(ctx, goos, startDir)
+	if err != nil {
+		return "", errors.New("no dialog tool available (install zenity or kdialog)")
 	}
 
-	var out []byte
-	out, err = cmd.Output()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("dialog cancelled or failed: %w", err)
 	}
@@ -79,6 +48,56 @@ func pickDirectory(startDir string) (string, error) {
 		return "", errors.New("no directory selected")
 	}
 	return selected, nil
+}
+
+// directoryPickerCommand selects the platform-specific directory picker
+// command builder for the given GOOS.
+func directoryPickerCommand(ctx context.Context, goos, startDir string) (*exec.Cmd, error) {
+	switch goos {
+	case "windows":
+		return windowsDirectoryPickerCommand(ctx, startDir), nil
+	case "darwin":
+		return darwinDirectoryPickerCommand(ctx, startDir), nil
+	default: // Linux / FreeBSD
+		return linuxDirectoryPickerCommand(ctx, startDir)
+	}
+}
+
+// windowsDirectoryPickerCommand builds the PowerShell command that opens the
+// native Windows FolderBrowserDialog.
+func windowsDirectoryPickerCommand(ctx context.Context, startDir string) *exec.Cmd {
+	// PowerShell script to open native Windows FolderBrowserDialog.
+	// -STA is required for WinForms dialogs; a hidden topmost form ensures
+	// the dialog appears in front of the browser window.
+	escaped := strings.ReplaceAll(startDir, "'", "''")
+	ps := fmt.Sprintf(
+		`Add-Type -AssemblyName System.Windows.Forms; `+
+			`$f = New-Object System.Windows.Forms.Form; `+
+			`$f.TopMost = $true; `+
+			`$f.WindowState = 'Minimized'; `+
+			`$f.ShowInTaskbar = $false; `+
+			`$d = New-Object System.Windows.Forms.FolderBrowserDialog; `+
+			`$d.Description = 'Select installation directory'; `+
+			`$d.ShowNewFolderButton = $true; `+
+			`if ('%s' -ne '') { $d.SelectedPath = '%s' }; `+
+			`if ($d.ShowDialog($f) -eq 'OK') { $d.SelectedPath }; `+
+			`$f.Dispose()`,
+		escaped, escaped,
+	)
+	return exec.CommandContext(ctx, "powershell", "-NoProfile", "-STA", "-Command", ps) // #nosec G204 -- trusted internal command with escaped directory path
+}
+
+// darwinDirectoryPickerCommand builds the osascript command that opens the
+// native macOS folder chooser.
+func darwinDirectoryPickerCommand(ctx context.Context, startDir string) *exec.Cmd {
+	script := `POSIX path of (choose folder with prompt "Select installation directory")`
+	if startDir != "" {
+		script = fmt.Sprintf( //nolint:gocritic // AppleScript requires literal double quotes, %q would break syntax
+			`POSIX path of (choose folder with prompt "Select installation directory" default location POSIX file "%s")`,
+			strings.ReplaceAll(startDir, `"`, `\"`),
+		)
+	}
+	return exec.CommandContext(ctx, "osascript", "-e", script) // #nosec G204 -- trusted internal command with escaped directory path
 }
 
 func linuxDirectoryPickerCommand(ctx context.Context, startDir string) (*exec.Cmd, error) {

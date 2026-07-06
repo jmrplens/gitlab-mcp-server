@@ -458,3 +458,15 @@ func TestWriteEnvFile_Wrapper(t *testing.T) {
 		t.Error("written file does not contain expected token")
 	}
 }
+
+// TestWriteEnvFileToPath_WriteError verifies writeEnvFileToPath wraps the
+// filesystem error when the env file cannot be written (here: the parent
+// directory does not exist).
+func TestWriteEnvFileToPath_WriteError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing-subdir", EnvFileName)
+
+	_, err := writeEnvFileToPath(path, ServerConfig{GitLabURL: "https://gitlab.example.com"})
+	if err == nil || !strings.Contains(err.Error(), "writing env file") {
+		t.Fatalf("writeEnvFileToPath error = %v, want writing env file", err)
+	}
+}

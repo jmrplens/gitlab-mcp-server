@@ -18,6 +18,11 @@ type Result struct {
 // LogLevelOptions lists the configurable log levels.
 var LogLevelOptions = []string{"debug", "info", "warn", "error"}
 
+// jsonMarshalIndentFn serializes the JetBrains snippet. Tests override it to
+// exercise the marshal error branch, which is otherwise unreachable with the
+// always-serializable snippet map.
+var jsonMarshalIndentFn = json.MarshalIndent
+
 // Apply writes the env file with secrets, then writes MCP configurations
 // for selected clients, and prints a summary.
 // It is called after any UI mode collects user input.
@@ -68,7 +73,7 @@ func printJetBrainsConfig(w io.Writer, cfg ServerConfig) error {
 			ServerEntryName: entry,
 		},
 	}
-	data, err := json.MarshalIndent(snippet, "    ", "  ")
+	data, err := jsonMarshalIndentFn(snippet, "    ", "  ")
 	if err != nil {
 		return err
 	}

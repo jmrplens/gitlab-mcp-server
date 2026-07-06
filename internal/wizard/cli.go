@@ -82,7 +82,7 @@ func printSection(w io.Writer, title string) {
 func stepInstall(p *Prompter, w io.Writer) (string, error) {
 	printSection(w, "Step 1: Binary Installation")
 
-	currentPath, err := os.Executable()
+	currentPath, err := osExecutableFn()
 	if err != nil {
 		return "", fmt.Errorf("getting executable path: %w", err)
 	}

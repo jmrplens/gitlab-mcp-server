@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // jsonTagsFromStruct extracts all JSON field names from a struct type using
@@ -1428,5 +1430,130 @@ func TestWebUI_AdvancedOptions_HaveHelpButtons(t *testing.T) {
 	}
 	if strings.Contains(html, `class="help-btn"`) && strings.Contains(html, `title="`) {
 		t.Error("help buttons should not rely on native title tooltips")
+	}
+}
+
+// TestRunWebUI_ListenError verifies RunWebUI fails fast with a wrapped error
+// when the local TCP listener cannot be opened. The listen hook injects the
+// failure because binding 127.0.0.1:0 practically never fails on a real host.
+func TestRunWebUI_ListenError(t *testing.T) {
+	origListen := listenFn
+	listenFn = func(context.Context, string, string) (net.Listener, error) {
+		return nil, errors.New("bind refused")
+	}
+	t.Cleanup(func() { listenFn = origListen })
+
+	var w bytes.Buffer
+	err := RunWebUI("1.0.0", &w)
+	if err == nil || !strings.Contains(err.Error(), "starting web server") {
+		t.Fatalf("RunWebUI error = %v, want starting web server", err)
+	}
+}
+
+// TestRunWebUI_ServeErrorAndBrowserFailure verifies two error paths in one
+// controlled run: when the browser cannot be opened, RunWebUI prints the
+// manual-URL fallback instead of failing; and when the HTTP server stops
+// serving with a non-ErrServerClosed error (the injected listener is closed
+// under it), that error is delivered through the done channel and returned.
+func TestRunWebUI_ServeErrorAndBrowserFailure(t *testing.T) {
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("creating test listener: %v", err)
+	}
+	origListen := listenFn
+	listenFn = func(context.Context, string, string) (net.Listener, error) {
+		return listener, nil
+	}
+	t.Cleanup(func() { listenFn = origListen })
+
+	origOpen := openBrowserFn
+	openBrowserFn = func(string) error {
+		// Kill the listener so server.Serve returns a non-ErrServerClosed
+		// error, then report a browser failure to hit the manual-URL hint.
+		_ = listener.Close()
+		return errors.New("no browser installed")
+	}
+	t.Cleanup(func() { openBrowserFn = origOpen })
+
+	var w bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- RunWebUI("1.0.0", &w) }()
+
+	select {
+	case err = <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("RunWebUI did not return after listener close")
+	}
+	if err == nil {
+		t.Fatal("RunWebUI error = nil, want serve error from closed listener")
+	}
+	out := w.String()
+	if !strings.Contains(out, "Could not open browser") {
+		t.Errorf("output %q missing browser failure notice", out)
+	}
+	if !strings.Contains(out, "manually") {
+		t.Errorf("output %q missing manual URL hint", out)
+	}
+}
+
+// TestServeIndex_AssetReadError verifies serveIndex responds with HTTP 500
+// when the embedded wizard page cannot be read. The asset hook injects the
+// failure because the embedded filesystem is otherwise always readable.
+func TestServeIndex_AssetReadError(t *testing.T) {
+	origRead := readWebAssetFn
+	readWebAssetFn = func(string) ([]byte, error) {
+		return nil, errors.New("corrupt asset")
+	}
+	t.Cleanup(func() { readWebAssetFn = origRead })
+
+	rec := httptest.NewRecorder()
+	serveIndex(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("serveIndex status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestInstallBinaryForConfigure_ExpandPathError verifies the requested path
+// is kept verbatim as both install dir and binary path when tilde expansion
+// fails (no resolvable home directory).
+func TestInstallBinaryForConfigure_ExpandPathError(t *testing.T) {
+	unsetHomeEnv(t)
+
+	var w bytes.Buffer
+	requested := "~" + string(os.PathSeparator) + "gitlab-install"
+	installDir, binaryPath := installBinaryForConfigure(&w, requested)
+
+	if installDir != requested {
+		t.Errorf("installDir = %q, want %q", installDir, requested)
+	}
+	if binaryPath != requested {
+		t.Errorf("binaryPath = %q, want %q", binaryPath, requested)
+	}
+}
+
+// TestInstallBinaryForConfigure_InstallErrorFallsBack verifies that a failed
+// binary installation reports the failure and falls back to the currently
+// running executable path.
+func TestInstallBinaryForConfigure_InstallErrorFallsBack(t *testing.T) {
+	origInstall := installBinaryFn
+	installBinaryFn = func(string) (string, error) {
+		return "", errors.New("disk full")
+	}
+	t.Cleanup(func() { installBinaryFn = origInstall })
+
+	var w bytes.Buffer
+	_, binaryPath := installBinaryForConfigure(&w, t.TempDir())
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binaryPath != exe {
+		t.Errorf("binaryPath = %q, want current executable %q", binaryPath, exe)
+	}
+	if !strings.Contains(w.String(), "Could not install") {
+		t.Errorf("output %q missing install failure notice", w.String())
 	}
 }

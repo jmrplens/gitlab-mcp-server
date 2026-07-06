@@ -486,3 +486,19 @@ func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
 		t.Error("should not contain Avatar for empty avatar URL")
 	}
 }
+
+// TestFormatDelegatorMarkdown_GetCreateUpdate verifies the thin
+// get/create/update formatter delegators produce the shared topic Markdown
+// (non-empty result), covering their delegation bodies.
+func TestFormatDelegatorMarkdown_GetCreateUpdate(t *testing.T) {
+	topic := TopicItem{ID: 3, Name: "go", Title: "Go"}
+	for name, result := range map[string]*mcp.CallToolResult{
+		"get":    FormatGetMarkdown(GetOutput{Topic: topic}),
+		"create": FormatCreateMarkdown(CreateOutput{Topic: topic}),
+		"update": FormatUpdateMarkdown(UpdateOutput{Topic: topic}),
+	} {
+		if result == nil || len(result.Content) == 0 {
+			t.Errorf("%s delegator returned empty result", name)
+		}
+	}
+}

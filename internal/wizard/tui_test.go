@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1688,5 +1689,42 @@ func TestUpdate_DefaultStepReturnsModelNil(t *testing.T) {
 	}
 	if final.step != tuiStep(99) {
 		t.Errorf("expected step unchanged, got %d", final.step)
+	}
+}
+
+// failingInputReader is an io.Reader whose Read always fails. Feeding it to
+// Bubble Tea's input makes tea.Program.Run return an error, which is the
+// only way to exercise RunTUI's error branch without a real TTY failure.
+type failingInputReader struct{}
+
+// Read implements io.Reader by always returning an input failure.
+func (failingInputReader) Read([]byte) (int, error) {
+	return 0, errors.New("input read failure")
+}
+
+// TestStdinFn_DefaultReturnsOSStdin verifies the production stdinFn default
+// hands Bubble Tea the real os.Stdin, locking the wiring between RunTUI and
+// the process standard input.
+func TestStdinFn_DefaultReturnsOSStdin(t *testing.T) {
+	if got := stdinFn(); got != io.Reader(os.Stdin) {
+		t.Fatalf("stdinFn() = %v, want os.Stdin", got)
+	}
+}
+
+// TestRunTUIWithInput_InputReadError_ReturnsTUIError verifies RunTUIWithInput
+// wraps a Bubble Tea program failure in a "TUI error" so the auto-mode
+// cascade can detect it and fall back to the plain CLI.
+func TestRunTUIWithInput_InputReadError_ReturnsTUIError(t *testing.T) {
+	var output bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- RunTUIWithInput("1.0.0", failingInputReader{}, &output) }()
+
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "TUI error") {
+			t.Fatalf("RunTUIWithInput error = %v, want wrapped TUI error", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("RunTUIWithInput hung on failing input reader")
 	}
 }

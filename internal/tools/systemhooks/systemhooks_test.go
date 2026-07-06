@@ -599,3 +599,19 @@ func TestFormatHookMarkdown_WithCreatedAt(t *testing.T) {
 		t.Errorf("expected created_at in output, got: %s", text)
 	}
 }
+
+// TestFormatDelegatorMarkdown_GetAddEdit verifies the thin get/add/edit
+// formatter delegators produce the shared hook Markdown (non-empty result
+// with text content), covering their delegation bodies.
+func TestFormatDelegatorMarkdown_GetAddEdit(t *testing.T) {
+	hook := HookItem{ID: 7, URL: "https://example.com/hook"}
+	for name, result := range map[string]*mcp.CallToolResult{
+		"get":  FormatGetMarkdown(GetOutput{Hook: hook}),
+		"add":  FormatAddMarkdown(AddOutput{Hook: hook}),
+		"edit": FormatEditMarkdown(EditOutput{Hook: hook}),
+	} {
+		if result == nil || len(result.Content) == 0 {
+			t.Errorf("%s delegator returned empty result", name)
+		}
+	}
+}

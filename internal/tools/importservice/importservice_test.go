@@ -761,3 +761,21 @@ func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 	}
 	return byTool
 }
+
+// TestMarkdownRegistry_PointerOutputFormatters verifies the init-registered
+// value-signature formatter closures render each import output type through
+// the shared Markdown registry (covering the registration lambdas that adapt
+// the pointer-returning handlers to value-type registry keys).
+func TestMarkdownRegistry_PointerOutputFormatters(t *testing.T) {
+	outputs := []any{
+		GitHubImportOutput{},
+		CancelledImportOutput{},
+		BitbucketCloudImportOutput{},
+		BitbucketServerImportOutput{},
+	}
+	for _, out := range outputs {
+		if result := toolutil.MarkdownForResult(out); result == nil || len(result.Content) == 0 {
+			t.Errorf("MarkdownForResult(%T) returned empty result", out)
+		}
+	}
+}

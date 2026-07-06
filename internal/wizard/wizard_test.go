@@ -616,3 +616,29 @@ func stubGetInstalledVersion(t *testing.T, version string) {
 	getInstalledVersionFn = func() string { return version }
 	t.Cleanup(func() { getInstalledVersionFn = orig })
 }
+
+// TestApply_JetBrainsMarshalError verifies Apply aborts with the underlying
+// error when the JetBrains display-only snippet cannot be serialized. The
+// marshal hook injects the failure because the snippet map is otherwise
+// always serializable.
+func TestApply_JetBrainsMarshalError(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+
+	origMarshal := jsonMarshalIndentFn
+	jsonMarshalIndentFn = func(any, string, string) ([]byte, error) {
+		return nil, errors.New("marshal boom")
+	}
+	t.Cleanup(func() { jsonMarshalIndentFn = origMarshal })
+
+	var w bytes.Buffer
+	result := &Result{
+		Config:          ServerConfig{GitLabURL: "https://gitlab.example.com", GitLabToken: "glpat-test"},
+		SelectedClients: []int{5}, // JetBrains (display-only) in the fake client list
+	}
+
+	err := Apply(&w, result)
+	if err == nil || !strings.Contains(err.Error(), "marshal boom") {
+		t.Fatalf("Apply error = %v, want marshal boom", err)
+	}
+}

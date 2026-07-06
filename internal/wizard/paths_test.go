@@ -3,6 +3,7 @@
 package wizard
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -346,5 +347,261 @@ func TestZedConfigPath_WindowsFallback(t *testing.T) {
 	want := filepath.Join(home, "AppData", "Roaming", "Zed", "settings.json")
 	if p != want {
 		t.Errorf("zedConfigPath = %q, want %q", p, want)
+	}
+}
+
+// fakeGetenv returns a getenv function backed by the given map, so
+// platform-parameterized path helpers can be tested with deterministic
+// environment values on any host.
+func fakeGetenv(vars map[string]string) func(string) string {
+	return func(key string) string { return vars[key] }
+}
+
+// unsetHomeEnv clears the environment variables os.UserHomeDir consults on
+// every platform (HOME on Unix, USERPROFILE on Windows, home on Plan 9) so
+// home-directory resolution fails deterministically in error-branch tests.
+func unsetHomeEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("home", "")
+}
+
+// TestDefaultInstallDirFor_PlatformBranches verifies the platform-specific
+// install directory selection for every GOOS branch: Windows prefers
+// %LOCALAPPDATA%, falls back to the home AppData path, and all other
+// platforms use ~/.local/bin. The extracted helper makes each branch
+// testable regardless of the host OS.
+func TestDefaultInstallDirFor_PlatformBranches(t *testing.T) {
+	tests := []struct {
+		name string
+		goos string
+		env  map[string]string
+		home string
+		want string
+	}{
+		{
+			name: "windows with LOCALAPPDATA",
+			goos: "windows",
+			env:  map[string]string{"LOCALAPPDATA": filepath.Join("C:", "Users", "u", "AppData", "Local")},
+			home: filepath.Join("C:", "Users", "u"),
+			want: filepath.Join("C:", "Users", "u", "AppData", "Local", appName),
+		},
+		{
+			name: "windows without LOCALAPPDATA falls back to home",
+			goos: "windows",
+			env:  map[string]string{},
+			home: filepath.Join("C:", "Users", "u"),
+			want: filepath.Join("C:", "Users", "u", "AppData", "Local", appName),
+		},
+		{
+			name: "linux uses ~/.local/bin",
+			goos: "linux",
+			env:  map[string]string{},
+			home: filepath.Join("/home", "u"),
+			want: filepath.Join("/home", "u", ".local", "bin"),
+		},
+		{
+			name: "darwin uses ~/.local/bin",
+			goos: "darwin",
+			env:  map[string]string{},
+			home: filepath.Join("/Users", "u"),
+			want: filepath.Join("/Users", "u", ".local", "bin"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := defaultInstallDirFor(tt.goos, fakeGetenv(tt.env), tt.home)
+			if got != tt.want {
+				t.Errorf("defaultInstallDirFor(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDefaultBinaryNameFor_PlatformBranches verifies the binary name gets a
+// .exe suffix only on Windows. The extracted helper makes the Windows branch
+// testable on non-Windows hosts.
+func TestDefaultBinaryNameFor_PlatformBranches(t *testing.T) {
+	if got := defaultBinaryNameFor("windows"); got != appName+".exe" {
+		t.Errorf("defaultBinaryNameFor(windows) = %q, want %q", got, appName+".exe")
+	}
+	if got := defaultBinaryNameFor("linux"); got != appName {
+		t.Errorf("defaultBinaryNameFor(linux) = %q, want %q", got, appName)
+	}
+	if got := defaultBinaryNameFor("darwin"); got != appName {
+		t.Errorf("defaultBinaryNameFor(darwin) = %q, want %q", got, appName)
+	}
+}
+
+// TestExpandPath_HomeLookupError verifies ExpandPath surfaces the
+// os.UserHomeDir error when a ~-prefixed path is expanded while no home
+// directory can be resolved from the environment.
+func TestExpandPath_HomeLookupError(t *testing.T) {
+	unsetHomeEnv(t)
+	if _, err := ExpandPath("~" + string(os.PathSeparator) + "sub"); err == nil {
+		t.Fatal("ExpandPath(~/sub) error = nil, want home lookup error")
+	}
+}
+
+// TestExpandPathWithHome_ErrorPropagates verifies the extracted helper
+// returns the home-resolution error verbatim and an empty path, matching the
+// original ExpandPath contract.
+func TestExpandPathWithHome_ErrorPropagates(t *testing.T) {
+	wantErr := os.ErrPermission
+	got, err := expandPathWithHome("~/x", "", wantErr)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expandPathWithHome error = %v, want %v", err, wantErr)
+	}
+	if got != "" {
+		t.Fatalf("expandPathWithHome path = %q, want empty on error", got)
+	}
+}
+
+// TestConfigDirFor_PlatformBranches verifies the per-platform user config
+// directory resolution: Windows prefers %APPDATA% with a home fallback,
+// macOS uses Library/Application Support, and Linux honors XDG_CONFIG_HOME
+// with a ~/.config fallback. The extracted helper makes every branch
+// testable on any host.
+func TestConfigDirFor_PlatformBranches(t *testing.T) {
+	home := filepath.Join("/home", "u")
+	tests := []struct {
+		name string
+		goos string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "windows with APPDATA",
+			goos: "windows",
+			env:  map[string]string{"APPDATA": filepath.Join("C:", "roaming")},
+			want: filepath.Join("C:", "roaming", "App"),
+		},
+		{
+			name: "windows without APPDATA falls back to home",
+			goos: "windows",
+			env:  map[string]string{},
+			want: filepath.Join(home, "AppData", "Roaming", "App"),
+		},
+		{
+			name: "darwin uses Application Support",
+			goos: "darwin",
+			env:  map[string]string{},
+			want: filepath.Join(home, "Library", "Application Support", "App"),
+		},
+		{
+			name: "linux with XDG_CONFIG_HOME",
+			goos: "linux",
+			env:  map[string]string{"XDG_CONFIG_HOME": "/xdg"},
+			want: filepath.Join("/xdg", "App"),
+		},
+		{
+			name: "linux without XDG_CONFIG_HOME falls back to ~/.config",
+			goos: "linux",
+			env:  map[string]string{},
+			want: filepath.Join(home, configDirXDG, "App"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := configDirFor(tt.goos, fakeGetenv(tt.env), home, "App")
+			if got != tt.want {
+				t.Errorf("configDirFor(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCrushConfigPathFor_PlatformBranches verifies the Crush config path
+// resolution: Windows prefers %LOCALAPPDATA% with a home fallback, all
+// other platforms use the shared config directory. The extracted helper
+// makes the Windows branches testable on any host.
+func TestCrushConfigPathFor_PlatformBranches(t *testing.T) {
+	home := filepath.Join("/home", "u")
+	tests := []struct {
+		name string
+		goos string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "windows with LOCALAPPDATA",
+			goos: "windows",
+			env:  map[string]string{"LOCALAPPDATA": filepath.Join("C:", "local")},
+			want: filepath.Join("C:", "local", "crush", crushFile),
+		},
+		{
+			name: "windows without LOCALAPPDATA falls back to home",
+			goos: "windows",
+			env:  map[string]string{},
+			want: filepath.Join(home, "AppData", "Local", "crush", crushFile),
+		},
+		{
+			name: "linux delegates to config dir",
+			goos: "linux",
+			env:  map[string]string{},
+			want: filepath.Join(home, configDirXDG, "crush", crushFile),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := crushConfigPathFor(tt.goos, fakeGetenv(tt.env), home)
+			if got != tt.want {
+				t.Errorf("crushConfigPathFor(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestZedConfigPathFor_PlatformBranches verifies the Zed settings path
+// resolution: macOS uses ~/.config/zed, Windows prefers %APPDATA% with a
+// home fallback, and Linux honors XDG_CONFIG_HOME with a ~/.config
+// fallback. The extracted helper makes every branch testable on any host.
+func TestZedConfigPathFor_PlatformBranches(t *testing.T) {
+	home := filepath.Join("/home", "u")
+	tests := []struct {
+		name string
+		goos string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "darwin uses ~/.config/zed",
+			goos: "darwin",
+			env:  map[string]string{},
+			want: filepath.Join(home, configDirXDG, "zed", settingsFile),
+		},
+		{
+			name: "windows with APPDATA",
+			goos: "windows",
+			env:  map[string]string{"APPDATA": filepath.Join("C:", "roaming")},
+			want: filepath.Join("C:", "roaming", "Zed", settingsFile),
+		},
+		{
+			name: "windows without APPDATA falls back to home",
+			goos: "windows",
+			env:  map[string]string{},
+			want: filepath.Join(home, "AppData", "Roaming", "Zed", settingsFile),
+		},
+		{
+			name: "linux with XDG_CONFIG_HOME",
+			goos: "linux",
+			env:  map[string]string{"XDG_CONFIG_HOME": "/xdg"},
+			want: filepath.Join("/xdg", "zed", settingsFile),
+		},
+		{
+			name: "linux without XDG_CONFIG_HOME falls back to ~/.config",
+			goos: "linux",
+			env:  map[string]string{},
+			want: filepath.Join(home, configDirXDG, "zed", settingsFile),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := zedConfigPathFor(tt.goos, fakeGetenv(tt.env), home)
+			if got != tt.want {
+				t.Errorf("zedConfigPathFor(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		})
 	}
 }
