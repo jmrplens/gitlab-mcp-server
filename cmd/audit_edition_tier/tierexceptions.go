@@ -29,13 +29,23 @@ const (
 	docTargetBranchPremium  = "target branch rules = Premium"
 	docPullMirrorPremium    = "project_pull_mirroring.md = Premium"
 	docBillableMembersPrem  = "billable members = Premium"
+
+	docMRApprovalRulesPremium = "merge_request_approvals.md per-MR approval-rule sections = Premium override"
 )
 
 var acceptedTierExceptions = map[string]tierException{
-	// merge_request_approvals.md is page-Premium, but the basic per-MR approval
-	// STATE endpoints are Free; only approval RULES are Premium.
+	// merge_request_approvals.md is page-Free with Premium section overrides:
+	// the basic per-MR approval STATE endpoints are Free; approval RULES are
+	// Premium (each rule section carries its own Premium badge).
 	"merge_request.approval_config": {tierFree, "basic approval state (GET /approvals) is Free; only approval rules are Premium per merge_request_approvals.md"},
 	"merge_request.approval_reset":  {tierFree, "reset approvals is a basic approval-state mutation, Free per merge_request_approvals.md"},
+
+	// Per-MR approval rules — merge_request_approvals.md 'Approval rules for a
+	// merge request' subsections each carry a Premium override badge.
+	"merge_request.approval_rules":       {tierPremium, docMRApprovalRulesPremium},
+	"merge_request.approval_rule_create": {tierPremium, docMRApprovalRulesPremium},
+	"merge_request.approval_rule_update": {tierPremium, docMRApprovalRulesPremium},
+	"merge_request.approval_rule_delete": {tierPremium, docMRApprovalRulesPremium},
 
 	// Project push rules — owned by the projects package (projects.md = Free) but
 	// documented on the Premium project push-rules page.
@@ -81,6 +91,10 @@ var acceptedTierExceptions = map[string]tierException{
 	// Group issue board create/delete — group_boards.md page is Free but the
 	// create/delete sections are Premium-overridden.
 	"group.group_board_create": {tierPremium, "group_boards.md 'Create' section = Premium override"},
+
+	// Group milestone burndown events — group_milestones.md page is Free but the
+	// burndown-chart-events section carries a Premium override badge.
+	"group.group_milestone_burndown": {tierPremium, "group_milestones.md 'burndown chart events' section = Premium override"},
 
 	// Epic resource label events — owned via resourceevents (resource_label_events.md
 	// = Free) but epic-scoped events are Premium (epics are Premium).

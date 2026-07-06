@@ -32,6 +32,12 @@ const (
 	// <DefaultBaseURL><area>.md.
 	DefaultBaseURL = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/api/"
 
+	// DefaultUserDocBaseURL is the raw doc root one level above the API
+	// reference. Some endpoint families carry their only licensing-tier badge on
+	// a user-facing page (e.g. merge request dependencies), so tier auditors need
+	// to fetch pages relative to doc/ as well as doc/api/.
+	DefaultUserDocBaseURL = "https://gitlab.com/gitlab-org/gitlab/-/raw/master/doc/"
+
 	// DefaultMaxAge is how long a cached doc is considered fresh before a
 	// re-download is attempted.
 	DefaultMaxAge = 7 * 24 * time.Hour
